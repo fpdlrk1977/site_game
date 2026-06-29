@@ -64,7 +64,14 @@ export function EditorCanvas() {
         <GizmoController orbitRef={orbitRef} />
 
         {/* 카메라 컨트롤 */}
-        <OrbitControls ref={orbitRef} makeDefault />
+        <OrbitControls
+          ref={orbitRef}
+          makeDefault
+          minPolarAngle={0.1}
+          maxPolarAngle={Math.PI / 2 - 0.02}
+          minDistance={1}
+          maxDistance={200}
+        />
       </Canvas>
     </ObjectRefsContext.Provider>
   );
