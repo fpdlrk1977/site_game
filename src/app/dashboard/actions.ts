@@ -1,39 +1,43 @@
 'use server';
 
 import { createSupabaseServer } from '@/lib/supabase-server';
-import { createEmptyScene } from '@/lib/scene';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { makeEmptySceneData } from '@/types/scene';
 
 export async function createProject(formData: FormData) {
   const supabase = await createSupabaseServer();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect('/login');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
 
   const name = (formData.get('name') as string)?.trim() || '새 프로젝트';
 
   // 1. project INSERT (default_scene_id = null)
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .insert({ owner_id: session.user.id, name })
+    .insert({ owner_id: user.id, name })
     .select('id')
     .single();
 
   if (projectError || !project) throw new Error(projectError?.message ?? 'project 생성 실패');
 
-  // 2. scene INSERT
-  const { data: scene, error: sceneError } = await supabase
+  // 2. scene INSERT — UUID upfront so scene_data can reference it
+  const sceneId = crypto.randomUUID();
+  const { error: sceneError } = await supabase
     .from('scenes')
-    .insert({ project_id: project.id, name: '메인 씬', scene_data: createEmptyScene() })
-    .select('id')
-    .single();
+    .insert({
+      id: sceneId,
+      project_id: project.id,
+      name: '메인 씬',
+      scene_data: makeEmptySceneData(project.id, sceneId),
+    });
 
-  if (sceneError || !scene) throw new Error(sceneError?.message ?? 'scene 생성 실패');
+  if (sceneError) throw new Error(sceneError.message);
 
   // 3. project UPDATE → default_scene_id 연결
   await supabase
     .from('projects')
-    .update({ default_scene_id: scene.id })
+    .update({ default_scene_id: sceneId })
     .eq('id', project.id);
 
   redirect(`/editor/${project.id}`);
@@ -41,28 +45,28 @@ export async function createProject(formData: FormData) {
 
 export async function deleteProject(projectId: string) {
   const supabase = await createSupabaseServer();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect('/login');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
 
   await supabase
     .from('projects')
     .delete()
     .eq('id', projectId)
-    .eq('owner_id', session.user.id);
+    .eq('owner_id', user.id);
 
   revalidatePath('/dashboard');
 }
 
 export async function renameProject(projectId: string, name: string) {
   const supabase = await createSupabaseServer();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect('/login');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
 
   await supabase
     .from('projects')
     .update({ name: name.trim() || '새 프로젝트' })
     .eq('id', projectId)
-    .eq('owner_id', session.user.id);
+    .eq('owner_id', user.id);
 
   revalidatePath('/dashboard');
 }
