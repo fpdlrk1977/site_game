@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -13,7 +13,14 @@ import { ObjectRefsContext } from './ObjectRefsContext';
 export function EditorCanvas() {
   const orbitRef = useRef<OrbitControlsImpl>(null);
   const objectRefsRef = useRef<Map<string, THREE.Object3D>>(new Map());
-  const { objects, environment, selectObject } = useSceneStore();
+  const { objects, environment, focusTarget, selectObject } = useSceneStore();
+
+  // F키 포커스: 선택 오브젝트 위치로 OrbitControls target 이동
+  useEffect(() => {
+    if (!focusTarget || !orbitRef.current) return;
+    orbitRef.current.target.set(focusTarget.x, focusTarget.y, focusTarget.z);
+    orbitRef.current.update();
+  }, [focusTarget]);
 
   const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#1a1a2e';
 

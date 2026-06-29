@@ -1,6 +1,7 @@
 'use server';
 
 import { createSupabaseServer } from '@/lib/supabase-server';
+import { assertCountLimit } from '@/lib/checkPlan';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { makeEmptySceneData } from '@/types/scene';
@@ -11,6 +12,13 @@ export async function createProject(formData: FormData) {
   if (!user) redirect('/login');
 
   const name = (formData.get('name') as string)?.trim() || '새 프로젝트';
+
+  // 플랜 제한 확인 (현재 프로젝트 수)
+  const { count } = await supabase
+    .from('projects')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', user.id);
+  await assertCountLimit(user.id, 'maxProjects', count ?? 0);
 
   // 1. project INSERT (default_scene_id = null)
   const { data: project, error: projectError } = await supabase

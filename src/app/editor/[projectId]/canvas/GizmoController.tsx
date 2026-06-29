@@ -13,8 +13,8 @@ interface Props {
 }
 
 export function GizmoController({ orbitRef }: Props) {
-  const { selectedId, transformMode, transformSpace, objects, updateObject, pushHistory } =
-    useSceneStore();
+  const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate,
+    objects, updateObject, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
   const isDragging = useRef(false);
 
@@ -24,11 +24,16 @@ export function GizmoController({ orbitRef }: Props) {
   const target = refsMap.current.get(selectedId);
   if (!target) return null;
 
+  const DEG2RAD = Math.PI / 180;
+
   return (
     <TransformControls
       object={target}
       mode={transformMode}
       space={transformSpace}
+      translationSnap={snapEnabled ? snapTranslate : null}
+      rotationSnap={snapEnabled ? snapRotate * DEG2RAD : null}
+      scaleSnap={snapEnabled ? 0.1 : null}
       onMouseDown={() => {
         isDragging.current = true;
         if (orbitRef.current) orbitRef.current.enabled = false;

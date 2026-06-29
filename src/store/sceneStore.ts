@@ -23,6 +23,10 @@ interface SceneState {
   selectedId: string | null;
   transformMode: 'translate' | 'rotate' | 'scale';
   transformSpace: 'world' | 'local';
+  snapEnabled: boolean;
+  snapTranslate: number;
+  snapRotate: number;
+  focusTarget: { x: number; y: number; z: number; _tick: number } | null;
   isModified: boolean;
   past: HistoryEntry[];
   future: HistoryEntry[];
@@ -36,6 +40,8 @@ interface SceneActions {
   addObject: (shape: PrimitiveShape) => void;
   addAsset: (asset: AssetRefSchema) => void;
   addAssetObject: (asset: AssetRefSchema) => void;
+  setSnap: (enabled: boolean, translate?: number, rotate?: number) => void;
+  requestFocus: () => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
   deleteSelected: () => void;
   duplicateSelected: () => void;
@@ -84,6 +90,10 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   selectedId: null,
   transformMode: 'translate',
   transformSpace: 'world',
+  snapEnabled: false,
+  snapTranslate: 0.5,
+  snapRotate: 15,
+  focusTarget: null,
   isModified: false,
   past: [],
   future: [],
@@ -116,6 +126,21 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       past: [...past.slice(-49), { objects }],
       future: [],
     });
+  },
+
+  setSnap: (enabled, translate, rotate) =>
+    set((s) => ({
+      snapEnabled: enabled,
+      snapTranslate: translate ?? s.snapTranslate,
+      snapRotate: rotate ?? s.snapRotate,
+    })),
+
+  requestFocus: () => {
+    const { selectedId, objects } = get();
+    if (!selectedId) return;
+    const obj = objects.find((o) => o.id === selectedId);
+    if (!obj) return;
+    set({ focusTarget: { ...obj.position, _tick: Date.now() } });
   },
 
   addAsset: (asset) => {

@@ -19,10 +19,13 @@ const SHAPES: { shape: PrimitiveShape; label: string; icon: string }[] = [
 export function ViewportToolbar({ projectName }: Props) {
   const {
     transformMode, transformSpace, isModified,
-    setTransformMode, setTransformSpace,
+    snapEnabled, snapTranslate,
+    setTransformMode, setTransformSpace, setSnap,
     addObject, undo, redo,
     projectId, sceneId, objects, assets, environment, markSaved,
   } = useSceneStore();
+
+  const SNAP_STEPS = [0.25, 0.5, 1, 2];
 
   const handleSave = async () => {
     if (!sceneId) return;
@@ -115,6 +118,34 @@ export function ViewportToolbar({ projectName }: Props) {
       >
         {transformSpace === 'world' ? 'World' : 'Local'}
       </button>
+
+      <div className="w-px h-5 bg-zinc-700" />
+
+      {/* 스냅 */}
+      <div className="flex items-center gap-0.5 bg-zinc-800 rounded-lg p-0.5">
+        <button
+          title="스냅 켜기/끄기"
+          onClick={() => setSnap(!snapEnabled)}
+          className={`px-2 h-7 rounded-md text-xs font-semibold transition-all ${
+            snapEnabled ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+          }`}
+        >
+          ⊞
+        </button>
+        {SNAP_STEPS.map((step) => (
+          <button
+            key={step}
+            onClick={() => setSnap(true, step)}
+            className={`px-1.5 h-7 rounded-md text-[10px] font-mono transition-all ${
+              snapEnabled && snapTranslate === step
+                ? 'bg-zinc-600 text-white'
+                : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
+            }`}
+          >
+            {step}
+          </button>
+        ))}
+      </div>
 
       <div className="w-px h-5 bg-zinc-700" />
 

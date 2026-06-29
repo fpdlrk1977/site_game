@@ -3,23 +3,34 @@ import { createSupabaseServer } from '@/lib/supabase-server';
 import { ProjectCard } from './ProjectCard';
 import { NewProjectButton } from './NewProjectButton';
 import { NewProjectCard } from './NewProjectCard';
+import { UserInitializer } from '@/components/ui/UserInitializer';
 import { createProject } from './actions';
+import type { PlanTier } from '@/store/userStore';
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: projects } = await supabase
-    .from('projects')
-    .select('id, name, is_published, updated_at, thumbnail_url')
-    .eq('owner_id', user.id)
-    .order('updated_at', { ascending: false });
+  const [{ data: projects }, { data: planData }] = await Promise.all([
+    supabase
+      .from('projects')
+      .select('id, name, is_published, updated_at, thumbnail_url')
+      .eq('owner_id', user.id)
+      .order('updated_at', { ascending: false }),
+    supabase
+      .from('users_plan')
+      .select('plan_tier')
+      .eq('user_id', user.id)
+      .single(),
+  ]);
 
   const list = projects ?? [];
+  const planTier = (planData?.plan_tier ?? 'free') as PlanTier;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
+      <UserInitializer userId={user.id} email={user.email ?? ''} planTier={planTier} />
       {/* 배경 장식 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />

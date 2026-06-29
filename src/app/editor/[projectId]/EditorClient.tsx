@@ -20,7 +20,7 @@ interface Props {
 }
 
 export function EditorClient({ projectName, initialScene }: Props) {
-  const { loadScene, undo, redo, deleteSelected, duplicateSelected, setTransformMode } = useSceneStore();
+  const { loadScene, undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus } = useSceneStore();
   const [isMobile, setIsMobile] = useState(false);
 
   // 씬 초기 로드
@@ -52,10 +52,11 @@ export function EditorClient({ projectName, initialScene }: Props) {
       if (e.key === 'w' || e.key === 'W') setTransformMode('translate');
       if (e.key === 'e' || e.key === 'E') setTransformMode('rotate');
       if (e.key === 'r' || e.key === 'R') setTransformMode('scale');
+      if (e.key === 'f' || e.key === 'F') requestFocus();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, deleteSelected, duplicateSelected, setTransformMode]);
+  }, [undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus]);
 
   if (isMobile) {
     return (
