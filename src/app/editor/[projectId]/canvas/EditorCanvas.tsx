@@ -20,7 +20,7 @@ export function EditorCanvas() {
   return (
     <ObjectRefsContext.Provider value={objectRefsRef}>
       <Canvas
-        shadows
+        shadows="soft"
         camera={{ position: [5, 4, 8], fov: 60 }}
         onPointerMissed={() => selectObject(null)}
         style={{ width: '100%', height: '100%', background: skyColor }}

@@ -21,28 +21,29 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // 인증 보호
-  const isProtected = PROTECTED_PATHS.some((p) => pathname.startsWith(p));
-  if (isProtected) {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => req.cookies.getAll(),
-          setAll: (cookiesToSet) => {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              req.cookies.set(name, value);
-              res.cookies.set(name, value, options);
-            });
-          },
+  // 모든 경로에서 세션 갱신 (액세스 토큰 만료 시 자동 갱신)
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            req.cookies.set(name, value);
+            res.cookies.set(name, value, options);
+          });
         },
-      }
-    );
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', req.url));
+      },
     }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // 보호된 경로 — 미인증 시 로그인으로 리다이렉트
+  const isProtected = PROTECTED_PATHS.some((p) => pathname.startsWith(p));
+  if (isProtected && !user) {
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
   return res;

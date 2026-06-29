@@ -98,6 +98,34 @@
 
 ### 태스크
 
+#### [P2-01] Scene Viewer `/space/[sceneId]`
+- SSR 서버 컴포넌트에서 scene_data 로드 (공개 씬: is_published=true, 소유자: 항상 접근 가능)
+- OG 메타태그 주입 (og:title, og:description, og:image=thumbnail_url)
+- R3F Canvas: 환경(sky/fog/lights), primitiveShape 오브젝트 렌더링
+- click 이벤트: open_url → window.open, show_popup → 팝업 모달
+- hover 이벤트: cursor:pointer, 오브젝트 하이라이트
+- OrbitControls (에디터 없음, 자유 시점)
+- 모바일 반응형 지원
+- "Powered by Park3D" 배지 (Free 플랜)
+- 예상 소요: 1.5일
+
+#### [P2-02] .glb 에셋 업로드
+- Supabase Storage 버킷: `assets` (public read)
+- 에디터 AssetBrowser에서 .glb 파일 업로드
+- 업로드 완료 후 assets 테이블에 INSERT
+- 씬에서 assetId로 참조, scene_data.assets[]에 dracoUrl 포함
+- 예상 소요: 2일
+
+#### [P2-03] 씬 퍼블리싱 (공개/비공개 토글)
+- 대시보드 프로젝트 카드 또는 에디터 툴바에서 토글
+- is_published=true 시 /space/:sceneId 공개 접근 허용
+- 예상 소요: 0.5일
+
+#### [P2-04] 씬 썸네일 자동 저장
+- Ctrl+S 저장 시 R3F Canvas gl.domElement.toDataURL()로 캡처
+- Supabase Storage 업로드 → projects.thumbnail_url 업데이트
+- 예상 소요: 0.5일
+
 #### [P2-05] 커스텀 도메인 연결
 - `projects` 테이블에 `custom_domain TEXT` 컬럼 추가
 - Next.js 미들웨어(`middleware.ts`)에서 요청 호스트명을 읽어 해당 `sceneId`로 rewrite
