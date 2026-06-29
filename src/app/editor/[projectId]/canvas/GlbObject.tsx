@@ -8,9 +8,10 @@ interface Props {
   url: string;
   selected: boolean;
   onClick: () => void;
+  wireframe?: boolean;
 }
 
-export function GlbObject({ url, selected, onClick }: Props) {
+export function GlbObject({ url, selected, onClick, wireframe = false }: Props) {
   const { scene } = useGLTF(url);
   const clone = useMemo(() => scene.clone(true), [scene]);
 
@@ -25,9 +26,10 @@ export function GlbObject({ url, selected, onClick }: Props) {
           m.emissive.set(selected ? '#3730a3' : '#000000');
           m.emissiveIntensity = selected ? 0.4 : 0;
         }
+        m.wireframe = wireframe;
       });
     });
-  }, [clone, selected]);
+  }, [clone, selected, wireframe]);
 
   return (
     <primitive

@@ -28,6 +28,21 @@ export default async function DashboardPage() {
   const list = projects ?? [];
   const planTier = (planData?.plan_tier ?? 'free') as PlanTier;
 
+  // 씬 방문 통계 (Pro 이상)
+  const sceneIds = list.map((p) => p.default_scene_id).filter(Boolean) as string[];
+  let viewCounts: Record<string, number> = {};
+  if ((planTier === 'pro' || planTier === 'business') && sceneIds.length > 0) {
+    const { data: viewEvents } = await supabase
+      .from('scene_events')
+      .select('scene_id')
+      .in('scene_id', sceneIds)
+      .eq('event_type', 'view');
+    viewCounts = (viewEvents ?? []).reduce<Record<string, number>>((acc, e) => {
+      acc[e.scene_id] = (acc[e.scene_id] ?? 0) + 1;
+      return acc;
+    }, {});
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <UserInitializer userId={user.id} email={user.email ?? ''} planTier={planTier} />
@@ -101,7 +116,12 @@ export default async function DashboardPage() {
           /* 프로젝트 그리드 */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {list.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard
+                key={project.id}
+                project={project}
+                viewCount={project.default_scene_id ? (viewCounts[project.default_scene_id] ?? 0) : 0}
+                showAnalytics={planTier === 'pro' || planTier === 'business'}
+              />
             ))}
             {/* 새 프로젝트 카드 */}
             <NewProjectCard />

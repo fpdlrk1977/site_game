@@ -2,9 +2,11 @@
 
 import { useRef, useEffect, Suspense } from 'react';
 import * as THREE from 'three';
+import { Text } from '@react-three/drei';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { GlbObject } from './GlbObject';
+import { ParticleEmitter } from '@/components/three/ParticleEmitter';
 import type { ObjectNodeSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
@@ -13,12 +15,30 @@ interface Props {
   object: ObjectNodeSchema;
 }
 
+function ColliderOverlay({ object }: { object: ObjectNodeSchema }) {
+  if (!object.physics.enabled) return null;
+  const isSensor = object.physics.isSensor;
+  const color = isSensor ? '#3b82f6' : '#22c55e';
+  const type = object.physics.colliderType ?? 'box';
+
+  return (
+    <mesh>
+      {type === 'sphere'
+        ? <sphereGeometry args={[0.51, 12, 12]} />
+        : <boxGeometry args={[1.02, 1.02, 1.02]} />
+      }
+      <meshBasicMaterial color={color} wireframe transparent opacity={0.5} />
+    </mesh>
+  );
+}
+
 export function EditorObjectInstance({ object }: Props) {
   const groupRef = useRef<THREE.Group>(null);
   const refsMap = useObjectRefs();
   const selectObject = useSceneStore((s) => s.selectObject);
   const selectedId = useSceneStore((s) => s.selectedId);
   const assets = useSceneStore((s) => s.assets);
+  const wireframeMode = useSceneStore((s) => s.wireframeMode);
   const isSelected = selectedId === object.id;
 
   useEffect(() => {
@@ -26,7 +46,6 @@ export function EditorObjectInstance({ object }: Props) {
     return () => { refsMap.current.delete(object.id); };
   }, [object.id, refsMap]);
 
-  // Sync position from store to Three.js imperatively (so TransformControls won't fight React)
   useEffect(() => {
     const g = groupRef.current;
     if (!g) return;
@@ -49,7 +68,59 @@ export function EditorObjectInstance({ object }: Props) {
   const color = object.material?.color ?? '#a78bfa';
   const roughness = object.material?.roughness ?? 0.5;
   const metalness = object.material?.metalness ?? 0.1;
+  const emissive = object.material?.emissive ?? '#000000';
   const handleClick = () => { if (!object.locked) selectObject(object.id); };
+
+  // 파티클 이미터 렌더링
+  if (object.particle) {
+    return (
+      <group ref={groupRef}>
+        <ParticleEmitter config={object.particle} />
+        {/* 선택 표시 — 빌보드 와이어프레임 구체 */}
+        {isSelected && (
+          <mesh onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+            <sphereGeometry args={[0.3, 8, 8]} />
+            <meshBasicMaterial color="#7c3aed" wireframe transparent opacity={0.6} />
+          </mesh>
+        )}
+        {!isSelected && (
+          <mesh onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+            <sphereGeometry args={[0.3, 8, 8]} />
+            <meshBasicMaterial transparent opacity={0} />
+          </mesh>
+        )}
+      </group>
+    );
+  }
+
+  // Content 오브젝트 렌더링
+  if (object.content) {
+    return (
+      <group ref={groupRef} onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+        {object.content.type === 'text' ? (
+          <Text
+            color={object.content.color ?? '#ffffff'}
+            fontSize={object.content.fontSize ?? 0.5}
+            anchorX="center" anchorY="middle"
+          >
+            {object.content.text ?? ''}
+          </Text>
+        ) : (
+          <mesh>
+            <planeGeometry args={[1, 1]} />
+            <meshBasicMaterial color={isSelected ? '#7c3aed' : '#334155'} />
+          </mesh>
+        )}
+        {isSelected && (
+          <mesh>
+            <planeGeometry args={[1.05, 1.05]} />
+            <meshBasicMaterial color="#7c3aed" wireframe />
+          </mesh>
+        )}
+        <ColliderOverlay object={object} />
+      </group>
+    );
+  }
 
   return (
     <group ref={groupRef}>
@@ -60,7 +131,7 @@ export function EditorObjectInstance({ object }: Props) {
             <meshStandardMaterial color="#52525b" wireframe />
           </mesh>
         }>
-          <GlbObject url={assetRef.dracoUrl} selected={isSelected} onClick={handleClick} />
+          <GlbObject url={assetRef.dracoUrl} selected={isSelected} onClick={handleClick} wireframe={wireframeMode} />
         </Suspense>
       ) : (
         <mesh
@@ -76,11 +147,14 @@ export function EditorObjectInstance({ object }: Props) {
             color={color}
             roughness={roughness}
             metalness={metalness}
-            emissive={isSelected ? '#4338ca' : '#000000'}
-            emissiveIntensity={isSelected ? 0.4 : 0}
+            wireframe={wireframeMode}
+            emissive={isSelected ? '#4338ca' : emissive}
+            emissiveIntensity={isSelected ? 0.4 : (emissive !== '#000000' ? 1 : 0)}
           />
         </mesh>
       )}
+      {/* 콜라이더 시각화 — 에디터 전용 */}
+      <ColliderOverlay object={object} />
     </group>
   );
 }

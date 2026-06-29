@@ -11,19 +11,20 @@ const SHAPE_ICONS: Record<string, string> = {
   plane: '▬',
 };
 
+type PanelTab = 'objects' | 'layers';
+
 function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
-  const { selectedId, selectObject, updateObject, deleteSelected, duplicateSelected } = useSceneStore();
+  const { selectedId, selectedIds, selectObject, toggleSelectObject, updateObject, deleteSelected, duplicateSelected } = useSceneStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
   const inputRef = useRef<HTMLInputElement>(null);
-  const isSelected = selectedId === obj.id;
+  const isSelected = selectedIds.length > 0 ? selectedIds.includes(obj.id) : selectedId === obj.id;
 
   useEffect(() => {
     if (editing) inputRef.current?.select();
   }, [editing]);
 
-  // obj.name이 외부에서 바뀌면 동기화
   useEffect(() => {
     if (!editing) setNameValue(obj.name);
   }, [obj.name, editing]);
@@ -44,14 +45,15 @@ function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
   return (
     <div className="relative">
       <div
-        onClick={() => !editing && selectObject(obj.id)}
+        onClick={(e) => { if (editing) return; e.shiftKey ? toggleSelectObject(obj.id) : selectObject(obj.id); }}
         onContextMenu={handleContextMenu}
+        onDoubleClick={() => !obj.locked && setEditing(true)}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer group transition-all text-xs ${
           isSelected ? 'bg-violet-600/30 text-white' : 'text-zinc-300 hover:bg-zinc-800'
         } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-zinc-500' : ''}`}
       >
         <span className="text-[10px] w-4 text-center opacity-60">
-          {obj.assetId ? '📦' : (SHAPE_ICONS[obj.primitiveShape ?? ''] ?? '○')}
+          {obj.content ? (obj.content.type === 'text' ? '𝐓' : obj.content.type === 'image' ? '🖼' : '▶') : (obj.assetId ? '📦' : (SHAPE_ICONS[obj.primitiveShape ?? ''] ?? '○'))}
         </span>
 
         {editing ? (
@@ -63,47 +65,32 @@ function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') commitRename();
               if (e.key === 'Escape') { setNameValue(obj.name); setEditing(false); }
-              e.stopPropagation();
             }}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 bg-zinc-700 border border-violet-500 rounded px-1 py-0 text-xs text-white focus:outline-none min-w-0"
+            className="flex-1 bg-zinc-800 border border-zinc-600 rounded px-1 py-0 text-xs text-white focus:outline-none"
           />
         ) : (
-          <span
-            className="flex-1 truncate"
-            onDoubleClick={(e) => { e.stopPropagation(); selectObject(obj.id); setEditing(true); }}
-          >
-            {obj.name}
-          </span>
+          <span className="flex-1 truncate text-[11px]">{obj.name}</span>
         )}
 
-        {/* 눈 아이콘 */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            updateObject(obj.id, { visible: !obj.visible });
-            if (obj.visible && selectedId === obj.id) selectObject(null);
-          }}
-          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-700 transition-all"
-          title={obj.visible ? '숨기기' : '표시'}
-        >
-          <span className="text-[10px]">{obj.visible ? '👁' : '🚫'}</span>
-        </button>
-
-        {/* 잠금 아이콘 */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            updateObject(obj.id, { locked: !obj.locked });
-          }}
-          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-700 transition-all"
-          title={obj.locked ? '잠금 해제' : '잠금'}
-        >
-          <span className="text-[10px]">{obj.locked ? '🔒' : '🔓'}</span>
-        </button>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+          <button
+            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); }}
+            className="w-5 h-5 flex items-center justify-center rounded text-zinc-500 hover:text-white transition-colors"
+            title={obj.visible ? '숨기기' : '표시'}
+          >
+            <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); }}
+            className="w-5 h-5 flex items-center justify-center rounded text-zinc-500 hover:text-white transition-colors"
+            title={obj.locked ? '잠금 해제' : '잠금'}
+          >
+            <span className="text-[10px]">{obj.locked ? '🔒' : '🔓'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* 컨텍스트 메뉴 */}
       {menuOpen && isSelected && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
@@ -135,8 +122,9 @@ function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
 }
 
 export function HierarchyPanel() {
-  const { objects } = useSceneStore();
+  const { objects, layers, toggleLayerVisible, toggleLayerLocked, addLayer } = useSceneStore();
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<PanelTab>('objects');
 
   const roots = objects.filter((o) => o.parentId === null);
   const filtered = search.trim()
@@ -145,33 +133,79 @@ export function HierarchyPanel() {
 
   return (
     <aside className="flex flex-col bg-zinc-950 border-r border-zinc-800 overflow-hidden">
-      <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Hierarchy</span>
-        <span className="text-xs text-zinc-600">{objects.length}</span>
+      {/* 탭 */}
+      <div className="flex border-b border-zinc-800">
+        {(['objects', 'layers'] as PanelTab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-2 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+              tab === t ? 'text-white bg-zinc-800/50' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {t === 'objects' ? `오브젝트 (${objects.length})` : '레이어'}
+          </button>
+        ))}
       </div>
 
-      {/* 검색 */}
-      <div className="px-2 pt-2 pb-1">
-        <input
-          type="text"
-          placeholder="오브젝트 검색..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
-        />
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <p className="text-zinc-600 text-xs leading-relaxed">
-              {search ? '검색 결과가 없습니다.' : '오브젝트가 없습니다.\n상단 툴바에서 추가하세요.'}
-            </p>
+      {tab === 'objects' && (
+        <>
+          <div className="px-2 pt-2 pb-1">
+            <input
+              type="text"
+              placeholder="오브젝트 검색..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+            />
           </div>
-        ) : (
-          filtered.map((obj) => <HierarchyItem key={obj.id} obj={obj} />)
-        )}
-      </div>
+          <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <p className="text-zinc-600 text-xs leading-relaxed">
+                  {search ? '검색 결과가 없습니다.' : '오브젝트가 없습니다.\n상단 툴바에서 추가하세요.'}
+                </p>
+              </div>
+            ) : (
+              filtered.map((obj) => <HierarchyItem key={obj.id} obj={obj} />)
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === 'layers' && (
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {Object.entries(layers).map(([key, layer]) => (
+            <div key={key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs">
+              <span className="flex-1 text-zinc-300 truncate">{layer.name}</span>
+              <span className="text-[10px] text-zinc-600">{objects.filter((o) => o.layer === key).length}</span>
+              <button
+                onClick={() => toggleLayerVisible(key)}
+                className="text-zinc-500 hover:text-white transition-colors"
+                title={layer.visible ? '숨기기' : '표시'}
+              >
+                <span className="text-[10px]">{layer.visible ? '👁' : '🙈'}</span>
+              </button>
+              <button
+                onClick={() => toggleLayerLocked(key)}
+                className="text-zinc-500 hover:text-white transition-colors"
+                title={layer.locked ? '잠금 해제' : '잠금'}
+              >
+                <span className="text-[10px]">{layer.locked ? '🔒' : '🔓'}</span>
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              const name = prompt('레이어 이름');
+              if (name?.trim()) addLayer(name.trim());
+            }}
+            className="w-full py-1.5 text-[10px] text-zinc-500 hover:text-white border border-dashed border-zinc-700 hover:border-zinc-600 rounded-lg transition-colors"
+          >
+            + 레이어 추가
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

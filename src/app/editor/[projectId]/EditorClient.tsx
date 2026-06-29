@@ -8,6 +8,7 @@ import { HierarchyPanel } from './panels/HierarchyPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
 import { AssetBrowser } from './panels/AssetBrowser';
 import { EditorOnboarding } from './EditorOnboarding';
+import { Toaster } from '@/components/ui/Toaster';
 import type { ProjectSceneSchema } from '@/types/scene';
 
 const EditorCanvas = dynamic(
@@ -107,6 +108,9 @@ export function EditorClient({ projectName, initialScene }: Props) {
 
       {/* 신규 유저 온보딩 — 첫 방문 시에만 표시 */}
       <EditorOnboarding />
+
+      {/* 토스트 알림 */}
+      <Toaster />
     </div>
   );
 }

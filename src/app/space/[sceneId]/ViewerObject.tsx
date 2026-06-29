@@ -1,12 +1,35 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useState, Suspense, useRef, useEffect as useEffectReact } from 'react';
+import { useGLTF, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMemo, useEffect } from 'react';
+import { useLoader } from '@react-three/fiber';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
+
+function ImagePlane({ position, rotation, scale, url, onClick, onPointerOver, onPointerOut }: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  url: string;
+  onClick: () => void;
+  onPointerOver: () => void;
+  onPointerOut: () => void;
+}) {
+  const texture = useLoader(THREE.TextureLoader, url);
+  return (
+    <mesh position={position} rotation={rotation} scale={scale}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onPointerOver={(e) => { e.stopPropagation(); onPointerOver(); }}
+      onPointerOut={onPointerOut}
+    >
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial map={texture} transparent side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
 
 function GlbViewer({ url, hovered, onClick, onPointerOver, onPointerOut }: {
   url: string;
@@ -101,9 +124,55 @@ export function ViewerObject({ object, assets, onEvent, noTransform = false }: P
     );
   }
 
+  // Content 오브젝트 렌더링
+  if (object.content) {
+    const { type } = object.content;
+    if (type === 'text') {
+      return (
+        <Text
+          position={pos}
+          rotation={rot}
+          scale={scl}
+          color={object.content.color ?? '#ffffff'}
+          fontSize={object.content.fontSize ?? 0.5}
+          anchorX="center"
+          anchorY="middle"
+          onClick={(e) => { e.stopPropagation(); handleClick(); }}
+          onPointerOver={(e) => { e.stopPropagation(); handlePointerOver(); }}
+          onPointerOut={handlePointerOut}
+        >
+          {object.content.text ?? ''}
+        </Text>
+      );
+    }
+    if (type === 'image' && object.content.url) {
+      return (
+        <Suspense fallback={null}>
+          <ImagePlane
+            position={pos} rotation={rot} scale={scl}
+            url={object.content.url}
+            onClick={handleClick}
+            onPointerOver={handlePointerOver}
+            onPointerOut={handlePointerOut}
+          />
+        </Suspense>
+      );
+    }
+    // video — 빈 플레인으로 폴백 (뷰어에서 완전 구현은 추후)
+    return (
+      <mesh position={pos} rotation={rot} scale={scl}
+        onClick={(e) => { e.stopPropagation(); handleClick(); }}
+      >
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial color="#1a1a2e" />
+      </mesh>
+    );
+  }
+
   const color = object.material?.color ?? '#a78bfa';
   const roughness = object.material?.roughness ?? 0.5;
   const metalness = object.material?.metalness ?? 0.1;
+  const emissive = object.material?.emissive ?? '#000000';
 
   return (
     <mesh
@@ -124,8 +193,8 @@ export function ViewerObject({ object, assets, onEvent, noTransform = false }: P
         color={color}
         roughness={roughness}
         metalness={metalness}
-        emissive={hovered ? color : '#000000'}
-        emissiveIntensity={hovered ? 0.3 : 0}
+        emissive={hovered ? color : emissive}
+        emissiveIntensity={hovered ? 0.3 : (emissive !== '#000000' ? 1 : 0)}
       />
     </mesh>
   );

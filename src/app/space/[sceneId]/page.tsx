@@ -23,11 +23,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const project = Array.isArray(proj) ? proj[0] : (proj as { name?: string; thumbnail_url?: string } | null | undefined) ?? null;
   const title = `${project?.name ?? '3D 공간'} — Park3D`;
 
+  const description = `${project?.name ?? '3D 공간'} — Park3D로 만든 인터랙티브 3D 공간입니다.`;
+
   return {
     title,
-    description: 'Park3D로 만든 3D 공간입니다.',
+    description,
     openGraph: {
       title,
+      description,
+      type: 'website',
+      images: project?.thumbnail_url
+        ? [{ url: project.thumbnail_url, width: 1200, height: 630, alt: project.name ?? '3D 공간' }]
+        : [],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
       images: project?.thumbnail_url ? [project.thumbnail_url] : [],
     },
   };
@@ -70,12 +82,23 @@ export default async function SpacePage({ params }: Props) {
     scene.id,
   );
 
+  // 소유자 플랜 조회 (배지 표시 여부)
+  const { data: ownerPlan } = await service
+    .from('users_plan')
+    .select('plan_tier')
+    .eq('user_id', project.owner_id)
+    .single();
+
+  const planTier = (ownerPlan?.plan_tier ?? 'free') as 'free' | 'pro' | 'business';
+  const hideBadge = planTier === 'pro' || planTier === 'business';
+
   return (
     <ViewerClient
       scene={sceneData}
       projectName={project.name}
       isOwner={isOwner}
       projectId={project.id}
+      hideBadge={hideBadge}
     />
   );
 }

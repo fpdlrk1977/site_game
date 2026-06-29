@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { MathUtils } from 'three';
 import { useSceneStore } from '@/store/sceneStore';
-import type { ObjectNodeSchema, ColliderType, EventSchema } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset } from '@/types/scene';
 
 // ── 단일 숫자 입력 ─────────────────────────────────────────────
 function NumInput({
@@ -231,14 +231,44 @@ function EnvironmentPanel() {
 
 // ── 메인 ───────────────────────────────────────────────────────
 export function InspectorPanel() {
-  const { objects, selectedId, updateObject, pushHistory } = useSceneStore();
+  const { objects, selectedId, selectedIds, updateObject, pushHistory, alignSelected } = useSceneStore();
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
+  const isMultiSelect = selectedIds.length > 1;
 
   // Events 추가 폼 상태
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newTrigger, setNewTrigger] = useState<EventSchema['trigger']>('click');
   const [newAction, setNewAction] = useState<EventSchema['action']>('show_popup');
   const [newValue, setNewValue] = useState('');
+
+  if (isMultiSelect) {
+    return (
+      <aside className="flex flex-col bg-zinc-950 border-l border-zinc-800 overflow-hidden">
+        <div className="px-3 py-2 border-b border-zinc-800">
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{selectedIds.length}개 선택됨</span>
+        </div>
+        <div className="px-3 py-4 space-y-3">
+          <p className="text-[10px] text-zinc-500">Shift+클릭으로 오브젝트를 추가 선택하세요.</p>
+          {(['x', 'y', 'z'] as const).map((axis) => (
+            <div key={axis}>
+              <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1.5">{axis.toUpperCase()}축 정렬</p>
+              <div className="grid grid-cols-3 gap-1">
+                {(['min', 'center', 'max'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => alignSelected(axis, mode)}
+                    className="py-1 rounded-lg text-[10px] bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white transition-colors"
+                  >
+                    {mode === 'min' ? '최소' : mode === 'center' ? '중앙' : '최대'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
+    );
+  }
 
   if (!obj) {
     return (
@@ -325,8 +355,134 @@ export function InspectorPanel() {
           />
         </div>
 
-        {/* Material (primitive 오브젝트만) */}
-        {!obj.assetId && (
+        {/* Content (content 오브젝트만) */}
+        {obj.content && (
+          <>
+            <SectionHeader title="Content" />
+            <div className="px-3 py-3 space-y-2.5">
+              {obj.content.type === 'text' && (
+                <>
+                  <div>
+                    <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">텍스트</span>
+                    <textarea
+                      value={obj.content.text ?? ''}
+                      onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, text: e.target.value } })}
+                      onBlur={pushHistory}
+                      rows={3}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">글자 크기</span>
+                      <span className="text-[10px] text-zinc-500">{(obj.content.fontSize ?? 0.5).toFixed(1)}</span>
+                    </div>
+                    <input type="range" min="0.1" max="3" step="0.1"
+                      value={obj.content.fontSize ?? 0.5}
+                      onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, fontSize: parseFloat(e.target.value) } })}
+                      onMouseUp={pushHistory}
+                      className="w-full accent-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">색상</span>
+                    <div className="flex items-center gap-2">
+                      <input type="color"
+                        value={obj.content.color ?? '#ffffff'}
+                        onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, color: e.target.value } })}
+                        onBlur={pushHistory}
+                        className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
+                      />
+                      <input type="text"
+                        value={obj.content.color ?? '#ffffff'}
+                        onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, color: e.target.value } })}
+                        onBlur={pushHistory}
+                        className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+              {(obj.content.type === 'image' || obj.content.type === 'video') && (
+                <div>
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">
+                    {obj.content.type === 'image' ? '이미지 URL' : '동영상 URL'}
+                  </span>
+                  <input
+                    type="text"
+                    value={obj.content.url ?? ''}
+                    onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, url: e.target.value } })}
+                    onBlur={pushHistory}
+                    placeholder={obj.content.type === 'image' ? 'https://example.com/img.jpg' : 'https://www.youtube.com/...'}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Particle (파티클 이미터만) */}
+        {obj.particle && (
+          <>
+            <SectionHeader title="Particle" />
+            <div className="px-3 py-3 space-y-2.5">
+              <div>
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Preset</span>
+                <select
+                  value={obj.particle.preset}
+                  onChange={(e) => { updateObject(obj.id, { particle: { ...obj.particle!, preset: e.target.value as ParticlePreset } }); pushHistory(); }}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                >
+                  <option value="fire">🔥 불꽃 (Fire)</option>
+                  <option value="dust">💨 먼지 (Dust)</option>
+                  <option value="light">✨ 빛 파티클 (Light)</option>
+                  <option value="snow">❄️ 눈 (Snow)</option>
+                </select>
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">색상 오버라이드</span>
+                <div className="flex items-center gap-2">
+                  <input type="color"
+                    value={obj.particle.color ?? '#ffffff'}
+                    onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
+                    onBlur={pushHistory}
+                    className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
+                  />
+                  <input type="text"
+                    value={obj.particle.color ?? ''}
+                    onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
+                    onBlur={pushHistory}
+                    placeholder="프리셋 기본값"
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder-zinc-600"
+                  />
+                </div>
+              </div>
+              {([
+                { key: 'count', label: '파티클 수', min: 10, max: 500, step: 10 },
+                { key: 'speed', label: '속도',       min: 0.1, max: 5,   step: 0.1 },
+                { key: 'spread', label: '확산 범위', min: 0.1, max: 5,   step: 0.1 },
+                { key: 'size',  label: '크기',       min: 0.01, max: 0.5, step: 0.01 },
+              ] as const).map(({ key, label, min, max, step }) => (
+                <div key={key}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{label}</span>
+                    <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.particle![key] ?? '기본').toString()}</span>
+                  </div>
+                  <input type="range" min={min} max={max} step={step}
+                    value={obj.particle![key] as number | undefined ?? (key === 'count' ? 80 : key === 'speed' ? 0.8 : key === 'spread' ? 1 : 0.08)}
+                    onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, [key]: parseFloat(e.target.value) } })}
+                    onMouseUp={pushHistory}
+                    className="w-full accent-violet-500"
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Material (primitive, non-content 오브젝트만) */}
+        {!obj.assetId && !obj.content && !obj.particle && (
           <>
             <SectionHeader title="Material" />
             <div className="px-3 py-3 space-y-2.5">
@@ -372,6 +528,25 @@ export function InspectorPanel() {
                   onMouseUp={pushHistory}
                   className="w-full accent-violet-500"
                 />
+              </div>
+              <div>
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Emissive</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={obj.material?.emissive ?? '#000000'}
+                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
+                    onBlur={pushHistory}
+                    className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={obj.material?.emissive ?? '#000000'}
+                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
+                    onBlur={pushHistory}
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
               </div>
             </div>
           </>

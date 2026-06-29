@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { createBrowserSupabase } from '@/lib/supabase';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
 
 const ViewerCanvas = dynamic(
@@ -26,13 +27,33 @@ interface Props {
   projectName: string;
   isOwner: boolean;
   projectId: string;
+  hideBadge?: boolean;
 }
 
-export function ViewerClient({ scene, projectName, isOwner, projectId }: Props) {
+export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge = false }: Props) {
   const [popup, setPopup] = useState<{ title: string; content: string } | null>(null);
   const [playMode, setPlayMode] = useState(false);
 
+  // 방문 이벤트 수집
+  useEffect(() => {
+    const supabase = createBrowserSupabase();
+    supabase.from('scene_events').insert({ scene_id: scene.sceneId, event_type: 'view' });
+  }, [scene.sceneId]);
+
+  const trackEvent = (eventType: string, objectId?: string, objectName?: string) => {
+    const supabase = createBrowserSupabase();
+    supabase.from('scene_events').insert({
+      scene_id: scene.sceneId,
+      event_type: eventType,
+      object_id: objectId,
+      object_name: objectName,
+    });
+  };
+
   const handleObjectEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => {
+    if (trigger === 'click') trackEvent('click', obj.id, obj.name);
+    if (trigger === 'area_enter') trackEvent('area_enter', obj.id, obj.name);
+
     const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
     for (const ev of matchingEvents) {
       if (ev.action === 'open_url' && ev.value) {
@@ -40,7 +61,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId }: Props) 
       } else if (ev.action === 'show_popup') {
         setPopup({ title: obj.name, content: ev.value });
       }
-      // emit_event / play_animation: 추후 구현
+      // emit_event: EmbedClient 참고
     }
   };
 
@@ -92,13 +113,18 @@ export function ViewerClient({ scene, projectName, isOwner, projectId }: Props) 
         </div>
       )}
 
-      {/* Park3D 배지 */}
-      <div className="absolute bottom-4 right-4 pointer-events-none">
-        <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 text-white/50 text-[10px] px-2.5 py-1.5 rounded-lg">
+      {/* Park3D 배지 — Free 플랜만 표시 */}
+      {!hideBadge && (
+        <a
+          href="https://park3d.io"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 text-white/50 hover:text-white/80 text-[10px] px-2.5 py-1.5 rounded-lg transition-colors"
+        >
           <span className="text-sm leading-none">⬡</span>
           Powered by Park3D
-        </div>
-      </div>
+        </a>
+      )}
 
       {/* 팝업 모달 */}
       {popup && (

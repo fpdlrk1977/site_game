@@ -35,6 +35,27 @@ export interface PhysicsSchema {
 
 export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane';
 
+export type ContentType = 'text' | 'image' | 'video';
+
+export interface ContentConfig {
+  type: ContentType;
+  text?: string;
+  fontSize?: number;
+  color?: string;
+  url?: string;
+}
+
+export type ParticlePreset = 'fire' | 'dust' | 'light' | 'snow';
+
+export interface ParticleConfig {
+  preset: ParticlePreset;
+  count?: number;
+  color?: string;
+  speed?: number;
+  spread?: number;
+  size?: number;
+}
+
 export interface MaterialOverride {
   color?: string;
   roughness?: number;
@@ -57,6 +78,8 @@ export interface ObjectNodeSchema {
   locked: boolean;
   physics: PhysicsSchema;
   events: EventSchema[];
+  content?: ContentConfig;
+  particle?: ParticleConfig;
 }
 
 export interface AssetRefSchema {

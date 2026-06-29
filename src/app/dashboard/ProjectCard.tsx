@@ -17,7 +17,7 @@ interface Project {
   custom_domain: string | null;
 }
 
-export function ProjectCard({ project }: { project: Project }) {
+export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: { project: Project; viewCount?: number; showAnalytics?: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameValue, setNameValue] = useState(project.name);
@@ -114,7 +114,14 @@ export function ProjectCard({ project }: { project: Project }) {
           ) : (
             <p className="text-sm font-medium text-white truncate">{project.name}</p>
           )}
-          <p className="text-xs text-zinc-500 mt-0.5">{updatedDate} 수정</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-xs text-zinc-500">{updatedDate} 수정</p>
+            {showAnalytics && (
+              <span className="text-[10px] text-zinc-500">
+                · 방문 {viewCount.toLocaleString()}회
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 더보기 메뉴 */}

@@ -1,10 +1,12 @@
 'use client';
 
-import { useRef, Suspense, lazy } from 'react';
+import { useRef, Suspense, lazy, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
 import { ViewerObject } from './ViewerObject';
+import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
+import { ParticleEmitter } from '@/components/three/ParticleEmitter';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
 
@@ -18,6 +20,13 @@ export function ViewerCanvas({ scene, playMode, onObjectClick }: Props) {
   const { environment, objects } = scene;
   const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#1a1a2e';
   const azimuthRef = useRef(0);
+
+  const instancedIds = useMemo(() => getInstancedIds(objects), [objects]);
+  const particleObjects = useMemo(() => objects.filter((o) => o.visible && o.particle), [objects]);
+  const nonInstancedObjects = useMemo(
+    () => objects.filter((o) => !instancedIds.has(o.id) && !o.particle),
+    [objects, instancedIds],
+  );
 
   return (
     <Canvas
@@ -56,9 +65,21 @@ export function ViewerCanvas({ scene, playMode, onObjectClick }: Props) {
         infiniteGrid
       />
 
-      {!playMode && objects.map((obj) => (
-        <ViewerObject key={obj.id} object={obj} assets={scene.assets ?? []} onEvent={onObjectClick} />
-      ))}
+      {!playMode && (
+        <>
+          <InstancedPrimitives objects={objects} />
+          {nonInstancedObjects.map((obj) => (
+            <ViewerObject key={obj.id} object={obj} assets={scene.assets ?? []} onEvent={onObjectClick} />
+          ))}
+          {particleObjects.map((obj) => (
+            <ParticleEmitter
+              key={obj.id}
+              config={obj.particle!}
+              position={[obj.position.x, obj.position.y, obj.position.z]}
+            />
+          ))}
+        </>
+      )}
 
       {playMode && (
         <Suspense fallback={null}>

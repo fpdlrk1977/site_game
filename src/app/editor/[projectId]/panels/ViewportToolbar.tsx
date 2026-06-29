@@ -1,9 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSceneStore } from '@/store/sceneStore';
+import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SceneSwitcher } from './SceneSwitcher';
+import { VersionHistoryModal } from './VersionHistoryModal';
 import type { PrimitiveShape, ProjectSceneSchema } from '@/types/scene';
 
 interface Props {
@@ -20,11 +24,13 @@ const SHAPES: { shape: PrimitiveShape; label: string; icon: string }[] = [
 export function ViewportToolbar({ projectName }: Props) {
   const {
     transformMode, transformSpace, isModified,
-    snapEnabled, snapTranslate,
-    setTransformMode, setTransformSpace, setSnap,
+    snapEnabled, snapTranslate, wireframeMode,
+    setTransformMode, setTransformSpace, setSnap, toggleWireframe,
     addObject, undo, redo,
     projectId, sceneId, objects, assets, environment, markSaved,
   } = useSceneStore();
+  const { addToast } = useToast();
+  const [showHistory, setShowHistory] = useState(false);
 
   const SNAP_STEPS = [0.25, 0.5, 1, 2];
 
@@ -40,10 +46,27 @@ export function ViewportToolbar({ projectName }: Props) {
       objects,
     };
 
-    await supabase
+    const { error: saveErr } = await supabase
       .from('scenes')
       .update({ scene_data: sceneData })
       .eq('id', sceneId);
+
+    if (saveErr) {
+      addToast('씬 저장에 실패했습니다. 다시 시도해 주세요.', 'error');
+      return;
+    }
+
+    // 버전 스냅샷 저장 (최대 30개 유지)
+    await supabase.from('scene_versions').insert({ scene_id: sceneId, scene_data: sceneData });
+    const { data: oldVersions } = await supabase
+      .from('scene_versions')
+      .select('id')
+      .eq('scene_id', sceneId)
+      .order('created_at', { ascending: false })
+      .range(30, 100);
+    if (oldVersions && oldVersions.length > 0) {
+      await supabase.from('scene_versions').delete().in('id', oldVersions.map((v) => v.id));
+    }
 
     // 썸네일 캡처 — canvas.toDataURL은 preserveDrawingBuffer: true 필요
     if (projectId) {
@@ -72,6 +95,7 @@ export function ViewportToolbar({ projectName }: Props) {
     }
 
     markSaved();
+    addToast('저장되었습니다.', 'success');
   };
 
   const MODE_BTNS = [
@@ -81,6 +105,7 @@ export function ViewportToolbar({ projectName }: Props) {
   ];
 
   return (
+    <>
     <header className="flex items-center gap-2 px-3 h-full bg-zinc-900 border-b border-zinc-800 select-none">
       {/* 뒤로 */}
       <Link
@@ -168,6 +193,21 @@ export function ViewportToolbar({ projectName }: Props) {
 
       <div className="w-px h-5 bg-zinc-700" />
 
+      {/* 와이어프레임 */}
+      <button
+        title="와이어프레임 토글"
+        onClick={toggleWireframe}
+        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+          wireframeMode
+            ? 'bg-cyan-600 text-white'
+            : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+        }`}
+      >
+        {wireframeMode ? '솔리드' : '와이어'}
+      </button>
+
+      <div className="w-px h-5 bg-zinc-700" />
+
       {/* Undo / Redo */}
       <div className="flex items-center gap-0.5 bg-zinc-800 rounded-lg p-0.5">
         <button
@@ -200,6 +240,15 @@ export function ViewportToolbar({ projectName }: Props) {
         저장{isModified ? ' *' : ''}
       </button>
 
+      {/* 버전 히스토리 */}
+      <button
+        title="버전 히스토리"
+        onClick={() => setShowHistory(true)}
+        className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+      >
+        히스토리
+      </button>
+
       {/* 미리보기 */}
       {sceneId && (
         <a
@@ -211,5 +260,11 @@ export function ViewportToolbar({ projectName }: Props) {
         </a>
       )}
     </header>
+
+    {showHistory && typeof document !== 'undefined' && createPortal(
+      <VersionHistoryModal onClose={() => setShowHistory(false)} />,
+      document.body,
+    )}
+    </>
   );
 }
