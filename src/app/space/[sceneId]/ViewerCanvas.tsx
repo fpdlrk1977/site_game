@@ -1,18 +1,23 @@
 'use client';
 
+import { useRef, Suspense, lazy } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
-import type { ProjectSceneSchema, ObjectNodeSchema } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
 import { ViewerObject } from './ViewerObject';
+
+const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
 
 interface Props {
   scene: ProjectSceneSchema;
-  onObjectClick: (obj: ObjectNodeSchema) => void;
+  playMode: boolean;
+  onObjectClick: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
 }
 
-export function ViewerCanvas({ scene, onObjectClick }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick }: Props) {
   const { environment, objects } = scene;
   const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#1a1a2e';
+  const azimuthRef = useRef(0);
 
   return (
     <Canvas
@@ -22,15 +27,10 @@ export function ViewerCanvas({ scene, onObjectClick }: Props) {
     >
       <color attach="background" args={[skyColor]} />
 
-      {/* 안개 */}
       {environment.fog.enabled && (
-        <fog
-          attach="fog"
-          args={[environment.fog.color, environment.fog.near, environment.fog.far]}
-        />
+        <fog attach="fog" args={[environment.fog.color, environment.fog.near, environment.fog.far]} />
       )}
 
-      {/* 조명 */}
       <ambientLight intensity={environment.lights.ambientIntensity} />
       <directionalLight
         position={[
@@ -43,7 +43,6 @@ export function ViewerCanvas({ scene, onObjectClick }: Props) {
         shadow-mapSize={[2048, 2048]}
       />
 
-      {/* 그리드 (에디터보다 연하게) */}
       <Grid
         position={[0, 0, 0]}
         cellSize={1}
@@ -57,18 +56,25 @@ export function ViewerCanvas({ scene, onObjectClick }: Props) {
         infiniteGrid
       />
 
-      {/* 씬 오브젝트 */}
-      {objects.map((obj) => (
+      {!playMode && objects.map((obj) => (
         <ViewerObject key={obj.id} object={obj} assets={scene.assets ?? []} onEvent={onObjectClick} />
       ))}
 
-      <OrbitControls
-        makeDefault
-        minPolarAngle={0.1}
-        maxPolarAngle={Math.PI / 2 - 0.02}
-        minDistance={1}
-        maxDistance={200}
-      />
+      {playMode && (
+        <Suspense fallback={null}>
+          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} />
+        </Suspense>
+      )}
+
+      {!playMode && (
+        <OrbitControls
+          makeDefault
+          minPolarAngle={0.1}
+          maxPolarAngle={Math.PI / 2 - 0.02}
+          minDistance={1}
+          maxDistance={200}
+        />
+      )}
     </Canvas>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { deleteProject, renameProject, togglePublish } from './actions';
+import { ShareModal } from './ShareModal';
 
 interface Project {
   id: string;
@@ -10,6 +11,7 @@ interface Project {
   is_published: boolean;
   updated_at: string;
   thumbnail_url: string | null;
+  default_scene_id: string | null;
 }
 
 export function ProjectCard({ project }: { project: Project }) {
@@ -17,6 +19,7 @@ export function ProjectCard({ project }: { project: Project }) {
   const [renaming, setRenaming] = useState(false);
   const [nameValue, setNameValue] = useState(project.name);
   const [deleting, setDeleting] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -128,6 +131,14 @@ export function ProjectCard({ project }: { project: Project }) {
               >
                 <span>✏</span> 이름 변경
               </button>
+              {project.default_scene_id && (
+                <button
+                  onClick={() => { setMenuOpen(false); setSharing(true); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+                >
+                  <span>🔗</span> 공유하기
+                </button>
+              )}
               <button
                 onClick={() => { setMenuOpen(false); togglePublish(project.id, !project.is_published); }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
@@ -146,6 +157,14 @@ export function ProjectCard({ project }: { project: Project }) {
           )}
         </div>
       </div>
+    {sharing && project.default_scene_id && (
+      <ShareModal
+        projectName={project.name}
+        sceneId={project.default_scene_id}
+        isPublished={project.is_published}
+        onClose={() => setSharing(false)}
+      />
+    )}
     </div>
   );
 }

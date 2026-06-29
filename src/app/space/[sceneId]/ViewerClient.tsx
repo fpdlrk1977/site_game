@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
-import type { ProjectSceneSchema, ObjectNodeSchema } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
 
 const ViewerCanvas = dynamic(
   () => import('./ViewerCanvas').then((m) => m.ViewerCanvas),
@@ -31,22 +30,23 @@ interface Props {
 
 export function ViewerClient({ scene, projectName, isOwner, projectId }: Props) {
   const [popup, setPopup] = useState<{ title: string; content: string } | null>(null);
+  const [playMode, setPlayMode] = useState(false);
 
-  const handleObjectClick = (obj: ObjectNodeSchema) => {
-    const clickEvent = obj.events.find((e) => e.trigger === 'click');
-    if (!clickEvent) return;
-
-    if (clickEvent.action === 'open_url') {
-      window.open(clickEvent.value, '_blank', 'noopener noreferrer');
-    } else if (clickEvent.action === 'show_popup') {
-      setPopup({ title: obj.name, content: clickEvent.value });
+  const handleObjectEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => {
+    const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
+    for (const ev of matchingEvents) {
+      if (ev.action === 'open_url' && ev.value) {
+        window.open(ev.value, '_blank', 'noopener noreferrer');
+      } else if (ev.action === 'show_popup') {
+        setPopup({ title: obj.name, content: ev.value });
+      }
+      // emit_event / play_animation: 추후 구현
     }
   };
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-zinc-950">
-      {/* 3D 캔버스 */}
-      <ViewerCanvas scene={scene} onObjectClick={handleObjectClick} />
+      <ViewerCanvas scene={scene} playMode={playMode} onObjectClick={handleObjectEvent} />
 
       {/* 상단 오버레이 */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 pointer-events-none">
@@ -63,12 +63,36 @@ export function ViewerClient({ scene, projectName, isOwner, projectId }: Props) 
             </button>
           )}
         </div>
-        <div className="text-white/60 text-xs font-medium bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-          {projectName}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <span className="text-white/60 text-xs font-medium bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+            {projectName}
+          </span>
+          <button
+            onClick={() => setPlayMode((v) => !v)}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border backdrop-blur-sm transition-all ${
+              playMode
+                ? 'bg-violet-600/80 border-violet-500/50 text-white'
+                : 'bg-black/40 border-white/10 text-white/70 hover:bg-black/60'
+            }`}
+          >
+            {playMode ? '⏹ 탐색 모드' : '▶ 플레이'}
+          </button>
         </div>
       </div>
 
-      {/* Park3D 배지 (Free 플랜) */}
+      {playMode && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 pointer-events-none">
+          <div className="bg-black/50 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2 text-white/50 text-xs flex items-center gap-3">
+            <span>WASD 이동</span>
+            <span className="text-white/20">|</span>
+            <span>Space 점프</span>
+            <span className="text-white/20">|</span>
+            <span>마우스 드래그 시점</span>
+          </div>
+        </div>
+      )}
+
+      {/* Park3D 배지 */}
       <div className="absolute bottom-4 right-4 pointer-events-none">
         <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 text-white/50 text-[10px] px-2.5 py-1.5 rounded-lg">
           <span className="text-sm leading-none">⬡</span>

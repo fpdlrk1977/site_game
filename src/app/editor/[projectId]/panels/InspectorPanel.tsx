@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { MathUtils } from 'three';
 import { useSceneStore } from '@/store/sceneStore';
-import type { ObjectNodeSchema } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema } from '@/types/scene';
 
 // ── 단일 숫자 입력 ─────────────────────────────────────────────
 function NumInput({
@@ -88,22 +89,163 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
+// ── Toggle ─────────────────────────────────────────────────────
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div
+      onClick={() => onChange(!value)}
+      className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer flex-shrink-0 ${value ? 'bg-violet-600' : 'bg-zinc-700'}`}
+    >
+      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-4' : 'left-0.5'}`} />
+    </div>
+  );
+}
+
+// ── 트리거/액션 라벨 ───────────────────────────────────────────
+const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
+  click: 'Click',
+  hover_enter: 'Hover',
+  area_enter: 'Area Enter',
+};
+const ACTION_LABELS: Record<string, string> = {
+  open_url: 'URL 열기',
+  show_popup: '팝업',
+};
+
+// ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
+function EnvironmentPanel() {
+  const { environment, updateEnvironment, pushHistory } = useSceneStore();
+  const env = environment;
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {/* Sky */}
+      <SectionHeader title="Sky" />
+      <div className="px-3 py-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={env.sky.value}
+            onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
+            onBlur={pushHistory}
+            className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
+          />
+          <input
+            type="text"
+            value={env.sky.value}
+            onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
+            onBlur={pushHistory}
+            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+          />
+        </div>
+      </div>
+
+      {/* Fog */}
+      <SectionHeader title="Fog" />
+      <div className="px-3 py-3 space-y-3">
+        <label className="flex items-center justify-between cursor-pointer">
+          <span className="text-xs text-zinc-400">Enable Fog</span>
+          <Toggle
+            value={env.fog.enabled}
+            onChange={(v) => { updateEnvironment({ fog: { ...env.fog, enabled: v } }); pushHistory(); }}
+          />
+        </label>
+        {env.fog.enabled && (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-zinc-500 w-12">Color</span>
+              <input
+                type="color"
+                value={env.fog.color}
+                onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
+                onBlur={pushHistory}
+                className="w-8 h-7 rounded border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Near</span>
+                <span className="text-[10px] text-zinc-500 tabular-nums">{env.fog.near}</span>
+              </div>
+              <input type="range" min="1" max="200" step="1" value={env.fog.near}
+                onChange={(e) => updateEnvironment({ fog: { ...env.fog, near: parseFloat(e.target.value) } })}
+                onMouseUp={pushHistory}
+                className="w-full accent-violet-500"
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Far</span>
+                <span className="text-[10px] text-zinc-500 tabular-nums">{env.fog.far}</span>
+              </div>
+              <input type="range" min="10" max="500" step="5" value={env.fog.far}
+                onChange={(e) => updateEnvironment({ fog: { ...env.fog, far: parseFloat(e.target.value) } })}
+                onMouseUp={pushHistory}
+                className="w-full accent-violet-500"
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Lights */}
+      <SectionHeader title="Lights" />
+      <div className="px-3 py-3 space-y-3">
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Ambient</span>
+            <span className="text-[10px] text-zinc-500 tabular-nums">{env.lights.ambientIntensity.toFixed(2)}</span>
+          </div>
+          <input type="range" min="0" max="3" step="0.05" value={env.lights.ambientIntensity}
+            onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientIntensity: parseFloat(e.target.value) } })}
+            onMouseUp={pushHistory}
+            className="w-full accent-violet-500"
+          />
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Directional</span>
+            <span className="text-[10px] text-zinc-500 tabular-nums">{env.lights.directionalIntensity.toFixed(2)}</span>
+          </div>
+          <input type="range" min="0" max="5" step="0.1" value={env.lights.directionalIntensity}
+            onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: parseFloat(e.target.value) } })}
+            onMouseUp={pushHistory}
+            className="w-full accent-violet-500"
+          />
+        </div>
+        <XYZRow
+          label="Sun Position"
+          x={env.lights.directionalPosition.x}
+          y={env.lights.directionalPosition.y}
+          z={env.lights.directionalPosition.z}
+          onChangeX={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, x: v } } })}
+          onChangeY={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, y: v } } })}
+          onChangeZ={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, z: v } } })}
+          onCommit={pushHistory}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 ───────────────────────────────────────────────────────
 export function InspectorPanel() {
   const { objects, selectedId, updateObject, pushHistory } = useSceneStore();
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
 
+  // Events 추가 폼 상태
+  const [showAddEvent, setShowAddEvent] = useState(false);
+  const [newTrigger, setNewTrigger] = useState<EventSchema['trigger']>('click');
+  const [newAction, setNewAction] = useState<EventSchema['action']>('show_popup');
+  const [newValue, setNewValue] = useState('');
+
   if (!obj) {
     return (
-      <aside className="flex flex-col bg-zinc-950 border-l border-zinc-800">
-        <div className="px-3 py-2 border-b border-zinc-800">
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Inspector</span>
+      <aside className="flex flex-col bg-zinc-950 border-l border-zinc-800 overflow-hidden">
+        <div className="px-3 py-2 border-b border-zinc-800 flex items-center gap-2">
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex-1">Environment</span>
         </div>
-        <div className="flex-1 flex items-center justify-center p-4">
-          <p className="text-zinc-600 text-xs text-center leading-relaxed">
-            오브젝트를 선택하면<br />속성을 편집할 수 있습니다
-          </p>
-        </div>
+        <EnvironmentPanel />
       </aside>
     );
   }
@@ -114,6 +256,27 @@ export function InspectorPanel() {
     updateObject(obj.id, { rotation: { ...obj.rotation, [axis]: v } });
   const setScl = (axis: 'x' | 'y' | 'z', v: number) =>
     updateObject(obj.id, { scale: { ...obj.scale, [axis]: v } });
+
+  const addEvent = () => {
+    if (!newValue.trim() && newAction !== 'show_popup') return;
+    const ev: EventSchema = {
+      id: MathUtils.generateUUID(),
+      trigger: newTrigger,
+      action: newAction,
+      value: newValue.trim(),
+    };
+    updateObject(obj.id, { events: [...obj.events, ev] });
+    pushHistory();
+    setNewValue('');
+    setShowAddEvent(false);
+  };
+
+  const removeEvent = (id: string) => {
+    updateObject(obj.id, { events: obj.events.filter((e) => e.id !== id) });
+    pushHistory();
+  };
+
+  const areaEnterNeedsPhysics = newTrigger === 'area_enter' && (!obj.physics.enabled || !obj.physics.isSensor);
 
   return (
     <aside className="flex flex-col bg-zinc-950 border-l border-zinc-800 overflow-hidden">
@@ -161,81 +324,235 @@ export function InspectorPanel() {
           />
         </div>
 
-        {/* Material */}
-        <SectionHeader title="Material" />
-        <div className="px-3 py-3 space-y-2.5">
-          <div>
-            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Color</span>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={obj.material?.color ?? '#a78bfa'}
-                onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
-                onBlur={pushHistory}
-                className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
-              />
-              <input
-                type="text"
-                value={obj.material?.color ?? '#a78bfa'}
-                onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
-                onBlur={pushHistory}
-                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
-              />
+        {/* Material (primitive 오브젝트만) */}
+        {!obj.assetId && (
+          <>
+            <SectionHeader title="Material" />
+            <div className="px-3 py-3 space-y-2.5">
+              <div>
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Color</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={obj.material?.color ?? '#a78bfa'}
+                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
+                    onBlur={pushHistory}
+                    className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={obj.material?.color ?? '#a78bfa'}
+                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
+                    onBlur={pushHistory}
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Roughness</span>
+                  <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.material?.roughness ?? 0.5).toFixed(2)}</span>
+                </div>
+                <input type="range" min="0" max="1" step="0.01"
+                  value={obj.material?.roughness ?? 0.5}
+                  onChange={(e) => updateObject(obj.id, { material: { ...obj.material, roughness: parseFloat(e.target.value) } })}
+                  onMouseUp={pushHistory}
+                  className="w-full accent-violet-500"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Metalness</span>
+                  <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.material?.metalness ?? 0.1).toFixed(2)}</span>
+                </div>
+                <input type="range" min="0" max="1" step="0.01"
+                  value={obj.material?.metalness ?? 0.1}
+                  onChange={(e) => updateObject(obj.id, { material: { ...obj.material, metalness: parseFloat(e.target.value) } })}
+                  onMouseUp={pushHistory}
+                  className="w-full accent-violet-500"
+                />
+              </div>
             </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Roughness</span>
-              <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.material?.roughness ?? 0.5).toFixed(2)}</span>
-            </div>
-            <input
-              type="range" min="0" max="1" step="0.01"
-              value={obj.material?.roughness ?? 0.5}
-              onChange={(e) => updateObject(obj.id, { material: { ...obj.material, roughness: parseFloat(e.target.value) } })}
-              onMouseUp={pushHistory}
-              className="w-full accent-violet-500"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Metalness</span>
-              <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.material?.metalness ?? 0.1).toFixed(2)}</span>
-            </div>
-            <input
-              type="range" min="0" max="1" step="0.01"
-              value={obj.material?.metalness ?? 0.1}
-              onChange={(e) => updateObject(obj.id, { material: { ...obj.material, metalness: parseFloat(e.target.value) } })}
-              onMouseUp={pushHistory}
-              className="w-full accent-violet-500"
-            />
-          </div>
-        </div>
+          </>
+        )}
 
         {/* Visibility */}
         <SectionHeader title="Visibility" />
         <div className="px-3 py-3 space-y-2">
-          {(
-            [
-              { key: 'visible', label: 'Visible' },
-              { key: 'locked', label: 'Locked' },
-            ] as const
-          ).map(({ key, label }) => (
+          {(['visible', 'locked'] as const).map((key) => (
             <label key={key} className="flex items-center justify-between cursor-pointer">
-              <span className="text-xs text-zinc-400">{label}</span>
-              <div
-                onClick={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }}
-                className={`relative w-9 h-5 rounded-full transition-colors ${
-                  obj[key] ? 'bg-violet-600' : 'bg-zinc-700'
-                }`}
-              >
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${
-                  obj[key] ? 'left-4' : 'left-0.5'
-                }`} />
-              </div>
+              <span className="text-xs text-zinc-400 capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
+              <Toggle
+                value={obj[key]}
+                onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }}
+              />
             </label>
           ))}
+        </div>
+
+        {/* Physics */}
+        <SectionHeader title="Physics" />
+        <div className="px-3 py-3 space-y-3">
+          <label className="flex items-center justify-between cursor-pointer">
+            <span className="text-xs text-zinc-400">Enable Physics</span>
+            <Toggle
+              value={obj.physics.enabled}
+              onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, enabled: v } }); pushHistory(); }}
+            />
+          </label>
+          {obj.physics.enabled && (
+            <>
+              <div>
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Collider Type</span>
+                <select
+                  value={obj.physics.colliderType}
+                  onChange={(e) => { updateObject(obj.id, { physics: { ...obj.physics, colliderType: e.target.value as ColliderType } }); pushHistory(); }}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                >
+                  <option value="box">Box (Cuboid)</option>
+                  <option value="sphere">Sphere (Ball)</option>
+                  <option value="capsule">Capsule</option>
+                  <option value="hull">Convex Hull</option>
+                  <option value="trimesh">Trimesh (정확/느림)</option>
+                </select>
+              </div>
+              <label className="flex items-center justify-between cursor-pointer">
+                <div>
+                  <span className="text-xs text-zinc-400">Is Sensor (Area)</span>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">진입 시 이벤트 발생</p>
+                </div>
+                <Toggle
+                  value={obj.physics.isSensor}
+                  onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, isSensor: v } }); pushHistory(); }}
+                />
+              </label>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Friction</span>
+                  <span className="text-[10px] text-zinc-500 tabular-nums">{obj.physics.friction.toFixed(2)}</span>
+                </div>
+                <input type="range" min="0" max="1" step="0.01" value={obj.physics.friction}
+                  onChange={(e) => updateObject(obj.id, { physics: { ...obj.physics, friction: parseFloat(e.target.value) } })}
+                  onMouseUp={pushHistory}
+                  className="w-full accent-violet-500"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Restitution</span>
+                  <span className="text-[10px] text-zinc-500 tabular-nums">{obj.physics.restitution.toFixed(2)}</span>
+                </div>
+                <input type="range" min="0" max="1" step="0.01" value={obj.physics.restitution}
+                  onChange={(e) => updateObject(obj.id, { physics: { ...obj.physics, restitution: parseFloat(e.target.value) } })}
+                  onMouseUp={pushHistory}
+                  className="w-full accent-violet-500"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Events */}
+        <SectionHeader title="Events" />
+        <div className="px-3 py-3 space-y-2">
+          {obj.events.length === 0 && !showAddEvent && (
+            <p className="text-zinc-600 text-xs py-1">이벤트 없음</p>
+          )}
+
+          {obj.events.map((ev) => (
+            <div key={ev.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0">
+                    {TRIGGER_LABELS[ev.trigger]}
+                  </span>
+                  <span className="text-zinc-500 text-[10px]">→</span>
+                  <span className="text-zinc-300 text-[10px] truncate">{ACTION_LABELS[ev.action] ?? ev.action}</span>
+                </div>
+                <button
+                  onClick={() => removeEvent(ev.id)}
+                  className="text-zinc-600 hover:text-red-400 text-xs ml-2 shrink-0 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              {ev.value && (
+                <p className="text-zinc-500 text-[10px] mt-1 truncate font-mono">{ev.value}</p>
+              )}
+            </div>
+          ))}
+
+          {showAddEvent ? (
+            <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 space-y-2">
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <span className="text-[10px] text-zinc-500 block mb-1">Trigger</span>
+                  <select
+                    value={newTrigger}
+                    onChange={(e) => setNewTrigger(e.target.value as EventSchema['trigger'])}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  >
+                    <option value="click">Click</option>
+                    <option value="hover_enter">Hover</option>
+                    <option value="area_enter">Area Enter</option>
+                  </select>
+                </div>
+                <div>
+                  <span className="text-[10px] text-zinc-500 block mb-1">Action</span>
+                  <select
+                    value={newAction}
+                    onChange={(e) => setNewAction(e.target.value as EventSchema['action'])}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  >
+                    <option value="show_popup">팝업</option>
+                    <option value="open_url">URL 열기</option>
+                  </select>
+                </div>
+              </div>
+
+              {areaEnterNeedsPhysics && (
+                <p className="text-amber-500/80 text-[10px] bg-amber-500/10 rounded px-2 py-1">
+                  Area Enter는 Physics 활성화 + Is Sensor 필요
+                </p>
+              )}
+
+              <div>
+                <span className="text-[10px] text-zinc-500 block mb-1">
+                  {newAction === 'open_url' ? 'URL' : '팝업 내용'}
+                </span>
+                <input
+                  type="text"
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  placeholder={newAction === 'open_url' ? 'https://...' : '표시할 텍스트'}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  onKeyDown={(e) => e.key === 'Enter' && addEvent()}
+                />
+              </div>
+
+              <div className="flex gap-1.5">
+                <button
+                  onClick={addEvent}
+                  className="flex-1 py-1 rounded bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
+                >
+                  추가
+                </button>
+                <button
+                  onClick={() => { setShowAddEvent(false); setNewValue(''); }}
+                  className="flex-1 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs transition-colors"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddEvent(true)}
+              className="w-full py-1.5 rounded-lg border border-dashed border-zinc-700 text-zinc-500 hover:border-violet-600 hover:text-violet-400 text-xs transition-colors"
+            >
+              + 이벤트 추가
+            </button>
+          )}
         </div>
       </div>
     </aside>

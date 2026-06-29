@@ -4,7 +4,7 @@ import { useState, Suspense } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMemo, useEffect } from 'react';
-import type { ObjectNodeSchema, AssetRefSchema } from '@/types/scene';
+import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -46,10 +46,12 @@ function GlbViewer({ url, hovered, onClick, onPointerOver, onPointerOut }: {
 interface Props {
   object: ObjectNodeSchema;
   assets: AssetRefSchema[];
-  onEvent: (obj: ObjectNodeSchema) => void;
+  onEvent: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
+  /** RigidBody 내부에서 사용할 때 — position/rotation은 부모 RigidBody가 담당, scale만 적용 */
+  noTransform?: boolean;
 }
 
-export function ViewerObject({ object, assets, onEvent }: Props) {
+export function ViewerObject({ object, assets, onEvent, noTransform = false }: Props) {
   const [hovered, setHovered] = useState(false);
   const hasClick = object.events.some((e) => e.trigger === 'click');
   const hasHover = object.events.some((e) => e.trigger === 'hover_enter');
@@ -57,8 +59,8 @@ export function ViewerObject({ object, assets, onEvent }: Props) {
 
   if (!object.visible) return null;
 
-  const pos: [number, number, number] = [object.position.x, object.position.y, object.position.z];
-  const rot: [number, number, number] = [
+  const pos: [number, number, number] = noTransform ? [0, 0, 0] : [object.position.x, object.position.y, object.position.z];
+  const rot: [number, number, number] = noTransform ? [0, 0, 0] : [
     object.rotation.x * DEG2RAD,
     object.rotation.y * DEG2RAD,
     object.rotation.z * DEG2RAD,
@@ -71,6 +73,7 @@ export function ViewerObject({ object, assets, onEvent }: Props) {
     if (!isInteractive) return;
     setHovered(true);
     document.body.style.cursor = 'pointer';
+    if (hasHover) onEvent(object, 'hover_enter');
   };
   const handlePointerOut = () => {
     if (!isInteractive) return;
@@ -79,7 +82,7 @@ export function ViewerObject({ object, assets, onEvent }: Props) {
   };
   const handleClick = () => {
     if (!hasClick) return;
-    onEvent(object);
+    onEvent(object, 'click');
   };
 
   if (assetRef) {

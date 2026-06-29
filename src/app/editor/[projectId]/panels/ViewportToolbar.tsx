@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useSceneStore } from '@/store/sceneStore';
 import { createBrowserSupabase } from '@/lib/supabase';
+import { SceneSwitcher } from './SceneSwitcher';
 import type { PrimitiveShape, ProjectSceneSchema } from '@/types/scene';
 
 interface Props {
@@ -90,6 +91,8 @@ export function ViewportToolbar({ projectName }: Props) {
       </Link>
       <span className="text-zinc-600 text-sm">|</span>
       <span className="text-sm font-medium text-zinc-300 shrink-0 max-w-[120px] truncate">{projectName}</span>
+      <span className="text-zinc-700 text-sm">/</span>
+      <SceneSwitcher />
 
       <div className="flex-1" />
 

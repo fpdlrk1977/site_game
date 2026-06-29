@@ -19,7 +19,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq('id', sceneId)
     .single();
 
-  const project = Array.isArray(scene?.projects) ? scene.projects[0] : scene?.projects as { name?: string; thumbnail_url?: string } | null;
+  const proj = scene?.projects;
+  const project = Array.isArray(proj) ? proj[0] : (proj as { name?: string; thumbnail_url?: string } | null | undefined) ?? null;
   const title = `${project?.name ?? '3D 공간'} — Park3D`;
 
   return {
