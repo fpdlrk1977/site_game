@@ -15,7 +15,7 @@ export default async function DashboardPage() {
   const [{ data: projects }, { data: planData }] = await Promise.all([
     supabase
       .from('projects')
-      .select('id, name, is_published, updated_at, thumbnail_url, default_scene_id')
+      .select('id, name, is_published, updated_at, thumbnail_url, default_scene_id, custom_domain')
       .eq('owner_id', user.id)
       .order('updated_at', { ascending: false }),
     supabase

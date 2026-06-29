@@ -110,6 +110,7 @@ const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
 const ACTION_LABELS: Record<string, string> = {
   open_url: 'URL 열기',
   show_popup: '팝업',
+  emit_event: '이벤트 발송',
 };
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
@@ -506,6 +507,7 @@ export function InspectorPanel() {
                   >
                     <option value="show_popup">팝업</option>
                     <option value="open_url">URL 열기</option>
+                    <option value="emit_event">이벤트 발송</option>
                   </select>
                 </div>
               </div>
@@ -518,13 +520,13 @@ export function InspectorPanel() {
 
               <div>
                 <span className="text-[10px] text-zinc-500 block mb-1">
-                  {newAction === 'open_url' ? 'URL' : '팝업 내용'}
+                  {newAction === 'open_url' ? 'URL' : newAction === 'emit_event' ? '이벤트 이름' : '팝업 내용'}
                 </span>
                 <input
                   type="text"
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
-                  placeholder={newAction === 'open_url' ? 'https://...' : '표시할 텍스트'}
+                  placeholder={newAction === 'open_url' ? 'https://...' : newAction === 'emit_event' ? 'my_event_name' : '표시할 텍스트'}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
                   onKeyDown={(e) => e.key === 'Enter' && addEvent()}
                 />

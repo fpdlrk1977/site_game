@@ -1,7 +1,7 @@
 'use server';
 
 import { createSupabaseServer } from '@/lib/supabase-server';
-import { assertCountLimit } from '@/lib/checkPlan';
+import { assertCountLimit, assertFeatureEnabled } from '@/lib/checkPlan';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { makeEmptySceneData } from '@/types/scene';
@@ -90,5 +90,24 @@ export async function renameProject(projectId: string, name: string) {
     .eq('id', projectId)
     .eq('owner_id', user.id);
 
+  revalidatePath('/dashboard');
+}
+
+export async function setCustomDomain(projectId: string, domain: string | null) {
+  const supabase = await createSupabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  if (domain) {
+    await assertFeatureEnabled(user.id, 'customDomain');
+  }
+
+  const { error } = await supabase
+    .from('projects')
+    .update({ custom_domain: domain ?? null })
+    .eq('id', projectId)
+    .eq('owner_id', user.id);
+
+  if (error) throw new Error(error.message);
   revalidatePath('/dashboard');
 }

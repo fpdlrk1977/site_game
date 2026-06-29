@@ -7,6 +7,7 @@ import { ViewportToolbar } from './panels/ViewportToolbar';
 import { HierarchyPanel } from './panels/HierarchyPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
 import { AssetBrowser } from './panels/AssetBrowser';
+import { EditorOnboarding } from './EditorOnboarding';
 import type { ProjectSceneSchema } from '@/types/scene';
 
 const EditorCanvas = dynamic(
@@ -103,6 +104,9 @@ export function EditorClient({ projectName, initialScene }: Props) {
       <div style={{ gridColumn: '1 / -1', gridRow: '3' }}>
         <AssetBrowser />
       </div>
+
+      {/* 신규 유저 온보딩 — 첫 방문 시에만 표시 */}
+      <EditorOnboarding />
     </div>
   );
 }

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { deleteProject, renameProject, togglePublish } from './actions';
 import { ShareModal } from './ShareModal';
+import { CustomDomainModal } from './CustomDomainModal';
 
 interface Project {
   id: string;
@@ -12,6 +14,7 @@ interface Project {
   updated_at: string;
   thumbnail_url: string | null;
   default_scene_id: string | null;
+  custom_domain: string | null;
 }
 
 export function ProjectCard({ project }: { project: Project }) {
@@ -20,6 +23,7 @@ export function ProjectCard({ project }: { project: Project }) {
   const [nameValue, setNameValue] = useState(project.name);
   const [deleting, setDeleting] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [domainOpen, setDomainOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -58,9 +62,9 @@ export function ProjectCard({ project }: { project: Project }) {
   });
 
   return (
-    <div className={`group relative bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden transition-all duration-200 hover:border-zinc-700 hover:shadow-xl hover:shadow-black/40 hover:-translate-y-0.5 ${deleting ? 'opacity-40 pointer-events-none' : ''}`}>
+    <div className={`group relative bg-zinc-900 border border-zinc-800 rounded-2xl transition-all duration-200 hover:border-zinc-700 hover:shadow-xl hover:shadow-black/40 hover:-translate-y-0.5 ${deleting ? 'opacity-40 pointer-events-none' : ''}`}>
       {/* 썸네일 */}
-      <Link href={`/editor/${project.id}`} className="block relative aspect-video bg-zinc-800 overflow-hidden">
+      <Link href={`/editor/${project.id}`} className="block relative aspect-video bg-zinc-800 overflow-hidden rounded-t-2xl">
         {project.thumbnail_url ? (
           <img src={project.thumbnail_url} alt={project.name} className="w-full h-full object-cover" />
         ) : (
@@ -68,11 +72,9 @@ export function ProjectCard({ project }: { project: Project }) {
             <div className="w-16 h-16 rounded-2xl bg-zinc-700/60 flex items-center justify-center text-3xl opacity-50 group-hover:opacity-70 transition-opacity">
               🌐
             </div>
-            {/* 배경 장식 */}
             <div className="absolute inset-0 bg-gradient-to-br from-violet-900/20 to-cyan-900/20" />
           </div>
         )}
-        {/* 편집 오버레이 */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
           <span className="bg-white/10 backdrop-blur-sm border border-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-lg">
             편집하기 →
@@ -86,6 +88,12 @@ export function ProjectCard({ project }: { project: Project }) {
         }`}>
           {project.is_published ? '공개' : '비공개'}
         </div>
+        {/* 커스텀 도메인 배지 */}
+        {project.custom_domain && (
+          <div className="absolute top-2 right-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/80 text-white">
+            {project.custom_domain}
+          </div>
+        )}
       </Link>
 
       {/* 하단 정보 */}
@@ -118,7 +126,7 @@ export function ProjectCard({ project }: { project: Project }) {
             ···
           </button>
           {menuOpen && (
-            <div className="absolute right-0 bottom-full mb-1 w-36 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl overflow-hidden z-10 py-1">
+            <div className="absolute right-0 bottom-full mb-1 w-40 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl overflow-hidden z-10 py-1">
               <Link
                 href={`/editor/${project.id}`}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
@@ -140,6 +148,12 @@ export function ProjectCard({ project }: { project: Project }) {
                 </button>
               )}
               <button
+                onClick={() => { setMenuOpen(false); setDomainOpen(true); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+              >
+                <span>🌐</span> 커스텀 도메인
+              </button>
+              <button
                 onClick={() => { setMenuOpen(false); togglePublish(project.id, !project.is_published); }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
               >
@@ -157,14 +171,27 @@ export function ProjectCard({ project }: { project: Project }) {
           )}
         </div>
       </div>
-    {sharing && project.default_scene_id && (
-      <ShareModal
-        projectName={project.name}
-        sceneId={project.default_scene_id}
-        isPublished={project.is_published}
-        onClose={() => setSharing(false)}
-      />
-    )}
+
+      {/* 모달은 Portal로 document.body에 마운트 — 카드 transform 영향 차단 */}
+      {sharing && project.default_scene_id && createPortal(
+        <ShareModal
+          projectName={project.name}
+          sceneId={project.default_scene_id}
+          isPublished={project.is_published}
+          onClose={() => setSharing(false)}
+        />,
+        document.body,
+      )}
+
+      {domainOpen && createPortal(
+        <CustomDomainModal
+          projectId={project.id}
+          projectName={project.name}
+          currentDomain={project.custom_domain}
+          onClose={() => setDomainOpen(false)}
+        />,
+        document.body,
+      )}
     </div>
   );
 }
