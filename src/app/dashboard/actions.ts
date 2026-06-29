@@ -57,6 +57,20 @@ export async function deleteProject(projectId: string) {
   revalidatePath('/dashboard');
 }
 
+export async function togglePublish(projectId: string, publish: boolean) {
+  const supabase = await createSupabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  await supabase
+    .from('projects')
+    .update({ is_published: publish })
+    .eq('id', projectId)
+    .eq('owner_id', user.id);
+
+  revalidatePath('/dashboard');
+}
+
 export async function renameProject(projectId: string, name: string) {
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();

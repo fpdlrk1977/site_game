@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { deleteProject, renameProject } from './actions';
+import { deleteProject, renameProject, togglePublish } from './actions';
 
 interface Project {
   id: string;
@@ -76,11 +76,13 @@ export function ProjectCard({ project }: { project: Project }) {
           </span>
         </div>
         {/* 배포 배지 */}
-        {project.is_published && (
-          <div className="absolute top-2 left-2 bg-emerald-500/90 text-white text-xs font-medium px-2 py-0.5 rounded-full">
-            배포됨
-          </div>
-        )}
+        <div className={`absolute top-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full ${
+          project.is_published
+            ? 'bg-emerald-500/90 text-white'
+            : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700'
+        }`}>
+          {project.is_published ? '공개' : '비공개'}
+        </div>
       </Link>
 
       {/* 하단 정보 */}
@@ -125,6 +127,13 @@ export function ProjectCard({ project }: { project: Project }) {
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
               >
                 <span>✏</span> 이름 변경
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); togglePublish(project.id, !project.is_published); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+              >
+                <span>{project.is_published ? '🔒' : '🌐'}</span>
+                {project.is_published ? '비공개로 전환' : '공개 배포'}
               </button>
               <div className="border-t border-zinc-700 my-1" />
               <button

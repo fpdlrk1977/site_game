@@ -35,10 +35,38 @@ export function ViewportToolbar({ projectName }: Props) {
       assets: [],
       objects,
     };
+
     await supabase
       .from('scenes')
       .update({ scene_data: sceneData })
       .eq('id', sceneId);
+
+    // 썸네일 캡처 — canvas.toDataURL은 preserveDrawingBuffer: true 필요
+    if (projectId) {
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
+      if (canvas) {
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
+          const { error } = await supabase.storage
+            .from('thumbnails')
+            .upload(`${projectId}.jpg`, blob, { contentType: 'image/jpeg', upsert: true });
+          if (!error) {
+            const { data: { publicUrl } } = supabase.storage
+              .from('thumbnails')
+              .getPublicUrl(`${projectId}.jpg`);
+            await supabase
+              .from('projects')
+              .update({ thumbnail_url: publicUrl })
+              .eq('id', projectId);
+          }
+        } catch {
+          // 썸네일 실패는 저장을 막지 않음
+        }
+      }
+    }
+
     markSaved();
   };
 

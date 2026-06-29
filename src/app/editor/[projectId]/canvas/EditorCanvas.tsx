@@ -22,6 +22,7 @@ export function EditorCanvas() {
       <Canvas
         shadows="soft"
         camera={{ position: [5, 4, 8], fov: 60 }}
+        gl={{ preserveDrawingBuffer: true }}
         onPointerMissed={() => selectObject(null)}
         style={{ width: '100%', height: '100%', background: skyColor }}
       >
