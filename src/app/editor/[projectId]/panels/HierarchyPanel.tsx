@@ -43,6 +43,7 @@ function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
           onClick={(e) => {
             e.stopPropagation();
             updateObject(obj.id, { visible: !obj.visible });
+            if (obj.visible && selectedId === obj.id) selectObject(null);
           }}
           className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-700 transition-all"
           title={obj.visible ? '숨기기' : '표시'}

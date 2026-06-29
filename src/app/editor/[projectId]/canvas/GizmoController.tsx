@@ -19,7 +19,7 @@ export function GizmoController({ orbitRef }: Props) {
   const isDragging = useRef(false);
 
   const selectedObject = objects.find((o) => o.id === selectedId);
-  if (!selectedId || !selectedObject || selectedObject.locked) return null;
+  if (!selectedId || !selectedObject || selectedObject.locked || !selectedObject.visible) return null;
 
   const target = refsMap.current.get(selectedId);
   if (!target) return null;
