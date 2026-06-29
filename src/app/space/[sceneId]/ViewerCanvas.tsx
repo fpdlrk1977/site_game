@@ -59,7 +59,7 @@ export function ViewerCanvas({ scene, onObjectClick }: Props) {
 
       {/* 씬 오브젝트 */}
       {objects.map((obj) => (
-        <ViewerObject key={obj.id} object={obj} onEvent={onObjectClick} />
+        <ViewerObject key={obj.id} object={obj} assets={scene.assets ?? []} onEvent={onObjectClick} />
       ))}
 
       <OrbitControls

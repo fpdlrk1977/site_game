@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { MathUtils } from 'three';
 import {
   ObjectNodeSchema,
+  AssetRefSchema,
   EnvSchema,
   ProjectSceneSchema,
   DEFAULT_ENVIRONMENT,
@@ -17,6 +18,7 @@ interface SceneState {
   projectId: string | null;
   sceneId: string | null;
   objects: ObjectNodeSchema[];
+  assets: AssetRefSchema[];
   environment: EnvSchema;
   selectedId: string | null;
   transformMode: 'translate' | 'rotate' | 'scale';
@@ -32,6 +34,8 @@ interface SceneActions {
   setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
   setTransformSpace: (space: 'world' | 'local') => void;
   addObject: (shape: PrimitiveShape) => void;
+  addAsset: (asset: AssetRefSchema) => void;
+  addAssetObject: (asset: AssetRefSchema) => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
   deleteSelected: () => void;
   duplicateSelected: () => void;
@@ -75,6 +79,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   projectId: null,
   sceneId: null,
   objects: [],
+  assets: [],
   environment: DEFAULT_ENVIRONMENT,
   selectedId: null,
   transformMode: 'translate',
@@ -88,6 +93,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       projectId: data.projectId,
       sceneId: data.sceneId,
       objects: data.objects,
+      assets: data.assets ?? [],
       environment: data.environment,
       selectedId: null,
       isModified: false,
@@ -102,6 +108,40 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   addObject: (shape) => {
     const obj = makeObject(shape);
+    const { objects, past } = get();
+    set({
+      objects: [...objects, obj],
+      selectedId: obj.id,
+      isModified: true,
+      past: [...past.slice(-49), { objects }],
+      future: [],
+    });
+  },
+
+  addAsset: (asset) => {
+    const { assets } = get();
+    if (assets.find((a) => a.id === asset.id)) return;
+    set({ assets: [...assets, asset] });
+  },
+
+  addAssetObject: (asset) => {
+    objectCounter += 1;
+    const obj: ObjectNodeSchema = {
+      id: MathUtils.generateUUID(),
+      name: asset.name,
+      assetId: asset.id,
+      primitiveShape: undefined,
+      material: {},
+      parentId: null,
+      layer: 'default',
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      visible: true,
+      locked: false,
+      physics: { ...DEFAULT_PHYSICS },
+      events: [],
+    };
     const { objects, past } = get();
     set({
       objects: [...objects, obj],

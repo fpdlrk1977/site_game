@@ -21,7 +21,7 @@ export function ViewportToolbar({ projectName }: Props) {
     transformMode, transformSpace, isModified,
     setTransformMode, setTransformSpace,
     addObject, undo, redo,
-    projectId, sceneId, objects, environment, markSaved,
+    projectId, sceneId, objects, assets, environment, markSaved,
   } = useSceneStore();
 
   const handleSave = async () => {
@@ -32,7 +32,7 @@ export function ViewportToolbar({ projectName }: Props) {
       sceneId,
       version: 1,
       environment,
-      assets: [],
+      assets,
       objects,
     };
 
