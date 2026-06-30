@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
@@ -26,11 +26,23 @@ export function ViewportToolbar({ projectName }: Props) {
     transformMode, transformSpace, isModified,
     snapEnabled, snapTranslate, wireframeMode,
     setTransformMode, setTransformSpace, setSnap, toggleWireframe,
-    addObject, undo, redo,
+    addObject, undo, redo, alignSelected, selectedIds,
     projectId, sceneId, objects, assets, environment, markSaved,
   } = useSceneStore();
   const { addToast } = useToast();
   const [showHistory, setShowHistory] = useState(false);
+  const [showAlign, setShowAlign] = useState(false);
+  const canAlign = selectedIds.length >= 2;
+  const alignRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showAlign) return;
+    const handler = (e: MouseEvent) => {
+      if (alignRef.current && !alignRef.current.contains(e.target as Node)) setShowAlign(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAlign]);
 
   const SNAP_STEPS = [0.25, 0.5, 1, 2];
 
@@ -189,6 +201,55 @@ export function ViewportToolbar({ projectName }: Props) {
             <span className="text-base leading-none">{icon}</span>
           </button>
         ))}
+      </div>
+
+      <div className="w-px h-5 bg-zinc-700" />
+
+      {/* 정렬 */}
+      <div className="relative" ref={alignRef}>
+        <button
+          title={canAlign ? '선택 오브젝트 정렬' : '2개 이상 선택 시 활성화'}
+          onClick={() => setShowAlign((v) => !v)}
+          disabled={!canAlign}
+          className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+            canAlign
+              ? showAlign
+                ? 'bg-violet-600 text-white'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+              : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+          }`}
+        >
+          정렬
+        </button>
+        {showAlign && canAlign && (
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 p-2 min-w-[160px]">
+            <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider px-1 mb-1.5">Align</div>
+            {([
+              { axis: 'x' as const, label: 'X축', min: '좌', ctr: '중', max: '우' },
+              { axis: 'y' as const, label: 'Y축', min: '하', ctr: '중', max: '상' },
+              { axis: 'z' as const, label: 'Z축', min: '전', ctr: '중', max: '후' },
+            ]).map(({ axis, label, min, ctr, max }) => (
+              <div key={axis} className="flex items-center gap-1.5 py-0.5">
+                <span className="text-[10px] font-mono text-zinc-500 w-6 shrink-0">{label}</span>
+                <div className="flex items-center bg-zinc-800 rounded-md p-0.5 gap-0.5 flex-1">
+                  {([
+                    { mode: 'min' as const, label: min },
+                    { mode: 'center' as const, label: ctr },
+                    { mode: 'max' as const, label: max },
+                  ]).map(({ mode, label: ml }) => (
+                    <button
+                      key={mode}
+                      onClick={() => { alignSelected(axis, mode); setShowAlign(false); }}
+                      className="flex-1 h-6 rounded text-[10px] font-medium text-zinc-400 hover:bg-violet-600 hover:text-white transition-all"
+                    >
+                      {ml}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="w-px h-5 bg-zinc-700" />
