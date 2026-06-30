@@ -170,13 +170,22 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
 });`}</pre>
                   </div>
 
-                  <a
-                    href={embedUrl}
-                    target="_blank"
-                    className="block w-full text-center py-2 rounded-xl border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors"
-                  >
-                    임베드 미리보기 ↗
-                  </a>
+                  <div className="flex gap-2">
+                    <a
+                      href={embedUrl}
+                      target="_blank"
+                      className="flex-1 text-center py-2 rounded-xl border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors"
+                    >
+                      임베드 미리보기 ↗
+                    </a>
+                    <a
+                      href={`/test/event-bridge?url=${encodeURIComponent(embedUrl)}`}
+                      target="_blank"
+                      className="flex-1 text-center py-2 rounded-xl border border-violet-700/50 text-violet-400 text-xs hover:bg-violet-900/30 transition-colors"
+                    >
+                      Event Bridge 테스트 ↗
+                    </a>
+                  </div>
                 </>
               )}
             </div>
