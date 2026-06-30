@@ -42,6 +42,7 @@ export interface ContentConfig {
   text?: string;
   fontSize?: number;
   color?: string;
+  depth?: number;
   url?: string;
 }
 

@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, Suspense } from 'react';
 import * as THREE from 'three';
-import { Text } from '@react-three/drei';
+import { Text3D, Center } from '@react-three/drei';
 import { useShallow } from 'zustand/react/shallow';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
@@ -160,13 +160,30 @@ export function EditorObjectInstance({ object }: Props) {
     return (
       <group ref={groupRef} onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}>
         {object.content.type === 'text' ? (
-          <Text
-            color={object.content.color ?? '#ffffff'}
-            fontSize={object.content.fontSize ?? 0.5}
-            anchorX="center" anchorY="middle"
-          >
-            {object.content.text ?? ''}
-          </Text>
+          <Suspense fallback={null}>
+            <Center>
+              <Text3D
+                font="/fonts/helvetiker_regular.typeface.json"
+                size={object.content.fontSize ?? 0.5}
+                height={object.content.depth ?? 0.1}
+                curveSegments={12}
+                bevelEnabled
+                bevelThickness={0.01}
+                bevelSize={0.008}
+                bevelSegments={4}
+              >
+                {object.content.text ?? ''}
+                <meshStandardMaterial
+                  color={color}
+                  roughness={roughness}
+                  metalness={metalness}
+                  emissive={isSelected ? '#4338ca' : emissive}
+                  emissiveIntensity={isSelected ? 0.4 : (emissive !== '#000000' ? 1 : 0)}
+                  wireframe={wireframeMode}
+                />
+              </Text3D>
+            </Center>
+          </Suspense>
         ) : (
           <mesh>
             <planeGeometry args={[1, 1]} />

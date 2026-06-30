@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, Suspense, useEffect as useEffectReact } from 'react';
-import { useGLTF, Text, Html } from '@react-three/drei';
+import { useGLTF, Text3D, Center, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMemo, useEffect } from 'react';
 import { useLoader } from '@react-three/fiber';
@@ -235,21 +235,40 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   if (object.content) {
     const { type } = object.content;
     if (type === 'text') {
+      const tColor = object.material?.color ?? '#a78bfa';
+      const tRoughness = object.material?.roughness ?? 0.5;
+      const tMetalness = object.material?.metalness ?? 0.1;
+      const tEmissive = object.material?.emissive ?? '#000000';
       return (
-        <Text
-          position={pos}
-          rotation={rot}
-          scale={scl}
-          color={object.content.color ?? '#ffffff'}
-          fontSize={object.content.fontSize ?? 0.5}
-          anchorX="center"
-          anchorY="middle"
+        <group position={pos} rotation={rot} scale={scl}
           onClick={(e) => { e.stopPropagation(); handleClick(); }}
           onPointerOver={(e) => { e.stopPropagation(); handlePointerOver(); }}
           onPointerOut={handlePointerOut}
         >
-          {object.content.text ?? ''}
-        </Text>
+          <Suspense fallback={null}>
+            <Center>
+              <Text3D
+                font="/fonts/helvetiker_regular.typeface.json"
+                size={object.content.fontSize ?? 0.5}
+                height={object.content.depth ?? 0.1}
+                curveSegments={12}
+                bevelEnabled
+                bevelThickness={0.01}
+                bevelSize={0.008}
+                bevelSegments={4}
+              >
+                {object.content.text ?? ''}
+                <meshStandardMaterial
+                  color={tColor}
+                  roughness={tRoughness}
+                  metalness={tMetalness}
+                  emissive={hovered ? tColor : tEmissive}
+                  emissiveIntensity={hovered ? 0.3 : (tEmissive !== '#000000' ? 1 : 0)}
+                />
+              </Text3D>
+            </Center>
+          </Suspense>
+        </group>
       );
     }
     if (type === 'image' && object.content.url) {

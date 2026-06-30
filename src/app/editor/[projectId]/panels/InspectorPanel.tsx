@@ -438,21 +438,16 @@ export function InspectorPanel() {
                     />
                   </div>
                   <div>
-                    <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">색상</span>
-                    <div className="flex items-center gap-2">
-                      <input type="color"
-                        value={obj.content.color ?? '#ffffff'}
-                        onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, color: e.target.value } })}
-                        onBlur={pushHistory}
-                        className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
-                      />
-                      <input type="text"
-                        value={obj.content.color ?? '#ffffff'}
-                        onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, color: e.target.value } })}
-                        onBlur={pushHistory}
-                        className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
-                      />
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">두께</span>
+                      <span className="text-[10px] text-zinc-500">{(obj.content.depth ?? 0.1).toFixed(2)}</span>
                     </div>
+                    <input type="range" min="0" max="1" step="0.01"
+                      value={obj.content.depth ?? 0.1}
+                      onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, depth: parseFloat(e.target.value) } })}
+                      onMouseUp={pushHistory}
+                      className="w-full accent-violet-500"
+                    />
                   </div>
                 </>
               )}
@@ -534,8 +529,8 @@ export function InspectorPanel() {
           </>
         )}
 
-        {/* Material (primitive, non-content 오브젝트만) */}
-        {!obj.assetId && !obj.content && !obj.particle && (
+        {/* Material (primitive + text content 오브젝트) */}
+        {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && (
           <>
             <SectionHeader title="Material" />
             <div className="px-3 py-3 space-y-2.5">

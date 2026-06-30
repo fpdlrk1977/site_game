@@ -182,7 +182,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   addContentObject: (type) => {
     objectCounter += 1;
     const defaults = {
-      text: { text: '텍스트를 입력하세요', fontSize: 0.5, color: '#ffffff' },
+      text: { text: '텍스트를 입력하세요', fontSize: 0.5, color: '#ffffff', depth: 0.1 },
       image: { url: '' },
       video: { url: '' },
     };
