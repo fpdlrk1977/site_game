@@ -61,6 +61,8 @@ interface SceneActions {
   requestFocus: () => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
   duplicateSelected: () => void;
+  groupSelected: () => void;
+  ungroupSelected: () => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -287,10 +289,16 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   deleteSelected: () => {
     const { selectedId, selectedIds, objects, past } = get();
-    const toDelete = selectedIds.length > 0 ? selectedIds : (selectedId ? [selectedId] : []);
-    if (toDelete.length === 0) return;
+    const roots = selectedIds.length > 0 ? selectedIds : (selectedId ? [selectedId] : []);
+    if (roots.length === 0) return;
+    // 그룹의 모든 자손도 함께 삭제
+    const collectDescendants = (id: string): string[] => {
+      const children = objects.filter((o) => o.parentId === id);
+      return [id, ...children.flatMap((c) => collectDescendants(c.id))];
+    };
+    const allToDelete = new Set(roots.flatMap((id) => collectDescendants(id)));
     set({
-      objects: objects.filter((o) => !toDelete.includes(o.id)),
+      objects: objects.filter((o) => !allToDelete.has(o.id)),
       selectedId: null,
       selectedIds: [],
       isModified: true,
@@ -322,15 +330,118 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const src = objects.find((o) => o.id === selectedId);
     if (!src) return;
     objectCounter += 1;
-    const copy: ObjectNodeSchema = {
-      ...src,
-      id: MathUtils.generateUUID(),
-      name: `${src.name} 복사`,
-      position: { ...src.position, x: src.position.x + 1 },
+
+    if (src.isGroup) {
+      const newGroupId = MathUtils.generateUUID();
+      const newGroup: ObjectNodeSchema = {
+        ...src,
+        id: newGroupId,
+        name: `${src.name} 복사`,
+        position: { ...src.position, x: src.position.x + 1 },
+      };
+      const children = objects.filter((o) => o.parentId === src.id);
+      const newChildren = children.map((c) => ({
+        ...c,
+        id: MathUtils.generateUUID(),
+        parentId: newGroupId,
+      }));
+      set({
+        objects: [...objects, newGroup, ...newChildren],
+        selectedId: newGroupId,
+        selectedIds: [newGroupId],
+        isModified: true,
+        past: [...past.slice(-49), { objects }],
+        future: [],
+      });
+    } else {
+      const copy: ObjectNodeSchema = {
+        ...src,
+        id: MathUtils.generateUUID(),
+        name: `${src.name} 복사`,
+        position: { ...src.position, x: src.position.x + 1 },
+        parentId: null, // 복제본은 항상 루트에
+      };
+      set({
+        objects: [...objects, copy],
+        selectedId: copy.id,
+        selectedIds: [copy.id],
+        isModified: true,
+        past: [...past.slice(-49), { objects }],
+        future: [],
+      });
+    }
+  },
+
+  groupSelected: () => {
+    const { selectedIds, objects, past } = get();
+    if (selectedIds.length < 2) return;
+    const toGroup = objects.filter((o) => selectedIds.includes(o.id));
+
+    // centroid 계산 (world 좌표 기준)
+    let cx = 0, cy = 0, cz = 0;
+    toGroup.forEach((o) => { cx += o.position.x; cy += o.position.y; cz += o.position.z; });
+    cx /= toGroup.length; cy /= toGroup.length; cz /= toGroup.length;
+
+    objectCounter += 1;
+    const groupId = MathUtils.generateUUID();
+    const groupObj: ObjectNodeSchema = {
+      id: groupId,
+      name: `그룹 ${objectCounter}`,
+      assetId: null,
+      primitiveShape: undefined,
+      material: {},
+      parentId: null,
+      layer: 'default',
+      position: { x: cx, y: cy, z: cz },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      visible: true,
+      locked: false,
+      physics: { ...DEFAULT_PHYSICS },
+      events: [],
+      isGroup: true,
     };
+
+    const updatedObjects = objects.map((o) =>
+      selectedIds.includes(o.id)
+        ? { ...o, parentId: groupId, position: { x: o.position.x - cx, y: o.position.y - cy, z: o.position.z - cz } }
+        : o
+    );
+
     set({
-      objects: [...objects, copy],
-      selectedId: copy.id,
+      objects: [...updatedObjects, groupObj],
+      selectedId: groupId,
+      selectedIds: [groupId],
+      isModified: true,
+      past: [...past.slice(-49), { objects }],
+      future: [],
+    });
+  },
+
+  ungroupSelected: () => {
+    const { selectedId, objects, past } = get();
+    if (!selectedId) return;
+    const group = objects.find((o) => o.id === selectedId);
+    if (!group?.isGroup) return;
+
+    const children = objects.filter((o) => o.parentId === selectedId);
+    // 자식들의 position을 world 좌표로 변환
+    const restoredChildren = children.map((c) => ({
+      ...c,
+      parentId: null,
+      position: {
+        x: c.position.x + group.position.x,
+        y: c.position.y + group.position.y,
+        z: c.position.z + group.position.z,
+      },
+    }));
+
+    const remaining = objects.filter((o) => o.id !== selectedId && !children.find((c) => c.id === o.id));
+
+    set({
+      objects: [...remaining, ...restoredChildren],
+      selectedId: null,
+      selectedIds: restoredChildren.map((c) => c.id),
       isModified: true,
       past: [...past.slice(-49), { objects }],
       future: [],

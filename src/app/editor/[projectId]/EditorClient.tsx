@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function EditorClient({ projectName, initialScene }: Props) {
-  const { loadScene, undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus } = useSceneStore();
+  const { loadScene, undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus, groupSelected, ungroupSelected } = useSceneStore();
   const [isMobile, setIsMobile] = useState(false);
 
   // 씬 초기 로드
@@ -48,6 +48,8 @@ export function EditorClient({ projectName, initialScene }: Props) {
       if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); redo(); return; }
       if (e.ctrlKey && e.key === 's') { e.preventDefault(); document.getElementById('save-btn')?.click(); return; }
       if (e.ctrlKey && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
+      if (e.ctrlKey && e.shiftKey && e.key === 'G') { e.preventDefault(); ungroupSelected(); return; }
+      if (e.ctrlKey && e.key === 'g') { e.preventDefault(); groupSelected(); return; }
 
       if (isInput) return;
       if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
@@ -58,7 +60,7 @@ export function EditorClient({ projectName, initialScene }: Props) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus]);
+  }, [undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus, groupSelected, ungroupSelected]);
 
   if (isMobile) {
     return (

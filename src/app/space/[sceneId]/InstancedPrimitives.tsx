@@ -77,6 +77,7 @@ export function getInstancedIds(objects: ObjectNodeSchema[]): Set<string> {
     if (!obj.visible || obj.content || obj.assetId || !obj.primitiveShape) continue;
     if (obj.events.length > 0) continue;
     if (obj.particle) continue;
+    if (obj.parentId !== null) continue; // 그룹 자식은 상대 좌표 — instancing 제외
     const key = makeKey(obj);
     const list = map.get(key) ?? [];
     list.push(obj);
@@ -96,6 +97,7 @@ export function InstancedPrimitives({ objects }: Props) {
       if (!obj.visible || obj.content || obj.assetId || !obj.primitiveShape) continue;
       if (obj.events.length > 0) continue;
       if (obj.particle) continue;
+      if (obj.parentId !== null) continue;
       const key = makeKey(obj);
       const list = map.get(key) ?? [];
       list.push(obj);

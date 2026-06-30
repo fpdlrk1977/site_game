@@ -80,6 +80,7 @@ export interface ObjectNodeSchema {
   events: EventSchema[];
   content?: ContentConfig;
   particle?: ParticleConfig;
+  isGroup?: boolean;
 }
 
 export interface AssetRefSchema {

@@ -5,27 +5,51 @@ import { useSceneStore } from '@/store/sceneStore';
 import type { ObjectNodeSchema } from '@/types/scene';
 
 const SHAPE_ICONS: Record<string, string> = {
-  box: '⬛',
-  sphere: '⬤',
-  cylinder: '⬭',
-  plane: '▬',
+  box: '⬛', sphere: '⬤', cylinder: '⬭', plane: '▬',
 };
 
-type PanelTab = 'objects' | 'layers';
+function getIcon(obj: ObjectNodeSchema) {
+  if (obj.isGroup) return '📁';
+  if (obj.content) return obj.content.type === 'text' ? '𝐓' : obj.content.type === 'image' ? '🖼' : '▶';
+  if (obj.assetId) return '📦';
+  if (obj.particle) return '✨';
+  return SHAPE_ICONS[obj.primitiveShape ?? ''] ?? '○';
+}
 
-interface HierarchyItemProps {
+// 트리를 펼쳐진 상태 기준으로 선형화 (range 선택용)
+function buildFlatList(
+  all: ObjectNodeSchema[],
+  parentId: string | null,
+  expanded: Set<string>,
+): ObjectNodeSchema[] {
+  const items = all.filter((o) => o.parentId === parentId);
+  const result: ObjectNodeSchema[] = [];
+  for (const obj of items) {
+    result.push(obj);
+    if (obj.isGroup && expanded.has(obj.id)) {
+      result.push(...buildFlatList(all, obj.id, expanded));
+    }
+  }
+  return result;
+}
+
+interface ItemProps {
   obj: ObjectNodeSchema;
+  depth: number;
   index: number;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
   onClickItem: (id: string, index: number, shiftKey: boolean) => void;
 }
 
-function HierarchyItem({ obj, index, onClickItem }: HierarchyItemProps) {
-  const { selectedId, selectedIds, updateObject, deleteSelected, duplicateSelected } = useSceneStore();
+function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickItem }: ItemProps) {
+  const { selectedId, selectedIds, updateObject, deleteSelected, duplicateSelected, selectObject, ungroupSelected } = useSceneStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
   const inputRef = useRef<HTMLInputElement>(null);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(obj.id) : selectedId === obj.id;
+  const hasChildren = obj.isGroup;
 
   useEffect(() => {
     if (editing) inputRef.current?.select();
@@ -37,32 +61,35 @@ function HierarchyItem({ obj, index, onClickItem }: HierarchyItemProps) {
 
   const commitRename = () => {
     setEditing(false);
-    const trimmed = nameValue.trim();
-    if (trimmed && trimmed !== obj.name) updateObject(obj.id, { name: trimmed });
+    const t = nameValue.trim();
+    if (t && t !== obj.name) updateObject(obj.id, { name: t });
     else setNameValue(obj.name);
-  };
-
-  const { selectObject } = useSceneStore();
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    selectObject(obj.id);
-    setMenuOpen(true);
   };
 
   return (
     <div className="relative">
       <div
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
-        onContextMenu={handleContextMenu}
-        onDoubleClick={() => !obj.locked && setEditing(true)}
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer group transition-all text-xs ${
+        onContextMenu={(e) => { e.preventDefault(); selectObject(obj.id); setMenuOpen(true); }}
+        onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
+        className={`flex items-center gap-1.5 pr-2 py-1 rounded-md cursor-pointer group transition-all text-xs ${
           isSelected ? 'bg-violet-600/30 text-white' : 'text-zinc-300 hover:bg-zinc-800'
         } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-zinc-500' : ''}`}
       >
-        <span className="text-[10px] w-4 text-center opacity-60">
-          {obj.content ? (obj.content.type === 'text' ? '𝐓' : obj.content.type === 'image' ? '🖼' : '▶') : (obj.assetId ? '📦' : (SHAPE_ICONS[obj.primitiveShape ?? ''] ?? '○'))}
-        </span>
+        {/* 그룹 펼치기/접기 */}
+        {hasChildren ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+            className="w-4 text-center text-[10px] text-zinc-500 hover:text-white transition-colors shrink-0"
+          >
+            {isExpanded ? '▼' : '▶'}
+          </button>
+        ) : (
+          <span className="w-4 shrink-0" />
+        )}
+
+        <span className="text-[10px] w-4 text-center opacity-60 shrink-0">{getIcon(obj)}</span>
 
         {editing ? (
           <input
@@ -81,45 +108,43 @@ function HierarchyItem({ obj, index, onClickItem }: HierarchyItemProps) {
           <span className="flex-1 truncate text-[11px]">{obj.name}</span>
         )}
 
+        {/* 호버 시 아이콘 */}
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-          <button
-            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); }}
-            className="w-5 h-5 flex items-center justify-center rounded text-zinc-500 hover:text-white transition-colors"
-            title={obj.visible ? '숨기기' : '표시'}
-          >
+          <button onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); }}
+            className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-white transition-colors">
             <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>
           </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); }}
-            className="w-5 h-5 flex items-center justify-center rounded text-zinc-500 hover:text-white transition-colors"
-            title={obj.locked ? '잠금 해제' : '잠금'}
-          >
+          <button onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); }}
+            className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-white transition-colors">
             <span className="text-[10px]">{obj.locked ? '🔒' : '🔓'}</span>
           </button>
         </div>
       </div>
 
+      {/* 컨텍스트 메뉴 */}
       {menuOpen && isSelected && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute left-2 top-full mt-0.5 w-36 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl z-50 py-1 overflow-hidden">
-            <button
-              onClick={() => { setMenuOpen(false); setEditing(true); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors"
-            >
-              이름 변경
-            </button>
-            <button
-              onClick={() => { duplicateSelected(); setMenuOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors"
-            >
+          <div className="absolute left-2 top-full mt-0.5 w-40 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+            {!obj.isGroup && (
+              <button onClick={() => { setMenuOpen(false); setEditing(true); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors">
+                이름 변경
+              </button>
+            )}
+            {obj.isGroup && (
+              <button onClick={() => { ungroupSelected(); setMenuOpen(false); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors">
+                그룹 해제 (Ctrl+Shift+G)
+              </button>
+            )}
+            <button onClick={() => { duplicateSelected(); setMenuOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors">
               복제 (Ctrl+D)
             </button>
             <div className="border-t border-zinc-700 my-1" />
-            <button
-              onClick={() => { deleteSelected(); setMenuOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-700 transition-colors"
-            >
+            <button onClick={() => { deleteSelected(); setMenuOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-700 transition-colors">
               삭제 (Del)
             </button>
           </div>
@@ -130,105 +155,91 @@ function HierarchyItem({ obj, index, onClickItem }: HierarchyItemProps) {
 }
 
 export function HierarchyPanel() {
-  const { objects, layers, toggleLayerVisible, toggleLayerLocked, addLayer, selectObject, selectObjects } = useSceneStore();
+  const { objects, selectObject, selectObjects } = useSceneStore();
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<PanelTab>('objects');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const anchorIndexRef = useRef<number>(-1);
 
-  const roots = objects.filter((o) => o.parentId === null);
-  const filtered = search.trim()
-    ? roots.filter((o) => o.name.toLowerCase().includes(search.toLowerCase()))
-    : roots;
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  // 검색 시 모든 그룹 자동 펼침
+  const allObjects = search.trim()
+    ? objects.filter((o) => o.name.toLowerCase().includes(search.toLowerCase()))
+    : objects;
+
+  // 펼쳐진 트리의 선형 목록 (range 선택용)
+  const flatList = buildFlatList(
+    search.trim() ? objects : allObjects,
+    null,
+    search.trim() ? new Set(objects.filter((o) => o.isGroup).map((o) => o.id)) : expanded,
+  );
 
   const handleClickItem = (id: string, index: number, shiftKey: boolean) => {
     if (shiftKey && anchorIndexRef.current >= 0) {
-      // 범위 선택: anchor ~ 현재 인덱스 사이 모두 선택
       const from = Math.min(anchorIndexRef.current, index);
       const to = Math.max(anchorIndexRef.current, index);
-      const rangeIds = filtered.slice(from, to + 1).map((o) => o.id);
-      selectObjects(rangeIds);
+      selectObjects(flatList.slice(from, to + 1).map((o) => o.id));
     } else {
-      // 일반 클릭: anchor 갱신 + 단일 선택
       anchorIndexRef.current = index;
       selectObject(id);
     }
   };
 
+  const renderTree = (parentId: string | null, depth: number): React.ReactNode[] => {
+    const src = search.trim()
+      ? objects.filter((o) => o.parentId === parentId && o.name.toLowerCase().includes(search.toLowerCase()))
+      : objects.filter((o) => o.parentId === parentId);
+
+    return src.flatMap((obj) => {
+      const index = flatList.findIndex((o) => o.id === obj.id);
+      const nodes: React.ReactNode[] = [
+        <HierarchyItem
+          key={obj.id}
+          obj={obj}
+          depth={depth}
+          index={index}
+          isExpanded={expanded.has(obj.id)}
+          onToggleExpand={() => toggleExpand(obj.id)}
+          onClickItem={handleClickItem}
+        />,
+      ];
+      if (obj.isGroup && (expanded.has(obj.id) || search.trim())) {
+        nodes.push(...renderTree(obj.id, depth + 1));
+      }
+      return nodes;
+    });
+  };
+
   return (
-    <aside className="flex flex-col bg-zinc-950 border-r border-zinc-800 overflow-hidden">
-      {/* 탭 */}
-      <div className="flex border-b border-zinc-800">
-        {(['objects', 'layers'] as PanelTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
-              tab === t ? 'text-white bg-zinc-800/50' : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {t === 'objects' ? `오브젝트 (${objects.length})` : '레이어'}
-          </button>
-        ))}
+    <aside className="flex flex-col bg-zinc-950 border-r border-zinc-800 overflow-hidden h-full">
+      {/* 헤더 */}
+      <div className="px-3 py-2 border-b border-zinc-800 shrink-0">
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+          오브젝트 ({objects.length})
+        </span>
       </div>
 
-      {tab === 'objects' && (
-        <>
-          <div className="px-2 pt-2 pb-1">
-            <input
-              type="text"
-              placeholder="오브젝트 검색..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
-            />
-          </div>
-          <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
-            {filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <p className="text-zinc-600 text-xs leading-relaxed">
-                  {search ? '검색 결과가 없습니다.' : '오브젝트가 없습니다.\n상단 툴바에서 추가하세요.'}
-                </p>
-              </div>
-            ) : (
-              filtered.map((obj, i) => <HierarchyItem key={obj.id} obj={obj} index={i} onClickItem={handleClickItem} />)
-            )}
-          </div>
-        </>
-      )}
+      <div className="px-2 pt-2 pb-1 shrink-0">
+        <input type="text" placeholder="검색..." value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+        />
+      </div>
 
-      {tab === 'layers' && (
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {Object.entries(layers).map(([key, layer]) => (
-            <div key={key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs">
-              <span className="flex-1 text-zinc-300 truncate">{layer.name}</span>
-              <span className="text-[10px] text-zinc-600">{objects.filter((o) => o.layer === key).length}</span>
-              <button
-                onClick={() => toggleLayerVisible(key)}
-                className="text-zinc-500 hover:text-white transition-colors"
-                title={layer.visible ? '숨기기' : '표시'}
-              >
-                <span className="text-[10px]">{layer.visible ? '👁' : '🙈'}</span>
-              </button>
-              <button
-                onClick={() => toggleLayerLocked(key)}
-                className="text-zinc-500 hover:text-white transition-colors"
-                title={layer.locked ? '잠금 해제' : '잠금'}
-              >
-                <span className="text-[10px]">{layer.locked ? '🔒' : '🔓'}</span>
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={() => {
-              const name = prompt('레이어 이름');
-              if (name?.trim()) addLayer(name.trim());
-            }}
-            className="w-full py-1.5 text-[10px] text-zinc-500 hover:text-white border border-dashed border-zinc-700 hover:border-zinc-600 rounded-lg transition-colors"
-          >
-            + 레이어 추가
-          </button>
-        </div>
-      )}
+      <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+        {objects.filter((o) => o.parentId === null).length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <p className="text-zinc-600 text-xs leading-relaxed">오브젝트가 없습니다.</p>
+          </div>
+        ) : (
+          renderTree(null, 0)
+        )}
+      </div>
     </aside>
   );
 }

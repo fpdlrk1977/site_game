@@ -23,10 +23,13 @@ export function ViewerCanvas({ scene, playMode, onObjectClick }: Props) {
 
   const instancedIds = useMemo(() => getInstancedIds(objects), [objects]);
   const particleObjects = useMemo(() => objects.filter((o) => o.visible && o.particle), [objects]);
+  // 루트 오브젝트만 렌더 (자식은 ViewerObject 내부에서 처리)
+  const rootObjects = useMemo(() => objects.filter((o) => o.parentId === null), [objects]);
   const nonInstancedObjects = useMemo(
-    () => objects.filter((o) => !instancedIds.has(o.id) && !o.particle),
-    [objects, instancedIds],
+    () => rootObjects.filter((o) => !instancedIds.has(o.id) && !o.particle && !o.isGroup),
+    [rootObjects, instancedIds],
   );
+  const rootGroups = useMemo(() => rootObjects.filter((o) => o.isGroup), [rootObjects]);
 
   return (
     <Canvas
@@ -69,9 +72,12 @@ export function ViewerCanvas({ scene, playMode, onObjectClick }: Props) {
         <>
           <InstancedPrimitives objects={objects} />
           {nonInstancedObjects.map((obj) => (
-            <ViewerObject key={obj.id} object={obj} assets={scene.assets ?? []} onEvent={onObjectClick} />
+            <ViewerObject key={obj.id} object={obj} assets={scene.assets ?? []} onEvent={onObjectClick} allObjects={objects} />
           ))}
-          {particleObjects.map((obj) => (
+          {rootGroups.map((obj) => (
+            <ViewerObject key={obj.id} object={obj} assets={scene.assets ?? []} onEvent={onObjectClick} allObjects={objects} />
+          ))}
+          {particleObjects.filter((o) => o.parentId === null).map((obj) => (
             <ParticleEmitter
               key={obj.id}
               config={obj.particle!}

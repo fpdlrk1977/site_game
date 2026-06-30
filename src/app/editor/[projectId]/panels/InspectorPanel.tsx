@@ -309,6 +309,59 @@ export function InspectorPanel() {
 
   const areaEnterNeedsPhysics = newTrigger === 'area_enter' && (!obj.physics.enabled || !obj.physics.isSensor);
 
+  // 그룹 오브젝트 전용 인스펙터
+  if (obj.isGroup) {
+    return (
+      <aside className="flex flex-col bg-zinc-950 border-l border-zinc-800 overflow-hidden">
+        <div className="px-3 py-2 border-b border-zinc-800 flex items-center gap-2">
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex-1">Inspector — 그룹</span>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-3 py-2 border-b border-zinc-800">
+            <input value={obj.name} onChange={(e) => updateObject(obj.id, { name: e.target.value })} onBlur={pushHistory}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500 font-medium"
+            />
+          </div>
+          <SectionHeader title="Transform" />
+          <div className="px-3 py-3 space-y-3">
+            <XYZRow label="Position" x={obj.position.x} y={obj.position.y} z={obj.position.z}
+              onChangeX={(v) => updateObject(obj.id, { position: { ...obj.position, x: v } })}
+              onChangeY={(v) => updateObject(obj.id, { position: { ...obj.position, y: v } })}
+              onChangeZ={(v) => updateObject(obj.id, { position: { ...obj.position, z: v } })}
+              onCommit={pushHistory}
+            />
+            <XYZRow label="Rotation °" x={obj.rotation.x} y={obj.rotation.y} z={obj.rotation.z}
+              onChangeX={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, x: v } })}
+              onChangeY={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, y: v } })}
+              onChangeZ={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, z: v } })}
+              onCommit={pushHistory}
+            />
+            <XYZRow label="Scale" x={obj.scale.x} y={obj.scale.y} z={obj.scale.z}
+              onChangeX={(v) => updateObject(obj.id, { scale: { ...obj.scale, x: v } })}
+              onChangeY={(v) => updateObject(obj.id, { scale: { ...obj.scale, y: v } })}
+              onChangeZ={(v) => updateObject(obj.id, { scale: { ...obj.scale, z: v } })}
+              onCommit={pushHistory}
+            />
+          </div>
+          <SectionHeader title="Visibility" />
+          <div className="px-3 py-3 space-y-2">
+            {(['visible', 'locked'] as const).map((key) => (
+              <label key={key} className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs text-zinc-400 capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
+                <Toggle value={obj[key]} onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }} />
+              </label>
+            ))}
+          </div>
+          <div className="px-3 py-3">
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              그룹 해제: <kbd className="bg-zinc-800 border border-zinc-700 rounded px-1 text-[10px]">Ctrl+Shift+G</kbd>
+            </p>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="flex flex-col bg-zinc-950 border-l border-zinc-800 overflow-hidden">
       <div className="px-3 py-2 border-b border-zinc-800 flex items-center gap-2">

@@ -70,17 +70,34 @@ interface Props {
   object: ObjectNodeSchema;
   assets: AssetRefSchema[];
   onEvent: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
+  allObjects?: ObjectNodeSchema[];
   /** RigidBody 내부에서 사용할 때 — position/rotation은 부모 RigidBody가 담당, scale만 적용 */
   noTransform?: boolean;
 }
 
-export function ViewerObject({ object, assets, onEvent, noTransform = false }: Props) {
+export function ViewerObject({ object, assets, onEvent, allObjects = [], noTransform = false }: Props) {
   const [hovered, setHovered] = useState(false);
   const hasClick = object.events.some((e) => e.trigger === 'click');
   const hasHover = object.events.some((e) => e.trigger === 'hover_enter');
   const isInteractive = hasClick || hasHover;
 
   if (!object.visible) return null;
+
+  // 그룹 오브젝트: 자식들을 Three.js group 안에 렌더
+  if (object.isGroup) {
+    const children = allObjects.filter((o) => o.parentId === object.id && o.visible);
+    return (
+      <group
+        position={[object.position.x, object.position.y, object.position.z]}
+        rotation={[object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD]}
+        scale={[object.scale.x, object.scale.y, object.scale.z]}
+      >
+        {children.map((child) => (
+          <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />
+        ))}
+      </group>
+    );
+  }
 
   const pos: [number, number, number] = noTransform ? [0, 0, 0] : [object.position.x, object.position.y, object.position.z];
   const rot: [number, number, number] = noTransform ? [0, 0, 0] : [

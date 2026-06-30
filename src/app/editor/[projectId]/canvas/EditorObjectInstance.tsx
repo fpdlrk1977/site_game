@@ -3,6 +3,7 @@
 import { useRef, useEffect, Suspense } from 'react';
 import * as THREE from 'three';
 import { Text } from '@react-three/drei';
+import { useShallow } from 'zustand/react/shallow';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { GlbObject } from './GlbObject';
@@ -32,6 +33,58 @@ function ColliderOverlay({ object }: { object: ObjectNodeSchema }) {
   );
 }
 
+function GroupObjectInstance({ object }: Props) {
+  const groupRef = useRef<THREE.Group>(null);
+  const refsMap = useObjectRefs();
+  const selectObject = useSceneStore((s) => s.selectObject);
+  const toggleSelectObject = useSceneStore((s) => s.toggleSelectObject);
+  const selectedIds = useSceneStore((s) => s.selectedIds);
+  const selectedId = useSceneStore((s) => s.selectedId);
+  const children = useSceneStore(useShallow((s) => s.objects.filter((o) => o.parentId === object.id)));
+  const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
+
+  useEffect(() => {
+    if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
+    return () => { refsMap.current.delete(object.id); };
+  }, [object.id, refsMap]);
+
+  useEffect(() => {
+    const g = groupRef.current;
+    if (!g) return;
+    g.position.set(object.position.x, object.position.y, object.position.z);
+    g.rotation.set(object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD);
+    g.scale.set(object.scale.x, object.scale.y, object.scale.z);
+  }, [object.position.x, object.position.y, object.position.z,
+      object.rotation.x, object.rotation.y, object.rotation.z,
+      object.scale.x, object.scale.y, object.scale.z]);
+
+  if (!object.visible) return null;
+
+  const handleClick = (shiftKey: boolean) => {
+    if (object.locked) return;
+    if (shiftKey) toggleSelectObject(object.id);
+    else selectObject(object.id);
+  };
+
+  return (
+    <group
+      ref={groupRef}
+      onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+    >
+      {/* 선택 표시 — 그룹 중심에 작은 마커 */}
+      {isSelected && (
+        <mesh>
+          <octahedronGeometry args={[0.15, 0]} />
+          <meshBasicMaterial color="#7c3aed" wireframe />
+        </mesh>
+      )}
+      {children.map((child) => (
+        <EditorObjectInstance key={child.id} object={child} />
+      ))}
+    </group>
+  );
+}
+
 export function EditorObjectInstance({ object }: Props) {
   const groupRef = useRef<THREE.Group>(null);
   const refsMap = useObjectRefs();
@@ -42,6 +95,9 @@ export function EditorObjectInstance({ object }: Props) {
   const assets = useSceneStore((s) => s.assets);
   const wireframeMode = useSceneStore((s) => s.wireframeMode);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
+
+  // 그룹 오브젝트는 별도 컴포넌트로 렌더
+  if (object.isGroup) return <GroupObjectInstance object={object} />;
 
   useEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);

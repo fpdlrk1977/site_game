@@ -63,8 +63,8 @@ export function EditorCanvas() {
           infiniteGrid
         />
 
-        {/* 씬 오브젝트 */}
-        {objects.map((obj) => (
+        {/* 루트 오브젝트만 렌더 — 자식은 GroupObjectInstance 내부에서 렌더 */}
+        {objects.filter((o) => o.parentId === null).map((obj) => (
           <EditorObjectInstance key={obj.id} object={obj} />
         ))}
 
