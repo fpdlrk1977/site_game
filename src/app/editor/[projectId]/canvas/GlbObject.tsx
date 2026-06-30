@@ -7,7 +7,7 @@ import * as THREE from 'three';
 interface Props {
   url: string;
   selected: boolean;
-  onClick: () => void;
+  onClick: (shiftKey: boolean) => void;
   wireframe?: boolean;
 }
 
@@ -34,7 +34,7 @@ export function GlbObject({ url, selected, onClick, wireframe = false }: Props) 
   return (
     <primitive
       object={clone}
-      onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onClick(); }}
+      onClick={(e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => { e.stopPropagation(); onClick(e.nativeEvent.shiftKey); }}
     />
   );
 }

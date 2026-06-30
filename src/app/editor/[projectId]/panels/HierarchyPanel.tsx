@@ -13,8 +13,14 @@ const SHAPE_ICONS: Record<string, string> = {
 
 type PanelTab = 'objects' | 'layers';
 
-function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
-  const { selectedId, selectedIds, selectObject, toggleSelectObject, updateObject, deleteSelected, duplicateSelected } = useSceneStore();
+interface HierarchyItemProps {
+  obj: ObjectNodeSchema;
+  index: number;
+  onClickItem: (id: string, index: number, shiftKey: boolean) => void;
+}
+
+function HierarchyItem({ obj, index, onClickItem }: HierarchyItemProps) {
+  const { selectedId, selectedIds, updateObject, deleteSelected, duplicateSelected } = useSceneStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
@@ -36,6 +42,8 @@ function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
     else setNameValue(obj.name);
   };
 
+  const { selectObject } = useSceneStore();
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     selectObject(obj.id);
@@ -45,7 +53,7 @@ function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
   return (
     <div className="relative">
       <div
-        onClick={(e) => { if (editing) return; e.shiftKey ? toggleSelectObject(obj.id) : selectObject(obj.id); }}
+        onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
         onContextMenu={handleContextMenu}
         onDoubleClick={() => !obj.locked && setEditing(true)}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer group transition-all text-xs ${
@@ -122,14 +130,29 @@ function HierarchyItem({ obj }: { obj: ObjectNodeSchema }) {
 }
 
 export function HierarchyPanel() {
-  const { objects, layers, toggleLayerVisible, toggleLayerLocked, addLayer } = useSceneStore();
+  const { objects, layers, toggleLayerVisible, toggleLayerLocked, addLayer, selectObject, selectObjects } = useSceneStore();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<PanelTab>('objects');
+  const anchorIndexRef = useRef<number>(-1);
 
   const roots = objects.filter((o) => o.parentId === null);
   const filtered = search.trim()
     ? roots.filter((o) => o.name.toLowerCase().includes(search.toLowerCase()))
     : roots;
+
+  const handleClickItem = (id: string, index: number, shiftKey: boolean) => {
+    if (shiftKey && anchorIndexRef.current >= 0) {
+      // 범위 선택: anchor ~ 현재 인덱스 사이 모두 선택
+      const from = Math.min(anchorIndexRef.current, index);
+      const to = Math.max(anchorIndexRef.current, index);
+      const rangeIds = filtered.slice(from, to + 1).map((o) => o.id);
+      selectObjects(rangeIds);
+    } else {
+      // 일반 클릭: anchor 갱신 + 단일 선택
+      anchorIndexRef.current = index;
+      selectObject(id);
+    }
+  };
 
   return (
     <aside className="flex flex-col bg-zinc-950 border-r border-zinc-800 overflow-hidden">
@@ -167,7 +190,7 @@ export function HierarchyPanel() {
                 </p>
               </div>
             ) : (
-              filtered.map((obj) => <HierarchyItem key={obj.id} obj={obj} />)
+              filtered.map((obj, i) => <HierarchyItem key={obj.id} obj={obj} index={i} onClickItem={handleClickItem} />)
             )}
           </div>
         </>

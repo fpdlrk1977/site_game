@@ -36,10 +36,12 @@ export function EditorObjectInstance({ object }: Props) {
   const groupRef = useRef<THREE.Group>(null);
   const refsMap = useObjectRefs();
   const selectObject = useSceneStore((s) => s.selectObject);
+  const toggleSelectObject = useSceneStore((s) => s.toggleSelectObject);
   const selectedId = useSceneStore((s) => s.selectedId);
+  const selectedIds = useSceneStore((s) => s.selectedIds);
   const assets = useSceneStore((s) => s.assets);
   const wireframeMode = useSceneStore((s) => s.wireframeMode);
-  const isSelected = selectedId === object.id;
+  const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
 
   useEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
@@ -69,7 +71,11 @@ export function EditorObjectInstance({ object }: Props) {
   const roughness = object.material?.roughness ?? 0.5;
   const metalness = object.material?.metalness ?? 0.1;
   const emissive = object.material?.emissive ?? '#000000';
-  const handleClick = () => { if (!object.locked) selectObject(object.id); };
+  const handleClick = (shiftKey: boolean) => {
+    if (object.locked) return;
+    if (shiftKey) toggleSelectObject(object.id);
+    else selectObject(object.id);
+  };
 
   // 파티클 이미터 렌더링
   if (object.particle) {
@@ -78,13 +84,13 @@ export function EditorObjectInstance({ object }: Props) {
         <ParticleEmitter config={object.particle} />
         {/* 선택 표시 — 빌보드 와이어프레임 구체 */}
         {isSelected && (
-          <mesh onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+          <mesh onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}>
             <sphereGeometry args={[0.3, 8, 8]} />
             <meshBasicMaterial color="#7c3aed" wireframe transparent opacity={0.6} />
           </mesh>
         )}
         {!isSelected && (
-          <mesh onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+          <mesh onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}>
             <sphereGeometry args={[0.3, 8, 8]} />
             <meshBasicMaterial transparent opacity={0} />
           </mesh>
@@ -96,7 +102,7 @@ export function EditorObjectInstance({ object }: Props) {
   // Content 오브젝트 렌더링
   if (object.content) {
     return (
-      <group ref={groupRef} onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+      <group ref={groupRef} onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}>
         {object.content.type === 'text' ? (
           <Text
             color={object.content.color ?? '#ffffff'}
@@ -126,16 +132,16 @@ export function EditorObjectInstance({ object }: Props) {
     <group ref={groupRef}>
       {assetRef ? (
         <Suspense fallback={
-          <mesh castShadow receiveShadow onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+          <mesh castShadow receiveShadow onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}>
             <boxGeometry args={[1, 1, 1]} />
             <meshStandardMaterial color="#52525b" wireframe />
           </mesh>
         }>
-          <GlbObject url={assetRef.dracoUrl} selected={isSelected} onClick={handleClick} wireframe={wireframeMode} />
+          <GlbObject url={assetRef.dracoUrl} selected={isSelected} onClick={(shiftKey) => handleClick(shiftKey)} wireframe={wireframeMode} />
         </Suspense>
       ) : (
         <mesh
-          onClick={(e) => { e.stopPropagation(); handleClick(); }}
+          onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
           castShadow
           receiveShadow
         >

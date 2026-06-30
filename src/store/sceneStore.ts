@@ -47,6 +47,7 @@ interface SceneActions {
   loadScene: (data: ProjectSceneSchema) => void;
   selectObject: (id: string | null) => void;
   toggleSelectObject: (id: string) => void;
+  selectObjects: (ids: string[]) => void;
   deleteSelected: () => void;
   alignSelected: (axis: 'x' | 'y' | 'z', mode: 'min' | 'center' | 'max') => void;
   setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
@@ -136,6 +137,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     }),
 
   selectObject: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+  selectObjects: (ids) => set({ selectedIds: ids, selectedId: ids[ids.length - 1] ?? null }),
+
   toggleSelectObject: (id) => set((s) => {
     const already = s.selectedIds.includes(id);
     const selectedIds = already
