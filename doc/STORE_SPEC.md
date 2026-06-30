@@ -41,7 +41,8 @@ interface EditorState {
   assets: AssetRefSchema[];     // 씬에 등록된 에셋 (dracoUrl 포함)
 
   // 선택 상태
-  selectedObjectId: string | null;
+  selectedObjectId: string | null;   // 단일 선택 (기즈모, Inspector 바인딩)
+  selectedIds: string[];             // 다중 선택 목록 (Shift+클릭, 범위 선택)
   hoveredObjectId: string | null;
 
   // 히스토리 (Command Pattern - Delta 방식)
@@ -74,7 +75,13 @@ interface EditorActions {
 
   // 선택
   selectObject: (id: string | null) => void;
+  selectObjects: (ids: string[]) => void;          // 범위 선택 (HierarchyPanel Shift+클릭)
+  toggleSelectObject: (id: string) => void;        // Shift+클릭 단일 토글 (캔버스/패널 공통)
   setHoveredObject: (id: string | null) => void;
+
+  // 그룹 시스템 (Ctrl+G / Ctrl+Shift+G)
+  groupSelected: () => void;    // 선택된 오브젝트들의 centroid에 그룹 생성, 자식 좌표를 로컬로 변환
+  ungroupSelected: () => void;  // 선택 그룹 해제, 자식 좌표를 월드로 복원 후 그룹 삭제
 
   // 히스토리 (드래그 종료 mouseup 시점에만 호출)
   saveToHistory: (delta: Delta) => void;
@@ -107,6 +114,10 @@ interface EditorActions {
 | `undo` | `past`에서 pop → `prev`로 복원 → `future`에 push |
 | `redo` | `future`에서 pop → `next`로 복원 → `past`에 push |
 | `addObject` / `removeObject` | 자동으로 `saveToHistory` 호출하여 실행 취소 지원 |
+| `selectedIds` 우선순위 | `selectedIds.length > 0`이면 다중 선택 모드. Inspector/기즈모는 `selectedIds[0]` 기준 |
+| `groupSelected` | 선택 오브젝트들의 position 평균값을 centroid로 계산 → 그룹 오브젝트(`isGroup: true`) 생성 → 자식들의 position을 그룹 로컬 좌표로 변환 |
+| `ungroupSelected` | 그룹의 자식들 position을 월드 좌표로 변환 → `parentId: null`로 변경 → 그룹 오브젝트 삭제 |
+| `deleteSelected` | 그룹 삭제 시 모든 자손(재귀)을 함께 삭제 |
 
 ---
 

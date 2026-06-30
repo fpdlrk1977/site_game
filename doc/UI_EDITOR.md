@@ -68,40 +68,52 @@ height: 100vh;
 |---|---|
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
-| `Delete` / `Backspace` | 선택 오브젝트 삭제 |
+| `Delete` / `Backspace` | 선택 오브젝트 삭제 (그룹이면 자손 포함 전체 삭제) |
 | `Ctrl+D` | 선택 오브젝트 복제 |
 | `W` / `E` / `R` | Transform 모드 전환 |
+| `Ctrl+G` | 선택 오브젝트들을 그룹으로 묶음 (centroid 기준 그룹 생성) |
+| `Ctrl+Shift+G` | 선택 그룹 해제 (자식을 월드 좌표로 복원) |
 
 ---
 
 ## 3. HierarchyPanel (`panels/HierarchyPanel.tsx`)
 
 ### 렌더링 규칙
-- `editorStore.objects` 배열을 `parentId` 기준으로 트리 구조로 렌더링
+- `objects` 배열을 `parentId` 기준으로 **재귀 트리**로 렌더링 (`renderTree(parentId, depth)`)
 - `parentId: null`인 오브젝트가 루트 레벨
-- 자식 오브젝트는 들여쓰기(16px/depth) 표시
+- 자식 오브젝트는 들여쓰기 `paddingLeft: 8 + depth * 16px`
+- 레이어 탭 없음 — 그룹 시스템이 계층 구조를 대체
+
+### 그룹 항목 동작
+- `isGroup: true` 오브젝트: `📁` 아이콘 + `▶/▼` 펼치기/접기 토글
+- 접힌 상태: 자식이 리스트에서 숨겨짐 (렌더링 안 됨)
+- 검색 중: 모든 그룹 자동 펼침
+- 이름 더블클릭: 그룹은 편집 불가 (일반 오브젝트만 더블클릭 이름 편집)
+
+### 선택 방식
+- **단일 클릭**: `selectObject(id)`, anchorIndex 갱신
+- **Shift+클릭**: `anchorIndexRef` 기준으로 `flatList` 범위 선택 → `selectObjects(ids[])`
+  - `flatList`: 현재 펼쳐진 트리를 선형화한 목록 (범위 계산 기준)
+- **캔버스 Shift+클릭**: `toggleSelectObject(id)` — 개별 토글
 
 ### 각 항목 요소
 - **이름 텍스트**: 클릭 시 `selectObject(id)` 호출
-- **눈 아이콘**: `visible` 토글
-- **자물쇠 아이콘**: `locked` 토글
+- **눈 아이콘**: `visible` 토글 (hover 시 표시)
+- **자물쇠 아이콘**: `locked` 토글 (hover 시 표시)
 
 ### 시각적 상태
 | 상태 | 표시 |
 |---|---|
-| 선택됨 | 파란색 배경 |
-| `locked: true` | 이름 텍스트 회색 |
-| `visible: false` | 이름 텍스트 반투명(opacity 0.4) |
-| hover | 연한 배경 강조 |
+| 선택됨 (`selectedIds` 포함 또는 `selectedId`) | 보라색 배경 (violet-600/30) |
+| `locked: true` | 이름 텍스트 회색 (zinc-500) |
+| `visible: false` | opacity 0.4 |
+| hover | zinc-800 배경 |
 
 ### 컨텍스트 메뉴 (우클릭)
+- 이름 변경 (일반 오브젝트만)
+- 그룹 해제 (`Ctrl+Shift+G`, 그룹 오브젝트만)
 - 복제 (`Ctrl+D`)
-- 삭제 (`Delete`)
-- 그룹화 (빈 부모 노드 생성 후 `parentId` 연결)
-
-### 드래그앤드롭
-- 항목을 다른 항목 위로 드래그 → `parentId` 변경 (계층 재구성)
-- 항목을 루트 영역으로 드래그 → `parentId: null`로 변경
+- 삭제 (`Delete`, 구분선 아래 빨간색)
 
 ---
 
@@ -152,16 +164,40 @@ height: 100vh;
 > - 뷰어의 `SceneObject.tsx`에서 `useAnimations()` 훅으로 AnimationMixer 바인딩
 > - Phase 3에서는 EventHandler가 `play_animation` 액션을 수신해도 콘솔 경고만 출력하고 무시
 
+### [Particle 섹션]
+`object.particle`이 존재할 때 표시. Material 섹션 대신 렌더링됨.
+
+| 필드 | 타입 | 동작 |
+|---|---|---|
+| Preset | 드롭다운 | `fire` / `dust` / `light` / `snow` — 선택 시 기본값 자동 적용 |
+| Color | 컬러피커 | 파티클 색상 |
+| Count | 슬라이더 | 파티클 수 (1~2000) |
+| Speed | 슬라이더 | 방출 속도 |
+| Spread | 슬라이더 | 퍼짐 각도 |
+| Size | 슬라이더 | 파티클 크기 |
+
+### [그룹 전용 Inspector]
+`object.isGroup: true`이면 일반 Inspector 대신 표시.
+- 이름 편집, Transform 섹션, Visible/Locked 토글
+- "그룹 해제: Ctrl+Shift+G" 힌트 표시
+
 ### [Visibility 섹션]
 | 필드 | 타입 |
 |---|---|
 | Visible | 토글 스위치 |
 | Locked | 토글 스위치 |
-| Layer | 텍스트 인풋 |
 
 ---
 
 ## 5. AssetBrowser (`panels/AssetBrowser.tsx`)
+
+### 탭 구성
+| 탭 | 내용 |
+|---|---|
+| 도형 | Box / Sphere / Cylinder / Plane 기본 도형 버튼 |
+| 에셋 | 업로드된 .glb 파일 타일 그리드 |
+| 콘텐츠 | Text / Image / Video 오브젝트 버튼 |
+| 파티클 | fire / dust / light / snow 프리셋 버튼 — 클릭 시 `addParticleObject(preset)` 호출 |
 
 ### 레이아웃
 - 수평 스크롤 가능한 그리드 타일 (타일 크기: 80×80px)
@@ -193,17 +229,30 @@ height: 100vh;
 
 ## 7. GizmoController (`canvas/GizmoController.tsx`)
 
-- `selectedObjectId`가 존재하고 해당 오브젝트의 `locked: false`일 때만 마운트
-- Three.js `TransformControls`를 R3F `<primitive>`로 래핑
-- `mode`: ViewportToolbar의 활성 모드(translate/rotate/scale)와 동기화
-- `space`: ViewportToolbar의 World/Local 설정과 동기화
+`selectedIds.length > 1`이면 `MultiGizmo`, 그 외에는 `SingleGizmo`를 렌더링.
 
-### 이벤트 처리
+### SingleGizmo
+- `selectedObjectId`가 존재하고 `locked: false`일 때 마운트
+- Three.js `TransformControls`를 해당 오브젝트 mesh에 attach
+- `mode`: translate / rotate / scale
+- `space`: World / Local
+
+### MultiGizmo
+- `selectedIds`가 2개 이상일 때 마운트
+- 선택 오브젝트들의 위치 평균(centroid)에 가상 피벗 `<group>` 배치
+- `useState`를 ref callback으로 사용: `<group ref={setPivotEl} />` — 마운트 시점에 re-render 트리거
+- `TransformControls`를 피벗 group에 attach
+- **translate 전용**: scale/rotate는 단일 오브젝트에만 허용
+- `onMouseDown`: 피벗 위치 + 모든 선택 오브젝트 위치 스냅샷
+- `onChange`: 피벗 delta를 모든 선택 오브젝트의 Three.js ref에 즉시 반영 (히스토리 미기록)
+- `onMouseUp`: 최종 위치를 스토어에 일괄 `updateObject` 호출
+
+### 이벤트 처리 (공통)
 | 이벤트 | 동작 |
 |---|---|
 | 드래그 시작 (`mouseDown`) | `OrbitControls.enabled = false` |
-| 드래그 중 (`objectChange`) | `updateTransform(id, newTransform)` — 히스토리 미기록 |
-| 드래그 종료 (`mouseUp`) | `OrbitControls.enabled = true`, `saveToHistory(delta)` 호출 |
+| 드래그 중 (`objectChange`) | `updateTransform` — 히스토리 미기록 |
+| 드래그 종료 (`mouseUp`) | `OrbitControls.enabled = true`, 스토어에 최종 위치 반영 |
 
 ---
 

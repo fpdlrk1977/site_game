@@ -72,6 +72,29 @@
 
 ---
 
+## 8. 파티클 이미터 렌더링
+
+`object.particle`이 존재하는 오브젝트는 `<ParticleEmitter>` 컴포넌트로 렌더링한다.
+
+- **컴포넌트**: `src/components/three/ParticleEmitter.tsx`
+- **렌더링**: `THREE.Points` + `AdditiveBlending` — 투명 배경에 발광 효과
+- **애니메이션**: `useFrame`으로 매 프레임 파티클 위치 업데이트, 수명 초과 시 재방출
+- **프리셋**: `fire` / `dust` / `light` / `snow` — 각각 색상·속도·퍼짐 기본값이 다름
+- **Physics 무관**: 파티클은 Rapier 콜라이더 없이 항상 렌더링 (`<Physics>` 컨텍스트 외부에서 처리 가능)
+- **그룹 자식인 경우**: `ViewerObject` 내에서 부모 그룹의 로컬 좌표로 렌더링
+- **InstancedMesh 제외**: `getInstancedIds()`에서 `obj.particle` 존재 시 배칭 대상 제외
+
+### ViewerCanvas 렌더링 분기
+```tsx
+// 루트 레벨 파티클만 직접 배치 (그룹 자식 파티클은 ViewerObject 내부에서 처리)
+{particleObjects.filter((o) => o.parentId === null).map((obj) => (
+  <ParticleEmitter key={obj.id} config={obj.particle!}
+    position={[obj.position.x, obj.position.y, obj.position.z]} />
+))}
+```
+
+---
+
 ## 7. HTML 오버레이 레이어
 
 - 3D 캔버스 위 `position: absolute` 2D HTML 레이어

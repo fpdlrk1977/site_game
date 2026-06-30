@@ -65,11 +65,12 @@ CREATE TABLE scene_events (
 );
 
 -- Phase 4: 씬 버전 히스토리 (최대 30개)
+-- 주의: version 컬럼은 없음 (2026-06-30 DROP COLUMN 완료)
 CREATE TABLE scene_versions (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   scene_id    UUID NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
   scene_data  JSONB NOT NULL,
-  saved_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Phase 4: 댓글/피드백
@@ -126,6 +127,42 @@ CREATE POLICY "owner_all" ON assets
 -- users_plan: 본인만 조회, 수정은 서비스 역할(결제 웹훅)만
 ALTER TABLE users_plan ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "self_read" ON users_plan FOR SELECT USING (user_id = auth.uid());
+
+-- scene_events: 누구나 INSERT (익명 뷰어도 수집), 소유자만 SELECT
+ALTER TABLE scene_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "scene_events: anyone inserts" ON scene_events
+  FOR INSERT WITH CHECK (true);
+CREATE POLICY "scene_events: owner reads" ON scene_events
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM scenes s JOIN projects p ON p.id = s.project_id
+      WHERE s.id = scene_events.scene_id AND p.owner_id = auth.uid()
+    )
+  );
+
+-- scene_versions: 소유자만 INSERT / SELECT / DELETE
+ALTER TABLE scene_versions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "scene_versions: owner selects" ON scene_versions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM scenes s JOIN projects p ON p.id = s.project_id
+      WHERE s.id = scene_versions.scene_id AND p.owner_id = auth.uid()
+    )
+  );
+CREATE POLICY "scene_versions: owner inserts" ON scene_versions
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM scenes s JOIN projects p ON p.id = s.project_id
+      WHERE s.id = scene_versions.scene_id AND p.owner_id = auth.uid()
+    )
+  );
+CREATE POLICY "scene_versions: owner deletes" ON scene_versions
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM scenes s JOIN projects p ON p.id = s.project_id
+      WHERE s.id = scene_versions.scene_id AND p.owner_id = auth.uid()
+    )
+  );
 ```
 
 ---
@@ -187,17 +224,29 @@ export async function GET(req: Request, { params }: { params: { sceneId: string 
 
 모든 쿼리는 `src/lib/supabase.ts`의 클라이언트를 통해서만 호출한다.
 
-### 씬 저장 (upsert)
+### 씬 저장 (update)
 ```typescript
+// 씬 데이터 저장
 await supabase
   .from('scenes')
-  .upsert({
-    id: sceneId,
-    project_id: projectId,
-    scene_data: serializedScene,
-    version: currentVersion + 1,
-    updated_at: new Date().toISOString(),
-  });
+  .update({ scene_data: serializedScene })
+  .eq('id', sceneId);
+
+// 버전 스냅샷 저장 (최대 30개 유지)
+await supabase
+  .from('scene_versions')
+  .insert({ scene_id: sceneId, scene_data: serializedScene });
+
+// 30개 초과 시 오래된 버전 삭제
+const { data: oldVersions } = await supabase
+  .from('scene_versions')
+  .select('id')
+  .eq('scene_id', sceneId)
+  .order('created_at', { ascending: false })
+  .range(30, 100);
+if (oldVersions?.length) {
+  await supabase.from('scene_versions').delete().in('id', oldVersions.map((v) => v.id));
+}
 ```
 
 ### 씬 불러오기

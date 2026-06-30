@@ -67,21 +67,23 @@ components/
 ├── editor/                             # 에디터 전용 — 뷰어에서 절대 import 금지
 │   ├── EditorLayout.tsx                # 4패널 CSS Grid 컨테이너
 │   ├── panels/
-│   │   ├── HierarchyPanel.tsx          # 좌측: 오브젝트 트리
-│   │   ├── InspectorPanel/             # 우측: 속성 편집기 (섹션별 분리)
-│   │   │   ├── index.tsx               # 섹션 조합 및 레이아웃만 담당
-│   │   │   ├── TransformSection.tsx    # Position / Rotation / Scale
-│   │   │   ├── PhysicsSection.tsx      # Enabled / ColliderType / isSensor
-│   │   │   ├── EventsSection.tsx       # 이벤트 목록 + 추가/삭제
-│   │   │   └── VisibilitySection.tsx   # Visible / Locked / Layer
-│   │   ├── AssetBrowser.tsx            # 하단: 에셋 브라우저 + 업로드
+│   │   ├── HierarchyPanel.tsx          # 좌측: 오브젝트 트리 (재귀 트리, 그룹 펼치기/접기, 범위 선택)
+│   │   ├── InspectorPanel.tsx          # 우측: 속성 편집기 (Transform/Material/Physics/Events/Particle/Group)
+│   │   ├── AssetBrowser.tsx            # 하단: 에셋 브라우저 + 도형/콘텐츠/파티클 탭
 │   │   ├── EnvironmentPanel.tsx        # 환경 설정 (하늘/안개/조명)
-│   │   └── ViewportToolbar.tsx         # 상단: Transform 모드 / 씬 드롭다운 / 저장
+│   │   ├── ViewportToolbar.tsx         # 상단: Transform 모드 / 씬 드롭다운 / 저장 / 히스토리
+│   │   ├── SceneSwitcher.tsx           # 씬 전환 드롭다운
+│   │   ├── VersionHistoryModal.tsx     # 버전 히스토리 목록 + 복구
+│   │   └── TemplatePickerModal.tsx     # 새 씬 템플릿 선택
 │   └── canvas/
-│       ├── EditorCanvas.tsx            # R3F Canvas (Physics 없음)
-│       ├── EditorGrid.tsx              # GridHelper 래퍼
-│       ├── GizmoController.tsx         # TransformControls 관리
-│       └── EditorObjectInstance.tsx    # 에디터 내 단순 mesh 렌더링
+│       ├── EditorCanvas.tsx            # R3F Canvas (Physics 없음, preserveDrawingBuffer)
+│       ├── GizmoController.tsx         # SingleGizmo + MultiGizmo (다중 선택 centroid 피벗)
+│       ├── EditorObjectInstance.tsx    # 오브젝트 렌더링 (GroupObjectInstance 포함)
+│       ├── GlbObject.tsx               # GLB 렌더러 (useGLTF + Suspense)
+│       └── ObjectRefsContext.tsx       # mesh ref map (MultiGizmo 위치 계산용)
+│
+├── three/                              # 에디터·뷰어 공용 Three.js 컴포넌트
+│   └── ParticleEmitter.tsx             # Three.js Points 기반 파티클 (fire/dust/light/snow)
 │
 ├── viewer/                             # 뷰어 전용 — 에디터에서 import 금지
 │   ├── ViewerCanvas.tsx                # R3F Canvas (<Physics> 래퍼 포함)
@@ -151,7 +153,11 @@ hooks/
 ```
 supabase/
 ├── migrations/
-│   └── 0001_init.sql               # 초기 테이블 생성 (API_SPEC.md 참조)
+│   ├── 0001_init.sql               # 초기 테이블 생성 (API_SPEC.md 참조)
+│   ├── 0002_storage.sql            # thumbnails 버킷
+│   ├── 0003_assets_storage.sql     # assets 버킷
+│   ├── 0004_analytics.sql          # scene_events 테이블 + RLS (✅ 실행 완료 2026-06-30)
+│   └── 0005_scene_versions.sql     # scene_versions 테이블 + RLS (✅ 실행 완료 2026-06-30)
 └── functions/
     └── process-asset/
         └── index.ts                # 업로드 후 Draco 압축 Edge Function

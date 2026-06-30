@@ -38,7 +38,7 @@ export interface PhysicsSchema {
 
 export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane';
 
-export type ContentType = 'text3d' | 'image' | 'video';
+export type ContentType = 'text' | 'image' | 'video';
 
 export interface ContentConfig {
   type: ContentType;
@@ -61,18 +61,19 @@ export interface ParticleConfig {
   color: string;
   speed: number;
   lifetime: number;
-  preset?: 'fire' | 'dust' | 'sparkle' | 'snow';
+  preset?: 'fire' | 'dust' | 'light' | 'snow';
 }
 
 export interface ObjectNodeSchema {
   id: string;
   name: string;
-  assetId: string | null;           // null이면 primitiveShape 또는 contentType 사용
+  assetId: string | null;           // null이면 primitiveShape 또는 content 사용
   primitiveShape?: PrimitiveShape;  // Phase 1: 기본 도형 (.glb 없이 생성)
-  contentConfig?: ContentConfig;    // Phase 3: 텍스트/이미지/동영상
-  particleConfig?: ParticleConfig;  // Phase 4: 파티클
+  content?: ContentConfig;          // Phase 3: 텍스트/이미지/동영상 (필드명: content)
+  particle?: ParticleConfig;        // Phase 4: 파티클 이미터 (필드명: particle)
   prefabId?: string;                // Phase 4: 프리팹 원본 ID
   material?: MaterialOverride;      // Phase 4: 재질 오버라이드
+  isGroup?: boolean;                // true이면 GroupObjectInstance로 렌더링. 자식은 parentId로 연결
   parentId: string | null;
   layer: string;
   position: Vector3;
