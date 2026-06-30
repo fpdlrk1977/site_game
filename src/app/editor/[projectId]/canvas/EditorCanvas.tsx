@@ -59,6 +59,8 @@ export function EditorCanvas() {
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     isDraggingRef.current = false;
     dragRectRef.current = null;
+    // Disable orbit immediately so it doesn't jitter before the 6px threshold kicks in
+    if (orbitRef.current) orbitRef.current.enabled = false;
   }, []);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -69,7 +71,6 @@ export function EditorCanvas() {
 
     if (!isDraggingRef.current) {
       isDraggingRef.current = true;
-      if (orbitRef.current) orbitRef.current.enabled = false;
     }
 
     const wr = wrapperRef.current!.getBoundingClientRect();
