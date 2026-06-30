@@ -72,6 +72,28 @@
 
 ---
 
+## 9. 동영상 콘텐츠 오브젝트 렌더링
+
+`object.content.type === 'video'` 오브젝트는 URL 형식에 따라 두 가지 방식으로 렌더링한다.
+
+### YouTube URL
+- URL에서 영상 ID 추출 (`youtube.com/watch?v=`, `youtu.be/`, `youtube.com/embed/` 패턴)
+- 검은 배경 plane + `<Html transform occlude center>` iframe 오버레이 (`https://www.youtube.com/embed/{id}?autoplay=1`)
+- `<Html transform>`은 1 CSS px = 1 Three.js 로컬 단위. 컨테이너를 1×1 px로 설정하고 iframe(640×360px)을 `scale(1/640)` CSS 변환으로 축소해 plane 크기에 정확히 맞춤
+- 영상 비율 16:9 → 세로 방향 레터박스 (plane 높이의 56.25% 채움)
+- 클릭은 배경 mesh에 바인딩
+
+### 직접 URL (MP4, WebM 등)
+- `document.createElement('video')`로 HTML video 엘리먼트 생성
+- `muted`, `loop`, `playsInline`, `autoplay` 적용 (브라우저 자동재생 정책 준수)
+- `THREE.VideoTexture`로 plane mesh에 텍스처 적용
+- `meshBasicMaterial`, `toneMapped={false}`, `DoubleSide`
+
+### URL 없는 경우
+- 어두운 placeholder plane (`#1a1a2e`) 렌더링
+
+---
+
 ## 8. 파티클 이미터 렌더링
 
 `object.particle`이 존재하는 오브젝트는 `<ParticleEmitter>` 컴포넌트로 렌더링한다.

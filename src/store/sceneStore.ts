@@ -196,7 +196,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       layer: 'default',
       position: { x: 0, y: 1, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 2, y: 1, z: 1 },
+      scale: type === 'video' ? { x: 16 / 9, y: 1, z: 1 } : { x: 2, y: 1, z: 1 },
       visible: true,
       locked: false,
       physics: { ...DEFAULT_PHYSICS },

@@ -1,13 +1,103 @@
 'use client';
 
-import { useState, Suspense, useRef, useEffect as useEffectReact } from 'react';
-import { useGLTF, Text } from '@react-three/drei';
+import { useState, Suspense, useEffect as useEffectReact } from 'react';
+import { useGLTF, Text, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMemo, useEffect } from 'react';
 import { useLoader } from '@react-three/fiber';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
+
+function getYouTubeId(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/]+)/);
+  return m ? m[1] : null;
+}
+
+function YouTubeEmbed({ ytId, position, rotation, scale, onClick }: {
+  ytId: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  onClick: () => void;
+}) {
+  // <Html transform> distanceFactor=10 default: 1 world unit = UNIT_PX = 40 CSS px.
+  // Html is placed in a scale-free group (position + rotation only) so that non-uniform
+  // object scale (e.g. 16:9) doesn't distort the iframe content.
+  // CSS size is computed as UNIT_PX × scale[axis] to match the plane's world size.
+  const UNIT_PX = 40;
+  const w = Math.round(UNIT_PX * scale[0]);
+  const h = Math.round(UNIT_PX * scale[1]);
+  const iframeScale = w / 640;
+  return (
+    <>
+      <mesh position={position} rotation={rotation} scale={scale}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial color="#000000" />
+      </mesh>
+      <group position={position} rotation={rotation}>
+        <Html transform center position={[0, 0, 0.01]}
+          style={{ width: `${w}px`, height: `${h}px`, overflow: 'hidden', pointerEvents: 'auto' }}>
+          <div style={{
+            position: 'absolute',
+            width: '640px',
+            height: '360px',
+            left: '50%',
+            top: '50%',
+            transform: `translate(-50%, -50%) scale(${iframeScale})`,
+            transformOrigin: 'center',
+          }}>
+            <iframe
+              src={`https://www.youtube.com/embed/${ytId}?autoplay=1`}
+              width={640} height={360}
+              style={{ border: 'none', display: 'block' }}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </Html>
+      </group>
+    </>
+  );
+}
+
+function VideoMesh({ position, rotation, scale, url, onClick, onPointerOver, onPointerOut }: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  url: string;
+  onClick: () => void;
+  onPointerOver: () => void;
+  onPointerOut: () => void;
+}) {
+  const [texture, setTexture] = useState<THREE.VideoTexture | null>(null);
+  useEffectReact(() => {
+    const vid = document.createElement('video');
+    vid.src = url;
+    vid.crossOrigin = 'anonymous';
+    vid.loop = true;
+    vid.muted = true;
+    vid.playsInline = true;
+    vid.play().catch(() => {});
+    const tex = new THREE.VideoTexture(vid);
+    setTexture(tex);
+    return () => { vid.pause(); vid.src = ''; tex.dispose(); };
+  }, [url]);
+  return (
+    <mesh position={position} rotation={rotation} scale={scale}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onPointerOver={(e) => { e.stopPropagation(); onPointerOver(); }}
+      onPointerOut={onPointerOut}
+    >
+      <planeGeometry args={[1, 1]} />
+      {texture
+        ? <meshBasicMaterial map={texture} side={THREE.DoubleSide} toneMapped={false} />
+        : <meshBasicMaterial color="#0f172a" />
+      }
+    </mesh>
+  );
+}
 
 function ImagePlane({ position, rotation, scale, url, onClick, onPointerOver, onPointerOut }: {
   position: [number, number, number];
@@ -175,7 +265,25 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
         </Suspense>
       );
     }
-    // video — 빈 플레인으로 폴백 (뷰어에서 완전 구현은 추후)
+    if (type === 'video') {
+      const url = object.content.url ?? '';
+      const ytId = url ? getYouTubeId(url) : null;
+      if (ytId) {
+        return <YouTubeEmbed ytId={ytId} position={pos} rotation={rot} scale={scl} onClick={handleClick} />;
+      }
+      if (url) {
+        return (
+          <VideoMesh
+            position={pos} rotation={rot} scale={scl}
+            url={url}
+            onClick={handleClick}
+            onPointerOver={handlePointerOver}
+            onPointerOut={handlePointerOut}
+          />
+        );
+      }
+    }
+    // 빈 플레이스홀더 (image URL 없음, video URL 없음)
     return (
       <mesh position={pos} rotation={rot} scale={scl}
         onClick={(e) => { e.stopPropagation(); handleClick(); }}
