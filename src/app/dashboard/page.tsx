@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import { ProjectCard } from './ProjectCard';
@@ -60,8 +61,14 @@ export default async function DashboardPage() {
           </div>
           <span className="font-bold text-lg tracking-tight">Park3D</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-zinc-400">{user.email}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-zinc-500 mr-1">{user.email}</span>
+          <Link
+            href="/account"
+            className="text-sm text-zinc-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-zinc-800"
+          >
+            계정 설정
+          </Link>
           <form action="/api/auth/signout" method="POST">
             <button
               type="submit"
