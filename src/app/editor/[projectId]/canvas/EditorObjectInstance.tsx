@@ -8,7 +8,13 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { GlbObject } from './GlbObject';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
+import { pointerDownOnObjectRef } from './boxSelectState';
 import type { ObjectNodeSchema } from '@/types/scene';
+
+const markObjectHit = (e: { stopPropagation: () => void }) => {
+  e.stopPropagation();
+  pointerDownOnObjectRef.current = true;
+};
 
 const DEG2RAD = Math.PI / 180;
 
@@ -70,6 +76,7 @@ function GroupObjectInstance({ object }: Props) {
     <group
       ref={groupRef}
       onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+      onPointerDown={markObjectHit}
     >
       {/* 선택 표시 — 그룹 중심에 작은 마커 */}
       {isSelected && (
@@ -136,7 +143,7 @@ export function EditorObjectInstance({ object }: Props) {
   // 파티클 이미터 렌더링
   if (object.particle) {
     return (
-      <group ref={groupRef}>
+      <group ref={groupRef} onPointerDown={markObjectHit}>
         <ParticleEmitter config={object.particle} />
         {/* 선택 표시 — 빌보드 와이어프레임 구체 */}
         {isSelected && (
@@ -158,7 +165,7 @@ export function EditorObjectInstance({ object }: Props) {
   // Content 오브젝트 렌더링
   if (object.content) {
     return (
-      <group ref={groupRef} onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}>
+      <group ref={groupRef} onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }} onPointerDown={markObjectHit}>
         {object.content.type === 'text' ? (
           <Suspense fallback={null}>
             <Center>
@@ -202,7 +209,7 @@ export function EditorObjectInstance({ object }: Props) {
   }
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} onPointerDown={markObjectHit}>
       {assetRef ? (
         <Suspense fallback={
           <mesh castShadow receiveShadow onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}>

@@ -33,7 +33,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick }: Props) {
 
   return (
     <Canvas
-      shadows="soft"
+      shadows="percentage"
       camera={{ position: [5, 4, 8], fov: 60 }}
       style={{ width: '100%', height: '100%' }}
     >

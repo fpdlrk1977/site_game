@@ -12,9 +12,10 @@ const DEG2RAD = Math.PI / 180;
 
 interface Props {
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
+  gizmoDraggingRef: React.MutableRefObject<boolean>;
 }
 
-function MultiGizmo({ orbitRef }: Props) {
+function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedIds, transformMode, transformSpace,
     snapEnabled, snapTranslate, snapRotate, updateObject, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
@@ -53,6 +54,7 @@ function MultiGizmo({ orbitRef }: Props) {
           rotationSnap={snapEnabled ? snapRotate * DEG2RAD : null}
           scaleSnap={snapEnabled ? 0.1 : null}
           onMouseDown={() => {
+            gizmoDraggingRef.current = true;
             if (orbitRef.current) orbitRef.current.enabled = false;
             dragStartPivot.current.copy(pivotEl.position);
             dragStartPositions.current.clear();
@@ -73,6 +75,7 @@ function MultiGizmo({ orbitRef }: Props) {
             }
           }}
           onMouseUp={() => {
+            gizmoDraggingRef.current = false;
             if (orbitRef.current) orbitRef.current.enabled = true;
             if (transformMode === 'translate') {
               for (const id of selectedIds) {
@@ -92,7 +95,7 @@ function MultiGizmo({ orbitRef }: Props) {
   );
 }
 
-function SingleGizmo({ orbitRef }: Props) {
+function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate,
     objects, updateObject, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
@@ -111,8 +114,9 @@ function SingleGizmo({ orbitRef }: Props) {
       translationSnap={snapEnabled ? snapTranslate : null}
       rotationSnap={snapEnabled ? snapRotate * DEG2RAD : null}
       scaleSnap={snapEnabled ? 0.1 : null}
-      onMouseDown={() => { if (orbitRef.current) orbitRef.current.enabled = false; }}
+      onMouseDown={() => { gizmoDraggingRef.current = true; if (orbitRef.current) orbitRef.current.enabled = false; }}
       onMouseUp={() => {
+        gizmoDraggingRef.current = false;
         if (orbitRef.current) orbitRef.current.enabled = true;
         const pos = target.position;
         const rot = target.rotation;
@@ -128,9 +132,9 @@ function SingleGizmo({ orbitRef }: Props) {
   );
 }
 
-export function GizmoController({ orbitRef }: Props) {
+export function GizmoController({ orbitRef, gizmoDraggingRef }: Props) {
   const selectedIds = useSceneStore((s) => s.selectedIds);
   return selectedIds.length > 1
-    ? <MultiGizmo orbitRef={orbitRef} />
-    : <SingleGizmo orbitRef={orbitRef} />;
+    ? <MultiGizmo orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
+    : <SingleGizmo orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />;
 }
