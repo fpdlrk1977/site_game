@@ -1,5 +1,44 @@
 # ROADMAP: 개발 단계 및 마일스톤
 
+## UI 리디자인 로드맵 (2026-07-01 결정)
+
+> **기준 디자인**: `doc/ChatGPT Image 2026년 7월 1일 오전 09_47_49.png`
+> Spline/Figma 스타일 3패널 에디터. 라이트 모드 기준, 다크 모드 토글 지원.
+> 세부 명세는 `doc/UI_EDITOR.md` 참조.
+
+### Phase A — 낮은 리스크 (빠른 효과)
+기존 구조를 유지하면서 시각적 완성도를 높이는 작업.
+
+| 태스크 | 파일 | 내용 |
+|---|---|---|
+| A-1 | `ViewportToolbar.tsx` | 텍스트 버튼 → 아이콘 버튼 + hover 툴팁 (단축키 표시) |
+| A-2 | `EditorClient.tsx` (헤더) | 프로젝트명 — 씬명 헤더 바 추가 (미저장 `•` 표시 포함) |
+| A-3 | `canvas/ViewportStatusBar.tsx` | Canvas 하단 Position/Rotation/Scale 실시간 표시 |
+| A-4 | `HierarchyPanel.tsx` | 오브젝트 타입별 아이콘 강화, 트리 들여쓰기 선 |
+| A-5 | `AssetBrowser.tsx` | Models/Materials/Textures/HDR/Audio 탭 구조 추가 (미구현 탭은 "준비 중" 표시) |
+
+### Phase B — 중간 리스크 (레이아웃 재구성)
+컴포넌트 위치/구조 변경. 기능에는 영향 없음.
+
+| 태스크 | 파일 | 내용 |
+|---|---|---|
+| B-1 | `EditorClient.tsx` | 레이아웃 재구성: AssetBrowser를 하단 띠 → 왼쪽 패널 하단으로 이동 |
+| B-2 | `AssetBrowser.tsx` | 가로 스크롤 → 세로 2열 그리드로 전환 |
+| B-3 | `InspectorPanel.tsx` | 섹션 구분 헤더 디자인 개선, Material 타입 선택기 추가 |
+| B-4 | `InspectorPanel.tsx` | Interactions 섹션 UI 개선 (URL 입력 + Add 버튼 스타일) |
+
+### Phase C — 높은 리스크 (테마 시스템)
+전체 컴포넌트 색상 클래스 교체. 충분한 일정 확보 후 진행.
+
+| 태스크 | 내용 |
+|---|---|
+| C-1 | CSS 변수 기반 테마 토큰 정의 (`--color-bg`, `--color-panel` 등) |
+| C-2 | 에디터/대시보드/계정 페이지 전체 하드코딩 색상 → CSS 변수 교체 |
+| C-3 | 라이트/다크 토글 버튼 + `localStorage` 저장 |
+| C-4 | HDR 환경맵 업로드/적용 (Three.js `RGBELoader` + Supabase storage) |
+
+---
+
 ## Phase 0: 진입 및 프로젝트 관리 기반
 - 목표: 로그인 → 대시보드 → 에디터 진입까지의 흐름 완성. 씬/프로젝트 CRUD.
 - 핵심 마일스톤: 신규 프로젝트 생성 후 에디터까지 막힘 없이 이동 가능.

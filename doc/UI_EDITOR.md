@@ -2,38 +2,72 @@
 
 > **에디터는 데스크탑 전용이다 (최소 1280px 너비).** 모바일/태블릿 접속 시 "에디터는 PC에서 이용해 주세요" 안내 화면을 표시하고 에디터 레이아웃을 렌더링하지 않는다. 뷰어(`/space/:sceneId`)는 별도로 모바일을 지원한다.
 
+> **디자인 기준**: `doc/ChatGPT Image 2026년 7월 1일 오전 09_47_49.png` 이미지를 기준 디자인으로 한다.
+> 라이트 모드(이미지 기준) + 다크 모드 토글을 지원한다. 기본값은 다크 모드.
+
 ---
 
 ## 1. 전체 레이아웃
 
-에디터는 CSS Grid 기반 4패널 구조를 사용한다. 전체 화면(`100vw × 100vh`)을 채운다.
+에디터는 CSS Grid 기반 3패널 구조를 사용한다. 전체 화면(`100vw × 100vh`)을 채운다.
+**기존 하단 AssetBrowser 띠(180px)를 제거하고 왼쪽 패널 하단으로 통합.**
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    ViewportToolbar                       │  48px 고정
-├────────────────┬───────────────────────┬────────────────┤
-│                │                       │                │
-│  Hierarchy     │     EditorCanvas      │   Inspector    │
-│   Panel        │     (Viewport)        │    Panel       │
-│   240px 고정   │     flex-grow: 1      │   280px 고정   │
-│                │                       │                │
-├────────────────┴───────────────────────┴────────────────┤
-│                    AssetBrowser                          │  180px 고정
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  [←] [앱명]  [프로젝트명] — [씬명 ▼]     [Preview] [Publish] │  48px 고정
+├──────────────────┬──────────────────────────┬───────────────┤
+│  Objects         │  [툴바 아이콘 + 단축키]  │  Inspector    │
+│  [검색창]        │                          │               │
+│  ├ Scene         │   EditorCanvas           │  [오브젝트명] │
+│  ├ Light         │   (Viewport)             │  Transform    │
+│  └ Wall          │                          │  Material     │
+│    ├ Roof        │                          │  Physics      │
+│    └ Door        │                          │  Events       │
+│──────────────────│  [Pos / Rot / Scale 바]  │               │
+│  Assets          │                          │               │
+│  [탭: Models…]   │                          │               │
+│  [썸네일 그리드] │                          │               │
+└──────────────────┴──────────────────────────┴───────────────┘
 ```
 
 **CSS Grid 설정 (`EditorLayout.tsx`):**
 ```css
 display: grid;
 grid-template-columns: 240px 1fr 280px;
-grid-template-rows: 48px 1fr 180px;
+grid-template-rows: 48px 1fr;   /* 하단 행 제거 */
 width: 100vw;
 height: 100vh;
 ```
 
+**왼쪽 패널 내부 분할 (flex column):**
+- Objects 영역: `flex: 1 1 60%`, 최소 높이 200px, 세로 스크롤
+- Assets 영역: `flex: 0 0 40%`, 최소 높이 160px, 세로 스크롤
+- 두 영역 사이 드래그 핸들로 비율 조절 가능 (선택 구현)
+
 ---
 
 ## 2. ViewportToolbar (`panels/ViewportToolbar.tsx`)
+
+### 상단 헤더 바 구조
+
+```
+[←] Park3D   |   My Project — Main Scene ▼        [Preview] [Publish] [🌙/☀]
+```
+
+- `[←]`: 대시보드 복귀 링크
+- `프로젝트명 — 씬명 ▼`: 클릭 시 씬 목록 드롭다운 (씬 전환 + 새 씬 추가)
+- `isModified: true`일 때 씬명 옆 `•` 미저장 표시
+- `[🌙/☀]`: 다크/라이트 모드 토글 버튼 (우측 끝)
+
+### 뷰포트 툴바 (Canvas 상단 오버레이)
+
+```
+[↔이동] [↻회전] [⤢스케일]  |  [World▼]  [스냅□ 1▼]  |  [그리드] [와이어] [환경🌤]
+```
+
+- 모든 버튼은 **아이콘 + hover 시 툴팁** (단축키 포함) 표시
+  - 예: 이동 버튼 hover → `"이동 (W)"`
+- 활성 버튼: 배경 강조 (다크: violet-700, 라이트: violet-100)
 
 ### 씬 전환 드롭다운 (추가)
 
@@ -191,17 +225,29 @@ height: 100vh;
 
 ## 5. AssetBrowser (`panels/AssetBrowser.tsx`)
 
+> **위치 변경**: 하단 가로 띠(180px) → **왼쪽 패널 하단** (Objects 아래)으로 이동.
+> 세로 그리드 레이아웃으로 전환. 수평 스크롤 제거.
+
 ### 탭 구성
-| 탭 | 내용 |
-|---|---|
-| 도형 | Box / Sphere / Cylinder / Plane 기본 도형 버튼 |
-| 에셋 | 업로드된 .glb 파일 타일 그리드 |
-| 콘텐츠 | Text / Image / Video 오브젝트 버튼 |
-| 파티클 | fire / dust / light / snow 프리셋 버튼 — 클릭 시 `addParticleObject(preset)` 호출 |
+| 탭 | 내용 | 구현 상태 |
+|---|---|---|
+| All Assets | 전체 에셋 목록 | ✅ 현재 구현 |
+| Models | 업로드된 .glb 파일 | ✅ 현재 구현 |
+| Materials | 재질 프리셋 (색상/PBR) | 🔜 Phase B |
+| Textures | 이미지 텍스처 파일 | 🔜 Phase B |
+| HDR | 환경맵 (.hdr/.exr) | 🔜 Phase C (환경 패널 연동) |
+| Audio | 배경음/효과음 | ⏳ Phase 5 (장기) |
+
+- 미구현 탭: 클릭 시 "준비 중입니다" 안내 표시 (빈 탭 X)
+
+### 도형/콘텐츠/파티클 추가 위치
+- 기존 AssetBrowser 탭(도형/콘텐츠/파티클)은 **왼쪽 패널 상단 Objects 영역 하단 버튼 그룹**으로 이동
+- 또는 `[+ 추가]` 버튼 클릭 → 미니 드롭다운으로 도형/콘텐츠/파티클/에셋 선택
 
 ### 레이아웃
-- 수평 스크롤 가능한 그리드 타일 (타일 크기: 80×80px)
-- 각 타일: `.glb` 파일명 + 썸네일 이미지 (없으면 기본 큐브 아이콘)
+- **세로 그리드**: 2열 고정, 타일 크기 64×64px
+- 각 타일: 파일명 + 썸네일 (없으면 기본 아이콘)
+- 패널 높이에 맞춰 세로 스크롤
 
 ### 동작 규칙
 | 동작 | 결과 |
@@ -209,7 +255,7 @@ height: 100vh;
 | 타일 클릭 | 씬 중앙 (0, 0, 0)에 ObjectNode 생성 후 자동 선택 |
 | 타일 → EditorCanvas 드래그앤드롭 | 마우스 레이캐스팅 좌표에 ObjectNode 생성 |
 | 영역 내 `.glb` 파일 드롭 | Supabase Storage 업로드 시작 |
-| 파일 선택 버튼 클릭 | 파일 다이얼로그 열기 → `.glb` 선택 → 업로드 |
+| 파일 선택 버튼 클릭 | 파일 다이얼로그 → `.glb` 선택 → 업로드 |
 
 ### 업로드 중 상태
 - 해당 타일 위치에 진행 스피너 표시
@@ -295,3 +341,61 @@ height: 100vh;
 
 - 변경 즉시 씬에 반영 (`updateEnvironment` 호출)
 - 에디터에서 변경한 환경 설정도 씬 저장 시 `ProjectSceneSchema.environment`에 포함됨
+
+---
+
+## 9. 뷰포트 상태바 (`canvas/ViewportStatusBar.tsx`) 🔜 Phase A
+
+Canvas 하단에 절대 위치로 오버레이. 선택된 오브젝트의 Transform 수치를 실시간 표시.
+
+```
+Position: 3.46, 0.00, -3.30  |  Rotation: 0°, 45°, 0°  |  Scale: 1.30, 1.30, 1.30  |  Perspective
+```
+
+- 오브젝트 미선택 시: 빈 상태 또는 카메라 위치만 표시
+- 숫자는 소수점 2자리 고정
+- `Perspective` / `Orthographic` 현재 카메라 타입 표시 (우측 끝)
+- 스타일: 반투명 배경, 작은 모노스페이스 폰트 (다크: zinc-900/80, 라이트: white/80)
+
+---
+
+## 10. 테마 시스템 🔜 Phase C
+
+### 목표
+- 라이트 모드(기준 디자인 이미지) + 다크 모드 토글 지원
+- 기본값: 다크 모드
+- 설정은 `localStorage`에 저장
+
+### 구현 방식
+CSS 변수(`--color-bg`, `--color-panel`, `--color-border`, `--color-text` 등)를 루트에 정의하고,
+모든 컴포넌트의 하드코딩된 `bg-zinc-950` 등 Tailwind 클래스를 CSS 변수 기반으로 교체.
+
+```css
+/* 다크 모드 (기본) */
+[data-theme="dark"] {
+  --color-bg: #09090b;          /* zinc-950 */
+  --color-panel: #18181b;       /* zinc-900 */
+  --color-border: #27272a;      /* zinc-800 */
+  --color-text: #d4d4d8;        /* zinc-300 */
+  --color-text-muted: #71717a;  /* zinc-500 */
+  --color-accent: #7c3aed;      /* violet-700 */
+}
+
+/* 라이트 모드 */
+[data-theme="light"] {
+  --color-bg: #f4f4f5;          /* zinc-100 */
+  --color-panel: #ffffff;
+  --color-border: #e4e4e7;      /* zinc-200 */
+  --color-text: #18181b;        /* zinc-900 */
+  --color-text-muted: #71717a;  /* zinc-500 */
+  --color-accent: #7c3aed;      /* violet-700 */
+}
+```
+
+### 적용 범위
+에디터 전체(`EditorClient`) + 대시보드 + 계정 페이지.
+뷰어(`/space/:sceneId`)는 테마 적용 제외 — 씬 배경색이 기준.
+
+### 리스크
+모든 컴포넌트의 Tailwind 색상 클래스를 전수 교체해야 함 (수십 개 파일).
+Phase C 진입 전 충분한 일정 확보 필요.
