@@ -97,9 +97,10 @@ export function MobileControls({ inputRef }: Props) {
         />
       </div>
 
-      {/* 점프 버튼 */}
+      {/* 점프 버튼 — onTouchStart은 React 기본이 passive라 preventDefault 불가.
+          스크롤 방지는 touchAction: 'none' CSS로 처리 */}
       <button
-        onTouchStart={(e) => { e.preventDefault(); inputRef.current.jump = true; }}
+        onTouchStart={() => { inputRef.current.jump = true; }}
         className="absolute bottom-12 right-8 w-16 h-16 rounded-full bg-white/15 border border-white/25 backdrop-blur-sm text-white text-xs font-semibold active:bg-white/30"
         style={{ touchAction: 'none' }}
       >
