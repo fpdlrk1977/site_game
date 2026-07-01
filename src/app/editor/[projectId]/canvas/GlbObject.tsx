@@ -31,6 +31,18 @@ export function GlbObject({ url, selected, onClick, wireframe = false }: Props) 
     });
   }, [clone, selected, wireframe]);
 
+  useEffect(() => {
+    return () => {
+      clone.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.geometry.dispose();
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        mats.forEach((m) => (m as THREE.Material).dispose());
+      });
+    };
+  }, [clone]);
+
   return (
     <primitive
       object={clone}

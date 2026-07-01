@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ?? 'localhost:3000';
 const PROTECTED_PATHS = ['/dashboard', '/editor'];
+const VALID_HOST_RE = /^[a-zA-Z0-9.-]+(:\d{1,5})?$/;
 
 export async function proxy(req: NextRequest) {
   let res = NextResponse.next({ request: req });
@@ -11,8 +12,9 @@ export async function proxy(req: NextRequest) {
 
   // 커스텀 도메인 처리
   if (!host.includes('localhost') && !host.includes(PLATFORM_DOMAIN)) {
+    if (!VALID_HOST_RE.test(host)) return res;
     const apiRes = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/projects?custom_domain=eq.${host}&select=default_scene_id`,
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/projects?custom_domain=eq.${encodeURIComponent(host)}&select=default_scene_id`,
       { headers: { apikey: process.env.SUPABASE_SERVICE_KEY! } }
     );
     const [project] = await apiRes.json();

@@ -109,6 +109,11 @@ function ImagePlane({ position, rotation, scale, url, onClick, onPointerOver, on
   onPointerOut: () => void;
 }) {
   const texture = useLoader(THREE.TextureLoader, url);
+
+  useEffect(() => {
+    return () => { texture.dispose(); };
+  }, [texture]);
+
   return (
     <mesh position={position} rotation={rotation} scale={scale}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
@@ -145,6 +150,18 @@ function GlbViewer({ url, hovered, onClick, onPointerOver, onPointerOut }: {
       });
     });
   }, [clone, hovered]);
+
+  useEffect(() => {
+    return () => {
+      clone.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.geometry.dispose();
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        mats.forEach((m) => (m as THREE.Material).dispose());
+      });
+    };
+  }, [clone]);
 
   return (
     <primitive

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import type { ParticleConfig } from '@/types/scene';
@@ -63,6 +63,10 @@ export function ParticleEmitter({ config, position = [0, 0, 0] }: Props) {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   }), [color, size]);
+
+  useEffect(() => {
+    return () => { geo.dispose(); mat.dispose(); };
+  }, [geo, mat]);
 
   useFrame((_state, delta) => {
     const dt = Math.min(delta, 0.05);

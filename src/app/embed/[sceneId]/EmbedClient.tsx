@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
 
@@ -23,6 +23,16 @@ interface Props {
 export function EmbedClient({ scene }: Props) {
   const [playMode, setPlayMode] = useState(false);
 
+  // postMessage 수신 허용 오리진: URL 파라미터 > referrer > 와일드카드 순으로 한정
+  const parentOrigin = useMemo(() => {
+    try {
+      const param = new URLSearchParams(window.location.search).get('parentOrigin');
+      if (param) return new URL(param).origin;
+      if (document.referrer) return new URL(document.referrer).origin;
+    } catch {}
+    return '*';
+  }, []);
+
   const handleObjectEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => {
     const events = obj.events.filter((e) => e.trigger === trigger);
     for (const ev of events) {
@@ -37,7 +47,7 @@ export function EmbedClient({ scene }: Props) {
             objectId: obj.id,
             objectName: obj.name,
             value: ev.value,
-          }, '*');
+          }, parentOrigin);
         }
       } else if (ev.action === 'emit_event') {
         // Event Bridge — 부모 페이지로 커스텀 이벤트 전송
@@ -49,7 +59,7 @@ export function EmbedClient({ scene }: Props) {
             objectName: obj.name,
             trigger,
             value: ev.value,
-          }, '*');
+          }, parentOrigin);
         }
       }
     }

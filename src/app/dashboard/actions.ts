@@ -13,13 +13,6 @@ export async function createProject(formData: FormData) {
 
   const name = (formData.get('name') as string)?.trim() || '새 프로젝트';
 
-  // 플랜 제한 확인 (현재 프로젝트 수)
-  const { count } = await supabase
-    .from('projects')
-    .select('*', { count: 'exact', head: true })
-    .eq('owner_id', user.id);
-  await assertCountLimit(user.id, 'maxProjects', count ?? 0);
-
   // 1. project INSERT (default_scene_id = null)
   const { data: project, error: projectError } = await supabase
     .from('projects')
@@ -28,6 +21,18 @@ export async function createProject(formData: FormData) {
     .single();
 
   if (projectError || !project) throw new Error(projectError?.message ?? 'project 생성 실패');
+
+  // 플랜 한도 검증: INSERT 이후 재카운트 → 동시 요청에 의한 초과 감지 + 롤백
+  const { count: countAfter } = await supabase
+    .from('projects')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', user.id);
+  try {
+    await assertCountLimit(user.id, 'maxProjects', (countAfter ?? 1) - 1);
+  } catch (e) {
+    await supabase.from('projects').delete().eq('id', project.id).eq('owner_id', user.id);
+    throw e;
+  }
 
   // 2. scene INSERT — UUID upfront so scene_data can reference it
   const sceneId = crypto.randomUUID();

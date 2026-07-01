@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSceneStore } from '@/store/sceneStore';
 import { ViewportToolbar } from './panels/ViewportToolbar';
@@ -25,10 +25,11 @@ export function EditorClient({ projectName, initialScene }: Props) {
   const { loadScene, undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus, groupSelected, ungroupSelected } = useSceneStore();
   const [isMobile, setIsMobile] = useState(false);
 
-  // 씬 초기 로드
+  // 씬 초기 로드 — ref로 캡처해 마운트 시 1회만 실행 (initialScene prop 재생성 시 재로드 방지)
+  const initialSceneRef = useRef(initialScene);
   useEffect(() => {
-    loadScene(initialScene);
-  }, [initialScene, loadScene]);
+    loadScene(initialSceneRef.current);
+  }, [loadScene]);
 
   // 모바일 감지
   useEffect(() => {
