@@ -37,9 +37,10 @@ interface Props {
   scene: ProjectSceneSchema;
   azimuthRef: React.MutableRefObject<number>;
   onObjectClick: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
+  mobileInputRef?: React.MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
 }
 
-export function PlayCanvas({ scene, azimuthRef, onObjectClick }: Props) {
+export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
@@ -74,6 +75,7 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick }: Props) {
         playerRef={playerRef}
         characterUrl={characterAsset?.dracoUrl}
         characterScale={scene.environment.playerCharacterScale ?? 1}
+        mobileInputRef={mobileInputRef}
       />
     </Physics>
   );

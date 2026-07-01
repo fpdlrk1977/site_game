@@ -42,6 +42,9 @@ interface SceneState {
   wireframeMode: boolean;
   past: HistoryEntry[];
   future: HistoryEntry[];
+  cameraBookmarks: Record<number, { position: [number, number, number]; target: [number, number, number] }>;
+  bookmarkSaveRequest: { slot: number; _tick: number } | null;
+  bookmarkRecallRequest: { slot: number; _tick: number } | null;
 }
 
 interface SceneActions {
@@ -60,6 +63,9 @@ interface SceneActions {
   addParticleObject: (preset: ParticlePreset) => void;
   setSnap: (enabled: boolean, translate?: number, rotate?: number) => void;
   requestFocus: () => void;
+  requestSaveBookmark: (slot: number) => void;
+  requestRecallBookmark: (slot: number) => void;
+  setCameraBookmark: (slot: number, position: [number, number, number], target: [number, number, number]) => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
   duplicateSelected: () => void;
   groupSelected: () => void;
@@ -125,6 +131,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   wireframeMode: false,
   past: [],
   future: [],
+  cameraBookmarks: {},
+  bookmarkSaveRequest: null,
+  bookmarkRecallRequest: null,
 
   loadScene: (data) => {
     objectCounter = 0;
@@ -182,6 +191,11 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     if (!obj) return;
     set({ focusTarget: { ...obj.position, _tick: Date.now() } });
   },
+
+  requestSaveBookmark: (slot) => set({ bookmarkSaveRequest: { slot, _tick: Date.now() } }),
+  requestRecallBookmark: (slot) => set({ bookmarkRecallRequest: { slot, _tick: Date.now() } }),
+  setCameraBookmark: (slot, position, target) =>
+    set((s) => ({ cameraBookmarks: { ...s.cameraBookmarks, [slot]: { position, target } } })),
 
   addContentObject: (type) => {
     objectCounter += 1;

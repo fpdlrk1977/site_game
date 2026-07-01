@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import {
   Move, RotateCcw, Maximize2, Globe, Crosshair,
-  Grid3x3, Box, Layers, Undo2, Redo2, AlignCenter,
+  Grid3x3, Box, Layers, Undo2, Redo2, AlignCenter, Camera,
 } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import type { PrimitiveShape } from '@/types/scene';
@@ -33,9 +33,9 @@ const SNAP_STEPS = [0.25, 0.5, 1, 2];
 export function ViewportFloatingToolbar() {
   const {
     transformMode, transformSpace, snapEnabled, snapTranslate, wireframeMode,
-    selectedIds,
+    selectedIds, cameraBookmarks,
     setTransformMode, setTransformSpace, setSnap, toggleWireframe,
-    addObject, undo, redo, alignSelected,
+    addObject, undo, redo, alignSelected, requestSaveBookmark, requestRecallBookmark,
   } = useSceneStore();
 
   const [showAlign, setShowAlign] = useState(false);
@@ -173,6 +173,37 @@ export function ViewportFloatingToolbar() {
               <Redo2 size={13} />
             </button>
           </Tip>
+        </div>
+
+        {SEP}
+
+        {/* 카메라 북마크 */}
+        <div className="flex items-center bg-background/50 rounded-lg p-0.5 gap-0.5">
+          <Tip label="카메라 북마크 — 클릭: 이동 / Shift+클릭: 현재 뷰 저장">
+            <div className="w-6 h-7 flex items-center justify-center text-muted">
+              <Camera size={12} />
+            </div>
+          </Tip>
+          {[1, 2, 3, 4, 5].map((slot) => {
+            const saved = !!cameraBookmarks[slot];
+            return (
+              <Tip key={slot} label={saved ? `뷰 ${slot}로 이동 (Shift+클릭: 재저장)` : `현재 뷰를 ${slot}에 저장 (Shift+클릭)`}>
+                <button
+                  onClick={(e) => {
+                    if (e.shiftKey) requestSaveBookmark(slot);
+                    else requestRecallBookmark(slot);
+                  }}
+                  className={`w-6 h-7 rounded-md text-[10px] font-mono transition-all ${
+                    saved
+                      ? 'bg-border text-foreground'
+                      : 'text-muted/50 hover:text-foreground hover:bg-background'
+                  }`}
+                >
+                  {slot}
+                </button>
+              </Tip>
+            );
+          })}
         </div>
 
         {SEP}

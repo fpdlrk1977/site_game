@@ -25,7 +25,10 @@ interface Props {
 }
 
 export function EditorClient({ projectName, initialScene }: Props) {
-  const { loadScene, undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus, groupSelected, ungroupSelected } = useSceneStore();
+  const {
+    loadScene, undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus,
+    groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark,
+  } = useSceneStore();
   const [isMobile, setIsMobile] = useState(false);
 
   // 씬 초기 로드 — ref로 캡처해 마운트 시 1회만 실행 (initialScene prop 재생성 시 재로드 방지)
@@ -61,10 +64,15 @@ export function EditorClient({ projectName, initialScene }: Props) {
       if (e.key === 'e' || e.key === 'E') setTransformMode('rotate');
       if (e.key === 'r' || e.key === 'R') setTransformMode('scale');
       if (e.key === 'f' || e.key === 'F') requestFocus();
+      if (/^[1-5]$/.test(e.key)) {
+        const slot = Number(e.key);
+        if (e.shiftKey) requestSaveBookmark(slot);
+        else requestRecallBookmark(slot);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus, groupSelected, ungroupSelected]);
+  }, [undo, redo, deleteSelected, duplicateSelected, setTransformMode, requestFocus, groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark]);
 
   if (isMobile) {
     return (

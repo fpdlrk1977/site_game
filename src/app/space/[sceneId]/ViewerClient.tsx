@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { createBrowserSupabase } from '@/lib/supabase';
+import { MobileControls } from './MobileControls';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
 
 const ViewerCanvas = dynamic(
@@ -33,7 +34,13 @@ interface Props {
 export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge = false }: Props) {
   const [popup, setPopup] = useState<{ title: string; content: string } | null>(null);
   const [playMode, setPlayMode] = useState(false);
+  const [isTouch, setIsTouch] = useState(false);
   const supabase = useState(() => createBrowserSupabase())[0];
+  const mobileInputRef = useRef({ fwd: 0, strafe: 0, jump: false });
+
+  useEffect(() => {
+    setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
 
   // 방문 이벤트 수집
   useEffect(() => {
@@ -66,7 +73,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={scene} playMode={playMode} onObjectClick={handleObjectEvent} />
+      <ViewerCanvas scene={scene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} />
 
       {/* 상단 오버레이 */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 pointer-events-none">
@@ -100,7 +107,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
         </div>
       </div>
 
-      {playMode && (
+      {playMode && !isTouch && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 pointer-events-none">
           <div className="bg-black/50 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2 text-white/50 text-xs flex items-center gap-3">
             <span>WASD 이동</span>
@@ -111,6 +118,8 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           </div>
         </div>
       )}
+
+      {playMode && isTouch && <MobileControls inputRef={mobileInputRef} />}
 
       {/* Park3D 배지 — Free 플랜만 표시 */}
       {!hideBadge && (

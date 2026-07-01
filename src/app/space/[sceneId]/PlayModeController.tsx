@@ -101,6 +101,7 @@ interface Props {
   spawnPosition?: [number, number, number];
   characterUrl?: string;
   characterScale?: number;
+  mobileInputRef?: MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
 }
 
 export function PlayModeController({
@@ -109,6 +110,7 @@ export function PlayModeController({
   spawnPosition = [0, 4, 0],
   characterUrl,
   characterScale = 1,
+  mobileInputRef,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   const { camera } = useThree();
@@ -200,15 +202,22 @@ export function PlayModeController({
     if (keys.current.a) { vx -= Math.cos(az); vz += Math.sin(az); }
     if (keys.current.d) { vx += Math.cos(az); vz -= Math.sin(az); }
 
+    const mobile = mobileInputRef?.current;
+    if (mobile) {
+      vx += Math.sin(az) * mobile.fwd + Math.cos(az) * mobile.strafe;
+      vz += Math.cos(az) * mobile.fwd - Math.sin(az) * mobile.strafe;
+    }
+
     const len = Math.sqrt(vx * vx + vz * vz);
     if (len > 0) { vx = (vx / len) * speed; vz = (vz / len) * speed; }
     rb.setLinvel({ x: vx, y: vel.y, z: vz }, true);
 
     // 점프
     const isGrounded = pos.y < 1.5 && vel.y <= 0.3;
-    if (keys.current.space && isGrounded) {
+    if ((keys.current.space || mobile?.jump) && isGrounded) {
       rb.applyImpulse({ x: 0, y: 12, z: 0 }, true);
       keys.current.space = false;
+      if (mobile) mobile.jump = false;
     }
 
     // 낙사 리스폰

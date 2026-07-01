@@ -14,9 +14,10 @@ interface Props {
   scene: ProjectSceneSchema;
   playMode: boolean;
   onObjectClick: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
+  mobileInputRef?: React.MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
 }
 
-export function ViewerCanvas({ scene, playMode, onObjectClick }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }: Props) {
   const { environment, objects } = scene;
   const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#1a1a2e';
   const azimuthRef = useRef(0);
@@ -89,7 +90,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick }: Props) {
 
       {playMode && (
         <Suspense fallback={null}>
-          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} />
+          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} />
         </Suspense>
       )}
 

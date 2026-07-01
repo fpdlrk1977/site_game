@@ -32,13 +32,33 @@ export function EditorCanvas() {
   const dragRectRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [selBox, setSelBox] = useState<SelBox | null>(null);
 
-  const { environment, focusTarget, objects } = useSceneStore();
+  const { environment, focusTarget, objects, bookmarkSaveRequest, bookmarkRecallRequest, setCameraBookmark } = useSceneStore();
 
   useEffect(() => {
     if (!focusTarget || !orbitRef.current) return;
     orbitRef.current.target.set(focusTarget.x, focusTarget.y, focusTarget.z);
     orbitRef.current.update();
   }, [focusTarget]);
+
+  useEffect(() => {
+    if (!bookmarkSaveRequest || !orbitRef.current) return;
+    const cam = orbitRef.current.object;
+    const tgt = orbitRef.current.target;
+    setCameraBookmark(
+      bookmarkSaveRequest.slot,
+      [cam.position.x, cam.position.y, cam.position.z],
+      [tgt.x, tgt.y, tgt.z],
+    );
+  }, [bookmarkSaveRequest, setCameraBookmark]);
+
+  useEffect(() => {
+    if (!bookmarkRecallRequest || !orbitRef.current) return;
+    const bm = useSceneStore.getState().cameraBookmarks[bookmarkRecallRequest.slot];
+    if (!bm) return;
+    orbitRef.current.object.position.set(...bm.position);
+    orbitRef.current.target.set(...bm.target);
+    orbitRef.current.update();
+  }, [bookmarkRecallRequest]);
 
   const resetDrag = useCallback(() => {
     if (orbitRef.current) orbitRef.current.enabled = true;

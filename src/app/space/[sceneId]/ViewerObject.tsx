@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, Suspense, useEffect, useMemo } from 'react';
-import { useGLTF, Text3D, Center, Html } from '@react-three/drei';
+import { useGLTF, Text3D, Center, Html, Outlines } from '@react-three/drei';
 import * as THREE from 'three';
 import { useLoader } from '@react-three/fiber';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
@@ -61,11 +61,12 @@ function YouTubeEmbed({ ytId, position, rotation, scale, onClick }: {
   );
 }
 
-function VideoMesh({ position, rotation, scale, url, onClick, onPointerOver, onPointerOut }: {
+function VideoMesh({ position, rotation, scale, url, hovered, onClick, onPointerOver, onPointerOut }: {
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
   url: string;
+  hovered: boolean;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
@@ -94,15 +95,17 @@ function VideoMesh({ position, rotation, scale, url, onClick, onPointerOver, onP
         ? <meshBasicMaterial map={texture} side={THREE.DoubleSide} toneMapped={false} />
         : <meshBasicMaterial color="#0f172a" />
       }
+      {hovered && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );
 }
 
-function ImagePlane({ position, rotation, scale, url, onClick, onPointerOver, onPointerOut }: {
+function ImagePlane({ position, rotation, scale, url, hovered, onClick, onPointerOver, onPointerOut }: {
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
   url: string;
+  hovered: boolean;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
@@ -121,6 +124,7 @@ function ImagePlane({ position, rotation, scale, url, onClick, onPointerOver, on
     >
       <planeGeometry args={[1, 1]} />
       <meshBasicMaterial map={texture} transparent side={THREE.DoubleSide} />
+      {hovered && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );
 }
@@ -134,6 +138,9 @@ function GlbViewer({ url, hovered, onClick, onPointerOver, onPointerOut }: {
 }) {
   const { scene } = useGLTF(url);
   const clone = useMemo(() => scene.clone(true), [scene]);
+  // Outlines는 단일 mesh(geometry를 직접 가진 부모)에서만 동작하므로,
+  // 여러 mesh로 구성된 GLB에는 bounding box 하이라이트를 대신 사용한다.
+  const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
 
   useEffect(() => {
     clone.traverse((child) => {
@@ -163,12 +170,15 @@ function GlbViewer({ url, hovered, onClick, onPointerOver, onPointerOut }: {
   }, [clone]);
 
   return (
-    <primitive
-      object={clone}
-      onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onClick(); }}
-      onPointerOver={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onPointerOver(); }}
-      onPointerOut={() => onPointerOut()}
-    />
+    <>
+      <primitive
+        object={clone}
+        onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onClick(); }}
+        onPointerOver={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onPointerOver(); }}
+        onPointerOut={() => onPointerOut()}
+      />
+      {hovered && <box3Helper args={[bbox, new THREE.Color('#22d3ee')]} />}
+    </>
   );
 }
 
@@ -281,6 +291,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
                   emissive={hovered ? tColor : tEmissive}
                   emissiveIntensity={hovered ? 0.3 : (tEmissive !== '#000000' ? 1 : 0)}
                 />
+                {hovered && <Outlines thickness={2} color="#22d3ee" />}
               </Text3D>
             </Center>
           </Suspense>
@@ -293,6 +304,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           <ImagePlane
             position={pos} rotation={rot} scale={scl}
             url={object.content.url}
+            hovered={hovered}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}
@@ -311,6 +323,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           <VideoMesh
             position={pos} rotation={rot} scale={scl}
             url={url}
+            hovered={hovered}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}
@@ -356,6 +369,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
         emissive={hovered ? color : emissive}
         emissiveIntensity={hovered ? 0.3 : (emissive !== '#000000' ? 1 : 0)}
       />
+      {hovered && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );
 }
