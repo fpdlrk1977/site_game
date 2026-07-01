@@ -1,43 +1,91 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeftRight } from 'lucide-react';
 import { MathUtils } from 'three';
 import { useSceneStore } from '@/store/sceneStore';
 import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset } from '@/types/scene';
 
-// ── 단일 숫자 입력 ─────────────────────────────────────────────
+// 소수점 1자리까지만 표시, 정수면 소수점 생략
+const fmt = (v: number) => {
+  const s = v.toFixed(1);
+  return s.endsWith('.0') ? String(Math.round(v)) : s;
+};
+
+// ── 드래그 스크럽 숫자 입력 ─────────────────────────────────────
 function NumInput({
   value,
   onChange,
   onCommit,
+  dragStep = 0.1,
 }: {
   value: number;
   onChange: (v: number) => void;
   onCommit: () => void;
+  dragStep?: number;
 }) {
-  const [local, setLocal] = useState(value.toFixed(3));
+  const [local, setLocal] = useState(fmt(value));
+  const isFocused = useRef(false);
+  const isDragging = useRef(false);
+  const dragOrigin = useRef({ x: 0, val: 0 });
 
   useEffect(() => {
-    setLocal(value.toFixed(3));
+    if (!isFocused.current) setLocal(fmt(value));
   }, [value]);
 
+  const onDragDown = (e: React.PointerEvent<HTMLSpanElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDragging.current = true;
+    dragOrigin.current = { x: e.clientX, val: value };
+    document.body.style.cursor = 'ew-resize';
+    e.preventDefault();
+  };
+
+  const onDragMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (!isDragging.current) return;
+    const dx = e.clientX - dragOrigin.current.x;
+    const newVal = Math.round((dragOrigin.current.val + dx * dragStep) * 10) / 10;
+    onChange(newVal);
+    setLocal(fmt(newVal));
+  };
+
+  const onDragUp = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    document.body.style.cursor = '';
+    onCommit();
+  };
+
   return (
-    <input
-      type="number"
-      step="0.01"
-      value={local}
-      onChange={(e) => {
-        setLocal(e.target.value);
-        const n = parseFloat(e.target.value);
-        if (!isNaN(n)) onChange(n);
-      }}
-      onBlur={() => {
-        const n = parseFloat(local);
-        if (!isNaN(n)) onChange(n);
-        onCommit();
-      }}
-      className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-transparent transition-all tabular-nums"
-    />
+    <div className="relative flex items-center">
+      <input
+        type="text"
+        value={local}
+        onFocus={() => { isFocused.current = true; }}
+        onChange={(e) => {
+          setLocal(e.target.value);
+          const n = parseFloat(e.target.value);
+          if (!isNaN(n)) onChange(n);
+        }}
+        onBlur={() => {
+          isFocused.current = false;
+          const n = parseFloat(local);
+          if (!isNaN(n)) { onChange(Math.round(n * 10) / 10); setLocal(fmt(Math.round(n * 10) / 10)); }
+          else setLocal(fmt(value));
+          onCommit();
+        }}
+        className="w-full bg-zinc-800 border border-zinc-700 rounded-md pl-6 pr-5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500 tabular-nums"
+      />
+      <span
+        className="absolute right-1 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 cursor-ew-resize select-none transition-colors"
+        onPointerDown={onDragDown}
+        onPointerMove={onDragMove}
+        onPointerUp={onDragUp}
+      >
+        <ArrowLeftRight size={10} />
+      </span>
+    </div>
   );
 }
 
@@ -47,6 +95,7 @@ function XYZRow({
   x, y, z,
   onChangeX, onChangeY, onChangeZ,
   onCommit,
+  dragStep = 0.1,
 }: {
   label: string;
   x: number; y: number; z: number;
@@ -54,6 +103,7 @@ function XYZRow({
   onChangeY: (v: number) => void;
   onChangeZ: (v: number) => void;
   onCommit: () => void;
+  dragStep?: number;
 }) {
   return (
     <div className="space-y-1">
@@ -65,14 +115,10 @@ function XYZRow({
           { axis: 'Z', val: z, change: onChangeZ },
         ].map(({ axis, val, change }) => (
           <div key={axis} className="relative">
-            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-500 pointer-events-none">
+            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-500 pointer-events-none z-10">
               {axis}
             </span>
-            <NumInput
-              value={val}
-              onChange={change}
-              onCommit={onCommit}
-            />
+            <NumInput value={val} onChange={change} onCommit={onCommit} dragStep={dragStep} />
           </div>
         ))}
       </div>
@@ -242,7 +288,7 @@ function EnvironmentPanel() {
           onChangeX={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, x: v } } })}
           onChangeY={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, y: v } } })}
           onChangeZ={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, z: v } } })}
-          onCommit={pushHistory}
+          onCommit={pushHistory} dragStep={0.5}
         />
       </div>
     </div>
@@ -358,19 +404,19 @@ export function InspectorPanel() {
               onChangeX={(v) => updateObject(obj.id, { position: { ...obj.position, x: v } })}
               onChangeY={(v) => updateObject(obj.id, { position: { ...obj.position, y: Math.max(0, v) } })}
               onChangeZ={(v) => updateObject(obj.id, { position: { ...obj.position, z: v } })}
-              onCommit={pushHistory}
+              onCommit={pushHistory} dragStep={0.1}
             />
             <XYZRow label="Rotation °" x={obj.rotation.x} y={obj.rotation.y} z={obj.rotation.z}
               onChangeX={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, x: v } })}
               onChangeY={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, y: v } })}
               onChangeZ={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, z: v } })}
-              onCommit={pushHistory}
+              onCommit={pushHistory} dragStep={1}
             />
             <XYZRow label="Scale" x={obj.scale.x} y={obj.scale.y} z={obj.scale.z}
               onChangeX={(v) => updateObject(obj.id, { scale: { ...obj.scale, x: v } })}
               onChangeY={(v) => updateObject(obj.id, { scale: { ...obj.scale, y: v } })}
               onChangeZ={(v) => updateObject(obj.id, { scale: { ...obj.scale, z: v } })}
-              onCommit={pushHistory}
+              onCommit={pushHistory} dragStep={0.05}
             />
           </div>
           <SectionHeader title="Visibility" />
@@ -419,7 +465,7 @@ export function InspectorPanel() {
               onChangeX={(v) => setPos('x', v)}
               onChangeY={(v) => setPos('y', v)}
               onChangeZ={(v) => setPos('z', v)}
-              onCommit={pushHistory}
+              onCommit={pushHistory} dragStep={0.1}
             />
             <XYZRow
               label="Rotation °"
@@ -427,7 +473,7 @@ export function InspectorPanel() {
               onChangeX={(v) => setRot('x', v)}
               onChangeY={(v) => setRot('y', v)}
               onChangeZ={(v) => setRot('z', v)}
-              onCommit={pushHistory}
+              onCommit={pushHistory} dragStep={1}
             />
             <XYZRow
               label="Scale"
@@ -435,7 +481,7 @@ export function InspectorPanel() {
               onChangeX={(v) => setScl('x', v)}
               onChangeY={(v) => setScl('y', v)}
               onChangeZ={(v) => setScl('z', v)}
-              onCommit={pushHistory}
+              onCommit={pushHistory} dragStep={0.05}
             />
           </div>
         )}
