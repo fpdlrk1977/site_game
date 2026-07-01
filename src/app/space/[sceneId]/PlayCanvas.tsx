@@ -18,14 +18,15 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
-  const staticObjects = scene.objects.filter((o) => !o.physics.enabled);
-  const physicsObjects = scene.objects.filter((o) => o.physics.enabled);
+  const allObjects = scene.objects;
+  const staticObjects = allObjects.filter((o) => !o.physics.enabled && !o.parentId);
+  const physicsObjects = allObjects.filter((o) => o.physics.enabled && !o.parentId);
 
   return (
     <>
       {/* 비물리 오브젝트 — Physics 밖, rapier 간섭 없음 */}
       {staticObjects.map((obj) => (
-        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} />
+        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
       <Physics gravity={[0, -20, 0]} timeStep="vary">

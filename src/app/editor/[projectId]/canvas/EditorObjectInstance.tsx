@@ -103,9 +103,6 @@ export function EditorObjectInstance({ object }: Props) {
   const wireframeMode = useSceneStore((s) => s.wireframeMode);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
 
-  // 그룹 오브젝트는 별도 컴포넌트로 렌더
-  if (object.isGroup) return <GroupObjectInstance object={object} />;
-
   useEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
     return () => { refsMap.current.delete(object.id); };
@@ -126,6 +123,9 @@ export function EditorObjectInstance({ object }: Props) {
     object.rotation.x, object.rotation.y, object.rotation.z,
     object.scale.x, object.scale.y, object.scale.z,
   ]);
+
+  // 그룹 오브젝트는 별도 컴포넌트로 렌더 (hooks 이후에 early return)
+  if (object.isGroup) return <GroupObjectInstance object={object} />;
 
   if (!object.visible) return null;
 

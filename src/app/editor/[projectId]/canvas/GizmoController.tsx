@@ -25,6 +25,8 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
 
   const dragStartPivot = useRef(new THREE.Vector3());
   const dragStartPositions = useRef<Map<string, THREE.Vector3>>(new Map());
+  const dragStartQuaternions = useRef<Map<string, THREE.Quaternion>>(new Map());
+  const dragStartScales = useRef<Map<string, THREE.Vector3>>(new Map());
 
   // pivotEl이 준비되거나 선택이 바뀌면 centroid로 피벗 재배치
   useEffect(() => {
@@ -58,36 +60,65 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
             if (orbitRef.current) orbitRef.current.enabled = false;
             dragStartPivot.current.copy(pivotEl.position);
             dragStartPositions.current.clear();
+            dragStartQuaternions.current.clear();
+            dragStartScales.current.clear();
             for (const id of selectedIds) {
               const ref = refsMap.current.get(id);
-              if (ref) dragStartPositions.current.set(id, ref.position.clone());
+              if (ref) {
+                dragStartPositions.current.set(id, ref.position.clone());
+                dragStartQuaternions.current.set(id, ref.quaternion.clone());
+                dragStartScales.current.set(id, ref.scale.clone());
+              }
             }
           }}
           onChange={() => {
-            if (transformMode !== 'translate') return;
-            const dx = pivotEl.position.x - dragStartPivot.current.x;
-            const dy = pivotEl.position.y - dragStartPivot.current.y;
-            const dz = pivotEl.position.z - dragStartPivot.current.z;
-            for (const id of selectedIds) {
-              const ref = refsMap.current.get(id);
-              const start = dragStartPositions.current.get(id);
-              if (ref && start) ref.position.set(start.x + dx, start.y + dy, start.z + dz);
+            if (transformMode === 'translate') {
+              const dx = pivotEl.position.x - dragStartPivot.current.x;
+              const dy = pivotEl.position.y - dragStartPivot.current.y;
+              const dz = pivotEl.position.z - dragStartPivot.current.z;
+              for (const id of selectedIds) {
+                const ref = refsMap.current.get(id);
+                const start = dragStartPositions.current.get(id);
+                if (ref && start) ref.position.set(start.x + dx, start.y + dy, start.z + dz);
+              }
+            } else if (transformMode === 'rotate') {
+              for (const id of selectedIds) {
+                const ref = refsMap.current.get(id);
+                const startPos = dragStartPositions.current.get(id);
+                const startQ = dragStartQuaternions.current.get(id);
+                if (!ref || !startPos || !startQ) continue;
+                const relPos = startPos.clone().sub(dragStartPivot.current);
+                relPos.applyQuaternion(pivotEl.quaternion);
+                ref.position.copy(relPos).add(dragStartPivot.current);
+                ref.quaternion.copy(pivotEl.quaternion).multiply(startQ);
+              }
+            } else if (transformMode === 'scale') {
+              const { x: sx, y: sy, z: sz } = pivotEl.scale;
+              for (const id of selectedIds) {
+                const ref = refsMap.current.get(id);
+                const startPos = dragStartPositions.current.get(id);
+                const startScale = dragStartScales.current.get(id);
+                if (!ref || !startPos || !startScale) continue;
+                const relPos = startPos.clone().sub(dragStartPivot.current);
+                relPos.x *= sx; relPos.y *= sy; relPos.z *= sz;
+                ref.position.copy(relPos).add(dragStartPivot.current);
+                ref.scale.set(startScale.x * sx, startScale.y * sy, startScale.z * sz);
+              }
             }
           }}
           onMouseUp={() => {
             gizmoDraggingRef.current = false;
             if (orbitRef.current) orbitRef.current.enabled = true;
-            if (transformMode === 'translate') {
-              for (const id of selectedIds) {
-                const ref = refsMap.current.get(id);
-                if (ref) {
-                  updateObject(id, {
-                    position: { x: ref.position.x, y: ref.position.y, z: ref.position.z },
-                  });
-                }
-              }
-              pushHistory();
+            for (const id of selectedIds) {
+              const ref = refsMap.current.get(id);
+              if (!ref) continue;
+              updateObject(id, {
+                position: { x: ref.position.x, y: ref.position.y, z: ref.position.z },
+                rotation: { x: ref.rotation.x * RAD2DEG, y: ref.rotation.y * RAD2DEG, z: ref.rotation.z * RAD2DEG },
+                scale: { x: ref.scale.x, y: ref.scale.y, z: ref.scale.z },
+              });
             }
+            pushHistory();
           }}
         />
       )}
