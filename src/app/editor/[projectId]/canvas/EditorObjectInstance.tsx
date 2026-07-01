@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, Suspense } from 'react';
+import { useRef, useEffect, useState, Suspense } from 'react';
 import * as THREE from 'three';
 import { Text3D, Center } from '@react-three/drei';
 import { useShallow } from 'zustand/react/shallow';
@@ -102,6 +102,9 @@ export function EditorObjectInstance({ object }: Props) {
   const assets = useSceneStore((s) => s.assets);
   const wireframeMode = useSceneStore((s) => s.wireframeMode);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
+  const [hovered, setHovered] = useState(false);
+  const handlePointerOver = (e: { stopPropagation: () => void }) => { e.stopPropagation(); setHovered(true); };
+  const handlePointerOut = (e: { stopPropagation: () => void }) => { e.stopPropagation(); setHovered(false); };
 
   useEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
@@ -165,7 +168,13 @@ export function EditorObjectInstance({ object }: Props) {
   // Content 오브젝트 렌더링
   if (object.content) {
     return (
-      <group ref={groupRef} onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }} onPointerDown={markObjectHit}>
+      <group
+        ref={groupRef}
+        onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+        onPointerDown={markObjectHit}
+        onPointerOver={handlePointerOver}
+        onPointerOut={handlePointerOut}
+      >
         {object.content.type === 'text' ? (
           <Suspense fallback={null}>
             <Center>
@@ -184,8 +193,8 @@ export function EditorObjectInstance({ object }: Props) {
                   color={color}
                   roughness={roughness}
                   metalness={metalness}
-                  emissive={isSelected ? '#4338ca' : emissive}
-                  emissiveIntensity={isSelected ? 0.4 : (emissive !== '#000000' ? 1 : 0)}
+                  emissive={isSelected ? '#4338ca' : hovered ? '#4338ca' : emissive}
+                  emissiveIntensity={isSelected ? 0.4 : hovered ? 0.2 : (emissive !== '#000000' ? 1 : 0)}
                   wireframe={wireframeMode}
                 />
               </Text3D>
@@ -194,13 +203,13 @@ export function EditorObjectInstance({ object }: Props) {
         ) : (
           <mesh>
             <planeGeometry args={[1, 1]} />
-            <meshBasicMaterial color={isSelected ? '#7c3aed' : '#334155'} />
+            <meshBasicMaterial color={isSelected ? '#7c3aed' : hovered ? '#4338ca' : '#334155'} />
           </mesh>
         )}
-        {isSelected && (
+        {(isSelected || hovered) && (
           <mesh>
             <planeGeometry args={[1.05, 1.05]} />
-            <meshBasicMaterial color="#7c3aed" wireframe />
+            <meshBasicMaterial color={isSelected ? '#7c3aed' : '#a78bfa'} wireframe />
           </mesh>
         )}
         <ColliderOverlay object={object} />
@@ -217,11 +226,20 @@ export function EditorObjectInstance({ object }: Props) {
             <meshStandardMaterial color="#52525b" wireframe />
           </mesh>
         }>
-          <GlbObject url={assetRef.dracoUrl} selected={isSelected} onClick={(shiftKey) => handleClick(shiftKey)} wireframe={wireframeMode} />
+          <GlbObject
+            url={assetRef.dracoUrl}
+            selected={isSelected}
+            hovered={hovered}
+            onClick={(shiftKey) => handleClick(shiftKey)}
+            onHoverChange={setHovered}
+            wireframe={wireframeMode}
+          />
         </Suspense>
       ) : (
         <mesh
           onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+          onPointerOver={handlePointerOver}
+          onPointerOut={handlePointerOut}
           castShadow
           receiveShadow
         >
@@ -234,9 +252,15 @@ export function EditorObjectInstance({ object }: Props) {
             roughness={roughness}
             metalness={metalness}
             wireframe={wireframeMode}
-            emissive={isSelected ? '#4338ca' : emissive}
-            emissiveIntensity={isSelected ? 0.4 : (emissive !== '#000000' ? 1 : 0)}
+            emissive={isSelected ? '#4338ca' : hovered ? '#4338ca' : emissive}
+            emissiveIntensity={isSelected ? 0.4 : hovered ? 0.2 : (emissive !== '#000000' ? 1 : 0)}
           />
+        </mesh>
+      )}
+      {!assetRef && (isSelected || hovered) && (
+        <mesh>
+          <boxGeometry args={[1.05, 1.05, 1.05]} />
+          <meshBasicMaterial color={isSelected ? '#7c3aed' : '#a78bfa'} wireframe />
         </mesh>
       )}
       {/* 콜라이더 시각화 — 에디터 전용 */}
