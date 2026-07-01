@@ -5,6 +5,7 @@ import { ProjectCard } from './ProjectCard';
 import { NewProjectButton } from './NewProjectButton';
 import { NewProjectCard } from './NewProjectCard';
 import { UserInitializer } from '@/components/ui/UserInitializer';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { createProject } from './actions';
 import type { PlanTier } from '@/store/userStore';
 
@@ -79,6 +80,7 @@ export default async function DashboardPage() {
               로그아웃
             </button>
           </form>
+          <ThemeToggle />
         </div>
       </header>
 

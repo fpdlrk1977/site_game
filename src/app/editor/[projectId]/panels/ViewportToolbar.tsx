@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
+import { useThemeStore } from '@/store/themeStore';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SceneSwitcher } from './SceneSwitcher';
 import { VersionHistoryModal } from './VersionHistoryModal';
@@ -49,6 +50,7 @@ export function ViewportToolbar({ projectName }: Props) {
     projectId, sceneId, objects, assets, environment, markSaved,
   } = useSceneStore();
   const { addToast } = useToast();
+  const { theme, toggleTheme } = useThemeStore();
   const [showHistory, setShowHistory] = useState(false);
   const [showAlign, setShowAlign] = useState(false);
   const canAlign = selectedIds.length >= 2;
@@ -383,6 +385,18 @@ export function ViewportToolbar({ projectName }: Props) {
             </a>
           </Tip>
         )}
+
+        {SEP}
+
+        {/* 다크/라이트 토글 */}
+        <Tip label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}>
+          <button
+            onClick={toggleTheme}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all shrink-0 text-sm"
+          >
+            {theme === 'dark' ? '☀' : '🌙'}
+          </button>
+        </Tip>
       </header>
 
       {showHistory && typeof document !== 'undefined' && createPortal(
