@@ -72,25 +72,46 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
         onContextMenu={(e) => { e.preventDefault(); selectObject(obj.id); setMenuOpen(true); }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
-        style={{ paddingLeft: `${8 + depth * 16}px` }}
-        className={`flex items-center gap-1.5 pr-2 py-1 rounded-md cursor-pointer group transition-all text-xs ${
-          isSelected ? 'bg-violet-600/30 text-white' : 'text-zinc-300 hover:bg-zinc-800'
+        className={`flex items-center gap-1.5 pr-2 py-[3px] rounded-md cursor-pointer group transition-all text-xs ${
+          isSelected
+            ? 'bg-violet-600/25 text-white'
+            : 'text-zinc-300 hover:bg-zinc-800/70'
         } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-zinc-500' : ''}`}
       >
-        {/* 그룹 펼치기/접기 */}
-        {hasChildren ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-            className="w-4 text-center text-[10px] text-zinc-500 hover:text-white transition-colors shrink-0"
+        {/* 깊이 인덴트 + 트리 라인 */}
+        {Array.from({ length: depth }).map((_, i) => (
+          <span
+            key={i}
+            className="shrink-0 w-4 self-stretch relative"
+            style={{ marginLeft: i === 0 ? 8 : 0 }}
           >
-            {isExpanded ? '▼' : '▶'}
-          </button>
-        ) : (
-          <span className="w-4 shrink-0" />
-        )}
+            <span className="absolute left-[7px] top-0 bottom-0 w-px bg-zinc-800" />
+            {i === depth - 1 && (
+              <span className="absolute left-[7px] top-1/2 w-2 h-px bg-zinc-800" />
+            )}
+          </span>
+        ))}
 
-        <span className="text-[10px] w-4 text-center opacity-60 shrink-0">{getIcon(obj)}</span>
+        {/* 그룹 펼치기/접기 */}
+        <span style={{ marginLeft: depth === 0 ? 8 : 0 }} className="shrink-0">
+          {hasChildren ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+              className="w-4 h-4 flex items-center justify-center text-[9px] text-zinc-500 hover:text-zinc-300 transition-colors rounded"
+            >
+              {isExpanded ? '▾' : '▸'}
+            </button>
+          ) : (
+            <span className="w-4 h-4 inline-block" />
+          )}
+        </span>
 
+        {/* 오브젝트 아이콘 */}
+        <span className={`text-[11px] w-4 text-center shrink-0 ${isSelected ? 'opacity-90' : 'opacity-50'}`}>
+          {getIcon(obj)}
+        </span>
+
+        {/* 이름 */}
         {editing ? (
           <input
             ref={inputRef}
@@ -102,20 +123,28 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
               if (e.key === 'Escape') { setNameValue(obj.name); setEditing(false); }
             }}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 bg-zinc-800 border border-zinc-600 rounded px-1 py-0 text-xs text-white focus:outline-none"
+            className="flex-1 bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
           />
         ) : (
-          <span className="flex-1 truncate text-[11px]">{obj.name}</span>
+          <span className={`flex-1 truncate text-[11px] font-medium ${isSelected ? 'text-white' : 'text-zinc-300'}`}>
+            {obj.name}
+          </span>
         )}
 
-        {/* 호버 시 아이콘 */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-          <button onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); }}
-            className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-white transition-colors">
+        {/* 호버 시 액션 아이콘 */}
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); }}
+            className="w-5 h-5 flex items-center justify-center text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+            title={obj.visible ? '숨기기' : '표시'}
+          >
             <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>
           </button>
-          <button onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); }}
-            className="w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-white transition-colors">
+          <button
+            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); }}
+            className="w-5 h-5 flex items-center justify-center text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+            title={obj.locked ? '잠금 해제' : '잠금'}
+          >
             <span className="text-[10px]">{obj.locked ? '🔒' : '🔓'}</span>
           </button>
         </div>
@@ -125,27 +154,38 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
       {menuOpen && isSelected && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute left-2 top-full mt-0.5 w-40 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+          <div className="absolute left-2 top-full mt-0.5 w-44 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl shadow-black/50 z-50 py-1 overflow-hidden">
             {!obj.isGroup && (
-              <button onClick={() => { setMenuOpen(false); setEditing(true); }}
-                className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors">
-                이름 변경
+              <button
+                onClick={() => { setMenuOpen(false); setEditing(true); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+              >
+                <span className="text-zinc-500">✏</span> 이름 변경
               </button>
             )}
             {obj.isGroup && (
-              <button onClick={() => { ungroupSelected(); setMenuOpen(false); }}
-                className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors">
-                그룹 해제 (Ctrl+Shift+G)
+              <button
+                onClick={() => { ungroupSelected(); setMenuOpen(false); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+              >
+                <span className="text-zinc-500">⊞</span> 그룹 해제
+                <span className="ml-auto text-zinc-600 text-[10px]">⌃⇧G</span>
               </button>
             )}
-            <button onClick={() => { duplicateSelected(); setMenuOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700 transition-colors">
-              복제 (Ctrl+D)
+            <button
+              onClick={() => { duplicateSelected(); setMenuOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+            >
+              <span className="text-zinc-500">⎘</span> 복제
+              <span className="ml-auto text-zinc-600 text-[10px]">⌃D</span>
             </button>
-            <div className="border-t border-zinc-700 my-1" />
-            <button onClick={() => { deleteSelected(); setMenuOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-700 transition-colors">
-              삭제 (Del)
+            <div className="border-t border-zinc-800 my-1" />
+            <button
+              onClick={() => { deleteSelected(); setMenuOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+            >
+              <span>✕</span> 삭제
+              <span className="ml-auto text-zinc-600 text-[10px]">Del</span>
             </button>
           </div>
         </>

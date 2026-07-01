@@ -8,6 +8,7 @@ import { HierarchyPanel } from './panels/HierarchyPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
 import { AssetBrowser } from './panels/AssetBrowser';
 import { EditorOnboarding } from './EditorOnboarding';
+import { ViewportStatusBar } from './canvas/ViewportStatusBar';
 import { Toaster } from '@/components/ui/Toaster';
 import type { ProjectSceneSchema } from '@/types/scene';
 
@@ -97,6 +98,7 @@ export function EditorClient({ projectName, initialScene }: Props) {
       {/* Viewport */}
       <div style={{ gridColumn: '2', gridRow: '2' }} className="relative overflow-hidden">
         <EditorCanvas />
+        <ViewportStatusBar />
       </div>
 
       {/* Inspector */}
