@@ -312,7 +312,7 @@ export function InspectorPanel() {
   }
 
   const setPos = (axis: 'x' | 'y' | 'z', v: number) =>
-    updateObject(obj.id, { position: { ...obj.position, [axis]: v } });
+    updateObject(obj.id, { position: { ...obj.position, [axis]: axis === 'y' ? Math.max(0, v) : v } });
   const setRot = (axis: 'x' | 'y' | 'z', v: number) =>
     updateObject(obj.id, { rotation: { ...obj.rotation, [axis]: v } });
   const setScl = (axis: 'x' | 'y' | 'z', v: number) =>
@@ -356,7 +356,7 @@ export function InspectorPanel() {
           <div className="px-3 py-3 space-y-3">
             <XYZRow label="Position" x={obj.position.x} y={obj.position.y} z={obj.position.z}
               onChangeX={(v) => updateObject(obj.id, { position: { ...obj.position, x: v } })}
-              onChangeY={(v) => updateObject(obj.id, { position: { ...obj.position, y: v } })}
+              onChangeY={(v) => updateObject(obj.id, { position: { ...obj.position, y: Math.max(0, v) } })}
               onChangeZ={(v) => updateObject(obj.id, { position: { ...obj.position, z: v } })}
               onCommit={pushHistory}
             />

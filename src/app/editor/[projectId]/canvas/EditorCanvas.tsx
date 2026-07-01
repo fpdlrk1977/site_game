@@ -151,7 +151,7 @@ export function EditorCanvas() {
           />
 
           <Grid
-            position={[0, 0, 0]}
+            position={[0, -0.001, 0]}
             args={[50, 50]}
             cellSize={1}
             cellThickness={0.4}

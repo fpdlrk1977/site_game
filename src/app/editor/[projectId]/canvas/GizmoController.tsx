@@ -79,7 +79,7 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
               for (const id of selectedIds) {
                 const ref = refsMap.current.get(id);
                 const start = dragStartPositions.current.get(id);
-                if (ref && start) ref.position.set(start.x + dx, start.y + dy, start.z + dz);
+                if (ref && start) ref.position.set(start.x + dx, Math.max(0, start.y + dy), start.z + dz);
               }
             } else if (transformMode === 'rotate') {
               for (const id of selectedIds) {
@@ -113,7 +113,7 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
               const ref = refsMap.current.get(id);
               if (!ref) continue;
               updateObject(id, {
-                position: { x: ref.position.x, y: ref.position.y, z: ref.position.z },
+                position: { x: ref.position.x, y: Math.max(0, ref.position.y), z: ref.position.z },
                 rotation: { x: ref.rotation.x * RAD2DEG, y: ref.rotation.y * RAD2DEG, z: ref.rotation.z * RAD2DEG },
                 scale: { x: ref.scale.x, y: ref.scale.y, z: ref.scale.z },
               });
@@ -146,6 +146,11 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
       rotationSnap={snapEnabled ? snapRotate * DEG2RAD : null}
       scaleSnap={snapEnabled ? 0.1 : null}
       onMouseDown={() => { gizmoDraggingRef.current = true; if (orbitRef.current) orbitRef.current.enabled = false; }}
+      onChange={() => {
+        if (transformMode === 'translate') {
+          target.position.y = Math.max(0, target.position.y);
+        }
+      }}
       onMouseUp={() => {
         gizmoDraggingRef.current = false;
         if (orbitRef.current) orbitRef.current.enabled = true;
@@ -153,7 +158,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
         const rot = target.rotation;
         const scl = target.scale;
         updateObject(selectedId, {
-          position: { x: pos.x, y: pos.y, z: pos.z },
+          position: { x: pos.x, y: Math.max(0, pos.y), z: pos.z },
           rotation: { x: rot.x * RAD2DEG, y: rot.y * RAD2DEG, z: rot.z * RAD2DEG },
           scale: { x: scl.x, y: scl.y, z: scl.z },
         });
