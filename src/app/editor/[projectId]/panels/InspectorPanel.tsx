@@ -107,7 +107,7 @@ function XYZRow({
 }) {
   return (
     <div className="space-y-1">
-      <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] font-semibold text-muted tracking-wide">{label}</span>
       <div className="grid grid-cols-3 gap-1">
         {[
           { axis: 'X', val: x, change: onChangeX },
@@ -142,7 +142,7 @@ function SectionHeader({
   return (
     <div
       onClick={onToggle}
-      className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-border bg-surface/40 select-none ${
+      className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-semibold text-muted tracking-wide border-b border-border bg-surface/40 select-none ${
         collapsible ? 'cursor-pointer hover:text-foreground hover:bg-surface/70 transition-colors' : ''
       }`}
     >
@@ -231,7 +231,7 @@ function EnvironmentPanel() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Near</span>
+                <span className="text-[10px] font-semibold text-muted tracking-wide">Near</span>
                 <span className="text-[10px] text-muted tabular-nums">{env.fog.near}</span>
               </div>
               <input type="range" min="1" max="200" step="1" value={env.fog.near}
@@ -242,7 +242,7 @@ function EnvironmentPanel() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Far</span>
+                <span className="text-[10px] font-semibold text-muted tracking-wide">Far</span>
                 <span className="text-[10px] text-muted tabular-nums">{env.fog.far}</span>
               </div>
               <input type="range" min="10" max="500" step="5" value={env.fog.far}
@@ -260,7 +260,7 @@ function EnvironmentPanel() {
       <div className="px-3 py-3 space-y-3">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Ambient</span>
+            <span className="text-[10px] font-semibold text-muted tracking-wide">Ambient</span>
             <span className="text-[10px] text-muted tabular-nums">{env.lights.ambientIntensity.toFixed(2)}</span>
           </div>
           <input type="range" min="0" max="3" step="0.05" value={env.lights.ambientIntensity}
@@ -271,7 +271,7 @@ function EnvironmentPanel() {
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Directional</span>
+            <span className="text-[10px] font-semibold text-muted tracking-wide">Directional</span>
             <span className="text-[10px] text-muted tabular-nums">{env.lights.directionalIntensity.toFixed(2)}</span>
           </div>
           <input type="range" min="0" max="5" step="0.1" value={env.lights.directionalIntensity}
@@ -300,7 +300,7 @@ function EnvironmentPanel() {
           return (
             <>
               <div>
-                <span className="text-[10px] text-muted block mb-1.5 font-semibold uppercase tracking-wider">캐릭터</span>
+                <span className="text-[10px] text-muted block mb-1.5 font-semibold tracking-wide">캐릭터</span>
                 <select
                   value={env.playerCharacterId ?? ''}
                   onChange={(e) => { updateEnvironment({ playerCharacterId: e.target.value || undefined }); pushHistory(); }}
@@ -320,7 +320,7 @@ function EnvironmentPanel() {
               {env.playerCharacterId && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Scale</span>
+                    <span className="text-[10px] font-semibold text-muted tracking-wide">Scale</span>
                     <span className="text-[10px] text-muted tabular-nums">{(env.playerCharacterScale ?? 1).toFixed(2)}</span>
                   </div>
                   <input
@@ -366,13 +366,13 @@ export function InspectorPanel() {
     return (
       <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
         <div className="px-3 py-2 border-b border-border">
-          <span className="text-xs font-semibold text-muted uppercase tracking-wider">{selectedIds.length}개 선택됨</span>
+          <span className="text-xs font-semibold text-muted tracking-wide">{selectedIds.length}개 선택됨</span>
         </div>
         <div className="px-3 py-4 space-y-3">
           <p className="text-[10px] text-muted">Shift+클릭으로 오브젝트를 추가 선택하세요.</p>
           {(['x', 'y', 'z'] as const).map((axis) => (
             <div key={axis}>
-              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1.5">{axis.toUpperCase()}축 정렬</p>
+              <p className="text-[10px] font-semibold text-muted tracking-wide mb-1.5">{axis.toUpperCase()}축 정렬</p>
               <div className="grid grid-cols-3 gap-1">
                 {(['min', 'center', 'max'] as const).map((mode) => (
                   <button
@@ -395,7 +395,7 @@ export function InspectorPanel() {
     return (
       <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
         <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-          <span className="text-xs font-semibold text-muted uppercase tracking-wider flex-1">Environment</span>
+          <span className="text-xs font-semibold text-muted tracking-wide flex-1">Environment</span>
         </div>
         <EnvironmentPanel />
       </aside>
@@ -435,7 +435,7 @@ export function InspectorPanel() {
     return (
       <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
         <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-          <span className="text-xs font-semibold text-muted uppercase tracking-wider flex-1">Inspector — 그룹</span>
+          <span className="text-xs font-semibold text-muted tracking-wide flex-1">Inspector — 그룹</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-2 border-b border-border">
@@ -486,7 +486,7 @@ export function InspectorPanel() {
   return (
     <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
       <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-        <span className="text-xs font-semibold text-muted uppercase tracking-wider flex-1">Inspector</span>
+        <span className="text-xs font-semibold text-muted tracking-wide flex-1">Inspector</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -539,7 +539,7 @@ export function InspectorPanel() {
               {obj.content.type === 'text' && (
                 <>
                   <div>
-                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">텍스트</span>
+                    <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">텍스트</span>
                     <textarea
                       value={obj.content.text ?? ''}
                       onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, text: e.target.value } })}
@@ -550,7 +550,7 @@ export function InspectorPanel() {
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">글자 크기</span>
+                      <span className="text-[10px] font-semibold text-muted tracking-wide">글자 크기</span>
                       <span className="text-[10px] text-muted">{(obj.content.fontSize ?? 0.5).toFixed(1)}</span>
                     </div>
                     <input type="range" min="0.1" max="3" step="0.1"
@@ -562,7 +562,7 @@ export function InspectorPanel() {
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">두께</span>
+                      <span className="text-[10px] font-semibold text-muted tracking-wide">두께</span>
                       <span className="text-[10px] text-muted">{(obj.content.depth ?? 0.1).toFixed(2)}</span>
                     </div>
                     <input type="range" min="0" max="1" step="0.01"
@@ -576,7 +576,7 @@ export function InspectorPanel() {
               )}
               {(obj.content.type === 'image' || obj.content.type === 'video') && (
                 <div>
-                  <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">
+                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">
                     {obj.content.type === 'image' ? '이미지 URL' : '동영상 URL'}
                   </span>
                   <input
@@ -599,7 +599,7 @@ export function InspectorPanel() {
             <SectionHeader title="Particle" icon="✨" isOpen={isOpen('particle')} onToggle={() => toggleSection('particle')} />
             {isOpen('particle') && <div className="px-3 py-3 space-y-2.5">
               <div>
-                <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Preset</span>
+                <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Preset</span>
                 <select
                   value={obj.particle.preset}
                   onChange={(e) => { updateObject(obj.id, { particle: { ...obj.particle!, preset: e.target.value as ParticlePreset } }); pushHistory(); }}
@@ -612,7 +612,7 @@ export function InspectorPanel() {
                 </select>
               </div>
               <div>
-                <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">색상 오버라이드</span>
+                <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">색상 오버라이드</span>
                 <div className="flex items-center gap-2">
                   <input type="color"
                     value={obj.particle.color ?? '#ffffff'}
@@ -637,7 +637,7 @@ export function InspectorPanel() {
               ] as const).map(({ key, label, min, max, step }) => (
                 <div key={key}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">{label}</span>
+                    <span className="text-[10px] font-semibold text-muted tracking-wide">{label}</span>
                     <span className="text-[10px] text-muted tabular-nums">{(obj.particle![key] ?? '기본').toString()}</span>
                   </div>
                   <input type="range" min={min} max={max} step={step}
@@ -659,7 +659,7 @@ export function InspectorPanel() {
             {isOpen('material') && (
               <div className="px-3 py-3 space-y-2.5">
                 <div>
-                  <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Color</span>
+                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Color</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
@@ -679,7 +679,7 @@ export function InspectorPanel() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Roughness</span>
+                    <span className="text-[10px] font-semibold text-muted tracking-wide">Roughness</span>
                     <span className="text-[10px] text-muted tabular-nums">{(obj.material?.roughness ?? 0.5).toFixed(2)}</span>
                   </div>
                   <input type="range" min="0" max="1" step="0.01"
@@ -691,7 +691,7 @@ export function InspectorPanel() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Metalness</span>
+                    <span className="text-[10px] font-semibold text-muted tracking-wide">Metalness</span>
                     <span className="text-[10px] text-muted tabular-nums">{(obj.material?.metalness ?? 0.1).toFixed(2)}</span>
                   </div>
                   <input type="range" min="0" max="1" step="0.01"
@@ -702,7 +702,7 @@ export function InspectorPanel() {
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Emissive</span>
+                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Emissive</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
@@ -754,7 +754,7 @@ export function InspectorPanel() {
           {obj.physics.enabled && (
             <>
               <div>
-                <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Collider Type</span>
+                <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Collider Type</span>
                 <select
                   value={obj.physics.colliderType}
                   onChange={(e) => { updateObject(obj.id, { physics: { ...obj.physics, colliderType: e.target.value as ColliderType } }); pushHistory(); }}
@@ -779,7 +779,7 @@ export function InspectorPanel() {
               </label>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Friction</span>
+                  <span className="text-[10px] font-semibold text-muted tracking-wide">Friction</span>
                   <span className="text-[10px] text-muted tabular-nums">{obj.physics.friction.toFixed(2)}</span>
                 </div>
                 <input type="range" min="0" max="1" step="0.01" value={obj.physics.friction}
@@ -790,7 +790,7 @@ export function InspectorPanel() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Restitution</span>
+                  <span className="text-[10px] font-semibold text-muted tracking-wide">Restitution</span>
                   <span className="text-[10px] text-muted tabular-nums">{obj.physics.restitution.toFixed(2)}</span>
                 </div>
                 <input type="range" min="0" max="1" step="0.01" value={obj.physics.restitution}
@@ -838,7 +838,7 @@ export function InspectorPanel() {
               <div className="bg-surface border border-border/60 rounded-xl p-2.5 space-y-2">
                 <div className="grid grid-cols-2 gap-1.5">
                   <div>
-                    <span className="text-[10px] text-muted block mb-1 font-semibold uppercase tracking-wider">Trigger</span>
+                    <span className="text-[10px] text-muted block mb-1 font-semibold tracking-wide">Trigger</span>
                     <select
                       value={newTrigger}
                       onChange={(e) => setNewTrigger(e.target.value as EventSchema['trigger'])}
@@ -850,7 +850,7 @@ export function InspectorPanel() {
                     </select>
                   </div>
                   <div>
-                    <span className="text-[10px] text-muted block mb-1 font-semibold uppercase tracking-wider">Action</span>
+                    <span className="text-[10px] text-muted block mb-1 font-semibold tracking-wide">Action</span>
                     <select
                       value={newAction}
                       onChange={(e) => setNewAction(e.target.value as EventSchema['action'])}
@@ -870,7 +870,7 @@ export function InspectorPanel() {
                 )}
 
                 <div>
-                  <span className="text-[10px] text-muted block mb-1 font-semibold uppercase tracking-wider">
+                  <span className="text-[10px] text-muted block mb-1 font-semibold tracking-wide">
                     {newAction === 'open_url' ? 'URL' : newAction === 'emit_event' ? '이벤트 이름' : '팝업 내용'}
                   </span>
                   <input
