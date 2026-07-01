@@ -8,6 +8,31 @@ import { ViewerObject } from './ViewerObject';
 import { PhysicsObject } from './PhysicsObject';
 import { PlayModeController } from './PlayModeController';
 
+const DEG2RAD = Math.PI / 180;
+
+// physics.enabled가 꺼진 오브젝트도 플레이 모드에서 고정 콜라이더를 부여
+function AutoCollider({ object, assets, onEvent, allObjects }: {
+  object: ObjectNodeSchema;
+  assets: Parameters<typeof ViewerObject>[0]['assets'];
+  onEvent: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
+  allObjects: ObjectNodeSchema[];
+}) {
+  const colliders = object.primitiveShape === 'box' ? 'cuboid'
+    : object.primitiveShape === 'sphere' ? 'ball'
+    : 'hull'; // glb, cylinder, plane 등 → convex hull
+
+  return (
+    <RigidBody
+      type="fixed"
+      colliders={colliders}
+      position={[object.position.x, object.position.y, object.position.z]}
+      rotation={[object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD]}
+    >
+      <ViewerObject object={object} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform />
+    </RigidBody>
+  );
+}
+
 interface Props {
   scene: ProjectSceneSchema;
   azimuthRef: React.MutableRefObject<number>;
@@ -19,28 +44,28 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick }: Props) {
   const assets = scene.assets ?? [];
 
   const allObjects = scene.objects;
-  const staticObjects = allObjects.filter((o) => !o.physics.enabled && !o.parentId);
-  const physicsObjects = allObjects.filter((o) => o.physics.enabled && !o.parentId);
+  const rootObjects = allObjects.filter((o) => !o.parentId);
+  const autoObjects = rootObjects.filter((o) => !o.physics.enabled);
+  const physicsObjects = rootObjects.filter((o) => o.physics.enabled);
 
   return (
-    <>
-      {/* 비물리 오브젝트 — Physics 밖, rapier 간섭 없음 */}
-      {staticObjects.map((obj) => (
-        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+    <Physics gravity={[0, -20, 0]} timeStep="vary">
+      {/* 바닥 */}
+      <RigidBody type="fixed" name="floor">
+        <CuboidCollider args={[100, 0.1, 100]} position={[0, -0.1, 0]} />
+      </RigidBody>
+
+      {/* physics 미설정 오브젝트 — 자동 고정 콜라이더 */}
+      {autoObjects.map((obj) => (
+        <AutoCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
-      <Physics gravity={[0, -20, 0]} timeStep="vary">
-        {/* 바닥: 명시적 CuboidCollider (lazy load 시 matrixWorld 미계산 문제 방지) */}
-        <RigidBody type="fixed" name="floor">
-          <CuboidCollider args={[100, 0.1, 100]} position={[0, -0.1, 0]} />
-        </RigidBody>
+      {/* physics 설정 오브젝트 — 기존 설정 그대로 */}
+      {physicsObjects.map((obj) => (
+        <PhysicsObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} />
+      ))}
 
-        {physicsObjects.map((obj) => (
-          <PhysicsObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} />
-        ))}
-
-        <PlayModeController azimuthRef={azimuthRef} playerRef={playerRef} />
-      </Physics>
-    </>
+      <PlayModeController azimuthRef={azimuthRef} playerRef={playerRef} />
+    </Physics>
   );
 }
