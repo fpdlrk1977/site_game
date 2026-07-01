@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { createSupabaseServer } from '@/lib/supabase-server';
-import { createServiceSupabase } from '@/lib/supabase';
+import { createServiceSupabase } from '@/lib/supabase-server';
 import { normalizeSceneData } from '@/types/scene';
 import { ViewerClient } from './ViewerClient';
 

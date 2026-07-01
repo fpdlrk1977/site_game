@@ -61,6 +61,37 @@ export async function deleteProject(projectId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  // 소유권 확인
+  const { data: project } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', projectId)
+    .eq('owner_id', user.id)
+    .single();
+
+  if (!project) return;
+
+  // 스토리지 파일 정리
+  const { data: storageFiles } = await supabase.storage
+    .from('assets')
+    .list(`assets/${projectId}`);
+  if (storageFiles && storageFiles.length > 0) {
+    const paths = storageFiles.map((f) => `assets/${projectId}/${f.name}`);
+    await supabase.storage.from('assets').remove(paths);
+  }
+
+  // 씬 버전 → 씬 → 프로젝트 순으로 삭제 (FK 순서)
+  const { data: scenes } = await supabase
+    .from('scenes')
+    .select('id')
+    .eq('project_id', projectId);
+
+  if (scenes && scenes.length > 0) {
+    const sceneIds = scenes.map((s) => s.id);
+    await supabase.from('scene_versions').delete().in('scene_id', sceneIds);
+    await supabase.from('scenes').delete().in('id', sceneIds);
+  }
+
   await supabase
     .from('projects')
     .delete()

@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, Suspense, useEffect as useEffectReact } from 'react';
+import { useState, Suspense, useEffect, useMemo } from 'react';
 import { useGLTF, Text3D, Center, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { useMemo, useEffect } from 'react';
 import { useLoader } from '@react-three/fiber';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
@@ -72,7 +71,7 @@ function VideoMesh({ position, rotation, scale, url, onClick, onPointerOver, onP
   onPointerOut: () => void;
 }) {
   const [texture, setTexture] = useState<THREE.VideoTexture | null>(null);
-  useEffectReact(() => {
+  useEffect(() => {
     const vid = document.createElement('video');
     vid.src = url;
     vid.crossOrigin = 'anonymous';

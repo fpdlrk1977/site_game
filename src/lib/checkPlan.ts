@@ -2,7 +2,7 @@ import { createSupabaseServer } from './supabase-server';
 import { getLimit, getFeature, type NumericGateKey, type BoolGateKey } from './planGates';
 import type { PlanTier } from '@/store/userStore';
 
-async function getUserTier(userId: string): Promise<PlanTier> {
+export async function getUserTier(userId: string): Promise<PlanTier> {
   const supabase = await createSupabaseServer();
   const { data } = await supabase
     .from('users_plan')
@@ -17,11 +17,12 @@ export async function assertCountLimit(
   userId: string,
   key: NumericGateKey,
   currentCount: number,
+  tier?: PlanTier,
 ): Promise<void> {
-  const tier = await getUserTier(userId);
-  const limit = getLimit(key, tier);
+  const resolvedTier = tier ?? await getUserTier(userId);
+  const limit = getLimit(key, resolvedTier);
   if (currentCount >= limit) {
-    throw new Error(`PLAN_LIMIT:${key}:${tier}`);
+    throw new Error(`PLAN_LIMIT:${key}:${resolvedTier}`);
   }
 }
 
@@ -29,10 +30,11 @@ export async function assertCountLimit(
 export async function assertFeatureEnabled(
   userId: string,
   key: BoolGateKey,
+  tier?: PlanTier,
 ): Promise<void> {
-  const tier = await getUserTier(userId);
-  const enabled = getFeature(key, tier);
+  const resolvedTier = tier ?? await getUserTier(userId);
+  const enabled = getFeature(key, resolvedTier);
   if (!enabled) {
-    throw new Error(`PLAN_FEATURE:${key}:${tier}`);
+    throw new Error(`PLAN_FEATURE:${key}:${resolvedTier}`);
   }
 }

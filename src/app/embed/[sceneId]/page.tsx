@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { createServiceSupabase } from '@/lib/supabase';
+import { createServiceSupabase } from '@/lib/supabase-server';
 import { normalizeSceneData } from '@/types/scene';
 import { EmbedClient } from './EmbedClient';
 

@@ -133,7 +133,7 @@ export function EditorCanvas() {
           onPointerMissed={() => {
             if (!isDraggingRef.current) useSceneStore.getState().selectObject(null);
           }}
-          style={{ width: '100%', height: '100%', background: skyColor }}
+          style={{ width: '100%', height: '100%' }}
         >
           <CameraCapture cameraRef={cameraRef} />
           <color attach="background" args={[skyColor]} />

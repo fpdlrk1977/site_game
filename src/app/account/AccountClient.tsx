@@ -22,6 +22,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
   const [nameSaving, setNameSaving] = useState(false);
   const [nameMsg, setNameMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
+  const [currentPw, setCurrentPw] = useState('');
   const [pw, setPw] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
   const [pwSaving, setPwSaving] = useState(false);
@@ -41,16 +42,25 @@ export function AccountClient({ email, displayName, planTier }: Props) {
 
   const handleChangePw = async () => {
     setPwMsg(null);
-    if (pw.length < 8) { setPwMsg({ text: '비밀번호는 8자 이상이어야 합니다.', ok: false }); return; }
-    if (pw !== pwConfirm) { setPwMsg({ text: '비밀번호가 일치하지 않습니다.', ok: false }); return; }
+    if (!currentPw) { setPwMsg({ text: '현재 비밀번호를 입력하세요.', ok: false }); return; }
+    if (pw.length < 8) { setPwMsg({ text: '새 비밀번호는 8자 이상이어야 합니다.', ok: false }); return; }
+    if (pw !== pwConfirm) { setPwMsg({ text: '새 비밀번호가 일치하지 않습니다.', ok: false }); return; }
     setPwSaving(true);
     const supabase = createBrowserSupabase();
+    // 현재 비밀번호 검증
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPw });
+    if (signInError) {
+      setPwSaving(false);
+      setPwMsg({ text: '현재 비밀번호가 올바르지 않습니다.', ok: false });
+      return;
+    }
     const { error } = await supabase.auth.updateUser({ password: pw });
     setPwSaving(false);
     if (error) {
       setPwMsg({ text: '변경 실패: ' + error.message, ok: false });
     } else {
       setPwMsg({ text: '비밀번호가 변경되었습니다.', ok: true });
+      setCurrentPw('');
       setPw('');
       setPwConfirm('');
     }
@@ -131,6 +141,17 @@ export function AccountClient({ email, displayName, planTier }: Props) {
           <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">보안</h2>
 
           <div>
+            <label className="block text-xs font-medium text-zinc-500 mb-1.5">현재 비밀번호</label>
+            <input
+              type="password"
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              placeholder="현재 비밀번호 입력"
+              className="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+            />
+          </div>
+
+          <div>
             <label className="block text-xs font-medium text-zinc-500 mb-1.5">새 비밀번호</label>
             <input
               type="password"
@@ -142,7 +163,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-500 mb-1.5">비밀번호 확인</label>
+            <label className="block text-xs font-medium text-zinc-500 mb-1.5">새 비밀번호 확인</label>
             <input
               type="password"
               value={pwConfirm}
@@ -161,7 +182,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
 
           <button
             onClick={handleChangePw}
-            disabled={pwSaving || !pw || !pwConfirm}
+            disabled={pwSaving || !currentPw || !pw || !pwConfirm}
             className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-sm font-medium rounded-lg border border-zinc-700 hover:border-zinc-600 transition-all"
           >
             {pwSaving ? '변경 중…' : '비밀번호 변경'}

@@ -125,7 +125,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   past: [],
   future: [],
 
-  loadScene: (data) =>
+  loadScene: (data) => {
+    objectCounter = 0;
     set({
       projectId: data.projectId,
       sceneId: data.sceneId,
@@ -137,7 +138,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       isModified: false,
       past: [],
       future: [],
-    }),
+    });
+  },
 
   selectObject: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
   selectObjects: (ids) => set({ selectedIds: ids, selectedId: ids[ids.length - 1] ?? null }),

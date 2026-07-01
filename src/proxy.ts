@@ -15,7 +15,7 @@ export async function proxy(req: NextRequest) {
     if (!VALID_HOST_RE.test(host)) return res;
     const apiRes = await fetch(
       `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/projects?custom_domain=eq.${encodeURIComponent(host)}&select=default_scene_id`,
-      { headers: { apikey: process.env.SUPABASE_SERVICE_KEY! } }
+      { headers: { apikey: process.env.SUPABASE_SERVICE_KEY! }, signal: AbortSignal.timeout(3000) }
     );
     const [project] = await apiRes.json();
     if (project?.default_scene_id) {
