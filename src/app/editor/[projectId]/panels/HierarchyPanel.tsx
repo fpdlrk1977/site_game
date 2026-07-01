@@ -194,7 +194,7 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
   );
 }
 
-export function HierarchyPanel() {
+export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   const { objects, selectObject, selectObjects } = useSceneStore();
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -260,22 +260,14 @@ export function HierarchyPanel() {
     });
   };
 
-  return (
-    <aside className="flex flex-col bg-zinc-950 border-r border-zinc-800 overflow-hidden h-full">
-      {/* 헤더 */}
-      <div className="px-3 py-2 border-b border-zinc-800 shrink-0">
-        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-          오브젝트 ({objects.length})
-        </span>
-      </div>
-
+  const inner = (
+    <>
       <div className="px-2 pt-2 pb-1 shrink-0">
         <input type="text" placeholder="검색..." value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
         />
       </div>
-
       <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
         {objects.filter((o) => o.parentId === null).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -285,6 +277,19 @@ export function HierarchyPanel() {
           renderTree(null, 0)
         )}
       </div>
+    </>
+  );
+
+  if (noWrapper) return <>{inner}</>;
+
+  return (
+    <aside className="flex flex-col bg-zinc-950 border-r border-zinc-800 overflow-hidden h-full">
+      <div className="px-3 py-2 border-b border-zinc-800 shrink-0">
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+          오브젝트 ({objects.length})
+        </span>
+      </div>
+      {inner}
     </aside>
   );
 }

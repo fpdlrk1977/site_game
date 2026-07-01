@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSceneStore } from '@/store/sceneStore';
 import { ViewportToolbar } from './panels/ViewportToolbar';
-import { HierarchyPanel } from './panels/HierarchyPanel';
+import { LeftPanel } from './panels/LeftPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
 import { AssetBrowser } from './panels/AssetBrowser';
 import { EditorOnboarding } from './EditorOnboarding';
 import { ViewportStatusBar } from './canvas/ViewportStatusBar';
+import { ViewportFloatingToolbar } from './canvas/ViewportFloatingToolbar';
+import { ViewportOrientationGizmo } from './canvas/ViewportOrientationGizmo';
 import { Toaster } from '@/components/ui/Toaster';
 import type { ProjectSceneSchema } from '@/types/scene';
 
@@ -82,39 +84,38 @@ export function EditorClient({ projectName, initialScene }: Props) {
       style={{
         display: 'grid',
         gridTemplateColumns: '240px 1fr 280px',
-        gridTemplateRows: '48px 1fr 180px',
+        gridTemplateRows: '48px 1fr 200px',
       }}
     >
-      {/* 상단 툴바 — 3열 전체 */}
+      {/* 헤더 — 3열 전체 */}
       <div style={{ gridColumn: '1 / -1', gridRow: '1' }}>
         <ViewportToolbar projectName={projectName} />
       </div>
 
-      {/* Hierarchy */}
+      {/* 왼쪽 패널 (Objects / Assets 탭) */}
       <div style={{ gridColumn: '1', gridRow: '2' }}>
-        <HierarchyPanel />
+        <LeftPanel />
       </div>
 
       {/* Viewport */}
       <div style={{ gridColumn: '2', gridRow: '2' }} className="relative overflow-hidden">
         <EditorCanvas />
+        <ViewportFloatingToolbar />
+        <ViewportOrientationGizmo />
         <ViewportStatusBar />
       </div>
 
-      {/* Inspector */}
-      <div style={{ gridColumn: '3', gridRow: '2' }}>
+      {/* Inspector — 헤더 제외 전체 높이 */}
+      <div style={{ gridColumn: '3', gridRow: '2 / 4' }}>
         <InspectorPanel />
       </div>
 
-      {/* Asset Browser — 3열 전체 하단 */}
-      <div style={{ gridColumn: '1 / -1', gridRow: '3' }}>
+      {/* Asset Browser — Inspector 제외 하단 */}
+      <div style={{ gridColumn: '1 / 3', gridRow: '3' }}>
         <AssetBrowser />
       </div>
 
-      {/* 신규 유저 온보딩 — 첫 방문 시에만 표시 */}
       <EditorOnboarding />
-
-      {/* 토스트 알림 */}
       <Toaster />
     </div>
   );
