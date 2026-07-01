@@ -80,11 +80,31 @@ function XYZRow({
   );
 }
 
-// ── 섹션 헤더 ──────────────────────────────────────────────────
-function SectionHeader({ title }: { title: string }) {
+// ── 섹션 헤더 (접기/펼치기 지원) ──────────────────────────────
+function SectionHeader({
+  title,
+  icon,
+  isOpen,
+  onToggle,
+}: {
+  title: string;
+  icon?: string;
+  isOpen?: boolean;
+  onToggle?: () => void;
+}) {
+  const collapsible = onToggle !== undefined;
   return (
-    <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800 bg-zinc-900/50">
-      {title}
+    <div
+      onClick={onToggle}
+      className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800 bg-zinc-900/40 select-none ${
+        collapsible ? 'cursor-pointer hover:text-zinc-400 hover:bg-zinc-900/70 transition-colors' : ''
+      }`}
+    >
+      {icon && <span className="text-[12px] opacity-60 font-normal not-italic">{icon}</span>}
+      <span className="flex-1">{title}</span>
+      {collapsible && (
+        <span className="text-zinc-700 text-[10px]">{isOpen ? '▾' : '▸'}</span>
+      )}
     </div>
   );
 }
@@ -235,6 +255,16 @@ export function InspectorPanel() {
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
 
+  // 섹션 접기 상태
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleSection = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  const isOpen = (key: string) => !collapsed.has(key);
+
   // Events 추가 폼 상태
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newTrigger, setNewTrigger] = useState<EventSchema['trigger']>('click');
@@ -380,39 +410,41 @@ export function InspectorPanel() {
         </div>
 
         {/* Transform */}
-        <SectionHeader title="Transform" />
-        <div className="px-3 py-3 space-y-3">
-          <XYZRow
-            label="Position"
-            x={obj.position.x} y={obj.position.y} z={obj.position.z}
-            onChangeX={(v) => setPos('x', v)}
-            onChangeY={(v) => setPos('y', v)}
-            onChangeZ={(v) => setPos('z', v)}
-            onCommit={pushHistory}
-          />
-          <XYZRow
-            label="Rotation °"
-            x={obj.rotation.x} y={obj.rotation.y} z={obj.rotation.z}
-            onChangeX={(v) => setRot('x', v)}
-            onChangeY={(v) => setRot('y', v)}
-            onChangeZ={(v) => setRot('z', v)}
-            onCommit={pushHistory}
-          />
-          <XYZRow
-            label="Scale"
-            x={obj.scale.x} y={obj.scale.y} z={obj.scale.z}
-            onChangeX={(v) => setScl('x', v)}
-            onChangeY={(v) => setScl('y', v)}
-            onChangeZ={(v) => setScl('z', v)}
-            onCommit={pushHistory}
-          />
-        </div>
+        <SectionHeader title="Transform" icon="⊹" isOpen={isOpen('transform')} onToggle={() => toggleSection('transform')} />
+        {isOpen('transform') && (
+          <div className="px-3 py-3 space-y-3">
+            <XYZRow
+              label="Position"
+              x={obj.position.x} y={obj.position.y} z={obj.position.z}
+              onChangeX={(v) => setPos('x', v)}
+              onChangeY={(v) => setPos('y', v)}
+              onChangeZ={(v) => setPos('z', v)}
+              onCommit={pushHistory}
+            />
+            <XYZRow
+              label="Rotation °"
+              x={obj.rotation.x} y={obj.rotation.y} z={obj.rotation.z}
+              onChangeX={(v) => setRot('x', v)}
+              onChangeY={(v) => setRot('y', v)}
+              onChangeZ={(v) => setRot('z', v)}
+              onCommit={pushHistory}
+            />
+            <XYZRow
+              label="Scale"
+              x={obj.scale.x} y={obj.scale.y} z={obj.scale.z}
+              onChangeX={(v) => setScl('x', v)}
+              onChangeY={(v) => setScl('y', v)}
+              onChangeZ={(v) => setScl('z', v)}
+              onCommit={pushHistory}
+            />
+          </div>
+        )}
 
         {/* Content (content 오브젝트만) */}
         {obj.content && (
           <>
-            <SectionHeader title="Content" />
-            <div className="px-3 py-3 space-y-2.5">
+            <SectionHeader title="Content" icon="🖼" isOpen={isOpen('content')} onToggle={() => toggleSection('content')} />
+            {isOpen('content') && <div className="px-3 py-3 space-y-2.5">
               {obj.content.type === 'text' && (
                 <>
                   <div>
@@ -466,15 +498,15 @@ export function InspectorPanel() {
                   />
                 </div>
               )}
-            </div>
+            </div>}
           </>
         )}
 
         {/* Particle (파티클 이미터만) */}
         {obj.particle && (
           <>
-            <SectionHeader title="Particle" />
-            <div className="px-3 py-3 space-y-2.5">
+            <SectionHeader title="Particle" icon="✨" isOpen={isOpen('particle')} onToggle={() => toggleSection('particle')} />
+            {isOpen('particle') && <div className="px-3 py-3 space-y-2.5">
               <div>
                 <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Preset</span>
                 <select
@@ -525,98 +557,102 @@ export function InspectorPanel() {
                   />
                 </div>
               ))}
-            </div>
+            </div>}
           </>
         )}
 
         {/* Material (primitive + text content 오브젝트) */}
         {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && (
           <>
-            <SectionHeader title="Material" />
-            <div className="px-3 py-3 space-y-2.5">
-              <div>
-                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Color</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={obj.material?.color ?? '#a78bfa'}
-                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
-                  />
-                  <input
-                    type="text"
-                    value={obj.material?.color ?? '#a78bfa'}
-                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
-                  />
+            <SectionHeader title="Material" icon="◉" isOpen={isOpen('material')} onToggle={() => toggleSection('material')} />
+            {isOpen('material') && (
+              <div className="px-3 py-3 space-y-2.5">
+                <div>
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Color</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={obj.material?.color ?? '#a78bfa'}
+                      onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={obj.material?.color ?? '#a78bfa'}
+                      onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Roughness</span>
-                  <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.material?.roughness ?? 0.5).toFixed(2)}</span>
-                </div>
-                <input type="range" min="0" max="1" step="0.01"
-                  value={obj.material?.roughness ?? 0.5}
-                  onChange={(e) => updateObject(obj.id, { material: { ...obj.material, roughness: parseFloat(e.target.value) } })}
-                  onMouseUp={pushHistory}
-                  className="w-full accent-violet-500"
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Metalness</span>
-                  <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.material?.metalness ?? 0.1).toFixed(2)}</span>
-                </div>
-                <input type="range" min="0" max="1" step="0.01"
-                  value={obj.material?.metalness ?? 0.1}
-                  onChange={(e) => updateObject(obj.id, { material: { ...obj.material, metalness: parseFloat(e.target.value) } })}
-                  onMouseUp={pushHistory}
-                  className="w-full accent-violet-500"
-                />
-              </div>
-              <div>
-                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Emissive</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={obj.material?.emissive ?? '#000000'}
-                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
-                  />
-                  <input
-                    type="text"
-                    value={obj.material?.emissive ?? '#000000'}
-                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Roughness</span>
+                    <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.material?.roughness ?? 0.5).toFixed(2)}</span>
+                  </div>
+                  <input type="range" min="0" max="1" step="0.01"
+                    value={obj.material?.roughness ?? 0.5}
+                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, roughness: parseFloat(e.target.value) } })}
+                    onMouseUp={pushHistory}
+                    className="w-full accent-violet-500"
                   />
                 </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Metalness</span>
+                    <span className="text-[10px] text-zinc-500 tabular-nums">{(obj.material?.metalness ?? 0.1).toFixed(2)}</span>
+                  </div>
+                  <input type="range" min="0" max="1" step="0.01"
+                    value={obj.material?.metalness ?? 0.1}
+                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, metalness: parseFloat(e.target.value) } })}
+                    onMouseUp={pushHistory}
+                    className="w-full accent-violet-500"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Emissive</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={obj.material?.emissive ?? '#000000'}
+                      onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 cursor-pointer p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={obj.material?.emissive ?? '#000000'}
+                      onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
 
         {/* Visibility */}
-        <SectionHeader title="Visibility" />
-        <div className="px-3 py-3 space-y-2">
-          {(['visible', 'locked'] as const).map((key) => (
-            <label key={key} className="flex items-center justify-between cursor-pointer">
-              <span className="text-xs text-zinc-400 capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
-              <Toggle
-                value={obj[key]}
-                onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }}
-              />
-            </label>
-          ))}
-        </div>
+        <SectionHeader title="Visibility" icon="👁" isOpen={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
+        {isOpen('visibility') && (
+          <div className="px-3 py-3 space-y-2">
+            {(['visible', 'locked'] as const).map((key) => (
+              <label key={key} className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs text-zinc-400 capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
+                <Toggle
+                  value={obj[key]}
+                  onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }}
+                />
+              </label>
+            ))}
+          </div>
+        )}
 
         {/* Physics */}
-        <SectionHeader title="Physics" />
-        <div className="px-3 py-3 space-y-3">
+        <SectionHeader title="Physics" icon="⬡" isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
+        {isOpen('physics') && <div className="px-3 py-3 space-y-3">
           <label className="flex items-center justify-between cursor-pointer">
             <span className="text-xs text-zinc-400">Enable Physics</span>
             <Toggle
@@ -674,111 +710,113 @@ export function InspectorPanel() {
               </div>
             </>
           )}
-        </div>
+        </div>}
 
         {/* Events */}
-        <SectionHeader title="Events" />
-        <div className="px-3 py-3 space-y-2">
-          {obj.events.length === 0 && !showAddEvent && (
-            <p className="text-zinc-600 text-xs py-1">이벤트 없음</p>
-          )}
+        <SectionHeader title="Events" icon="⚡" isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
+        {isOpen('events') && (
+          <div className="px-3 py-3 space-y-2">
+            {obj.events.length === 0 && !showAddEvent && (
+              <p className="text-zinc-600 text-xs py-1">이벤트 없음</p>
+            )}
 
-          {obj.events.map((ev) => (
-            <div key={ev.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0">
-                    {TRIGGER_LABELS[ev.trigger]}
+            {obj.events.map((ev) => (
+              <div key={ev.id} className="bg-zinc-900 border border-zinc-800/80 rounded-xl p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <span className="bg-violet-600/20 text-violet-300 border border-violet-600/30 px-1.5 py-0.5 rounded-md text-[10px] font-medium shrink-0">
+                      {TRIGGER_LABELS[ev.trigger]}
+                    </span>
+                    <span className="text-zinc-600 text-[10px]">›</span>
+                    <span className="text-zinc-300 text-[10px] truncate font-medium">{ACTION_LABELS[ev.action] ?? ev.action}</span>
+                  </div>
+                  <button
+                    onClick={() => removeEvent(ev.id)}
+                    className="text-zinc-700 hover:text-red-400 text-[11px] shrink-0 transition-colors w-4 h-4 flex items-center justify-center rounded hover:bg-red-400/10"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {ev.value && (
+                  <p className="text-zinc-600 text-[10px] mt-1.5 truncate font-mono bg-zinc-950/50 rounded px-1.5 py-0.5">{ev.value}</p>
+                )}
+              </div>
+            ))}
+
+            {showAddEvent ? (
+              <div className="bg-zinc-900 border border-zinc-700/60 rounded-xl p-2.5 space-y-2">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <span className="text-[10px] text-zinc-500 block mb-1 font-semibold uppercase tracking-wider">Trigger</span>
+                    <select
+                      value={newTrigger}
+                      onChange={(e) => setNewTrigger(e.target.value as EventSchema['trigger'])}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-1.5 py-1.5 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    >
+                      <option value="click">Click</option>
+                      <option value="hover_enter">Hover</option>
+                      <option value="area_enter">Area Enter</option>
+                    </select>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-zinc-500 block mb-1 font-semibold uppercase tracking-wider">Action</span>
+                    <select
+                      value={newAction}
+                      onChange={(e) => setNewAction(e.target.value as EventSchema['action'])}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-1.5 py-1.5 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    >
+                      <option value="show_popup">팝업</option>
+                      <option value="open_url">URL 열기</option>
+                      <option value="emit_event">이벤트 발송</option>
+                    </select>
+                  </div>
+                </div>
+
+                {areaEnterNeedsPhysics && (
+                  <p className="text-amber-400/80 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1.5">
+                    ⚠ Area Enter는 Physics 활성화 + Is Sensor 필요
+                  </p>
+                )}
+
+                <div>
+                  <span className="text-[10px] text-zinc-500 block mb-1 font-semibold uppercase tracking-wider">
+                    {newAction === 'open_url' ? 'URL' : newAction === 'emit_event' ? '이벤트 이름' : '팝업 내용'}
                   </span>
-                  <span className="text-zinc-500 text-[10px]">→</span>
-                  <span className="text-zinc-300 text-[10px] truncate">{ACTION_LABELS[ev.action] ?? ev.action}</span>
+                  <input
+                    type="text"
+                    value={newValue}
+                    onChange={(e) => setNewValue(e.target.value)}
+                    placeholder={newAction === 'open_url' ? 'https://...' : newAction === 'emit_event' ? 'my_event_name' : '표시할 텍스트'}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    onKeyDown={(e) => e.key === 'Enter' && addEvent()}
+                  />
                 </div>
-                <button
-                  onClick={() => removeEvent(ev.id)}
-                  className="text-zinc-600 hover:text-red-400 text-xs ml-2 shrink-0 transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-              {ev.value && (
-                <p className="text-zinc-500 text-[10px] mt-1 truncate font-mono">{ev.value}</p>
-              )}
-            </div>
-          ))}
 
-          {showAddEvent ? (
-            <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 space-y-2">
-              <div className="grid grid-cols-2 gap-1.5">
-                <div>
-                  <span className="text-[10px] text-zinc-500 block mb-1">Trigger</span>
-                  <select
-                    value={newTrigger}
-                    onChange={(e) => setNewTrigger(e.target.value as EventSchema['trigger'])}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={addEvent}
+                    className="flex-1 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
                   >
-                    <option value="click">Click</option>
-                    <option value="hover_enter">Hover</option>
-                    <option value="area_enter">Area Enter</option>
-                  </select>
-                </div>
-                <div>
-                  <span className="text-[10px] text-zinc-500 block mb-1">Action</span>
-                  <select
-                    value={newAction}
-                    onChange={(e) => setNewAction(e.target.value as EventSchema['action'])}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    추가
+                  </button>
+                  <button
+                    onClick={() => { setShowAddEvent(false); setNewValue(''); }}
+                    className="flex-1 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
                   >
-                    <option value="show_popup">팝업</option>
-                    <option value="open_url">URL 열기</option>
-                    <option value="emit_event">이벤트 발송</option>
-                  </select>
+                    취소
+                  </button>
                 </div>
               </div>
-
-              {areaEnterNeedsPhysics && (
-                <p className="text-amber-500/80 text-[10px] bg-amber-500/10 rounded px-2 py-1">
-                  Area Enter는 Physics 활성화 + Is Sensor 필요
-                </p>
-              )}
-
-              <div>
-                <span className="text-[10px] text-zinc-500 block mb-1">
-                  {newAction === 'open_url' ? 'URL' : newAction === 'emit_event' ? '이벤트 이름' : '팝업 내용'}
-                </span>
-                <input
-                  type="text"
-                  value={newValue}
-                  onChange={(e) => setNewValue(e.target.value)}
-                  placeholder={newAction === 'open_url' ? 'https://...' : newAction === 'emit_event' ? 'my_event_name' : '표시할 텍스트'}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
-                  onKeyDown={(e) => e.key === 'Enter' && addEvent()}
-                />
-              </div>
-
-              <div className="flex gap-1.5">
-                <button
-                  onClick={addEvent}
-                  className="flex-1 py-1 rounded bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
-                >
-                  추가
-                </button>
-                <button
-                  onClick={() => { setShowAddEvent(false); setNewValue(''); }}
-                  className="flex-1 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs transition-colors"
-                >
-                  취소
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowAddEvent(true)}
-              className="w-full py-1.5 rounded-lg border border-dashed border-zinc-700 text-zinc-500 hover:border-violet-600 hover:text-violet-400 text-xs transition-colors"
-            >
-              + 이벤트 추가
-            </button>
-          )}
-        </div>
+            ) : (
+              <button
+                onClick={() => setShowAddEvent(true)}
+                className="w-full py-1.5 rounded-lg border border-dashed border-zinc-700 text-zinc-500 hover:border-violet-600/60 hover:text-violet-400 hover:bg-violet-600/5 text-xs transition-all"
+              >
+                + 이벤트 추가
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );

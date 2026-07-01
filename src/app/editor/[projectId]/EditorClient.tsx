@@ -106,7 +106,7 @@ export function EditorClient({ projectName, initialScene }: Props) {
         <InspectorPanel />
       </div>
 
-      {/* Asset Browser — 3열 전체 */}
+      {/* Asset Browser — 3열 전체 하단 */}
       <div style={{ gridColumn: '1 / -1', gridRow: '3' }}>
         <AssetBrowser />
       </div>

@@ -9,13 +9,13 @@ import type { AssetRefSchema, ContentType, ParticlePreset } from '@/types/scene'
 type Tab = 'models' | 'content' | 'particle' | 'materials' | 'textures' | 'hdr' | 'audio';
 
 const TABS: { id: Tab; label: string; wip?: boolean }[] = [
-  { id: 'models',    label: '모델' },
-  { id: 'content',   label: '콘텐츠' },
-  { id: 'particle',  label: '파티클' },
-  { id: 'materials', label: '재질',   wip: true },
-  { id: 'textures',  label: '텍스처', wip: true },
-  { id: 'hdr',       label: 'HDR',    wip: true },
-  { id: 'audio',     label: '오디오', wip: true },
+  { id: 'models',    label: 'Models' },
+  { id: 'content',   label: 'Content' },
+  { id: 'particle',  label: 'Particle' },
+  { id: 'materials', label: 'Materials', wip: true },
+  { id: 'textures',  label: 'Textures',  wip: true },
+  { id: 'hdr',       label: 'HDR',       wip: true },
+  { id: 'audio',     label: 'Audio',     wip: true },
 ];
 
 const CONTENT_ITEMS: { type: ContentType; label: string; emoji: string }[] = [
@@ -25,15 +25,16 @@ const CONTENT_ITEMS: { type: ContentType; label: string; emoji: string }[] = [
 ];
 
 const PARTICLE_ITEMS: { preset: ParticlePreset; label: string; emoji: string }[] = [
-  { preset: 'fire',  label: '불꽃',      emoji: '🔥' },
-  { preset: 'dust',  label: '먼지',      emoji: '💨' },
-  { preset: 'light', label: '빛 파티클', emoji: '✨' },
-  { preset: 'snow',  label: '눈',        emoji: '❄️' },
+  { preset: 'fire',  label: '불꽃',   emoji: '🔥' },
+  { preset: 'dust',  label: '먼지',   emoji: '💨' },
+  { preset: 'light', label: '빛',     emoji: '✨' },
+  { preset: 'snow',  label: '눈',     emoji: '❄️' },
 ];
 
 export function AssetBrowser() {
   const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject } = useSceneStore();
   const [tab, setTab] = useState<Tab>('models');
+  const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
   const { addToast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -101,103 +102,126 @@ export function AssetBrowser() {
   };
 
   const currentTab = TABS.find((t) => t.id === tab)!;
+  const filteredAssets = search.trim()
+    ? assets.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
+    : assets;
 
   return (
-    <div className="flex items-stretch bg-zinc-950 border-t border-zinc-800 h-full overflow-hidden">
-      {/* 수직 탭 사이드바 */}
-      <div className="flex flex-col border-r border-zinc-800 shrink-0 py-1 gap-0.5">
+    <div className="flex h-full bg-zinc-950 border-t border-zinc-800 overflow-hidden">
+      {/* 왼쪽 세로 탭 사이드바 */}
+      <div className="flex flex-col w-[88px] shrink-0 border-r border-zinc-800/80 py-2 gap-0.5">
+        <p className="px-3 pb-1 text-[9px] font-semibold text-zinc-600 uppercase tracking-widest">Assets</p>
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`relative px-3 py-1.5 text-[10px] font-semibold text-left transition-colors whitespace-nowrap ${
+            className={`mx-1.5 px-2 py-1.5 text-[11px] font-medium text-left rounded-lg transition-all ${
               tab === t.id
-                ? 'text-white bg-zinc-800/80 rounded-md mx-1'
+                ? 'bg-zinc-800 text-white'
                 : t.wip
-                  ? 'text-zinc-600 hover:text-zinc-500 mx-1'
-                  : 'text-zinc-500 hover:text-zinc-300 mx-1'
+                  ? 'text-zinc-700 hover:text-zinc-500 hover:bg-zinc-900/50'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
             }`}
           >
             {t.label}
-            {t.wip && (
-              <span className="ml-1 text-[8px] text-zinc-700 font-normal">•</span>
-            )}
+            {t.wip && <span className="ml-1 text-[8px] opacity-50">·</span>}
           </button>
         ))}
       </div>
 
-      {/* 탭 콘텐츠 */}
-      <div className="flex-1 overflow-hidden">
-        {/* 모델 탭 */}
+      {/* 콘텐츠 영역 */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* 검색창 (Models 탭에서만) */}
         {tab === 'models' && (
-          <div className="flex items-center gap-3 px-4 h-full overflow-x-auto">
-            <input ref={inputRef} type="file" accept=".glb" className="hidden" onChange={handleFileChange} />
-            <button
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading}
-              title=".glb 업로드"
-              className="w-16 h-16 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center text-zinc-600 hover:border-violet-500 hover:text-violet-400 transition-all cursor-pointer shrink-0 gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {uploading ? (
-                <span className="text-xs animate-pulse">...</span>
-              ) : (
-                <><span className="text-xl leading-none">+</span><span className="text-[9px]">.glb</span></>
-              )}
-            </button>
+          <div className="px-3 pt-2 pb-1.5 shrink-0">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="에셋 검색..."
+              className="w-full max-w-xs bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+            />
+          </div>
+        )}
 
-            <div className="flex items-center gap-2 py-2">
-              {assets.map((asset) => (
+        {/* Models */}
+        {tab === 'models' && (
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex items-center gap-2 px-3 pb-2 h-full">
+              <input ref={inputRef} type="file" accept=".glb" className="hidden" onChange={handleFileChange} />
+              {/* 업로드 버튼 */}
+              <button
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+                title=".glb 파일 업로드"
+                className="w-[72px] h-[72px] shrink-0 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center text-zinc-600 hover:border-violet-500 hover:text-violet-400 transition-all gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {uploading ? (
+                  <span className="text-xs animate-pulse">...</span>
+                ) : (
+                  <>
+                    <span className="text-xl leading-none">+</span>
+                    <span className="text-[9px]">.glb</span>
+                  </>
+                )}
+              </button>
+
+              {/* 에셋 목록 */}
+              {filteredAssets.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} onAdd={() => addAssetObject(asset)} />
               ))}
               {assets.length === 0 && (
-                <p className="text-xs text-zinc-600">.glb 파일을 업로드하면 씬에 배치할 수 있습니다</p>
+                <p className="text-[11px] text-zinc-600 ml-2">.glb 파일을 업로드하면 씬에 배치할 수 있습니다</p>
               )}
             </div>
           </div>
         )}
 
-        {/* 콘텐츠 탭 */}
+        {/* Content */}
         {tab === 'content' && (
-          <div className="flex items-center gap-3 px-4 h-full overflow-x-auto">
-            {CONTENT_ITEMS.map(({ type, label, emoji }) => (
-              <button
-                key={type}
-                onClick={() => addContentObject(type)}
-                className="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-600 transition-all shrink-0 flex flex-col items-center justify-center gap-1"
-              >
-                <span className="text-xl leading-none">{emoji}</span>
-                <span className="text-[9px] text-zinc-500">{label}</span>
-              </button>
-            ))}
-            <p className="text-xs text-zinc-600 ml-2">클릭하면 씬에 배치됩니다</p>
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex items-center gap-2 px-3 pb-2 h-full pt-2">
+              {CONTENT_ITEMS.map(({ type, label, emoji }) => (
+                <button
+                  key={type}
+                  onClick={() => addContentObject(type)}
+                  className="w-[72px] h-[72px] shrink-0 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all flex flex-col items-center justify-center gap-1.5"
+                >
+                  <span className="text-xl leading-none">{emoji}</span>
+                  <span className="text-[9px] text-zinc-500">{label}</span>
+                </button>
+              ))}
+              <p className="text-[11px] text-zinc-600 ml-2">클릭하면 씬에 배치됩니다</p>
+            </div>
           </div>
         )}
 
-        {/* 파티클 탭 */}
+        {/* Particle */}
         {tab === 'particle' && (
-          <div className="flex items-center gap-3 px-4 h-full overflow-x-auto">
-            {PARTICLE_ITEMS.map(({ preset, label, emoji }) => (
-              <button
-                key={preset}
-                onClick={() => addParticleObject(preset)}
-                className="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-violet-500/60 transition-all shrink-0 flex flex-col items-center justify-center gap-1"
-              >
-                <span className="text-xl leading-none">{emoji}</span>
-                <span className="text-[9px] text-zinc-500">{label}</span>
-              </button>
-            ))}
-            <p className="text-xs text-zinc-600 ml-2">클릭하면 씬에 파티클이 배치됩니다</p>
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex items-center gap-2 px-3 pb-2 h-full pt-2">
+              {PARTICLE_ITEMS.map(({ preset, label, emoji }) => (
+                <button
+                  key={preset}
+                  onClick={() => addParticleObject(preset)}
+                  className="w-[72px] h-[72px] shrink-0 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-violet-500/60 hover:bg-zinc-800/50 transition-all flex flex-col items-center justify-center gap-1.5"
+                >
+                  <span className="text-xl leading-none">{emoji}</span>
+                  <span className="text-[9px] text-zinc-500">{label}</span>
+                </button>
+              ))}
+              <p className="text-[11px] text-zinc-600 ml-2">클릭하면 씬에 파티클이 배치됩니다</p>
+            </div>
           </div>
         )}
 
-        {/* 준비 중 탭 (재질/텍스처/HDR/오디오) */}
+        {/* 준비 중 탭 */}
         {currentTab.wip && (
-          <div className="flex flex-col items-center justify-center h-full gap-2 select-none">
-            <span className="text-2xl opacity-30">
+          <div className="flex-1 flex flex-col items-center justify-center gap-1.5 select-none">
+            <span className="text-2xl opacity-20">
               {tab === 'materials' ? '🎨' : tab === 'textures' ? '🖼' : tab === 'hdr' ? '🌅' : '🎵'}
             </span>
-            <p className="text-xs text-zinc-600 font-medium">{currentTab.label} — 준비 중</p>
-            <p className="text-[11px] text-zinc-700">곧 지원될 예정입니다</p>
+            <p className="text-[11px] text-zinc-600 font-medium">{currentTab.label} — 준비 중</p>
           </div>
         )}
       </div>
@@ -207,7 +231,7 @@ export function AssetBrowser() {
 
 function AssetCard({ asset, onAdd }: { asset: AssetRefSchema; onAdd: () => void }) {
   return (
-    <div className="group relative w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-600 transition-all shrink-0 flex flex-col items-center justify-center gap-1 overflow-hidden">
+    <div className="group relative w-[72px] h-[72px] shrink-0 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-600 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden">
       <span className="text-2xl leading-none">📦</span>
       <span className="text-[9px] text-zinc-500 truncate w-full text-center px-1">{asset.name}</span>
       <button
