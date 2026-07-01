@@ -50,7 +50,7 @@ export function Tooltip({ content, children, className }: Props) {
         <div
           ref={tipRef}
           style={style}
-          className="px-2.5 py-1 bg-sidebar border border-border text-[11px] font-medium text-foreground rounded-lg whitespace-nowrap pointer-events-none shadow-xl shadow-black/20 transition-opacity duration-100"
+          className="px-2.5 py-1 bg-foreground text-background text-[11px] font-medium rounded-lg whitespace-nowrap pointer-events-none shadow-xl shadow-black/20 transition-opacity duration-100"
         >
           {content}
         </div>,

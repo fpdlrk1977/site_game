@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import { normalizeSceneData } from '@/types/scene';
+import type { PlanTier } from '@/store/userStore';
 import { EditorClient } from './EditorClient';
+import { UserInitializer } from '@/components/ui/UserInitializer';
 
 interface Props {
   params: Promise<{ projectId: string }>;
@@ -13,6 +15,13 @@ export default async function EditorPage({ params }: Props) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+
+  const { data: planData } = await supabase
+    .from('users_plan')
+    .select('plan_tier')
+    .eq('user_id', user.id)
+    .single();
+  const planTier = (planData?.plan_tier ?? 'free') as PlanTier;
 
   // 프로젝트 + 디폴트 씬 조인
   const { data: project } = await supabase
@@ -39,9 +48,12 @@ export default async function EditorPage({ params }: Props) {
   );
 
   return (
-    <EditorClient
-      projectName={project.name}
-      initialScene={initialScene}
-    />
+    <>
+      <UserInitializer userId={user.id} email={user.email ?? ''} planTier={planTier} />
+      <EditorClient
+        projectName={project.name}
+        initialScene={initialScene}
+      />
+    </>
   );
 }

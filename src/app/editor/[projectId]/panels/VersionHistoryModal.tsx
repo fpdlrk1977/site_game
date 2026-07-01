@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function VersionHistoryModal({ onClose }: Props) {
-  const { sceneId, projectId, isModified, loadScene } = useSceneStore();
+  const { sceneId, projectId, isModified, loadScene, markModified } = useSceneStore();
   const [versions, setVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState(true);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -52,6 +52,7 @@ export function VersionHistoryModal({ onClose }: Props) {
         projectId,
         sceneId,
       ));
+      markModified();
       onClose();
     } finally {
       setRestoring(null);

@@ -69,6 +69,7 @@ interface SceneActions {
   undo: () => void;
   redo: () => void;
   markSaved: () => void;
+  markModified: () => void;
   toggleWireframe: () => void;
   addLayer: (name: string) => void;
   toggleLayerVisible: (name: string) => void;
@@ -527,6 +528,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   markSaved: () => set({ isModified: false }),
+  markModified: () => set({ isModified: true }),
   toggleWireframe: () => set((s) => ({ wireframeMode: !s.wireframeMode })),
 
   addLayer: (name) => set((s) => ({
