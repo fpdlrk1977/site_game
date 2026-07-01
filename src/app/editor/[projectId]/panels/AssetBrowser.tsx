@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
+import { tryEmbedTextures } from '@/lib/glbEmbed';
 import type { AssetRefSchema, ContentType, ParticlePreset } from '@/types/scene';
 
 type Tab = 'models' | 'character' | 'content' | 'particle' | 'materials' | 'textures' | 'hdr' | 'audio';
@@ -41,7 +42,7 @@ export function AssetBrowser() {
   const modelInputRef = useRef<HTMLInputElement>(null);
   const characterInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadGlb = async (file: File, assetType: AssetRefSchema['type']) => {
+  const uploadGlb = async (file: File, assetType: AssetRefSchema['type'], textureFiles: File[] = []) => {
     if (!projectId) return;
     if (file.size > 50 * 1024 * 1024) {
       addToast('파일이 너무 큽니다. 최대 50MB까지 지원합니다.', 'error');
@@ -49,6 +50,17 @@ export function AssetBrowser() {
     }
     setUploading(true);
     try {
+      // glb가 텍스처를 외부 파일로 참조하고 있고, 함께 선택한 파일 중 일치하는 게 있으면
+      // 완전히 임베드된 새 glb로 재포장한다. 해당 없음/실패 시 blob은 null → 원본 그대로 업로드.
+      const { blob, embeddedNames, missingNames } = await tryEmbedTextures(file, textureFiles);
+      if (embeddedNames.length > 0) {
+        addToast(`텍스처 ${embeddedNames.length}개를 파일에 포함했습니다: ${embeddedNames.join(', ')}`, 'success');
+      }
+      if (missingNames.length > 0) {
+        addToast(`일부 텍스처를 찾을 수 없어 비어있을 수 있습니다: ${missingNames.join(', ')}`, 'error');
+      }
+      const uploadBody: File | Blob = blob ?? file;
+
       const supabase = createBrowserSupabase();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -56,7 +68,7 @@ export function AssetBrowser() {
       const path = `assets/${projectId}/${assetId}.glb`;
       const { error: storageErr } = await supabase.storage
         .from('assets')
-        .upload(path, file, { contentType: 'model/gltf-binary', upsert: false });
+        .upload(path, uploadBody, { contentType: 'model/gltf-binary', upsert: false });
       if (storageErr) throw storageErr;
       const { data: signedData } = await supabase.storage.from('assets').createSignedUrl(path, 60 * 60 * 24 * 365);
       if (!signedData?.signedUrl) throw new Error('signed URL 생성 실패');
@@ -64,7 +76,7 @@ export function AssetBrowser() {
         id: assetId, project_id: projectId, owner_id: user.id,
         name: file.name.replace(/\.glb$/i, ''),
         file_url: signedData.signedUrl, draco_url: signedData.signedUrl,
-        mime_type: 'model/gltf-binary', size_bytes: file.size,
+        mime_type: 'model/gltf-binary', size_bytes: uploadBody.size,
       });
       if (dbErr) { await supabase.storage.from('assets').remove([path]); throw dbErr; }
       const asset: AssetRefSchema = {
@@ -83,15 +95,27 @@ export function AssetBrowser() {
   };
 
   const handleModelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const fileList = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (file) await uploadGlb(file, 'model');
+    const modelFile = fileList.find((f) => /\.glb$/i.test(f.name));
+    if (!modelFile) {
+      if (fileList.length > 0) addToast('.glb 파일을 선택해주세요.', 'error');
+      return;
+    }
+    const textureFiles = fileList.filter((f) => f !== modelFile);
+    await uploadGlb(modelFile, 'model', textureFiles);
   };
 
   const handleCharacterFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const fileList = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (file) await uploadGlb(file, 'character');
+    const modelFile = fileList.find((f) => /\.glb$/i.test(f.name));
+    if (!modelFile) {
+      if (fileList.length > 0) addToast('.glb 파일을 선택해주세요.', 'error');
+      return;
+    }
+    const textureFiles = fileList.filter((f) => f !== modelFile);
+    await uploadGlb(modelFile, 'character', textureFiles);
   };
 
   const currentTab = TABS.find((t) => t.id === tab)!;
@@ -141,8 +165,12 @@ export function AssetBrowser() {
         {tab === 'models' && (
           <div className="flex-1 overflow-x-auto overflow-y-hidden">
             <div className="flex items-center gap-2 px-3 pb-2 h-full">
-              <input ref={modelInputRef} type="file" accept=".glb" className="hidden" onChange={handleModelFile} />
-              <UploadButton uploading={uploading} onClick={() => modelInputRef.current?.click()} />
+              <input ref={modelInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleModelFile} />
+              <UploadButton
+                uploading={uploading}
+                onClick={() => modelInputRef.current?.click()}
+                title="glb 선택 시 텍스처 이미지 파일도 함께(Ctrl/Cmd로 다중 선택) 고르면 자동으로 파일에 포함됩니다"
+              />
               {filteredModels.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} icon="📦" onAdd={() => addAssetObject(asset)} />
               ))}
@@ -156,8 +184,13 @@ export function AssetBrowser() {
         {tab === 'character' && (
           <div className="flex-1 overflow-x-auto overflow-y-hidden">
             <div className="flex items-center gap-2 px-3 pb-2 h-full">
-              <input ref={characterInputRef} type="file" accept=".glb" className="hidden" onChange={handleCharacterFile} />
-              <UploadButton uploading={uploading} onClick={() => characterInputRef.current?.click()} label="캐릭터" />
+              <input ref={characterInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleCharacterFile} />
+              <UploadButton
+                uploading={uploading}
+                onClick={() => characterInputRef.current?.click()}
+                label="캐릭터"
+                title="glb 선택 시 텍스처 이미지 파일도 함께(Ctrl/Cmd로 다중 선택) 고르면 자동으로 파일에 포함됩니다"
+              />
               {characterAssets.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} icon="🧍" />
               ))}
@@ -217,11 +250,12 @@ export function AssetBrowser() {
   );
 }
 
-function UploadButton({ uploading, onClick, label = '.glb' }: { uploading: boolean; onClick: () => void; label?: string }) {
+function UploadButton({ uploading, onClick, label = '.glb', title }: { uploading: boolean; onClick: () => void; label?: string; title?: string }) {
   return (
     <button
       onClick={onClick}
       disabled={uploading}
+      title={title}
       className="w-[72px] h-[72px] shrink-0 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {uploading ? (
