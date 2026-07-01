@@ -1,139 +1,93 @@
 @import "tailwindcss";
 
-:root {
-  --background: #09090b;
-  --foreground: #d4d4d8;
+/* ── Dark mode: .dark 클래스 기반 ─────────────────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Tier 1: Raw CSS vars in @layer base.
+  :root and .dark share the same specificity (0,1,0), so cascade order within
+  the same layer decides the winner. Placing .dark after :root here guarantees
+  the dark values win when the class is present — no specificity tricks needed.
+*/
+@layer base {
+  :root {
+    --background: #F6F7F9;
+    --surface:    #FFFFFF;
+    --sidebar:    #FBFBFC;
+    --canvas:     #EEF1F4;
+    --border:     #E8EBEF;
+    --foreground: #0F172A;
+    --muted:      #64748B;
+    --primary:    #2563EB;
+    --success:    #22C55E;
+    --warning:    #F59E0B;
+    --danger:     #EF4444;
+  }
+  .dark {
+    --background: #111317;
+    --surface:    #181B21;
+    --sidebar:    #14171C;
+    --canvas:     #0D1015;
+    --border:     #252B34;
+    --foreground: #F8FAFC;
+    --muted:      #94A3B8;
+    --primary:    #3B82F6;
+  }
 }
 
+/*
+  Tier 2: @theme inline maps Tailwind color utilities to the raw vars via var().
+  "inline" causes utilities like bg-background to emit `background-color: var(--background)`
+  instead of a hardcoded hex, so they respond to .dark overrides at runtime.
+*/
 @theme inline {
   --color-background: var(--background);
+  --color-surface:    var(--surface);
+  --color-sidebar:    var(--sidebar);
+  --color-canvas:     var(--canvas);
+  --color-border:     var(--border);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted:      var(--muted);
+  --color-primary:    var(--primary);
+  --color-success:    var(--success);
+  --color-warning:    var(--warning);
+  --color-danger:     var(--danger);
+
+  /* Radius */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Shadow */
+  --shadow-card:     0 1px 2px rgba(15,23,42,.05);
+  --shadow-floating: 0 8px 24px rgba(15,23,42,.08);
+  --shadow-dropdown: 0 12px 32px rgba(15,23,42,.12);
+  --shadow-modal:    0 24px 60px rgba(15,23,42,.18);
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), "Inter", sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
+/* ── Body 기본값 ──────────────────────────────────────────────── */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 
-/* ─────────────────────────────────────────────────────────────
-   라이트 모드 테마 — zinc 색상 스케일 반전
-   컴포넌트 코드 변경 없이 전체 테마 전환
-   ───────────────────────────────────────────────────────────── */
-
-/* 부드러운 전환 */
-[data-theme="light"] * {
-  transition-property: background-color, border-color, color, fill, stroke;
+/* ── 부드러운 테마 전환 ───────────────────────────────────────── */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
   transition-duration: 120ms;
   transition-timing-function: ease;
 }
-/* 3D 캔버스는 제외 */
-[data-theme="light"] canvas {
-  transition: none;
-}
+canvas, * > canvas { transition: none !important; }
 
-/* ── 배경색 ─────────────────────────────────── */
-[data-theme="light"] .bg-zinc-950 { background-color: #ffffff; }   /* 패널 메인 배경 → 화이트 */
-[data-theme="light"] .bg-zinc-900 { background-color: #f5f5f5; }   /* 섹션 헤더 → 아주 연한 회색 */
-[data-theme="light"] .bg-zinc-800 { background-color: #ebebeb; }   /* 입력필드/버튼 배경 */
-[data-theme="light"] .bg-zinc-700 { background-color: #dcdcdc; }
-[data-theme="light"] .bg-zinc-600 { background-color: #a1a1aa; }
-
-/* 배경색 — 불투명도 변형 */
-[data-theme="light"] .bg-zinc-950\/80 { background-color: rgb(255 255 255 / 80%); }
-[data-theme="light"] .bg-zinc-950\/50 { background-color: rgb(255 255 255 / 50%); }
-[data-theme="light"] .bg-zinc-900\/95 { background-color: rgb(255 255 255 / 95%); }
-[data-theme="light"] .bg-zinc-900\/90 { background-color: rgb(255 255 255 / 90%); }
-[data-theme="light"] .bg-zinc-900\/80 { background-color: rgb(255 255 255 / 80%); }
-[data-theme="light"] .bg-zinc-900\/70 { background-color: rgb(245 245 245 / 70%); }
-[data-theme="light"] .bg-zinc-900\/50 { background-color: rgb(245 245 245 / 50%); }
-[data-theme="light"] .bg-zinc-900\/40 { background-color: rgb(245 245 245 / 40%); }
-[data-theme="light"] .bg-zinc-900\/30 { background-color: rgb(245 245 245 / 30%); }
-[data-theme="light"] .bg-zinc-800\/80 { background-color: rgb(235 235 235 / 80%); }
-[data-theme="light"] .bg-zinc-800\/70 { background-color: rgb(235 235 235 / 70%); }
-[data-theme="light"] .bg-zinc-800\/60 { background-color: rgb(235 235 235 / 60%); }
-[data-theme="light"] .bg-zinc-800\/50 { background-color: rgb(235 235 235 / 50%); }
-[data-theme="light"] .bg-zinc-800\/40 { background-color: rgb(235 235 235 / 40%); }
-
-/* ── 텍스트색 ────────────────────────────────── */
-/* white 계열 → 어두운 텍스트로 반전 */
-[data-theme="light"] .text-white  { color: #18181b; }
-[data-theme="light"] .text-zinc-100 { color: #18181b; }
-[data-theme="light"] .text-zinc-200 { color: #27272a; }
-[data-theme="light"] .text-zinc-300 { color: #27272a; }
-[data-theme="light"] .text-zinc-400 { color: #3f3f46; }
-[data-theme="light"] .text-zinc-500 { color: #52525b; }
-[data-theme="light"] .text-zinc-600 { color: #71717a; }
-[data-theme="light"] .text-zinc-700 { color: #a1a1aa; }
-
-/* 유색 배경(버튼 등)에서는 흰색 텍스트 유지 */
-[data-theme="light"] .bg-violet-600.text-white,
-[data-theme="light"] .bg-emerald-600.text-white,
-[data-theme="light"] .bg-cyan-600.text-white,
-[data-theme="light"] .from-violet-600.text-white { color: white; }
-/* 그라디언트 버튼 내부 아이콘/텍스트 */
-[data-theme="light"] .bg-gradient-to-r.text-white { color: white; }
-
-/* ── 테두리색 ───────────────────────────────── */
-[data-theme="light"] .border-zinc-800 { border-color: #d4d4d8; }
-[data-theme="light"] .border-zinc-800\/80 { border-color: rgb(212 212 216 / 80%); }
-[data-theme="light"] .border-zinc-800\/60 { border-color: rgb(212 212 216 / 60%); }
-[data-theme="light"] .border-zinc-800\/50 { border-color: rgb(212 212 216 / 50%); }
-[data-theme="light"] .border-zinc-700 { border-color: #a1a1aa; }
-[data-theme="light"] .border-zinc-700\/80 { border-color: rgb(161 161 170 / 80%); }
-[data-theme="light"] .border-zinc-700\/60 { border-color: rgb(161 161 170 / 60%); }
-[data-theme="light"] .border-zinc-600 { border-color: #71717a; }
-
-/* ── 호버 상태 ──────────────────────────────── */
-[data-theme="light"] .hover\:bg-zinc-900:hover    { background-color: #ececed; }
-[data-theme="light"] .hover\:bg-zinc-800:hover    { background-color: #dadadd; }
-[data-theme="light"] .hover\:bg-zinc-700:hover    { background-color: #d4d4d8; }
-[data-theme="light"] .hover\:text-zinc-300:hover  { color: #18181b; }
-[data-theme="light"] .hover\:text-zinc-400:hover  { color: #27272a; }
-[data-theme="light"] .hover\:text-white:hover     { color: #18181b; }
-/* 유색 배경 위 hover:text-white는 흰색 유지 */
-[data-theme="light"] .bg-violet-600.hover\:text-white:hover,
-[data-theme="light"] .bg-emerald-600.hover\:text-white:hover,
-[data-theme="light"] .bg-cyan-600.hover\:text-white:hover { color: white; }
-
-[data-theme="light"] .hover\:bg-zinc-900\/50:hover { background-color: rgb(236 236 237 / 50%); }
-[data-theme="light"] .hover\:bg-zinc-900\/70:hover { background-color: rgb(236 236 237 / 70%); }
-[data-theme="light"] .hover\:bg-zinc-800\/70:hover { background-color: rgb(218 218 221 / 70%); }
-
-/* ── 포커스 링 ──────────────────────────────── */
-/* violet focus rings 유지 (변경 없음) */
-
-/* ── 입력 필드 텍스트 ────────────────────────── */
-/* bg-zinc-800 → 밝아지므로, text-white 입력 필드는 어두운 텍스트로 */
-[data-theme="light"] input[type="text"],
-[data-theme="light"] input[type="number"],
-[data-theme="light"] input[type="email"],
-[data-theme="light"] input[type="password"],
-[data-theme="light"] select,
-[data-theme="light"] textarea {
-  color: #18181b;
-}
-[data-theme="light"] input[type="text"]::placeholder,
-[data-theme="light"] input[type="number"]::placeholder,
-[data-theme="light"] input[type="email"]::placeholder,
-[data-theme="light"] input[type="password"]::placeholder,
-[data-theme="light"] textarea::placeholder {
-  color: #71717a;
-}
-
-/* ── 플레이스홀더 ────────────────────────────── */
-[data-theme="light"] .placeholder-zinc-600::placeholder { color: #a1a1aa; }
-
-/* ── 플로팅 패널 그림자 완화 ──────────────────── */
-[data-theme="light"] .shadow-black\/50 { --tw-shadow-color: rgb(0 0 0 / 12%); }
-[data-theme="light"] .shadow-black\/40 { --tw-shadow-color: rgb(0 0 0 / 10%); }
-[data-theme="light"] .shadow-black\/30 { --tw-shadow-color: rgb(0 0 0 / 8%); }
-[data-theme="light"] .shadow-black\/60 { --tw-shadow-color: rgb(0 0 0 / 14%); }
-
-/* ── 스크롤바 (라이트 모드) ─────────────────── */
-[data-theme="light"] ::-webkit-scrollbar { width: 6px; height: 6px; }
-[data-theme="light"] ::-webkit-scrollbar-track { background: #f5f5f5; }
-[data-theme="light"] ::-webkit-scrollbar-thumb { background: #d5d5d5; border-radius: 3px; }
-[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #b0b0b0; }
+/* ── 스크롤바 ─────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--background); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }

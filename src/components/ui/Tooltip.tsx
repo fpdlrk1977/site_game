@@ -18,8 +18,8 @@ export function Tooltip({ content, children, side = 'top', className }: Props) {
           absolute ${side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}
           left-1/2 -translate-x-1/2
           px-2.5 py-1
-          bg-zinc-950 border border-zinc-800
-          text-[11px] font-medium text-zinc-200
+          bg-sidebar border border-border
+          text-[11px] font-medium text-foreground
           rounded-lg whitespace-nowrap
           opacity-0 group-hover/tip:opacity-100
           transition-opacity duration-100

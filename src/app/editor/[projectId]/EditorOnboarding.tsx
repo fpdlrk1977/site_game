@@ -67,10 +67,9 @@ export function EditorOnboarding() {
 
   return (
     <div className="fixed bottom-6 right-6 z-50 w-80 pointer-events-auto">
-      {/* 카드 */}
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden">
+      <div className="bg-surface border border-border rounded-2xl shadow-floating overflow-hidden">
         {/* 진행 바 */}
-        <div className="h-0.5 bg-zinc-800">
+        <div className="h-0.5 bg-border">
           <div
             className="h-full bg-gradient-to-r from-violet-500 to-cyan-500 transition-all duration-300"
             style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
@@ -82,14 +81,14 @@ export function EditorOnboarding() {
           <div className="flex items-start gap-3">
             <span className="text-2xl leading-none mt-0.5">{current.icon}</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white leading-snug">{current.title}</p>
+              <p className="text-sm font-semibold text-foreground leading-snug">{current.title}</p>
               {'tip' in current && current.tip && (
-                <p className="text-[10px] text-violet-400 mt-0.5 font-medium">{current.tip}</p>
+                <p className="text-[10px] text-primary mt-0.5 font-medium">{current.tip}</p>
               )}
             </div>
             <button
               onClick={dismiss}
-              className="text-zinc-600 hover:text-zinc-400 transition-colors text-base leading-none shrink-0 mt-0.5"
+              className="text-muted/60 hover:text-muted transition-colors text-base leading-none shrink-0 mt-0.5"
               title="닫기"
             >
               ✕
@@ -97,17 +96,17 @@ export function EditorOnboarding() {
           </div>
 
           {/* 설명 */}
-          <p className="text-zinc-400 text-xs leading-relaxed">{current.desc}</p>
+          <p className="text-muted text-xs leading-relaxed">{current.desc}</p>
 
           {/* 단축키 테이블 */}
           {'table' in current && current.table && (
-            <div className="bg-zinc-800/60 rounded-xl px-3 py-2 space-y-1.5">
+            <div className="bg-background/60 rounded-xl px-3 py-2 space-y-1.5">
               {current.table.map(({ key, label }) => (
                 <div key={key} className="flex items-center gap-2.5">
-                  <kbd className="bg-zinc-700 border border-zinc-600 text-white text-[10px] font-mono px-1.5 py-0.5 rounded min-w-[28px] text-center">
+                  <kbd className="bg-background border border-border text-foreground text-[10px] font-mono px-1.5 py-0.5 rounded min-w-[28px] text-center">
                     {key}
                   </kbd>
-                  <span className="text-zinc-400 text-[11px]">{label}</span>
+                  <span className="text-muted text-[11px]">{label}</span>
                 </div>
               ))}
             </div>
@@ -123,8 +122,8 @@ export function EditorOnboarding() {
                   onClick={() => setStep(i)}
                   className={`rounded-full transition-all ${
                     i === step
-                      ? 'w-4 h-1.5 bg-violet-500'
-                      : 'w-1.5 h-1.5 bg-zinc-700 hover:bg-zinc-500'
+                      ? 'w-4 h-1.5 bg-primary'
+                      : 'w-1.5 h-1.5 bg-border hover:bg-muted/40'
                   }`}
                 />
               ))}
@@ -135,7 +134,7 @@ export function EditorOnboarding() {
               {!isFirst && (
                 <button
                   onClick={() => setStep((s) => s - 1)}
-                  className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
+                  className="px-3 py-1.5 rounded-lg bg-background hover:bg-surface text-foreground text-xs transition-colors"
                 >
                   이전
                 </button>
@@ -150,7 +149,7 @@ export function EditorOnboarding() {
               ) : (
                 <button
                   onClick={() => setStep((s) => s + 1)}
-                  className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
+                  className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/80 text-white text-xs font-semibold transition-colors"
                 >
                   다음
                 </button>
@@ -162,7 +161,7 @@ export function EditorOnboarding() {
           {!isLast && (
             <button
               onClick={dismiss}
-              className="w-full text-center text-[10px] text-zinc-600 hover:text-zinc-500 transition-colors"
+              className="w-full text-center text-[10px] text-muted/60 hover:text-muted transition-colors"
             >
               건너뛰기
             </button>

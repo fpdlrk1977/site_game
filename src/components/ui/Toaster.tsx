@@ -17,7 +17,7 @@ export function Toaster() {
               ? 'bg-red-950/90 border border-red-500/40 text-red-200'
               : t.type === 'success'
               ? 'bg-emerald-950/90 border border-emerald-500/40 text-emerald-200'
-              : 'bg-zinc-800/90 border border-zinc-600/40 text-zinc-200'
+              : 'bg-surface/90 border border-border/60 text-foreground'
           }`}
         >
           <span>

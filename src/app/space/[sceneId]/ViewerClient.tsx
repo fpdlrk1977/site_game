@@ -10,12 +10,12 @@ const ViewerCanvas = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex items-center justify-center bg-zinc-950">
+      <div className="w-full h-full flex items-center justify-center bg-sidebar">
         <div className="text-center">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-2xl mx-auto mb-3 animate-pulse">
             ⬡
           </div>
-          <p className="text-zinc-400 text-sm">3D 공간 로딩 중...</p>
+          <p className="text-muted text-sm">3D 공간 로딩 중...</p>
         </div>
       </div>
     ),
@@ -65,7 +65,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
   };
 
   return (
-    <div className="w-screen h-screen relative overflow-hidden bg-zinc-950">
+    <div className="w-screen h-screen relative overflow-hidden bg-canvas">
       <ViewerCanvas scene={scene} playMode={playMode} onObjectClick={handleObjectEvent} />
 
       {/* 상단 오버레이 */}
@@ -91,7 +91,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
             onClick={() => setPlayMode((v) => !v)}
             className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border backdrop-blur-sm transition-all ${
               playMode
-                ? 'bg-violet-600/80 border-violet-500/50 text-white'
+                ? 'bg-primary/80 border-primary/50 text-white'
                 : 'bg-black/40 border-white/10 text-white/70 hover:bg-black/60'
             }`}
           >
@@ -132,9 +132,9 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setPopup(null)}
           />
-          <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-3">{popup.title}</h3>
-            <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+          <div className="relative bg-surface border border-border rounded-2xl p-6 w-full max-w-md shadow-modal">
+            <h3 className="text-lg font-bold text-foreground mb-3">{popup.title}</h3>
+            <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
               {popup.content}
             </p>
             <button

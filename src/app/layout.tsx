@@ -26,11 +26,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      data-theme="dark"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
-      {/* FOUC 방지 — hydration 전에 localStorage 테마를 읽어 적용 */}
+      {/* FOUC 방지 — hydration 전에 localStorage 테마를 읽어 .dark 클래스 적용 */}
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -38,7 +37,9 @@ export default function RootLayout({
               try {
                 var s = localStorage.getItem('park3d-theme');
                 var t = s ? JSON.parse(s) : null;
-                document.documentElement.setAttribute('data-theme', t && t.state && t.state.theme ? t.state.theme : 'dark');
+                var theme = (t && t.state && t.state.theme) ? t.state.theme : 'dark';
+                if (theme === 'dark') document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
               } catch(e) {}
             `,
           }}

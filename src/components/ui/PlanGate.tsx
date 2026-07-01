@@ -60,11 +60,11 @@ export function UpgradeBanner({ requiredPlan = 'pro', compact = false }: Upgrade
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-zinc-800 bg-zinc-900/50 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-border bg-surface/50 text-center">
       <span className={`text-xs font-bold px-2.5 py-1 rounded-full bg-gradient-to-r ${gradientClass} text-white`}>
         {PLAN_LABELS[requiredPlan]} 플랜 필요
       </span>
-      <p className="text-xs text-zinc-500 leading-relaxed">
+      <p className="text-xs text-muted leading-relaxed">
         이 기능은 {PLAN_LABELS[requiredPlan]} 이상 플랜에서 사용할 수 있습니다.
       </p>
       <a

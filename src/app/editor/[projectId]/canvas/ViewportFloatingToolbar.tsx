@@ -12,14 +12,14 @@ function Tip({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="relative group/tip">
       {children}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-zinc-950 border border-zinc-800 text-[10px] font-medium text-zinc-200 rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity duration-100 pointer-events-none z-[200] shadow-xl shadow-black/60">
+      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-sidebar border border-border text-[10px] font-medium text-foreground rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity duration-100 pointer-events-none z-[200] shadow-xl shadow-black/20">
         {label}
       </div>
     </div>
   );
 }
 
-const SEP = <div className="w-px h-4 bg-zinc-700/60 shrink-0" />;
+const SEP = <div className="w-px h-4 bg-border/60 shrink-0" />;
 
 const SHAPES: { shape: PrimitiveShape; label: string; icon: string }[] = [
   { shape: 'box',      label: '박스',   icon: '⬛' },
@@ -59,18 +59,18 @@ export function ViewportFloatingToolbar() {
 
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-      <div className="flex items-center gap-1 px-2 py-1.5 bg-zinc-900/95 backdrop-blur-sm border border-zinc-700/80 rounded-xl shadow-2xl shadow-black/50 pointer-events-auto select-none">
+      <div className="flex items-center gap-1 px-2 py-1.5 bg-surface/95 backdrop-blur-sm border border-border/80 rounded-xl shadow-floating pointer-events-auto select-none">
 
         {/* Transform 모드 */}
-        <div className="flex items-center bg-zinc-800/50 rounded-lg p-0.5 gap-0.5">
+        <div className="flex items-center bg-background/50 rounded-lg p-0.5 gap-0.5">
           {MODE_BTNS.map(({ mode, icon, title }) => (
             <Tip key={mode} label={title}>
               <button
                 onClick={() => setTransformMode(mode)}
                 className={`w-7 h-7 rounded-md flex items-center justify-center transition-all ${
                   transformMode === mode
-                    ? 'bg-violet-600 text-white shadow-md shadow-violet-500/30'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                    ? 'bg-primary text-white shadow-md shadow-primary/30'
+                    : 'text-muted hover:text-foreground hover:bg-background'
                 }`}
               >
                 {icon}
@@ -83,7 +83,7 @@ export function ViewportFloatingToolbar() {
         <Tip label={transformSpace === 'world' ? '월드 → 로컬' : '로컬 → 월드'}>
           <button
             onClick={() => setTransformSpace(transformSpace === 'world' ? 'local' : 'world')}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:text-foreground hover:bg-background transition-all"
           >
             {transformSpace === 'world' ? <Globe size={13} /> : <Crosshair size={13} />}
           </button>
@@ -92,14 +92,14 @@ export function ViewportFloatingToolbar() {
         {SEP}
 
         {/* 스냅 */}
-        <div className="flex items-center bg-zinc-800/50 rounded-lg p-0.5 gap-0.5">
+        <div className="flex items-center bg-background/50 rounded-lg p-0.5 gap-0.5">
           <Tip label={snapEnabled ? '스냅 끄기' : '스냅 켜기'}>
             <button
               onClick={() => setSnap(!snapEnabled)}
               className={`w-7 h-7 rounded-md flex items-center justify-center transition-all ${
                 snapEnabled
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                  ? 'bg-success text-white shadow-md shadow-success/30'
+                  : 'text-muted hover:text-foreground hover:bg-background'
               }`}
             >
               <Grid3x3 size={12} />
@@ -111,8 +111,8 @@ export function ViewportFloatingToolbar() {
                 onClick={() => setSnap(true, step)}
                 className={`px-1.5 h-7 rounded-md text-[10px] font-mono transition-all ${
                   snapEnabled && snapTranslate === step
-                    ? 'bg-zinc-600 text-white'
-                    : 'text-zinc-500 hover:text-white hover:bg-zinc-700'
+                    ? 'bg-border text-foreground'
+                    : 'text-muted hover:text-foreground hover:bg-background'
                 }`}
               >
                 {step}
@@ -129,7 +129,7 @@ export function ViewportFloatingToolbar() {
             <Tip key={shape} label={`${label} 추가`}>
               <button
                 onClick={() => addObject(shape)}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all text-sm"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all text-sm"
               >
                 {icon}
               </button>
@@ -146,7 +146,7 @@ export function ViewportFloatingToolbar() {
             className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
               wireframeMode
                 ? 'bg-cyan-600 text-white shadow-md shadow-cyan-500/20'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-muted hover:text-foreground hover:bg-background'
             }`}
           >
             {wireframeMode ? <Layers size={13} /> : <Box size={13} />}
@@ -156,11 +156,11 @@ export function ViewportFloatingToolbar() {
         {SEP}
 
         {/* Undo / Redo */}
-        <div className="flex items-center bg-zinc-800/50 rounded-lg p-0.5 gap-0.5">
+        <div className="flex items-center bg-background/50 rounded-lg p-0.5 gap-0.5">
           <Tip label="실행 취소 (Ctrl+Z)">
             <button
               onClick={undo}
-              className="w-7 h-7 rounded-md flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all"
+              className="w-7 h-7 rounded-md flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
             >
               <Undo2 size={13} />
             </button>
@@ -168,7 +168,7 @@ export function ViewportFloatingToolbar() {
           <Tip label="다시 실행 (Ctrl+Y)">
             <button
               onClick={redo}
-              className="w-7 h-7 rounded-md flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all"
+              className="w-7 h-7 rounded-md flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
             >
               <Redo2 size={13} />
             </button>
@@ -186,25 +186,25 @@ export function ViewportFloatingToolbar() {
               className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
                 canAlign
                   ? showAlign
-                    ? 'bg-violet-600 text-white'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                  : 'text-zinc-700 cursor-not-allowed'
+                    ? 'bg-primary text-white'
+                    : 'text-muted hover:text-foreground hover:bg-background'
+                  : 'text-muted/30 cursor-not-allowed'
               }`}
             >
               <AlignCenter size={13} />
             </button>
           </Tip>
           {showAlign && canAlign && (
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 p-2 min-w-[160px]">
-              <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider px-1 mb-1.5">정렬</div>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-surface border border-border rounded-xl shadow-dropdown z-50 p-2 min-w-[160px]">
+              <div className="text-[10px] font-semibold text-muted uppercase tracking-wider px-1 mb-1.5">정렬</div>
               {([
                 { axis: 'x' as const, label: 'X', min: '좌', ctr: '중', max: '우' },
                 { axis: 'y' as const, label: 'Y', min: '하', ctr: '중', max: '상' },
                 { axis: 'z' as const, label: 'Z', min: '전', ctr: '중', max: '후' },
               ]).map(({ axis, label, min, ctr, max }) => (
                 <div key={axis} className="flex items-center gap-1.5 py-0.5">
-                  <span className="text-[10px] font-mono text-zinc-500 w-4 shrink-0">{label}</span>
-                  <div className="flex items-center bg-zinc-800 rounded-md p-0.5 gap-0.5 flex-1">
+                  <span className="text-[10px] font-mono text-muted w-4 shrink-0">{label}</span>
+                  <div className="flex items-center bg-background rounded-md p-0.5 gap-0.5 flex-1">
                     {([
                       { mode: 'min' as const, label: min },
                       { mode: 'center' as const, label: ctr },
@@ -213,7 +213,7 @@ export function ViewportFloatingToolbar() {
                       <button
                         key={mode}
                         onClick={() => { alignSelected(axis, mode); setShowAlign(false); }}
-                        className="flex-1 h-6 rounded text-[10px] font-medium text-zinc-400 hover:bg-violet-600 hover:text-white transition-all"
+                        className="flex-1 h-6 rounded text-[10px] font-medium text-muted hover:bg-primary hover:text-white transition-all"
                       >
                         {ml}
                       </button>

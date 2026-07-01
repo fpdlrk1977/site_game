@@ -27,10 +27,10 @@ function TemplatePickerModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white">씬 템플릿 선택</h3>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">✕</button>
+      <div className="relative bg-surface border border-border rounded-2xl w-full max-w-lg shadow-modal overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="text-sm font-bold text-foreground">씬 템플릿 선택</h3>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors">✕</button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -42,20 +42,20 @@ function TemplatePickerModal({
                 onClick={() => setSelected(t.id)}
                 className={`p-3 rounded-xl border text-left transition-all ${
                   selected === t.id
-                    ? 'border-violet-500 bg-violet-600/20'
-                    : 'border-zinc-700 hover:border-zinc-600 bg-zinc-800/50'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:border-border/60 bg-background/50'
                 }`}
               >
                 <div className="text-2xl mb-1.5">{t.emoji}</div>
-                <p className="text-xs font-semibold text-white">{t.name}</p>
-                <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">{t.description}</p>
+                <p className="text-xs font-semibold text-foreground">{t.name}</p>
+                <p className="text-[10px] text-muted mt-0.5 leading-relaxed">{t.description}</p>
               </button>
             ))}
           </div>
 
           {/* 씬 이름 */}
           <div>
-            <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">
+            <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1.5">
               씬 이름
             </label>
             <input
@@ -63,7 +63,7 @@ function TemplatePickerModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && name.trim() && onSelect(selected, name.trim())}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="씬 이름..."
               autoFocus
             />
@@ -73,7 +73,7 @@ function TemplatePickerModal({
         <div className="px-5 pb-4 flex gap-2 justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm text-zinc-400 hover:bg-zinc-800 transition-colors"
+            className="px-4 py-2 rounded-xl text-sm text-muted hover:bg-background transition-colors"
           >
             취소
           </button>
@@ -192,16 +192,16 @@ export function SceneSwitcher() {
         <button
           onClick={() => setOpen(!open)}
           disabled={busy}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors text-xs max-w-[140px] disabled:opacity-50"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-background text-foreground hover:bg-surface transition-colors text-xs max-w-[140px] disabled:opacity-50"
         >
-          <span className="text-[10px] text-zinc-500 shrink-0">씬</span>
+          <span className="text-[10px] text-muted shrink-0">씬</span>
           <span className="truncate flex-1 text-left">{currentScene?.name ?? '...'}</span>
-          <span className="text-zinc-500 shrink-0">▾</span>
+          <span className="text-muted shrink-0">▾</span>
         </button>
 
         {open && (
-          <div className="absolute top-full left-0 mt-1 w-52 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-50 py-1 overflow-hidden">
-            <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+          <div className="absolute top-full left-0 mt-1 w-52 bg-surface border border-border rounded-xl shadow-dropdown z-50 py-1 overflow-hidden">
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider">
               씬 목록
             </div>
             {scenes.map((scene) => (
@@ -210,8 +210,8 @@ export function SceneSwitcher() {
                   onClick={() => switchScene(scene.id)}
                   className={`flex-1 text-left px-3 py-2 text-xs transition-colors ${
                     scene.id === sceneId
-                      ? 'text-violet-400 bg-violet-600/20'
-                      : 'text-zinc-200 hover:bg-zinc-700'
+                      ? 'text-primary bg-primary/10'
+                      : 'text-foreground hover:bg-background'
                   }`}
                 >
                   {scene.id === sceneId && <span className="mr-1.5 opacity-70">✓</span>}
@@ -220,18 +220,18 @@ export function SceneSwitcher() {
                 {scene.id !== sceneId && (
                   <button
                     onClick={() => deleteScene(scene.id, scene.name)}
-                    className="hidden group-hover:flex w-7 items-center justify-center py-2 text-zinc-600 hover:text-red-400 transition-colors text-xs"
+                    className="hidden group-hover:flex w-7 items-center justify-center py-2 text-muted/60 hover:text-danger transition-colors text-xs"
                   >
                     ✕
                   </button>
                 )}
               </div>
             ))}
-            <div className="border-t border-zinc-700 my-1" />
+            <div className="border-t border-border my-1" />
             <button
               onClick={handleAddScene}
               disabled={busy}
-              className="w-full text-left px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-700 hover:text-white transition-colors flex items-center gap-1.5 disabled:opacity-40"
+              className="w-full text-left px-3 py-2 text-xs text-muted hover:bg-background hover:text-foreground transition-colors flex items-center gap-1.5 disabled:opacity-40"
             >
               <span>+</span> 새 씬 추가
               {!can('multiScene') && (

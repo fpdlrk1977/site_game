@@ -54,11 +54,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       {/* 배경 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-cyan-600/20 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
@@ -67,45 +67,45 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-500 mb-4 shadow-lg shadow-violet-500/25">
             <span className="text-3xl">⬡</span>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Park3D</h1>
-          <p className="text-zinc-400 text-sm mt-1">노코드 3D 공간 제작 플랫폼</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Park3D</h1>
+          <p className="text-muted text-sm mt-1">노코드 3D 공간 제작 플랫폼</p>
         </div>
 
         {/* 카드 */}
-        <div className="bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-lg font-semibold text-white mb-6">
+        <div className="bg-surface/80 backdrop-blur-sm border border-border rounded-2xl p-8 shadow-modal">
+          <h2 className="text-lg font-semibold text-foreground mb-6">
             {isSignUp ? '새 계정 만들기' : '로그인'}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1.5">이메일</label>
+              <label className="block text-sm font-medium text-muted mb-1.5">이메일</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="hello@example.com"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+                className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-foreground placeholder-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1.5">비밀번호</label>
+              <label className="block text-sm font-medium text-muted mb-1.5">비밀번호</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+                className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-foreground placeholder-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
               />
             </div>
 
             {message && (
               <p className={`text-sm rounded-lg px-3 py-2 ${
                 message.type === 'error'
-                  ? 'text-red-400 bg-red-400/10 border border-red-400/20'
+                  ? 'text-danger bg-danger/10 border border-danger/20'
                   : 'text-cyan-400 bg-cyan-400/10 border border-cyan-400/20'
               }`}>
                 {message.text}
@@ -124,7 +124,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <button
               onClick={() => { setIsSignUp(!isSignUp); setMessage(null); }}
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
+              className="text-sm text-muted hover:text-foreground transition-colors"
             >
               {isSignUp ? '이미 계정이 있으신가요? 로그인' : '계정이 없으신가요? 회원가입'}
             </button>

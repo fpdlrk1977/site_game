@@ -16,7 +16,6 @@ function getIcon(obj: ObjectNodeSchema) {
   return SHAPE_ICONS[obj.primitiveShape ?? ''] ?? '○';
 }
 
-// 트리를 펼쳐진 상태 기준으로 선형화 (range 선택용)
 function buildFlatList(
   all: ObjectNodeSchema[],
   parentId: string | null,
@@ -74,9 +73,9 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
         className={`flex items-center gap-1.5 pr-2 py-[3px] rounded-md cursor-pointer group transition-all text-xs ${
           isSelected
-            ? 'bg-violet-600/25 text-white'
-            : 'text-zinc-300 hover:bg-zinc-800/70'
-        } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-zinc-500' : ''}`}
+            ? 'bg-primary/20 text-foreground'
+            : 'text-foreground/70 hover:bg-surface'
+        } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-muted' : ''}`}
       >
         {/* 깊이 인덴트 + 트리 라인 */}
         {Array.from({ length: depth }).map((_, i) => (
@@ -85,9 +84,9 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
             className="shrink-0 w-4 self-stretch relative"
             style={{ marginLeft: i === 0 ? 8 : 0 }}
           >
-            <span className="absolute left-[7px] top-0 bottom-0 w-px bg-zinc-800" />
+            <span className="absolute left-[7px] top-0 bottom-0 w-px bg-border" />
             {i === depth - 1 && (
-              <span className="absolute left-[7px] top-1/2 w-2 h-px bg-zinc-800" />
+              <span className="absolute left-[7px] top-1/2 w-2 h-px bg-border" />
             )}
           </span>
         ))}
@@ -97,7 +96,7 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
           {hasChildren ? (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-              className="w-4 h-4 flex items-center justify-center text-[9px] text-zinc-500 hover:text-zinc-300 transition-colors rounded"
+              className="w-4 h-4 flex items-center justify-center text-[9px] text-muted hover:text-foreground transition-colors rounded"
             >
               {isExpanded ? '▾' : '▸'}
             </button>
@@ -123,10 +122,10 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
               if (e.key === 'Escape') { setNameValue(obj.name); setEditing(false); }
             }}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0 text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+            className="flex-1 bg-background border border-border rounded px-1.5 py-0 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
         ) : (
-          <span className={`flex-1 truncate text-[11px] font-medium ${isSelected ? 'text-white' : 'text-zinc-300'}`}>
+          <span className={`flex-1 truncate text-[11px] font-medium ${isSelected ? 'text-foreground' : 'text-foreground/70'}`}>
             {obj.name}
           </span>
         )}
@@ -135,14 +134,14 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); }}
-            className="w-5 h-5 flex items-center justify-center text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+            className="w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded"
             title={obj.visible ? '숨기기' : '표시'}
           >
             <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); }}
-            className="w-5 h-5 flex items-center justify-center text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+            className="w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded"
             title={obj.locked ? '잠금 해제' : '잠금'}
           >
             <span className="text-[10px]">{obj.locked ? '🔒' : '🔓'}</span>
@@ -154,38 +153,38 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
       {menuOpen && isSelected && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute left-2 top-full mt-0.5 w-44 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-2xl shadow-black/50 z-50 py-1 overflow-hidden">
+          <div className="absolute left-2 top-full mt-0.5 w-44 bg-surface border border-border rounded-xl shadow-2xl shadow-black/30 z-50 py-1 overflow-hidden">
             {!obj.isGroup && (
               <button
                 onClick={() => { setMenuOpen(false); setEditing(true); }}
-                className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+                className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
               >
-                <span className="text-zinc-500">✏</span> 이름 변경
+                <span className="text-muted">✏</span> 이름 변경
               </button>
             )}
             {obj.isGroup && (
               <button
                 onClick={() => { ungroupSelected(); setMenuOpen(false); }}
-                className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+                className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
               >
-                <span className="text-zinc-500">⊞</span> 그룹 해제
-                <span className="ml-auto text-zinc-600 text-[10px]">⌃⇧G</span>
+                <span className="text-muted">⊞</span> 그룹 해제
+                <span className="ml-auto text-muted/60 text-[10px]">⌃⇧G</span>
               </button>
             )}
             <button
               onClick={() => { duplicateSelected(); setMenuOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
-              <span className="text-zinc-500">⎘</span> 복제
-              <span className="ml-auto text-zinc-600 text-[10px]">⌃D</span>
+              <span className="text-muted">⎘</span> 복제
+              <span className="ml-auto text-muted/60 text-[10px]">⌃D</span>
             </button>
-            <div className="border-t border-zinc-800 my-1" />
+            <div className="border-t border-border my-1" />
             <button
               onClick={() => { deleteSelected(); setMenuOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-800 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-background transition-colors flex items-center gap-2"
             >
               <span>✕</span> 삭제
-              <span className="ml-auto text-zinc-600 text-[10px]">Del</span>
+              <span className="ml-auto text-muted/60 text-[10px]">Del</span>
             </button>
           </div>
         </>
@@ -207,12 +206,10 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
       return next;
     });
 
-  // 검색 시 모든 그룹 자동 펼침
   const allObjects = search.trim()
     ? objects.filter((o) => o.name.toLowerCase().includes(search.toLowerCase()))
     : objects;
 
-  // 펼쳐진 트리의 선형 목록 (range 선택용)
   const flatList = buildFlatList(
     search.trim() ? objects : allObjects,
     null,
@@ -265,13 +262,13 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
       <div className="px-2 pt-2 pb-1 shrink-0">
         <input type="text" placeholder="검색..." value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+          className="w-full bg-background border border-border rounded-lg px-2.5 py-1 text-xs text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
         />
       </div>
       <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
         {objects.filter((o) => o.parentId === null).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <p className="text-zinc-600 text-xs leading-relaxed">오브젝트가 없습니다.</p>
+            <p className="text-muted text-xs leading-relaxed">오브젝트가 없습니다.</p>
           </div>
         ) : (
           renderTree(null, 0)
@@ -283,9 +280,9 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   if (noWrapper) return <>{inner}</>;
 
   return (
-    <aside className="flex flex-col bg-zinc-950 border-r border-zinc-800 overflow-hidden h-full">
-      <div className="px-3 py-2 border-b border-zinc-800 shrink-0">
-        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+    <aside className="flex flex-col bg-sidebar border-r border-border overflow-hidden h-full">
+      <div className="px-3 py-2 border-b border-border shrink-0">
+        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
           오브젝트 ({objects.length})
         </span>
       </div>

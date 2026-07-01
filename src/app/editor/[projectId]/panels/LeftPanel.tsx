@@ -75,15 +75,15 @@ function AssetsTabContent() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* 에셋 탭 */}
-      <div className="flex gap-0.5 px-2 pt-2 pb-1.5 border-b border-zinc-800/60 shrink-0">
+      <div className="flex gap-0.5 px-2 pt-2 pb-1.5 border-b border-border/60 shrink-0">
         {ASSET_TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setAssetTab(t.id)}
             className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-all ${
               assetTab === t.id
-                ? 'bg-zinc-800 text-white'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
+                ? 'bg-background text-foreground'
+                : 'text-muted hover:text-foreground hover:bg-surface'
             }`}
           >
             {t.label}
@@ -97,11 +97,10 @@ function AssetsTabContent() {
           <>
             <input ref={inputRef} type="file" accept=".glb" className="hidden" onChange={handleFileChange} />
             <div className="grid grid-cols-2 gap-2">
-              {/* 업로드 버튼 */}
               <button
                 onClick={() => inputRef.current?.click()}
                 disabled={uploading}
-                className="h-[72px] rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center text-zinc-600 hover:border-violet-500 hover:text-violet-400 transition-all gap-0.5 disabled:opacity-40"
+                className="h-[72px] rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40"
               >
                 {uploading ? (
                   <span className="text-xs animate-pulse">...</span>
@@ -112,23 +111,22 @@ function AssetsTabContent() {
                   </>
                 )}
               </button>
-              {/* 에셋 타일 */}
               {assets.map((asset) => (
                 <button
                   key={asset.id}
                   onClick={() => addAssetObject(asset)}
                   title={asset.name}
-                  className="group relative h-[72px] rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-600 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
+                  className="group relative h-[72px] rounded-xl bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
                 >
                   <span className="text-xl leading-none">📦</span>
-                  <span className="text-[9px] text-zinc-500 truncate w-full text-center px-1">{asset.name}</span>
-                  <div className="absolute inset-0 bg-violet-600/0 group-hover:bg-violet-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white text-[10px] font-medium">
+                  <span className="text-[9px] text-muted truncate w-full text-center px-1">{asset.name}</span>
+                  <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white text-[10px] font-medium">
                     + 추가
                   </div>
                 </button>
               ))}
               {assets.length === 0 && (
-                <p className="col-span-2 text-[10px] text-zinc-600 text-center py-4 leading-relaxed">
+                <p className="col-span-2 text-[10px] text-muted text-center py-4 leading-relaxed">
                   .glb 파일을 업로드하면<br />여기에 표시됩니다
                 </p>
               )}
@@ -142,10 +140,10 @@ function AssetsTabContent() {
               <button
                 key={type}
                 onClick={() => addContentObject(type)}
-                className="h-[72px] rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all flex flex-col items-center justify-center gap-1.5"
+                className="h-[72px] rounded-xl bg-background border border-border hover:border-border/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
               >
                 <span className="text-xl leading-none">{emoji}</span>
-                <span className="text-[9px] text-zinc-500">{label}</span>
+                <span className="text-[9px] text-muted">{label}</span>
               </button>
             ))}
           </div>
@@ -157,10 +155,10 @@ function AssetsTabContent() {
               <button
                 key={preset}
                 onClick={() => addParticleObject(preset)}
-                className="h-[72px] rounded-xl bg-zinc-900 border border-zinc-800 hover:border-violet-500/60 hover:bg-zinc-800/50 transition-all flex flex-col items-center justify-center gap-1.5"
+                className="h-[72px] rounded-xl bg-background border border-border hover:border-primary/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
               >
                 <span className="text-xl leading-none">{emoji}</span>
-                <span className="text-[9px] text-zinc-500">{label}</span>
+                <span className="text-[9px] text-muted">{label}</span>
               </button>
             ))}
           </div>
@@ -175,34 +173,34 @@ export function LeftPanel() {
   const { objects } = useSceneStore();
 
   return (
-    <div className="flex flex-col bg-zinc-950 border-r border-zinc-800 overflow-hidden h-full">
+    <div className="flex flex-col bg-sidebar border-r border-border overflow-hidden h-full">
       {/* 탭 헤더 */}
-      <div className="flex items-center gap-0 border-b border-zinc-800 shrink-0 px-2 pt-1.5">
+      <div className="flex items-center gap-0 border-b border-border shrink-0 px-2 pt-1.5">
         <button
           onClick={() => setTab('objects')}
           className={`relative px-3 pb-1.5 pt-1 text-[11px] font-semibold transition-all ${
             tab === 'objects'
-              ? 'text-white'
-              : 'text-zinc-500 hover:text-zinc-300'
+              ? 'text-foreground'
+              : 'text-muted hover:text-foreground'
           }`}
         >
           Objects
           {tab === 'objects' && (
-            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-violet-500 rounded-t-full" />
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-t-full" />
           )}
-          <span className="ml-1 text-[9px] text-zinc-600 font-normal">{objects.length}</span>
+          <span className="ml-1 text-[9px] text-muted/60 font-normal">{objects.length}</span>
         </button>
         <button
           onClick={() => setTab('assets')}
           className={`relative px-3 pb-1.5 pt-1 text-[11px] font-semibold transition-all ${
             tab === 'assets'
-              ? 'text-white'
-              : 'text-zinc-500 hover:text-zinc-300'
+              ? 'text-foreground'
+              : 'text-muted hover:text-foreground'
           }`}
         >
           Assets
           {tab === 'assets' && (
-            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-violet-500 rounded-t-full" />
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-t-full" />
           )}
         </button>
       </div>

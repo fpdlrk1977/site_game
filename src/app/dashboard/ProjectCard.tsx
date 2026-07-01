@@ -62,17 +62,17 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
   });
 
   return (
-    <div className={`group relative bg-zinc-900 border border-zinc-800 rounded-2xl transition-all duration-200 hover:border-zinc-700 hover:shadow-xl hover:shadow-black/40 hover:-translate-y-0.5 ${deleting ? 'opacity-40 pointer-events-none' : ''}`}>
+    <div className={`group relative bg-surface border border-border rounded-2xl transition-all duration-200 hover:border-border/60 hover:shadow-xl hover:shadow-black/10 hover:-translate-y-0.5 ${deleting ? 'opacity-40 pointer-events-none' : ''}`}>
       {/* 썸네일 */}
-      <Link href={`/editor/${project.id}`} className="block relative aspect-video bg-zinc-800 overflow-hidden rounded-t-2xl">
+      <Link href={`/editor/${project.id}`} className="block relative aspect-video bg-background overflow-hidden rounded-t-2xl">
         {project.thumbnail_url ? (
           <img src={project.thumbnail_url} alt={project.name} className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-700/60 flex items-center justify-center text-3xl opacity-50 group-hover:opacity-70 transition-opacity">
+            <div className="w-16 h-16 rounded-2xl bg-muted/20 flex items-center justify-center text-3xl opacity-50 group-hover:opacity-70 transition-opacity">
               🌐
             </div>
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-900/20 to-cyan-900/20" />
+            <div className="absolute inset-0 bg-gradient-to-br from-violet-900/10 to-cyan-900/10" />
           </div>
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -84,13 +84,13 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
         <div className={`absolute top-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full ${
           project.is_published
             ? 'bg-emerald-500/90 text-white'
-            : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700'
+            : 'bg-surface/80 text-muted border border-border'
         }`}>
           {project.is_published ? '공개' : '비공개'}
         </div>
         {/* 커스텀 도메인 배지 */}
         {project.custom_domain && (
-          <div className="absolute top-2 right-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/80 text-white">
+          <div className="absolute top-2 right-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/80 text-white">
             {project.custom_domain}
           </div>
         )}
@@ -109,15 +109,15 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
                 if (e.key === 'Enter') handleRename();
                 if (e.key === 'Escape') { setNameValue(project.name); setRenaming(false); }
               }}
-              className="w-full bg-zinc-800 border border-violet-500 rounded-lg px-2 py-0.5 text-sm text-white focus:outline-none"
+              className="w-full bg-background border border-primary rounded-lg px-2 py-0.5 text-sm text-foreground focus:outline-none"
             />
           ) : (
-            <p className="text-sm font-medium text-white truncate">{project.name}</p>
+            <p className="text-sm font-medium text-foreground truncate">{project.name}</p>
           )}
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-xs text-zinc-500">{updatedDate} 수정</p>
+            <p className="text-xs text-muted">{updatedDate} 수정</p>
             {showAnalytics && (
-              <span className="text-[10px] text-zinc-500">
+              <span className="text-[10px] text-muted">
                 · 방문 {viewCount.toLocaleString()}회
               </span>
             )}
@@ -128,49 +128,49 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
         <div ref={menuRef} className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-700 transition-all opacity-0 group-hover:opacity-100"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all opacity-0 group-hover:opacity-100"
           >
             ···
           </button>
           {menuOpen && (
-            <div className="absolute right-0 bottom-full mb-1 w-40 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl overflow-hidden z-10 py-1">
+            <div className="absolute right-0 bottom-full mb-1 w-40 bg-surface border border-border rounded-xl shadow-dropdown overflow-hidden z-10 py-1">
               <Link
                 href={`/editor/${project.id}`}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
                 <span>✏️</span> 편집하기
               </Link>
               <button
                 onClick={() => { setMenuOpen(false); setRenaming(true); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
                 <span>✏</span> 이름 변경
               </button>
               {project.default_scene_id && (
                 <button
                   onClick={() => { setMenuOpen(false); setSharing(true); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
                 >
                   <span>🔗</span> 공유하기
                 </button>
               )}
               <button
                 onClick={() => { setMenuOpen(false); setDomainOpen(true); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
                 <span>🌐</span> 커스텀 도메인
               </button>
               <button
                 onClick={() => { setMenuOpen(false); togglePublish(project.id, !project.is_published); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
                 <span>{project.is_published ? '🔒' : '🌐'}</span>
                 {project.is_published ? '비공개로 전환' : '공개 배포'}
               </button>
-              <div className="border-t border-zinc-700 my-1" />
+              <div className="border-t border-border my-1" />
               <button
                 onClick={handleDelete}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-zinc-700 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-background transition-colors"
               >
                 <span>🗑</span> 삭제
               </button>

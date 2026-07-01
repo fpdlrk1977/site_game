@@ -21,7 +21,7 @@ function Tip({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="relative group/tip">
       {children}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-zinc-950 border border-zinc-800 text-[11px] font-medium text-zinc-200 rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity duration-100 pointer-events-none z-[100] shadow-xl shadow-black/60">
+      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 bg-sidebar border border-border text-[11px] font-medium text-foreground rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity duration-100 pointer-events-none z-[100] shadow-xl shadow-black/20">
         {label}
       </div>
     </div>
@@ -101,34 +101,34 @@ export function ViewportToolbar({ projectName }: Props) {
 
   return (
     <>
-      <header className="flex items-center gap-2 px-3 h-full bg-zinc-900 border-b border-zinc-800/80 select-none overflow-hidden">
+      <header className="flex items-center gap-2 px-3 h-full bg-surface border-b border-border/80 select-none">
 
         {/* 왼쪽: 네비게이션 + 프로젝트/씬 */}
         <Tip label="대시보드로 이동">
           <Link
             href="/dashboard"
-            className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all shrink-0"
+            className="w-7 h-7 flex items-center justify-center text-muted hover:text-foreground hover:bg-background rounded-lg transition-all shrink-0"
           >
             <ArrowLeft size={15} />
           </Link>
         </Tip>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold shadow-md shadow-violet-500/30">
+          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold shadow-md shadow-primary/30">
             ⬡
           </div>
-          <span className="text-xs font-bold text-zinc-300 hidden xl:block">Park3D</span>
+          <span className="text-xs font-bold text-foreground hidden xl:block">Park3D</span>
         </div>
 
-        <div className="w-px h-4 bg-zinc-800 shrink-0" />
+        <div className="w-px h-4 bg-border shrink-0" />
 
         <div className="flex items-center gap-1.5 min-w-0 shrink">
-          <span className="text-sm font-medium text-zinc-300 truncate max-w-[90px] hidden lg:block">{projectName}</span>
-          <span className="text-zinc-600 text-xs hidden lg:block">—</span>
+          <span className="text-sm font-medium text-foreground truncate max-w-[90px] hidden lg:block">{projectName}</span>
+          <span className="text-muted text-xs hidden lg:block">—</span>
           <SceneSwitcher />
           {isModified && (
             <Tip label="저장되지 않은 변경사항">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0 animate-pulse" />
             </Tip>
           )}
         </div>
@@ -139,7 +139,7 @@ export function ViewportToolbar({ projectName }: Props) {
         <Tip label="버전 히스토리">
           <button
             onClick={() => setShowHistory(true)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-white transition-all shrink-0"
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0"
           >
             <History size={14} />
           </button>
@@ -152,8 +152,8 @@ export function ViewportToolbar({ projectName }: Props) {
             disabled={!isModified}
             className={`flex items-center gap-1.5 px-3 h-7 rounded-lg text-xs font-semibold transition-all shrink-0 ${
               isModified
-                ? 'bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-md shadow-violet-500/25 hover:from-violet-500 hover:to-cyan-500'
-                : 'bg-zinc-800/40 text-zinc-600 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-md shadow-primary/25 hover:from-violet-500 hover:to-cyan-500'
+                : 'bg-background/40 text-muted cursor-not-allowed'
             }`}
           >
             <Save size={12} />
@@ -166,7 +166,7 @@ export function ViewportToolbar({ projectName }: Props) {
             <a
               href={`/space/${sceneId}`}
               target="_blank"
-              className="flex items-center gap-1.5 px-3 h-7 rounded-lg border border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700 transition-all text-xs font-medium shrink-0"
+              className="flex items-center gap-1.5 px-3 h-7 rounded-lg border border-border text-foreground hover:bg-background hover:border-border/60 transition-all text-xs font-medium shrink-0"
             >
               <ExternalLink size={12} />
               <span className="hidden md:block">미리보기</span>
@@ -174,12 +174,12 @@ export function ViewportToolbar({ projectName }: Props) {
           </Tip>
         )}
 
-        <div className="w-px h-4 bg-zinc-800 shrink-0" />
+        <div className="w-px h-4 bg-border shrink-0" />
 
         <Tip label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}>
           <button
             onClick={toggleTheme}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all shrink-0 text-sm"
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0 text-sm"
           >
             {theme === 'dark' ? '☀' : '🌙'}
           </button>

@@ -66,28 +66,28 @@ export function VersionHistoryModal({ onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white">버전 히스토리</h3>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">✕</button>
+      <div className="relative bg-surface border border-border rounded-2xl w-full max-w-sm shadow-modal overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="text-sm font-bold text-foreground">버전 히스토리</h3>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors">✕</button>
         </div>
 
         <div className="max-h-96 overflow-y-auto">
           {loading ? (
             <div className="py-8 flex items-center justify-center">
-              <div className="w-5 h-5 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
+              <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
             </div>
           ) : versions.length === 0 ? (
-            <div className="py-8 text-center text-zinc-500 text-sm">
+            <div className="py-8 text-center text-muted text-sm">
               <p>저장 이력이 없습니다.</p>
-              <p className="text-xs mt-1 text-zinc-600">Ctrl+S로 저장하면 이력이 생성됩니다.</p>
+              <p className="text-xs mt-1 text-muted/60">Ctrl+S로 저장하면 이력이 생성됩니다.</p>
             </div>
           ) : (
             <div className="py-1">
               {versions.map((v, i) => (
-                <div key={v.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-zinc-800/50 transition-colors group">
+                <div key={v.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-background/50 transition-colors group">
                   <div>
-                    <p className="text-xs text-white font-medium">{formatDate(v.created_at)}</p>
+                    <p className="text-xs text-foreground font-medium">{formatDate(v.created_at)}</p>
                     {i === 0 && (
                       <span className="text-[9px] text-emerald-400 font-semibold">최신</span>
                     )}
@@ -95,7 +95,7 @@ export function VersionHistoryModal({ onClose }: Props) {
                   <button
                     onClick={() => restore(v.id)}
                     disabled={restoring === v.id}
-                    className="opacity-0 group-hover:opacity-100 text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-violet-600 text-white hover:bg-violet-500 transition-all disabled:opacity-40"
+                    className="opacity-0 group-hover:opacity-100 text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-primary text-white hover:bg-primary/80 transition-all disabled:opacity-40"
                   >
                     {restoring === v.id ? '복구 중...' : '이 버전으로 복구'}
                   </button>
@@ -105,8 +105,8 @@ export function VersionHistoryModal({ onClose }: Props) {
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-zinc-800">
-          <p className="text-[10px] text-zinc-600">최대 30개 이력 보관 · 저장마다 자동 생성</p>
+        <div className="px-5 py-3 border-t border-border">
+          <p className="text-[10px] text-muted/60">최대 30개 이력 보관 · 저장마다 자동 생성</p>
         </div>
       </div>
     </div>

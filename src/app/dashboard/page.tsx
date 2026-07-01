@@ -48,16 +48,16 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <UserInitializer userId={user.id} email={user.email ?? ''} planTier={planTier} />
       {/* 배경 장식 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-violet-600/10 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-cyan-600/10 rounded-full blur-3xl -translate-x-1/2 translate-y-1/2" />
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-cyan-600/5 rounded-full blur-3xl -translate-x-1/2 translate-y-1/2" />
       </div>
 
       {/* 헤더 */}
-      <header className="relative border-b border-zinc-800/60 px-6 py-4 flex items-center justify-between backdrop-blur-sm">
+      <header className="relative border-b border-border/60 px-6 py-4 flex items-center justify-between backdrop-blur-sm bg-sidebar/80">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm shadow-lg shadow-violet-500/25">
             ⬡
@@ -65,17 +65,17 @@ export default async function DashboardPage() {
           <span className="font-bold text-lg tracking-tight">Park3D</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-zinc-500 mr-1">{user.email}</span>
+          <span className="text-sm text-muted mr-1">{user.email}</span>
           <Link
             href="/account"
-            className="text-sm text-zinc-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-zinc-800"
+            className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-surface"
           >
             계정 설정
           </Link>
           <form action="/api/auth/signout" method="POST">
             <button
               type="submit"
-              className="text-sm text-zinc-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-zinc-800"
+              className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-surface"
             >
               로그아웃
             </button>
@@ -89,7 +89,7 @@ export default async function DashboardPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold">내 프로젝트</h1>
-            <p className="text-zinc-400 text-sm mt-1">
+            <p className="text-muted text-sm mt-1">
               {list.length > 0 ? `${list.length}개의 프로젝트` : '3D 공간을 만들고 배포하세요'}
             </p>
           </div>
@@ -100,7 +100,7 @@ export default async function DashboardPage() {
           /* 빈 상태 */
           <div className="flex flex-col items-center justify-center py-32 text-center">
             <div className="relative mb-6">
-              <div className="w-28 h-28 rounded-3xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-5xl shadow-inner">
+              <div className="w-28 h-28 rounded-3xl bg-surface border border-border flex items-center justify-center text-5xl shadow-inner">
                 🌐
               </div>
               <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-xs font-bold shadow-lg shadow-violet-500/25 animate-bounce">
@@ -108,7 +108,7 @@ export default async function DashboardPage() {
               </div>
             </div>
             <h2 className="text-xl font-semibold mb-2">아직 프로젝트가 없어요</h2>
-            <p className="text-zinc-400 text-sm max-w-sm mb-8 leading-relaxed">
+            <p className="text-muted text-sm max-w-sm mb-8 leading-relaxed">
               첫 번째 3D 공간을 만들어보세요.<br />
               코딩 없이 멋진 3D 웹 경험을 완성할 수 있습니다.
             </p>

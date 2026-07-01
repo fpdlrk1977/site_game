@@ -7,7 +7,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useThemeStore((s) => s.theme);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const el = document.documentElement;
+    if (theme === 'dark') el.classList.add('dark');
+    else el.classList.remove('dark');
   }, [theme]);
 
   return <>{children}</>;

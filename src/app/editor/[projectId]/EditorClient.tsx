@@ -16,7 +16,7 @@ import type { ProjectSceneSchema } from '@/types/scene';
 
 const EditorCanvas = dynamic(
   () => import('./canvas/EditorCanvas').then((m) => m.EditorCanvas),
-  { ssr: false, loading: () => <div className="w-full h-full bg-zinc-900 flex items-center justify-center"><span className="text-zinc-500 text-sm">뷰포트 로딩 중...</span></div> },
+  { ssr: false, loading: () => <div className="w-full h-full bg-surface flex items-center justify-center"><span className="text-muted text-sm">뷰포트 로딩 중...</span></div> },
 );
 
 interface Props {
@@ -68,11 +68,11 @@ export function EditorClient({ projectName, initialScene }: Props) {
 
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-sidebar flex items-center justify-center p-6 text-center">
         <div>
           <div className="text-5xl mb-4">🖥️</div>
-          <h2 className="text-xl font-bold text-white mb-2">PC에서 이용해 주세요</h2>
-          <p className="text-zinc-400 text-sm">에디터는 1280px 이상의 화면에서 지원됩니다.</p>
+          <h2 className="text-xl font-bold text-foreground mb-2">PC에서 이용해 주세요</h2>
+          <p className="text-muted text-sm">에디터는 1280px 이상의 화면에서 지원됩니다.</p>
         </div>
       </div>
     );
@@ -80,7 +80,7 @@ export function EditorClient({ projectName, initialScene }: Props) {
 
   return (
     <div
-      className="w-screen h-screen bg-zinc-950 overflow-hidden"
+      className="w-screen h-screen bg-sidebar overflow-hidden"
       style={{
         display: 'grid',
         gridTemplateColumns: '240px 1fr 280px',

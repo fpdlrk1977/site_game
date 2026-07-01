@@ -64,17 +64,17 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div className="relative bg-surface border border-border rounded-2xl w-full max-w-md shadow-modal overflow-hidden">
         {/* 헤더 */}
-        <div className="px-5 py-4 border-b border-zinc-800 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center text-base">
+        <div className="px-5 py-4 border-b border-border flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-base">
             🌐
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-semibold text-white">커스텀 도메인</h2>
-            <p className="text-[11px] text-zinc-500 truncate">{projectName}</p>
+            <h2 className="text-sm font-semibold text-foreground">커스텀 도메인</h2>
+            <p className="text-[11px] text-muted truncate">{projectName}</p>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">✕</button>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors text-lg leading-none">✕</button>
         </div>
 
         <div className="px-5 py-5 space-y-4">
@@ -83,8 +83,8 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
             <div className="bg-gradient-to-br from-violet-600/20 to-cyan-600/20 border border-violet-500/30 rounded-xl p-4 text-center space-y-3">
               <div className="text-2xl">✨</div>
               <div>
-                <p className="text-white font-semibold text-sm">Pro 플랜 전용</p>
-                <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
+                <p className="text-foreground font-semibold text-sm">Pro 플랜 전용</p>
+                <p className="text-muted text-xs mt-1 leading-relaxed">
                   커스텀 도메인 연결은 Pro 플랜부터 사용할 수 있습니다.
                   나만의 도메인으로 3D 공간을 제공하세요.
                 </p>
@@ -96,13 +96,13 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
           ) : success ? (
             <div className="py-6 text-center">
               <div className="text-3xl mb-3">✅</div>
-              <p className="text-white font-semibold">저장됐어요</p>
+              <p className="text-foreground font-semibold">저장됐어요</p>
             </div>
           ) : (
             <>
               {/* 도메인 입력 */}
               <div>
-                <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                <label className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">
                   도메인
                 </label>
                 <input
@@ -111,39 +111,39 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
                   onChange={(e) => { setDomain(e.target.value); setError(null); }}
                   onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                   placeholder="mysite.com"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
                 />
                 {error && (
-                  <p className="text-red-400 text-[11px] mt-1.5">{error}</p>
+                  <p className="text-danger text-[11px] mt-1.5">{error}</p>
                 )}
               </div>
 
               {/* DNS 안내 */}
-              <div className="bg-zinc-800/60 border border-zinc-700 rounded-xl p-3.5 space-y-2">
-                <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">DNS 설정 방법</p>
-                <p className="text-zinc-400 text-[11px] leading-relaxed">
+              <div className="bg-background/60 border border-border rounded-xl p-3.5 space-y-2">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">DNS 설정 방법</p>
+                <p className="text-muted text-[11px] leading-relaxed">
                   도메인 DNS 설정에서 CNAME 레코드를 추가하세요.
                 </p>
-                <div className="bg-zinc-900 rounded-lg px-3 py-2 font-mono text-[11px] space-y-1">
-                  <div className="grid grid-cols-[60px_1fr] gap-2 text-zinc-500">
-                    <span>Type</span><span className="text-zinc-300">CNAME</span>
-                    <span>Name</span><span className="text-zinc-300">@  <span className="text-zinc-600">(또는 www)</span></span>
-                    <span>Value</span><span className="text-violet-300">{PLATFORM_DOMAIN}</span>
+                <div className="bg-sidebar rounded-lg px-3 py-2 font-mono text-[11px] space-y-1">
+                  <div className="grid grid-cols-[60px_1fr] gap-2 text-muted">
+                    <span>Type</span><span className="text-foreground">CNAME</span>
+                    <span>Name</span><span className="text-foreground">@  <span className="text-muted/60">(또는 www)</span></span>
+                    <span>Value</span><span className="text-primary">{PLATFORM_DOMAIN}</span>
                   </div>
                 </div>
-                <p className="text-zinc-600 text-[10px]">
+                <p className="text-muted/60 text-[10px]">
                   DNS 전파는 최대 48시간 소요될 수 있습니다.
                 </p>
               </div>
 
               {/* 현재 도메인 */}
               {currentDomain && (
-                <div className="flex items-center justify-between text-[11px] bg-zinc-800/40 rounded-lg px-3 py-2">
-                  <span className="text-zinc-400">현재: <span className="text-white font-mono">{currentDomain}</span></span>
+                <div className="flex items-center justify-between text-[11px] bg-background/40 rounded-lg px-3 py-2">
+                  <span className="text-muted">현재: <span className="text-foreground font-mono">{currentDomain}</span></span>
                   <button
                     onClick={handleClear}
                     disabled={isPending}
-                    className="text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                    className="text-danger hover:text-danger/80 transition-colors disabled:opacity-50"
                   >
                     제거
                   </button>
@@ -154,14 +154,14 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={onClose}
-                  className="flex-1 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm transition-colors"
+                  className="flex-1 py-2 rounded-lg bg-background hover:bg-surface text-foreground text-sm transition-colors"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={isPending || !domain.trim()}
-                  className="flex-1 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-semibold transition-colors"
+                  className="flex-1 py-2 rounded-lg bg-primary hover:bg-primary/80 disabled:opacity-40 text-white text-sm font-semibold transition-colors"
                 >
                   {isPending ? '저장 중…' : '저장'}
                 </button>
