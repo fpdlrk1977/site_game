@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Save, History, ExternalLink } from 'lucide-react';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { useThemeStore } from '@/store/themeStore';
@@ -17,16 +18,6 @@ interface Props {
   projectName: string;
 }
 
-function Tip({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="relative group/tip">
-      {children}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 bg-sidebar border border-border text-[11px] font-medium text-foreground rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity duration-100 pointer-events-none z-[100] shadow-xl shadow-black/20">
-        {label}
-      </div>
-    </div>
-  );
-}
 
 export function ViewportToolbar({ projectName }: Props) {
   const {
@@ -104,14 +95,14 @@ export function ViewportToolbar({ projectName }: Props) {
       <header className="flex items-center gap-2 px-3 h-full bg-surface border-b border-border/80 select-none">
 
         {/* 왼쪽: 네비게이션 + 프로젝트/씬 */}
-        <Tip label="대시보드로 이동">
+        <Tooltip content="대시보드로 이동">
           <Link
             href="/dashboard"
             className="w-7 h-7 flex items-center justify-center text-muted hover:text-foreground hover:bg-background rounded-lg transition-all shrink-0"
           >
             <ArrowLeft size={15} />
           </Link>
-        </Tip>
+        </Tooltip>
 
         <div className="flex items-center gap-1.5 shrink-0">
           <div className="w-5 h-5 rounded-md bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold shadow-md shadow-primary/30">
@@ -127,25 +118,25 @@ export function ViewportToolbar({ projectName }: Props) {
           <span className="text-muted text-xs hidden lg:block">—</span>
           <SceneSwitcher />
           {isModified && (
-            <Tip label="저장되지 않은 변경사항">
+            <Tooltip content="저장되지 않은 변경사항">
               <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0 animate-pulse" />
-            </Tip>
+            </Tooltip>
           )}
         </div>
 
         <div className="flex-1" />
 
         {/* 오른쪽: 액션 */}
-        <Tip label="버전 히스토리">
+        <Tooltip content="버전 히스토리">
           <button
             onClick={() => setShowHistory(true)}
             className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0"
           >
             <History size={14} />
           </button>
-        </Tip>
+        </Tooltip>
 
-        <Tip label={isModified ? '저장 (Ctrl+S)' : '변경사항 없음'}>
+        <Tooltip content={isModified ? '저장 (Ctrl+S)' : '변경사항 없음'}>
           <button
             id="save-btn"
             onClick={handleSave}
@@ -159,10 +150,10 @@ export function ViewportToolbar({ projectName }: Props) {
             <Save size={12} />
             <span className="hidden sm:block">저장</span>
           </button>
-        </Tip>
+        </Tooltip>
 
         {sceneId && (
-          <Tip label="새 탭으로 미리보기">
+          <Tooltip content="새 탭으로 미리보기">
             <a
               href={`/space/${sceneId}`}
               target="_blank"
@@ -171,19 +162,19 @@ export function ViewportToolbar({ projectName }: Props) {
               <ExternalLink size={12} />
               <span className="hidden md:block">미리보기</span>
             </a>
-          </Tip>
+          </Tooltip>
         )}
 
         <div className="w-px h-4 bg-border shrink-0" />
 
-        <Tip label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}>
+        <Tooltip content={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}>
           <button
             onClick={toggleTheme}
             className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0 text-sm"
           >
             {theme === 'dark' ? '☀' : '🌙'}
           </button>
-        </Tip>
+        </Tooltip>
       </header>
 
       {showHistory && typeof document !== 'undefined' && createPortal(
