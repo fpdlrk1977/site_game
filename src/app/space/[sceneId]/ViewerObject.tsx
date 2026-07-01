@@ -8,6 +8,19 @@ import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scen
 
 const DEG2RAD = Math.PI / 180;
 
+// 이 컴포넌트는 우리 Next.js 앱(같은 origin)뿐 아니라 embed.js 번들을 통해
+// 완전히 다른 origin(제3자 사이트)에서도 렌더링된다. 루트 상대경로("/fonts/...")는
+// 그 경우 우리 서버가 아니라 호스트 페이지의 origin 기준으로 해석되어 깨진다.
+// embed/main.tsx가 마운트 직전 window.__PARK3D_ASSET_BASE__를 우리 서버 origin으로
+// 설정해두면 그 값을 앞에 붙이고, 없으면(=우리 앱 안에서 직접 렌더링되는 경우) 기존과
+// 동일하게 그대로 사용한다 — 일반 뷰어/에디터 동작은 전혀 변하지 않는다.
+function assetUrl(path: string): string {
+  const base = typeof window !== 'undefined'
+    ? (window as unknown as Record<string, string | undefined>).__PARK3D_ASSET_BASE__
+    : undefined;
+  return base ? `${base}${path}` : path;
+}
+
 function getYouTubeId(url: string): string | null {
   const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/]+)/);
   return m ? m[1] : null;
@@ -274,7 +287,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           <Suspense fallback={null}>
             <Center>
               <Text3D
-                font="/fonts/helvetiker_regular.typeface.json"
+                font={assetUrl('/fonts/helvetiker_regular.typeface.json')}
                 size={object.content.fontSize ?? 0.5}
                 height={object.content.depth ?? 0.1}
                 curveSegments={12}

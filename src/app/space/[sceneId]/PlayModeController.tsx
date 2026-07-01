@@ -158,7 +158,7 @@ export function PlayModeController({
       const dy = e.clientY - lastMouseRef.current.y;
       lastMouseRef.current = { x: e.clientX, y: e.clientY };
       azimuthRef.current -= dx * 0.006;
-      elevationRef.current = Math.max(0.1, Math.min(1.3, elevationRef.current - dy * 0.006));
+      elevationRef.current = Math.max(0.1, Math.min(1.3, elevationRef.current + dy * 0.006));
     };
     const onUp = () => { isDragging.current = false; };
     const onTouchStart = (e: TouchEvent) => {
@@ -170,7 +170,7 @@ export function PlayModeController({
         const dy = e.touches[0].clientY - lastTouchRef.current.y;
         lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         azimuthRef.current -= dx * 0.006;
-        elevationRef.current = Math.max(0.1, Math.min(1.3, elevationRef.current - dy * 0.006));
+        elevationRef.current = Math.max(0.1, Math.min(1.3, elevationRef.current + dy * 0.006));
       }
     };
     window.addEventListener('mousedown', onDown);
@@ -196,16 +196,18 @@ export function PlayModeController({
     const az = azimuthRef.current;
     const speed = 5;
 
+    // 카메라는 (sin(az), cos(az)) 방향 오프셋에서 캐릭터를 바라보므로,
+    // 카메라가 실제로 바라보는(전진) 방향은 그 반대인 (-sin(az), -cos(az))다.
     let vx = 0, vz = 0;
-    if (keys.current.w) { vx += Math.sin(az); vz += Math.cos(az); }
-    if (keys.current.s) { vx -= Math.sin(az); vz -= Math.cos(az); }
+    if (keys.current.w) { vx -= Math.sin(az); vz -= Math.cos(az); }
+    if (keys.current.s) { vx += Math.sin(az); vz += Math.cos(az); }
     if (keys.current.a) { vx -= Math.cos(az); vz += Math.sin(az); }
     if (keys.current.d) { vx += Math.cos(az); vz -= Math.sin(az); }
 
     const mobile = mobileInputRef?.current;
     if (mobile) {
-      vx += Math.sin(az) * mobile.fwd + Math.cos(az) * mobile.strafe;
-      vz += Math.cos(az) * mobile.fwd - Math.sin(az) * mobile.strafe;
+      vx += -Math.sin(az) * mobile.fwd + Math.cos(az) * mobile.strafe;
+      vz += -Math.cos(az) * mobile.fwd - Math.sin(az) * mobile.strafe;
     }
 
     const len = Math.sqrt(vx * vx + vz * vz);
