@@ -12,6 +12,8 @@ export interface EnvSchema {
     directionalPosition: Vector3;
     directionalIntensity: number;
   };
+  playerCharacterId?: string;
+  playerCharacterScale?: number;
 }
 
 export interface EventSchema {
@@ -88,6 +90,7 @@ export interface AssetRefSchema {
   id: string;
   dracoUrl: string;
   name: string;
+  type?: 'model' | 'character';
 }
 
 export interface ProjectSceneSchema {

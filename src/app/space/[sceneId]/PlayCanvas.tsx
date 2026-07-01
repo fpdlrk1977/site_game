@@ -48,6 +48,10 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick }: Props) {
   const autoObjects = rootObjects.filter((o) => !o.physics.enabled);
   const physicsObjects = rootObjects.filter((o) => o.physics.enabled);
 
+  const characterAsset = scene.environment.playerCharacterId
+    ? assets.find((a) => a.id === scene.environment.playerCharacterId)
+    : undefined;
+
   return (
     <Physics gravity={[0, -20, 0]} timeStep="vary">
       {/* 바닥 */}
@@ -65,7 +69,12 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick }: Props) {
         <PhysicsObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} />
       ))}
 
-      <PlayModeController azimuthRef={azimuthRef} playerRef={playerRef} />
+      <PlayModeController
+        azimuthRef={azimuthRef}
+        playerRef={playerRef}
+        characterUrl={characterAsset?.dracoUrl}
+        characterScale={scene.environment.playerCharacterScale ?? 1}
+      />
     </Physics>
   );
 }

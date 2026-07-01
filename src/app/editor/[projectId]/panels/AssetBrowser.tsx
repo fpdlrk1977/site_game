@@ -6,10 +6,11 @@ import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import type { AssetRefSchema, ContentType, ParticlePreset } from '@/types/scene';
 
-type Tab = 'models' | 'content' | 'particle' | 'materials' | 'textures' | 'hdr' | 'audio';
+type Tab = 'models' | 'character' | 'content' | 'particle' | 'materials' | 'textures' | 'hdr' | 'audio';
 
 const TABS: { id: Tab; label: string; wip?: boolean }[] = [
   { id: 'models',    label: 'Models' },
+  { id: 'character', label: 'Character' },
   { id: 'content',   label: 'Content' },
   { id: 'particle',  label: 'Particle' },
   { id: 'materials', label: 'Materials', wip: true },
@@ -37,12 +38,11 @@ export function AssetBrowser() {
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
   const { addToast } = useToast();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const modelInputRef = useRef<HTMLInputElement>(null);
+  const characterInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !projectId) return;
-    e.target.value = '';
+  const uploadGlb = async (file: File, assetType: AssetRefSchema['type']) => {
+    if (!projectId) return;
     if (file.size > 50 * 1024 * 1024) {
       addToast('파일이 너무 큽니다. 최대 50MB까지 지원합니다.', 'error');
       return;
@@ -67,7 +67,12 @@ export function AssetBrowser() {
         mime_type: 'model/gltf-binary', size_bytes: file.size,
       });
       if (dbErr) { await supabase.storage.from('assets').remove([path]); throw dbErr; }
-      const asset: AssetRefSchema = { id: assetId, name: file.name.replace(/\.glb$/i, ''), dracoUrl: signedData.signedUrl };
+      const asset: AssetRefSchema = {
+        id: assetId,
+        name: file.name.replace(/\.glb$/i, ''),
+        dracoUrl: signedData.signedUrl,
+        type: assetType,
+      };
       addAsset(asset);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '알 수 없는 오류';
@@ -77,10 +82,24 @@ export function AssetBrowser() {
     }
   };
 
+  const handleModelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) await uploadGlb(file, 'model');
+  };
+
+  const handleCharacterFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) await uploadGlb(file, 'character');
+  };
+
   const currentTab = TABS.find((t) => t.id === tab)!;
-  const filteredAssets = search.trim()
-    ? assets.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
-    : assets;
+  const modelAssets = assets.filter((a) => a.type !== 'character');
+  const characterAssets = assets.filter((a) => a.type === 'character');
+  const filteredModels = search.trim()
+    ? modelAssets.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
+    : modelAssets;
 
   return (
     <div className="flex h-full bg-sidebar border-t border-border overflow-hidden">
@@ -122,27 +141,28 @@ export function AssetBrowser() {
         {tab === 'models' && (
           <div className="flex-1 overflow-x-auto overflow-y-hidden">
             <div className="flex items-center gap-2 px-3 pb-2 h-full">
-              <input ref={inputRef} type="file" accept=".glb" className="hidden" onChange={handleFileChange} />
-              <button
-                onClick={() => inputRef.current?.click()}
-                disabled={uploading}
-                title=".glb 파일 업로드"
-                className="w-[72px] h-[72px] shrink-0 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {uploading ? (
-                  <span className="text-xs animate-pulse">...</span>
-                ) : (
-                  <>
-                    <span className="text-xl leading-none">+</span>
-                    <span className="text-[9px]">.glb</span>
-                  </>
-                )}
-              </button>
-              {filteredAssets.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} onAdd={() => addAssetObject(asset)} />
+              <input ref={modelInputRef} type="file" accept=".glb" className="hidden" onChange={handleModelFile} />
+              <UploadButton uploading={uploading} onClick={() => modelInputRef.current?.click()} />
+              {filteredModels.map((asset) => (
+                <AssetCard key={asset.id} asset={asset} icon="📦" onAdd={() => addAssetObject(asset)} />
               ))}
-              {assets.length === 0 && (
+              {modelAssets.length === 0 && (
                 <p className="text-[11px] text-muted ml-2">.glb 파일을 업로드하면 씬에 배치할 수 있습니다</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'character' && (
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex items-center gap-2 px-3 pb-2 h-full">
+              <input ref={characterInputRef} type="file" accept=".glb" className="hidden" onChange={handleCharacterFile} />
+              <UploadButton uploading={uploading} onClick={() => characterInputRef.current?.click()} label="캐릭터" />
+              {characterAssets.map((asset) => (
+                <AssetCard key={asset.id} asset={asset} icon="🧍" />
+              ))}
+              {characterAssets.length === 0 && (
+                <p className="text-[11px] text-muted ml-2">캐릭터 GLB를 업로드하세요. Inspector → Player에서 씬에 적용합니다</p>
               )}
             </div>
           </div>
@@ -197,17 +217,38 @@ export function AssetBrowser() {
   );
 }
 
-function AssetCard({ asset, onAdd }: { asset: AssetRefSchema; onAdd: () => void }) {
+function UploadButton({ uploading, onClick, label = '.glb' }: { uploading: boolean; onClick: () => void; label?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={uploading}
+      className="w-[72px] h-[72px] shrink-0 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      {uploading ? (
+        <span className="text-xs animate-pulse">...</span>
+      ) : (
+        <>
+          <span className="text-xl leading-none">+</span>
+          <span className="text-[9px]">{label}</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string; onAdd?: () => void }) {
   return (
     <div className="group relative w-[72px] h-[72px] shrink-0 rounded-xl bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden">
-      <span className="text-2xl leading-none">📦</span>
+      <span className="text-2xl leading-none">{icon}</span>
       <span className="text-[9px] text-muted truncate w-full text-center px-1">{asset.name}</span>
-      <button
-        onClick={onAdd}
-        className="absolute inset-0 bg-primary/0 group-hover:bg-primary/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white text-xs font-medium"
-      >
-        + 추가
-      </button>
+      {onAdd && (
+        <button
+          onClick={onAdd}
+          className="absolute inset-0 bg-primary/0 group-hover:bg-primary/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white text-xs font-medium"
+        >
+          + 추가
+        </button>
+      )}
     </div>
   );
 }

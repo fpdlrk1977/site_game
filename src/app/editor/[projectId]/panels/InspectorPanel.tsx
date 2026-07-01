@@ -181,7 +181,7 @@ const ACTION_LABELS: Record<string, string> = {
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 function EnvironmentPanel() {
-  const { environment, updateEnvironment, pushHistory } = useSceneStore();
+  const { environment, updateEnvironment, pushHistory, assets } = useSceneStore();
   const env = environment;
 
   return (
@@ -290,6 +290,51 @@ function EnvironmentPanel() {
           onChangeZ={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, z: v } } })}
           onCommit={pushHistory} dragStep={0.5}
         />
+      </div>
+
+      {/* Player */}
+      <SectionHeader title="Player" icon="🧍" />
+      <div className="px-3 py-3 space-y-3">
+        {(() => {
+          const characterAssets = assets.filter((a) => a.type === 'character');
+          return (
+            <>
+              <div>
+                <span className="text-[10px] text-muted block mb-1.5 font-semibold uppercase tracking-wider">캐릭터</span>
+                <select
+                  value={env.playerCharacterId ?? ''}
+                  onChange={(e) => { updateEnvironment({ playerCharacterId: e.target.value || undefined }); pushHistory(); }}
+                  className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">기본 캡슐</option>
+                  {characterAssets.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                {characterAssets.length === 0 && (
+                  <p className="text-[10px] text-muted/60 mt-1.5">
+                    Asset Browser → Character 탭에서 GLB를 업로드하세요
+                  </p>
+                )}
+              </div>
+              {env.playerCharacterId && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Scale</span>
+                    <span className="text-[10px] text-muted tabular-nums">{(env.playerCharacterScale ?? 1).toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range" min="0.1" max="3" step="0.05"
+                    value={env.playerCharacterScale ?? 1}
+                    onChange={(e) => updateEnvironment({ playerCharacterScale: parseFloat(e.target.value) })}
+                    onMouseUp={pushHistory}
+                    className="w-full accent-primary"
+                  />
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
     </div>
   );
