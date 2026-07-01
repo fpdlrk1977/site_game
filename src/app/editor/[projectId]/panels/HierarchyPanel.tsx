@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useSceneStore } from '@/store/sceneStore';
 import type { ObjectNodeSchema } from '@/types/scene';
 
@@ -179,6 +179,11 @@ export function HierarchyPanel() {
     search.trim() ? new Set(objects.filter((o) => o.isGroup).map((o) => o.id)) : expanded,
   );
 
+  const indexMap = useMemo(
+    () => new Map(flatList.map((o, i) => [o.id, i])),
+    [flatList],
+  );
+
   const handleClickItem = (id: string, index: number, shiftKey: boolean) => {
     if (shiftKey && anchorIndexRef.current >= 0) {
       const from = Math.min(anchorIndexRef.current, index);
@@ -196,7 +201,7 @@ export function HierarchyPanel() {
       : objects.filter((o) => o.parentId === parentId);
 
     return src.flatMap((obj) => {
-      const index = flatList.findIndex((o) => o.id === obj.id);
+      const index = indexMap.get(obj.id) ?? 0;
       const nodes: React.ReactNode[] = [
         <HierarchyItem
           key={obj.id}

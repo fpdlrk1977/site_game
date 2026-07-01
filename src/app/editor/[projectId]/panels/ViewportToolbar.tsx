@@ -9,6 +9,7 @@ import { createBrowserSupabase } from '@/lib/supabase';
 import { SceneSwitcher } from './SceneSwitcher';
 import { VersionHistoryModal } from './VersionHistoryModal';
 import type { PrimitiveShape, ProjectSceneSchema } from '@/types/scene';
+import { SCENE_VERSION } from '@/types/scene';
 
 interface Props {
   projectName: string;
@@ -52,7 +53,7 @@ export function ViewportToolbar({ projectName }: Props) {
     const sceneData: ProjectSceneSchema = {
       projectId: projectId ?? '',
       sceneId,
-      version: 1,
+      version: SCENE_VERSION,
       environment,
       assets,
       objects,
@@ -75,14 +76,14 @@ export function ViewportToolbar({ projectName }: Props) {
       .select('id')
       .eq('scene_id', sceneId)
       .order('created_at', { ascending: false })
-      .range(30, 100);
+      .range(30, 9999);
     if (oldVersions && oldVersions.length > 0) {
       await supabase.from('scene_versions').delete().in('id', oldVersions.map((v) => v.id));
     }
 
     // 썸네일 캡처 — canvas.toDataURL은 preserveDrawingBuffer: true 필요
     if (projectId) {
-      const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
+      const canvas = document.getElementById('editor-canvas') as HTMLCanvasElement | null;
       if (canvas) {
         try {
           const dataUrl = canvas.toDataURL('image/jpeg', 0.8);

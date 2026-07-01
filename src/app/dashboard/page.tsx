@@ -33,15 +33,17 @@ export default async function DashboardPage() {
   const sceneIds = list.map((p) => p.default_scene_id).filter(Boolean) as string[];
   let viewCounts: Record<string, number> = {};
   if ((planTier === 'pro' || planTier === 'business') && sceneIds.length > 0) {
-    const { data: viewEvents } = await supabase
-      .from('scene_events')
-      .select('scene_id')
-      .in('scene_id', sceneIds)
-      .eq('event_type', 'view');
-    viewCounts = (viewEvents ?? []).reduce<Record<string, number>>((acc, e) => {
-      acc[e.scene_id] = (acc[e.scene_id] ?? 0) + 1;
-      return acc;
-    }, {});
+    const countResults = await Promise.all(
+      sceneIds.map(async (id) => {
+        const { count } = await supabase
+          .from('scene_events')
+          .select('*', { count: 'exact', head: true })
+          .eq('scene_id', id)
+          .eq('event_type', 'view');
+        return [id, count ?? 0] as const;
+      })
+    );
+    viewCounts = Object.fromEntries(countResults);
   }
 
   return (

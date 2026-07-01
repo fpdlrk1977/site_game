@@ -33,15 +33,14 @@ interface Props {
 export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge = false }: Props) {
   const [popup, setPopup] = useState<{ title: string; content: string } | null>(null);
   const [playMode, setPlayMode] = useState(false);
+  const supabase = useState(() => createBrowserSupabase())[0];
 
   // 방문 이벤트 수집
   useEffect(() => {
-    const supabase = createBrowserSupabase();
     supabase.from('scene_events').insert({ scene_id: scene.sceneId, event_type: 'view' });
-  }, [scene.sceneId]);
+  }, [scene.sceneId, supabase]);
 
   const trackEvent = (eventType: string, objectId?: string, objectName?: string) => {
-    const supabase = createBrowserSupabase();
     supabase.from('scene_events').insert({
       scene_id: scene.sceneId,
       event_type: eventType,

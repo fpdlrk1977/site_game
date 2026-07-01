@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { MathUtils } from 'three';
+import { MathUtils, Quaternion, Euler, Vector3 } from 'three';
 import {
   ObjectNodeSchema,
   AssetRefSchema,
@@ -14,6 +14,7 @@ import {
 
 interface HistoryEntry {
   objects: ObjectNodeSchema[];
+  environment: EnvSchema;
 }
 
 export interface LayerState {
@@ -154,12 +155,12 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   addObject: (shape) => {
     const obj = makeObject(shape);
-    const { objects, past } = get();
+    const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
       isModified: true,
-      past: [...past.slice(-49), { objects }],
+      past: [...past.slice(-49), { objects, environment }],
       future: [],
     });
   },
@@ -203,13 +204,13 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       events: [],
       content: { type, ...defaults[type] },
     };
-    const { objects, past } = get();
+    const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
       selectedIds: [obj.id],
       isModified: true,
-      past: [...past.slice(-49), { objects }],
+      past: [...past.slice(-49), { objects, environment }],
       future: [],
     });
   },
@@ -234,13 +235,13 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       events: [],
       particle: { preset },
     };
-    const { objects, past } = get();
+    const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
       selectedIds: [obj.id],
       isModified: true,
-      past: [...past.slice(-49), { objects }],
+      past: [...past.slice(-49), { objects, environment }],
       future: [],
     });
   },
@@ -269,12 +270,12 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       physics: { ...DEFAULT_PHYSICS },
       events: [],
     };
-    const { objects, past } = get();
+    const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
       isModified: true,
-      past: [...past.slice(-49), { objects }],
+      past: [...past.slice(-49), { objects, environment }],
       future: [],
     });
   },
@@ -288,7 +289,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   deleteSelected: () => {
-    const { selectedId, selectedIds, objects, past } = get();
+    const { selectedId, selectedIds, objects, environment, past } = get();
     const roots = selectedIds.length > 0 ? selectedIds : (selectedId ? [selectedId] : []);
     if (roots.length === 0) return;
     // 그룹의 모든 자손도 함께 삭제
@@ -302,13 +303,13 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedId: null,
       selectedIds: [],
       isModified: true,
-      past: [...past.slice(-49), { objects }],
+      past: [...past.slice(-49), { objects, environment }],
       future: [],
     });
   },
 
   alignSelected: (axis, mode) => {
-    const { selectedIds, objects, past } = get();
+    const { selectedIds, objects, environment, past } = get();
     const targets = objects.filter((o) => selectedIds.includes(o.id));
     if (targets.length < 2) return;
     const values = targets.map((o) => o.position[axis]);
@@ -319,13 +320,13 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         : o
       ),
       isModified: true,
-      past: [...past.slice(-49), { objects }],
+      past: [...past.slice(-49), { objects, environment }],
       future: [],
     });
   },
 
   duplicateSelected: () => {
-    const { selectedId, objects, past } = get();
+    const { selectedId, objects, environment, past } = get();
     if (!selectedId) return;
     const src = objects.find((o) => o.id === selectedId);
     if (!src) return;
@@ -350,7 +351,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         selectedId: newGroupId,
         selectedIds: [newGroupId],
         isModified: true,
-        past: [...past.slice(-49), { objects }],
+        past: [...past.slice(-49), { objects, environment }],
         future: [],
       });
     } else {
@@ -359,21 +360,21 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         id: MathUtils.generateUUID(),
         name: `${src.name} 복사`,
         position: { ...src.position, x: src.position.x + 1 },
-        parentId: null, // 복제본은 항상 루트에
+        parentId: null,
       };
       set({
         objects: [...objects, copy],
         selectedId: copy.id,
         selectedIds: [copy.id],
         isModified: true,
-        past: [...past.slice(-49), { objects }],
+        past: [...past.slice(-49), { objects, environment }],
         future: [],
       });
     }
   },
 
   groupSelected: () => {
-    const { selectedIds, objects, past } = get();
+    const { selectedIds, objects, environment, past } = get();
     if (selectedIds.length < 2) return;
     const toGroup = objects.filter((o) => selectedIds.includes(o.id));
 
@@ -413,28 +414,62 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedId: groupId,
       selectedIds: [groupId],
       isModified: true,
-      past: [...past.slice(-49), { objects }],
+      past: [...past.slice(-49), { objects, environment }],
       future: [],
     });
   },
 
   ungroupSelected: () => {
-    const { selectedId, objects, past } = get();
+    const { selectedId, objects, environment, past } = get();
     if (!selectedId) return;
     const group = objects.find((o) => o.id === selectedId);
     if (!group?.isGroup) return;
 
+    const DEG2RAD = Math.PI / 180;
+    const RAD2DEG = 180 / Math.PI;
+
+    const groupQuat = new Quaternion().setFromEuler(
+      new Euler(
+        group.rotation.x * DEG2RAD,
+        group.rotation.y * DEG2RAD,
+        group.rotation.z * DEG2RAD,
+      ),
+    );
+
     const children = objects.filter((o) => o.parentId === selectedId);
-    // 자식들의 position을 world 좌표로 변환
-    const restoredChildren = children.map((c) => ({
-      ...c,
-      parentId: null,
-      position: {
-        x: c.position.x + group.position.x,
-        y: c.position.y + group.position.y,
-        z: c.position.z + group.position.z,
-      },
-    }));
+    const restoredChildren = children.map((c) => {
+      // 자식 로컬 좌표 → 그룹 scale 적용 → 그룹 rotation 적용 → 그룹 위치 더하기
+      const localPos = new Vector3(c.position.x, c.position.y, c.position.z);
+      localPos.x *= group.scale.x;
+      localPos.y *= group.scale.y;
+      localPos.z *= group.scale.z;
+      localPos.applyQuaternion(groupQuat);
+      localPos.x += group.position.x;
+      localPos.y += group.position.y;
+      localPos.z += group.position.z;
+
+      // 월드 rotation = 그룹 rotation * 자식 rotation
+      const childQuat = new Quaternion().setFromEuler(
+        new Euler(c.rotation.x * DEG2RAD, c.rotation.y * DEG2RAD, c.rotation.z * DEG2RAD),
+      );
+      const worldEuler = new Euler().setFromQuaternion(groupQuat.clone().multiply(childQuat));
+
+      return {
+        ...c,
+        parentId: null,
+        position: { x: localPos.x, y: localPos.y, z: localPos.z },
+        rotation: {
+          x: worldEuler.x * RAD2DEG,
+          y: worldEuler.y * RAD2DEG,
+          z: worldEuler.z * RAD2DEG,
+        },
+        scale: {
+          x: c.scale.x * group.scale.x,
+          y: c.scale.y * group.scale.y,
+          z: c.scale.z * group.scale.z,
+        },
+      };
+    });
 
     const remaining = objects.filter((o) => o.id !== selectedId && !children.find((c) => c.id === o.id));
 
@@ -443,40 +478,47 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedId: null,
       selectedIds: restoredChildren.map((c) => c.id),
       isModified: true,
-      past: [...past.slice(-49), { objects }],
+      past: [...past.slice(-49), { objects, environment }],
       future: [],
     });
   },
 
   updateEnvironment: (patch) => {
-    const { environment } = get();
-    set({ environment: { ...environment, ...patch }, isModified: true });
+    const { environment, objects, past } = get();
+    set({
+      environment: { ...environment, ...patch },
+      isModified: true,
+      past: [...past.slice(-49), { objects, environment }],
+      future: [],
+    });
   },
 
   pushHistory: () => {
-    const { objects, past } = get();
-    set({ past: [...past.slice(-49), { objects }], future: [] });
+    const { objects, environment, past } = get();
+    set({ past: [...past.slice(-49), { objects, environment }], future: [] });
   },
 
   undo: () => {
-    const { past, objects, future } = get();
+    const { past, objects, environment, future } = get();
     if (past.length === 0) return;
     const prev = past[past.length - 1];
     set({
       objects: prev.objects,
+      environment: prev.environment,
       past: past.slice(0, -1),
-      future: [{ objects }, ...future],
+      future: [{ objects, environment }, ...future],
       isModified: true,
     });
   },
 
   redo: () => {
-    const { past, objects, future } = get();
+    const { past, objects, environment, future } = get();
     if (future.length === 0) return;
     const next = future[0];
     set({
       objects: next.objects,
-      past: [...past, { objects }],
+      environment: next.environment,
+      past: [...past, { objects, environment }],
       future: future.slice(1),
       isModified: true,
     });

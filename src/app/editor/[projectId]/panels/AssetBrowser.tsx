@@ -35,6 +35,12 @@ export function AssetBrowser() {
     if (!file || !projectId) return;
     e.target.value = '';
 
+    const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
+    if (file.size > MAX_SIZE) {
+      addToast('파일이 너무 큽니다. 최대 50MB까지 지원합니다.', 'error');
+      return;
+    }
+
     setUploading(true);
     try {
       const supabase = createBrowserSupabase();
@@ -67,7 +73,11 @@ export function AssetBrowser() {
         size_bytes: file.size,
       });
 
-      if (dbErr) throw dbErr;
+      if (dbErr) {
+        // DB insert 실패 시 스토리지 고아 파일 정리
+        await supabase.storage.from('assets').remove([path]);
+        throw dbErr;
+      }
 
       const asset: AssetRefSchema = {
         id: assetId,

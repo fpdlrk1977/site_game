@@ -108,7 +108,7 @@ export function EditorCanvas() {
       }
     }
 
-    if (matchingIds.length > 0) selectObjects(matchingIds);
+    selectObjects(matchingIds);
 
     resetDrag();
   }, [resetDrag]);
@@ -126,6 +126,7 @@ export function EditorCanvas() {
         onPointerLeave={resetDrag}
       >
         <Canvas
+          id="editor-canvas"
           shadows="percentage"
           camera={{ position: [5, 4, 8], fov: 60 }}
           gl={{ preserveDrawingBuffer: true }}

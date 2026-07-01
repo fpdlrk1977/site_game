@@ -60,6 +60,7 @@ export function ParticleEmitter({ config, position = [0, 0, 0] }: Props) {
     size,
     sizeAttenuation: true,
     transparent: true,
+    opacity: 0.85,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   }), [color, size]);
@@ -91,7 +92,6 @@ export function ParticleEmitter({ config, position = [0, 0, 0] }: Props) {
     }
     geo.attributes.position.needsUpdate = true;
     geo.attributes.alpha.needsUpdate = true;
-    mat.opacity = 0.85;
   });
 
   return <points ref={pointsRef} geometry={geo} material={mat} position={position} />;

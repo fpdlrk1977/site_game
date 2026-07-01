@@ -19,6 +19,8 @@ export function PlayModeController({ azimuthRef, playerRef, spawnPosition = [0, 
   const isDragging = useRef(false);
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const lastTouchRef = useRef({ x: 0, y: 0 });
+  const _targetPos = useRef(new THREE.Vector3());
+  const _camPos = useRef(new THREE.Vector3());
 
   // 키보드 입력
   useEffect(() => {
@@ -127,14 +129,15 @@ export function PlayModeController({ azimuthRef, playerRef, spawnPosition = [0, 
     // 팔로우 카메라
     const d = cameraDistanceRef.current;
     const el = elevationRef.current;
-    const targetPos = new THREE.Vector3(pos.x, pos.y + 1, pos.z);
-    camTarget.current.lerp(targetPos, 0.12);
+    _targetPos.current.set(pos.x, pos.y + 1, pos.z);
+    camTarget.current.lerp(_targetPos.current, 0.12);
 
     const camX = camTarget.current.x + d * Math.sin(az) * Math.cos(el);
     const camY = camTarget.current.y + d * Math.sin(el);
     const camZ = camTarget.current.z + d * Math.cos(az) * Math.cos(el);
 
-    camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 0.1);
+    _camPos.current.set(camX, camY, camZ);
+    camera.position.lerp(_camPos.current, 0.1);
     camera.lookAt(camTarget.current);
   });
 

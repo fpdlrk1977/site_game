@@ -36,7 +36,7 @@ export function PhysicsObject({ object, assets, onEvent }: Props) {
 
   return (
     <RigidBody
-      type="fixed"
+      type={object.physics.mass > 0 ? 'dynamic' : 'fixed'}
       position={pos}
       rotation={rot}
       colliders={colliders}

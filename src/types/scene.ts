@@ -118,11 +118,13 @@ export const DEFAULT_ENVIRONMENT: EnvSchema = {
   },
 };
 
+export const SCENE_VERSION = 1;
+
 export function makeEmptySceneData(projectId: string, sceneId: string): ProjectSceneSchema {
   return {
     projectId,
     sceneId,
-    version: 1,
+    version: SCENE_VERSION,
     environment: DEFAULT_ENVIRONMENT,
     assets: [],
     objects: [],
@@ -135,9 +137,19 @@ export function normalizeSceneData(
   projectId: string,
   sceneId: string,
 ): ProjectSceneSchema {
-  if (raw.projectId && raw.sceneId && Array.isArray(raw.objects)) {
-    return raw as unknown as ProjectSceneSchema;
+  if (
+    typeof raw.projectId === 'string' &&
+    typeof raw.sceneId === 'string' &&
+    Array.isArray(raw.objects)
+  ) {
+    return {
+      projectId: raw.projectId,
+      sceneId: raw.sceneId,
+      version: typeof raw.version === 'number' ? raw.version : SCENE_VERSION,
+      environment: (raw.environment as EnvSchema | undefined) ?? DEFAULT_ENVIRONMENT,
+      assets: Array.isArray(raw.assets) ? (raw.assets as AssetRefSchema[]) : [],
+      objects: raw.objects as ObjectNodeSchema[],
+    };
   }
-  // Legacy or empty format → return fresh empty scene
   return makeEmptySceneData(projectId, sceneId);
 }
