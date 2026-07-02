@@ -5,7 +5,9 @@ export interface Vector3 {
 }
 
 export interface EnvSchema {
-  sky: { type: 'color' | 'hdr'; value: string };
+  sky: { type: 'color' | 'hdr' | 'sky'; value: string };
+  ground?: { enabled: boolean; color: string };
+  boundary?: number;
   fog: { enabled: boolean; color: string; near: number; far: number };
   lights: {
     ambientIntensity: number;

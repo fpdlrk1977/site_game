@@ -2,7 +2,7 @@
 
 import { useRef, Suspense, lazy, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid } from '@react-three/drei';
+import { OrbitControls, Grid, Sky } from '@react-three/drei';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
 import { ViewerObject } from './ViewerObject';
 import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
@@ -10,6 +10,31 @@ import { ParticleEmitter } from '@/components/three/ParticleEmitter';
 import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
+
+function BoundaryGizmo({ size }: { size: number }) {
+  const b = size;
+  const positions = useMemo(() => new Float32Array([
+    // 바닥 사각형
+    -b, 0.02, -b,   b, 0.02, -b,
+     b, 0.02, -b,   b, 0.02,  b,
+     b, 0.02,  b,  -b, 0.02,  b,
+    -b, 0.02,  b,  -b, 0.02, -b,
+    // 네 모서리 수직선
+    -b, 0, -b,  -b, 8, -b,
+     b, 0, -b,   b, 8, -b,
+     b, 0,  b,   b, 8,  b,
+    -b, 0,  b,  -b, 8,  b,
+  ]), [b]);
+
+  return (
+    <lineSegments>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial color="#f59e0b" />
+    </lineSegments>
+  );
+}
 
 interface Props {
   scene: ProjectSceneSchema;
@@ -20,7 +45,8 @@ interface Props {
 
 export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }: Props) {
   const { environment, objects } = scene;
-  const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#1a1a2e';
+  const isSkyMode = environment.sky.type === 'sky';
+  const skyColor = isSkyMode ? '#87ceeb' : environment.sky.value;
   const azimuthRef = useRef(0);
 
   const instancedIds = useMemo(() => getInstancedIds(objects), [objects]);
@@ -40,6 +66,27 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
       style={{ width: '100%', height: '100%' }}
     >
       <color attach="background" args={[skyColor]} />
+
+      {isSkyMode && (
+        <Sky
+          sunPosition={[
+            environment.lights.directionalPosition.x,
+            environment.lights.directionalPosition.y,
+            environment.lights.directionalPosition.z,
+          ]}
+          turbidity={8}
+          rayleigh={2}
+          mieCoefficient={0.005}
+          mieDirectionalG={0.85}
+        />
+      )}
+
+      {playMode && environment.ground?.enabled && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+          <planeGeometry args={[1000, 1000]} />
+          <meshStandardMaterial color={environment.ground.color} />
+        </mesh>
+      )}
 
       {environment.fog.enabled && (
         <fog attach="fog" args={[environment.fog.color, environment.fog.near, environment.fog.far]} />
@@ -69,6 +116,10 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
         fadeStrength={1.5}
         infiniteGrid
       />
+
+      {!playMode && (environment.boundary ?? 0) > 0 && (
+        <BoundaryGizmo size={environment.boundary!} />
+      )}
 
       {!playMode && (
         <>

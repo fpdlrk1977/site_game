@@ -221,24 +221,74 @@ function EnvironmentPanel() {
         {/* Sky */}
       <GroupBox>
         <SectionHeader title="Sky" />
-        <div className="px-3 pb-3">
-          <div className="px-2 flex items-center border border-border rounded-xs">
-            <input
-              type="color"
-              value={env.sky.value}
-              onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
-              onBlur={pushHistory}
-              className="w-5 h-5 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={env.sky.value}
-              onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
-              onBlur={pushHistory}
-              className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+        <div className="px-3 pb-3 space-y-2">
+          <div className="flex gap-1">
+            {(['color', 'sky'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => { updateEnvironment({ sky: { ...env.sky, type: t } }); pushHistory(); }}
+                className={`flex-1 py-1 rounded-xs text-[10px] font-medium transition-all border ${
+                  env.sky.type === t
+                    ? 'bg-primary border-primary text-white'
+                    : 'bg-background border-border text-muted hover:text-foreground'
+                }`}
+              >
+                {t === 'color' ? '단색' : '하늘'}
+              </button>
+            ))}
           </div>
+          {env.sky.type !== 'sky' && (
+            <div className="px-2 flex items-center border border-border rounded-xs">
+              <input
+                type="color"
+                value={env.sky.value}
+                onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
+                onBlur={pushHistory}
+                className="w-5 h-5 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={env.sky.value}
+                onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
+                onBlur={pushHistory}
+                className="flex-1 px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          )}
         </div>
+      </GroupBox>
+
+      {/* Ground */}
+      <GroupBox>
+        <div className="relative">
+          <SectionHeader title="Ground" />
+          <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+            <Toggle
+              value={env.ground?.enabled ?? false}
+              onChange={(v) => { updateEnvironment({ ground: { color: env.ground?.color ?? '#4a7c59', enabled: v } }); pushHistory(); }}
+            />
+          </label>
+        </div>
+        {env.ground?.enabled && (
+          <div className="px-3 pb-3">
+            <div className="px-2 flex items-center border border-border rounded-xs">
+              <input
+                type="color"
+                value={env.ground.color}
+                onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
+                onBlur={pushHistory}
+                className="w-5 h-5 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={env.ground.color}
+                onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
+                onBlur={pushHistory}
+                className="flex-1 px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+        )}
       </GroupBox>
       
 
@@ -439,6 +489,30 @@ function EnvironmentPanel() {
           {/* {!env.playerStartPosition && (
             <p className="mt-1 text-[10px] text-muted/60">기본값: X=0, Y=4, Z=0</p>
           )} */}
+        </div>
+      </GroupBox>
+
+      {/* Boundary */}
+      <GroupBox>
+        <SectionHeader title="Boundary" />
+        <div className="px-3 pb-4">
+          <div className="-mb-1.5">
+            <span className="text-[10px] font-semibold text-muted/50 tracking-wide">크기 : </span>
+            <span className="text-[10px] text-foreground font-semibold tabular-nums">
+              {(env.boundary ?? 0) === 0 ? '무한' : `±${env.boundary}m`}
+            </span>
+          </div>
+          <input
+            type="range" min="0" max="200" step="5"
+            value={env.boundary ?? 0}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              updateEnvironment({ boundary: v === 0 ? undefined : v });
+            }}
+            onMouseUp={pushHistory}
+            className="w-full accent-primary"
+          />
+          <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음</p>
         </div>
       </GroupBox>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -12,6 +12,28 @@ import { ObjectRefsContext } from './ObjectRefsContext';
 import { pointerDownOnObjectRef } from './boxSelectState';
 import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
 import type { Vector3 as Vec3 } from '@/types/scene';
+
+function BoundaryGizmo({ size }: { size: number }) {
+  const b = size;
+  const positions = useMemo(() => new Float32Array([
+    -b, 0.02, -b,   b, 0.02, -b,
+     b, 0.02, -b,   b, 0.02,  b,
+     b, 0.02,  b,  -b, 0.02,  b,
+    -b, 0.02,  b,  -b, 0.02, -b,
+    -b, 0, -b,  -b, 8, -b,
+     b, 0, -b,   b, 8, -b,
+     b, 0,  b,   b, 8,  b,
+    -b, 0,  b,  -b, 8,  b,
+  ]), [b]);
+  return (
+    <lineSegments>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial color="#f59e0b" />
+    </lineSegments>
+  );
+}
 
 function SpawnMarker({ position }: { position: Vec3 }) {
   return (
@@ -237,6 +259,10 @@ export function EditorCanvas() {
           {objects.filter((o) => o.parentId === null).map((obj) => (
             <EditorObjectInstance key={obj.id} object={obj} />
           ))}
+
+          {(environment.boundary ?? 0) > 0 && (
+            <BoundaryGizmo size={environment.boundary!} />
+          )}
 
           {environment.playerStartPosition && (
             <SpawnMarker position={environment.playerStartPosition} />
