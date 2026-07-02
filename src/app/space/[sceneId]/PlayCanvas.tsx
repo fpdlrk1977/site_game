@@ -17,9 +17,12 @@ function AutoCollider({ object, assets, onEvent, allObjects }: {
   onEvent: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
   allObjects: ObjectNodeSchema[];
 }) {
+  // GLB(산·바위 등 오목한 지형 포함)는 trimesh로 실제 메쉬 형태 그대로 충돌 처리.
+  // hull(볼록 껍질)은 오목한 형태를 매끈하게 뭉개버려 절벽/급경사가 실제보다 완만한
+  // 경사로 처리되는 원인이 되므로 사용하지 않는다 (fixed 바디는 trimesh 사용 가능).
   const colliders = object.primitiveShape === 'box' ? 'cuboid'
     : object.primitiveShape === 'sphere' ? 'ball'
-    : 'hull'; // glb, cylinder, plane 등 → convex hull
+    : 'trimesh';
 
   return (
     <RigidBody

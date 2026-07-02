@@ -1,5 +1,52 @@
 # CHANGELOG: 변경 이력 및 빌드 스냅샷
 
+## [0.6.2] - 2026-07-02
+### 플레이어 컨트롤러 재작성 — 경사면/지형 통과 버그 근본 수정
+
+#### 문제
+W(전진) + 점프로 가파른 지형(산 등)에 부딪히면 캐릭터가 뚫고 넘어가거나, 멈춘 듯 서서히 흘러내리는 현상이 반복 보고됨. 여러 차례 임계값 패치를 시도했으나 재발.
+
+#### 원인
+기존 `PlayModeController`는 dynamic `RigidBody`를 매 프레임 `setLinvel`/`setTranslation`으로 강제 덮어쓰는 방식이었음. Rapier 충돌 솔버가 경사면 접촉으로 밀어올린 위치를 스크립트가 다시 스냅백하는 핑퐁 구조였고, 특히 **점프 상승 구간(`jumpActiveRef` true)에서는 이 스냅백 로직 자체가 완전히 비활성화**되어 있어 W+점프로 지형에 부딪히는 정확히 그 상황에서 보호 장치가 작동하지 않았음. 추가로 `isGrounded` 판정이 raycast가 아닌 절대 Y좌표(`pos.y < 1.5`) 하드코딩이었고, 산 같은 오목 지형에도 볼록 껍질(`hull`) 콜라이더만 사용되고 있었음.
+
+#### 수정
+- `PlayModeController`의 플레이어 바디를 dynamic → **`kinematicPosition`**으로 전환, Rapier의 `world.createCharacterController()`(`KinematicCharacterController`) 기반 move-and-slide 방식으로 재작성
+- `setMaxSlopeClimbAngle` / `setMinSlopeSlideAngle` (46°)로 오를 수 있는 경사각을 엔진 레벨에서 명시적으로 제한 — 이 각도보다 가파른 지형은 물리적으로 등반 불가, 자동으로 미끄러져 내려옴
+- `enableAutostep(0.3, 0.2, true)`로 낮은 턱/계단만 자동으로 넘어가도록 허용(큰 지형은 영향 없음), `enableSnapToGround(0.3)`로 미세 지면 요철에서의 튐 방지
+- 중력을 수동 적분(`verticalVelRef`)하는 방식으로 변경, 접지 여부는 `computedGrounded()`(실제 지오메트리 접촉 판정)로 대체 — 절대 Y좌표 하드코딩 제거
+- 매 프레임 위치 강제 텔레포트(`setTranslation`) 로직 완전 제거 — 스크립트와 물리 솔버의 소유권 경합 해소
+
+#### 후속 수정 — AutoCollider hull → trimesh
+0.6.2 배포 후에도 W+점프로 산을 넘어가는 현상이 재현됨. 원인은 `PlayCanvas.tsx`의 `AutoCollider`(physics.enabled가 꺼진 — 즉 기본값 그대로인 — 오브젝트에 자동으로 고정 콜라이더를 부여하는 컴포넌트)가 박스/구체가 아닌 모든 GLB를 `hull`(볼록 껍질)로 근사하고 있었기 때문. 볼록 껍질은 오목한 지형(산의 굴곡, 급경사, 오버행)을 실제보다 완만하게 뭉개버려서, `MAX_SLOPE_CLIMB_DEG` 각도 제한이 정상 작동해도 애초에 "덜 가파른 지형"으로 인식되어 통과됨. `ObjectNodeSchema`의 물리 기본값이 `physics.enabled: false`(`DEFAULT_PHYSICS`)이므로, 에셋 브라우저로 배치만 하고 Physics 패널을 건드리지 않은 일반적인 산/바위 오브젝트는 전부 이 경로를 탄다.
+- `AutoCollider`의 콜라이더 매핑을 `hull` → **`trimesh`**로 변경 (`type="fixed"` 바디는 오목한 trimesh를 안전하게 사용 가능 — convex 제약은 dynamic 바디에만 적용됨). 이제 실제 GLB 메쉬 형태 그대로 충돌 처리되어, 로컬하게 가파른 절벽/오버행이 실제로 가파르게 판정됨
+
+#### 검토: "일반적인 게임의 처리 방식" 4가지 대조
+사용자가 조사한 대표적 해법과 현재 구현을 대조한 결과:
+- **① 법선 벡터 기반 경사각 제한**: Rapier `KinematicCharacterController`가 `setMaxSlopeClimbAngle`/`setMinSlopeSlideAngle`로 이미 엔진 네이티브 레벨에서 수행 중 (0.6.2에 적용). 직접 재구현할 필요 없음
+- **② 벽면 슬라이딩(속도 투영)**: `computeColliderMovement` + `slideEnabled(true)`가 move-and-slide 스윕 테스트로 이미 처리. 수동으로 `Velocity - Dot(Velocity, Normal) * Normal` 재구현 시 기존에 고쳤던 "스크립트 vs 솔버 경합" 버그가 재발할 위험이 있어 권장하지 않음
+- **③ 마찰력 0**: 플레이어 캡슐 콜라이더는 이미 `friction={0}` 적용됨. 다만 KinematicCharacterController 방식에서는 경사 통과 여부가 마찰이 아닌 슬로프 각도 판정으로 결정되므로 영향은 제한적
+- **④ 단순화된 충돌 메쉬 / 투명 벽**: 이번에 실제로 누락되어 있던 부분. `hull` → `trimesh` 전환으로 지형 정확도를 개선함. 그래도 특정 구역을 100% 차단하고 싶다면(디자인 의도상 절대 불가 지역), 해당 산 GLB와 별도로 눈에 안 보이는 단순 Box/Cylinder 콜라이더 오브젝트를 겹쳐 놓는 방식(Invisible Wall)을 여전히 권장 — 현재 에디터에서도 투명 오브젝트(visible: false + physics.enabled: true)로 구현 가능
+
+#### 후속 수정 — 오토스텝(autostep) 비활성화
+trimesh 전환 후에도 "점프를 여러 번 반복하면 결국 산을 넘어간다"는 현상이 재현됨. 단번에 넘어가는 게 아니라 "여러 번 시도해야" 넘어간다는 점이 단서 — 이는 경사각 제한이 뚫린 게 아니라, `enableAutostep(0.3, 0.2, true)`가 매 점프 착지마다 조금씩 캐릭터를 밀어 올리는 누적 현상이었을 가능성이 높음. 저폴리곤 산 메쉬(GLB)는 표면이 완전히 매끈한 경사면이 아니라 작은 계단 모양 facet들로 쪼개져 있는 경우가 많은데, 오토스텝은 이런 작은 턱(최대 0.3m)을 정당한 "계단"으로 간주해 자동으로 올라타게 해준다. 이 기능이 경사각 판정과 별개의 경로로 동작하기 때문에, `maxSlopeClimbAngle`이 정상 작동해도 오토스텝이 반복 적용되며 경사각 제한을 우회해 서서히 정상을 넘어갈 수 있었음.
+- `PlayModeController.tsx`에서 `enableAutostep` 호출 제거, `controller.disableAutostep()`으로 명시적 비활성화
+- 이 게임에는 별도 계단 오브젝트/기능이 없어 오토스텝의 실사용 이점이 크지 않고, 지형 등반 우회의 위험이 더 크다고 판단해 완전 비활성화함. 추후 작은 턱(요철 바닥 등)이 걸리적거리면 `enableAutostep(0.1, 0.1, false)`처럼 훨씬 작은 값으로 재도입 검토 가능
+
+#### 후속 수정 — 진짜 근본 원인 발견: `computedGrounded()`가 경사각을 무시함
+trimesh 전환 + 오토스텝 비활성화 후에도 "점프를 여러 번 반복하면 산을 넘어간다"는 현상이 계속 재현됨. 브라우저/로그인 없이 `@dimforge/rapier3d-compat`만으로 60도 경사로(제한각 46도보다 훨씬 가파름) + 동일한 `PlayModeController` 로직을 격리 재현하는 시뮬레이션 스크립트를 작성해 검증한 결과, 실제 원인을 특정함:
+
+**`KinematicCharacterController.computedGrounded()`는 `setMaxSlopeClimbAngle()` 설정과 무관하게, 발밑에 어떤 접촉이든 있으면(각도 상관없이) `true`를 반환한다.** 순수 걷기(수평 이동만)로는 60도 경사면에 막혀 더 못 감(경사각 제한이 정상 작동하는 것처럼 보임) — 하지만 일단 점프로 그 경사면 위에 올라서면, `computedGrounded()`가 `true`를 반환하므로 게임 로직이 "접지 상태"로 착각해 그 자리에서 **또 점프를 허용**한다. 이 잘못된 재점프가 매번 조금씩 더 높이/앞으로 캐릭터를 밀어 올리고, 반복될수록 산 정상까지 누적 등반이 가능해짐. (격리 시뮬레이션: 기존 로직은 15초 반복 점프 후 정상 근처 z=13.7/15, y=16.4/17.3까지 도달 — 명백한 버그 재현. 수정 로직은 50초·수십 회 반복 점프 후에도 z=4.76(경사로 진입 지점 밖)에서 벗어나지 못함 — 정상 차단 확인)
+
+- `PlayModeController.tsx`에서 `controller.computedGrounded()` 원값을 그대로 쓰지 않고, `controller.numComputedCollisions()` / `computedCollision(i).normal1`로 이번 프레임의 모든 접촉면 노멀 각도를 직접 계산해 "걸을 수 있는 각도(≤46°)의 접촉이 하나라도 있을 때만" 진짜 접지로 인정하도록 변경. 이 "trueGrounded" 값을 점프 허용 여부와 낙하 속도 리셋에 사용
+- 결과적으로 46°보다 가파른 면 위에서는 재점프가 원천 차단되고, 중력이 정상적으로 캐릭터를 끌어내림
+
+#### 남은 과제 (별도 확인 필요)
+- 경사각 임계값(46°)은 실제 산 에셋의 형태를 보고 튜닝 필요할 수 있음 (`PlayModeController.tsx` 상단 `MAX_SLOPE_CLIMB_DEG`)
+- `PhysicsObject.tsx`(physics.enabled를 사용자가 직접 켠 오브젝트)의 `colliderType` 기본값도 `'hull'`(`DEFAULT_PHYSICS`) — 사용자가 Inspector에서 직접 `trimesh`로 바꾸지 않는 한 동일한 문제가 재발할 수 있음. 다만 이 기본값은 mass>0(dynamic) 오브젝트에도 공유되고, dynamic 바디에는 trimesh가 부적합/불안정하므로 전역 기본값을 바꾸기보다 산처럼 큰 정적 지형에는 사용자가 Inspector에서 명시적으로 `trimesh`를 선택하도록 안내하는 편이 안전함
+- 100% 확실한 차단이 필요한 구역(디자인상 절대 진입 불가)은 이번 수정 이후에도 메쉬 정확도에 의존하지 않는 별도의 투명 Box/Cylinder 콜라이더(Invisible Wall)를 덧대는 것을 권장
+
+---
+
 ## [0.6.1] - 2026-07-02
 ### 환경 편집 고도화 + 버그 수정
 

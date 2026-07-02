@@ -3,9 +3,17 @@
 import { useRef, useEffect, MutableRefObject, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
-import { RigidBody, CapsuleCollider, CoefficientCombineRule, type RapierRigidBody } from '@react-three/rapier';
+import { RigidBody, CapsuleCollider, CoefficientCombineRule, useRapier, type RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
+
+const DEG2RAD = Math.PI / 180;
+// PlayCanvas의 <Physics gravity={[0, -20, 0]}>와 동일한 크기로 유지할 것
+// (킨매틱 바디는 물리 월드의 중력을 받지 않아 여기서 수동으로 적분한다)
+const GRAVITY = 20;
+// 이 각도보다 가파른 경사(산 등)는 오를 수 없고 미끄러져 내려온다
+const MAX_SLOPE_CLIMB_DEG = 46;
+const MIN_SLOPE_SLIDE_DEG = 46;
 
 // ── 유틸 ────────────────────────────────────────────────────────
 
@@ -121,6 +129,7 @@ export function PlayModeController({
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   const { camera } = useThree();
+  const { world } = useRapier();
   const elevationRef = useRef(0.45);
   const cameraDistanceRef = useRef(8);
   const isDragging = useRef(false);
@@ -134,10 +143,30 @@ export function PlayModeController({
   const characterGroupRef = useRef<THREE.Group>(null);
   const movingRef = useRef(false);
   const jumpingRef = useRef(false);
-  // 점프 중 플래그 — 점프 Y속도와 경사면 Y속도를 구별하는 데 사용
-  const jumpActiveRef = useRef(false);
-  // 직전 프레임의 Y 위치 — 경사면이 올려놓은 위치를 복원하는 기준점
-  const prevPosYRef = useRef(spawnPosition[1]);
+  // 수동으로 적분하는 수직 속도 (킨매틱 바디는 물리 솔버가 다루지 않음)
+  const verticalVelRef = useRef(0);
+  // KinematicCharacterController.computedGrounded()의 직전 프레임 결과
+  const groundedRef = useRef(false);
+  const controllerRef = useRef<ReturnType<typeof world.createCharacterController> | null>(null);
+
+  // 캐릭터 컨트롤러 생성 — 경사각 제한/지면 스냅을 엔진이 직접 처리
+  useEffect(() => {
+    const controller = world.createCharacterController(0.02);
+    controller.setSlideEnabled(true);
+    controller.setMaxSlopeClimbAngle(MAX_SLOPE_CLIMB_DEG * DEG2RAD);
+    controller.setMinSlopeSlideAngle(MIN_SLOPE_SLIDE_DEG * DEG2RAD);
+    // 오토스텝 비활성화: 저폴리곤 지형(산 등)은 표면이 작은 계단 모양 facet으로
+    // 쪼개져 있는 경우가 많아, 오토스텝이 그걸 "계단"으로 오인해 매 점프마다
+    // 조금씩 밀어 올려 결국 경사각 제한을 무력화시키고 산을 넘게 만든다.
+    controller.disableAutostep();
+    controller.enableSnapToGround(0.3);
+    controller.setApplyImpulsesToDynamicBodies(true);
+    controllerRef.current = controller;
+    return () => {
+      world.removeCharacterController(controller);
+      controllerRef.current = null;
+    };
+  }, [world]);
 
   // 키보드
   useEffect(() => {
@@ -198,19 +227,14 @@ export function PlayModeController({
     };
   }, [azimuthRef]);
 
-  useFrame(() => {
+  useFrame((_state, delta) => {
     const rb = playerRef.current;
-    if (!rb) return;
+    const controller = controllerRef.current;
+    if (!rb || !controller || rb.numColliders() === 0) return;
 
-    const vel = rb.linvel();
     const pos = rb.translation();
     const az = azimuthRef.current;
     const speed = playerSpeed;
-
-    // 점프 Y속도가 정점을 지나 하강 시작하면 점프 플래그 해제
-    if (jumpActiveRef.current && vel.y <= 0) {
-      jumpActiveRef.current = false;
-    }
 
     // 카메라는 (sin(az), cos(az)) 방향 오프셋에서 캐릭터를 바라보므로,
     // 카메라가 실제로 바라보는(전진) 방향은 그 반대인 (-sin(az), -cos(az))다.
@@ -229,42 +253,65 @@ export function PlayModeController({
     const len = Math.sqrt(vx * vx + vz * vz);
     if (len > 0) { vx = (vx / len) * speed; vz = (vz / len) * speed; }
 
-    if (jumpActiveRef.current) {
-      // 점프 중: Y 속도를 그대로 유지하고 현재 위치를 기준점으로 갱신
-      rb.setLinvel({ x: vx, y: vel.y, z: vz }, true);
-      prevPosYRef.current = pos.y;
-    } else {
-      // 점프 없이 Y 위치가 올라갔으면 이전 위치로 강제 복원 (경사면 타기 방지)
-      // — vel.y 취소만으로는 물리 스텝이 이미 올려놓은 위치를 막지 못함
-      if (pos.y > prevPosYRef.current + 0.01) {
-        rb.setTranslation({ x: pos.x, y: prevPosYRef.current, z: pos.z }, true);
-        rb.setLinvel({ x: vx, y: 0, z: vz }, true);
-      } else {
-        prevPosYRef.current = pos.y;
-        // 낙하(음수)는 허용, 경사면 반발력의 양수 Y는 차단
-        rb.setLinvel({ x: vx, y: Math.min(vel.y, 0), z: vz }, true);
-      }
+    // 중력 수동 적분 — 착지 상태면 누적된 낙하 속도를 리셋
+    if (groundedRef.current && verticalVelRef.current < 0) {
+      verticalVelRef.current = 0;
     }
+    verticalVelRef.current -= GRAVITY * delta;
 
-    // 점프
-    const isGrounded = pos.y < 1.5 && vel.y <= 0.3;
-    if ((keys.current.space || mobile?.jump) && isGrounded) {
-      rb.applyImpulse({ x: 0, y: playerJumpForce, z: 0 }, true);
-      jumpActiveRef.current = true;
+    // 점프 — 직전 프레임의 지면 판정(computedGrounded)에서만 허용
+    if ((keys.current.space || mobile?.jump) && groundedRef.current) {
+      verticalVelRef.current = playerJumpForce;
+      groundedRef.current = false;
       keys.current.space = false;
       if (mobile) mobile.jump = false;
     }
 
-    // 낙사 리스폰
-    if (pos.y < -10) {
-      rb.setTranslation({ x: spawnPosition[0], y: spawnPosition[1], z: spawnPosition[2] }, true);
-      rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    // 지형과 충돌·슬라이딩되는 실제 이동량을 캐릭터 컨트롤러가 계산
+    // (오토스텝·지면 스냅을 엔진이 처리 — 수동 위치 보정 불필요)
+    const desired = { x: vx * delta, y: verticalVelRef.current * delta, z: vz * delta };
+    controller.computeColliderMovement(rb.collider(0), desired);
+    const corrected = controller.computedMovement();
+
+    // computedGrounded()는 maxSlopeClimbAngle과 무관하게 "발밑에 뭔가 닿아있으면"
+    // true를 반환한다(격리 시뮬레이션으로 확인된 동작) — 46도보다 가파른 절벽 위에
+    // 서 있어도 grounded=true로 나와 그 자리에서 또 점프가 가능해지고, 이게 반복되면
+    // 절벽을 타고 올라가버린다. 그래서 접촉면 노멀 각도를 직접 검사해, 걸을 수 있는
+    // 각도(<=MAX_SLOPE_CLIMB_DEG)의 접촉이 하나라도 있을 때만 진짜 접지로 인정한다.
+    const rawGrounded = controller.computedGrounded();
+    let touchingAnything = false;
+    let hasWalkableContact = false;
+    const numCollisions = controller.numComputedCollisions();
+    for (let i = 0; i < numCollisions; i++) {
+      const collision = controller.computedCollision(i);
+      if (!collision?.normal1) continue;
+      touchingAnything = true;
+      const angleDeg = Math.acos(Math.min(1, Math.max(-1, collision.normal1.y))) / DEG2RAD;
+      if (angleDeg <= MAX_SLOPE_CLIMB_DEG) hasWalkableContact = true;
     }
+    groundedRef.current = rawGrounded && (touchingAnything ? hasWalkableContact : true);
+
+    // 위쪽 이동이 경사각 제한/천장 충돌로 막혔다면 수직 속도를 소모
+    if (verticalVelRef.current > 0 && corrected.y < desired.y - 1e-4) {
+      verticalVelRef.current = 0;
+    }
+
+    const newPos = { x: pos.x + corrected.x, y: pos.y + corrected.y, z: pos.z + corrected.z };
+
+    // 낙사 리스폰
+    if (newPos.y < -10) {
+      newPos.x = spawnPosition[0];
+      newPos.y = spawnPosition[1];
+      newPos.z = spawnPosition[2];
+      verticalVelRef.current = 0;
+    }
+
+    rb.setNextKinematicTranslation(newPos);
 
     // 애니메이션 상태 업데이트
     const horizSpeed = Math.sqrt(vx * vx + vz * vz);
     movingRef.current = horizSpeed > 0.5;
-    jumpingRef.current = vel.y > 1.5;
+    jumpingRef.current = verticalVelRef.current > 1.5;
 
     // 이동 방향으로 캐릭터 회전 (lerp)
     if (movingRef.current && characterGroupRef.current) {
@@ -279,7 +326,7 @@ export function PlayModeController({
     // 팔로우 카메라
     const d = cameraDistanceRef.current;
     const el = elevationRef.current;
-    _targetPos.current.set(pos.x, pos.y + 1, pos.z);
+    _targetPos.current.set(newPos.x, newPos.y + 1, newPos.z);
     camTarget.current.lerp(_targetPos.current, 0.12);
 
     const camX = camTarget.current.x + d * Math.sin(az) * Math.cos(el);
@@ -294,10 +341,8 @@ export function PlayModeController({
   return (
     <RigidBody
       ref={playerRef}
-      type="dynamic"
+      type="kinematicPosition"
       position={spawnPosition}
-      enabledRotations={[false, false, false]}
-      linearDamping={4}
       colliders={false}
     >
       <CapsuleCollider args={[0.5, 0.4]} friction={0} frictionCombineRule={CoefficientCombineRule.Min} />
