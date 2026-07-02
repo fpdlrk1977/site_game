@@ -10,6 +10,7 @@ import { EditorObjectInstance } from './EditorObjectInstance';
 import { GizmoController } from './GizmoController';
 import { ObjectRefsContext } from './ObjectRefsContext';
 import { pointerDownOnObjectRef } from './boxSelectState';
+import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
 import type { Vector3 as Vec3 } from '@/types/scene';
 
 function SpawnMarker({ position }: { position: Vec3 }) {
@@ -242,6 +243,8 @@ export function EditorCanvas() {
           )}
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
+
+          <PostProcessingEffects preset={environment.postProcessing?.preset ?? 'none'} />
 
           <OrbitControls
             ref={orbitRef}

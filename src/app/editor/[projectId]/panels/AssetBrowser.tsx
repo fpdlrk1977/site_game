@@ -5,6 +5,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { tryEmbedTextures } from '@/lib/glbEmbed';
+import { AssetPreviewPopup } from './AssetPreviewPopup';
 import type { AssetRefSchema, ContentType, ParticlePreset } from '@/types/scene';
 
 type Tab = 'models' | 'character' | 'content' | 'particle' | 'materials' | 'textures' | 'hdr' | 'audio';
@@ -271,8 +272,19 @@ function UploadButton({ uploading, onClick, label = '.glb', title }: { uploading
 }
 
 function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string; onAdd?: () => void }) {
+  const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const isModel = !!asset.dracoUrl;
+
   return (
-    <div className="group relative w-[72px] h-[72px] shrink-0 rounded-xl bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden">
+    <div
+      ref={cardRef}
+      className="group relative w-[72px] h-[72px] shrink-0 rounded-xl bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
+      onMouseEnter={() => {
+        if (isModel && cardRef.current) setHoverRect(cardRef.current.getBoundingClientRect());
+      }}
+      onMouseLeave={() => setHoverRect(null)}
+    >
       <span className="text-2xl leading-none">{icon}</span>
       <span className="text-[9px] text-muted truncate w-full text-center px-1">{asset.name}</span>
       {onAdd && (
@@ -282,6 +294,9 @@ function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string
         >
           + 추가
         </button>
+      )}
+      {hoverRect && isModel && (
+        <AssetPreviewPopup url={asset.dracoUrl} name={asset.name} anchorRect={hoverRect} />
       )}
     </div>
   );

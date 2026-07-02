@@ -5,7 +5,7 @@ import { ArrowLeftRight } from 'lucide-react';
 import { MathUtils } from 'three';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
-import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset } from '@/types/scene';
 
 function evalMath(expr: string): number | null {
   const s = expr.replace(/[^0-9+\-*/.()\s]/g, '').trim();
@@ -39,6 +39,10 @@ function NumInput({
   const isFocused = useRef(false);
   const isDragging = useRef(false);
   const dragOrigin = useRef({ x: 0, val: 0 });
+  // RAF ref: throttles Zustand store updates to once-per-frame to avoid
+  // "Maximum update depth exceeded" when pointermove fires faster than React
+  // can process SyncLane renders (especially with DevTools open).
+  const rafRef = useRef<{ id: number; val: number } | null>(null);
 
   useEffect(() => {
     if (!isFocused.current) setLocal(fmt(value));
@@ -56,8 +60,12 @@ function NumInput({
     if (!isDragging.current) return;
     const dx = e.clientX - dragOrigin.current.x;
     const newVal = Math.round((dragOrigin.current.val + dx * dragStep) * 10) / 10;
-    onChange(newVal);
     setLocal(fmt(newVal));
+    if (rafRef.current) cancelAnimationFrame(rafRef.current.id);
+    rafRef.current = {
+      val: newVal,
+      id: requestAnimationFrame(() => { onChange(newVal); rafRef.current = null; }),
+    };
   };
 
   const onDragUp = (e: React.PointerEvent<HTMLSpanElement>) => {
@@ -65,6 +73,11 @@ function NumInput({
     isDragging.current = false;
     e.currentTarget.releasePointerCapture(e.pointerId);
     document.body.style.cursor = '';
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current.id);
+      onChange(rafRef.current.val);
+      rafRef.current = null;
+    }
     onCommit();
   };
 
@@ -398,6 +411,35 @@ function EnvironmentPanel() {
         {!env.playerStartPosition && (
           <p className="text-[10px] text-muted/60">기본값: X=0, Y=4, Z=0</p>
         )}
+      </div>
+
+      {/* Post Processing */}
+      <SectionHeader title="Post Processing" icon="✦" />
+      <div className="px-3 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-semibold text-muted tracking-wide">Preset</span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {(['none', 'cinematic', 'dreamy', 'vintage', 'sharp'] as PostProcessPreset[]).map((preset) => {
+            const current = env.postProcessing?.preset ?? 'none';
+            const LABELS: Record<PostProcessPreset, string> = {
+              none: 'None', cinematic: 'Cinematic', dreamy: 'Dreamy', vintage: 'Vintage', sharp: 'Sharp',
+            };
+            return (
+              <button
+                key={preset}
+                onClick={() => { updateEnvironment({ postProcessing: { preset } }); pushHistory(); }}
+                className={`px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+                  current === preset
+                    ? 'bg-primary text-white'
+                    : 'bg-background border border-border text-muted hover:text-foreground hover:border-border/60'
+                }`}
+              >
+                {LABELS[preset]}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* 씬 메모 */}
@@ -909,8 +951,117 @@ export function InspectorPanel() {
           </div>
         )}
 
+        {/* Light */}
+        {obj.light && (
+          <>
+            <SectionHeader title="Light" icon="💡" isOpen={isOpen('light')} onToggle={() => toggleSection('light')} />
+            {isOpen('light') && (
+              <div className="px-3 py-3 space-y-3">
+                {/* Type */}
+                <div>
+                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Type</span>
+                  <select
+                    value={obj.light.type}
+                    onChange={(e) => { updateObject(obj.id, { light: { ...obj.light!, type: e.target.value as 'point' | 'spot' | 'directional' } }); pushHistory(); }}
+                    className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="point">Point Light</option>
+                    <option value="spot">Spot Light</option>
+                    <option value="directional">Directional Light</option>
+                  </select>
+                </div>
+                {/* Color */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">Color</span>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={obj.light.color}
+                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent" />
+                    <span className="text-[10px] font-mono text-muted">{obj.light.color}</span>
+                  </div>
+                </div>
+                {/* Intensity */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-muted tracking-wide">Intensity</span>
+                    <span className="text-[10px] text-muted tabular-nums">{obj.light.intensity.toFixed(1)}</span>
+                  </div>
+                  <input type="range" min="0" max="10" step="0.1" value={obj.light.intensity}
+                    onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, intensity: parseFloat(e.target.value) } })}
+                    onMouseUp={pushHistory}
+                    className="w-full accent-primary" />
+                </div>
+                {/* Distance (point, spot) */}
+                {obj.light.type !== 'directional' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-semibold text-muted tracking-wide">Distance</span>
+                      <span className="text-[10px] text-muted tabular-nums">{(obj.light.distance ?? 20).toFixed(0)}</span>
+                    </div>
+                    <input type="range" min="1" max="100" step="1" value={obj.light.distance ?? 20}
+                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, distance: parseFloat(e.target.value) } })}
+                      onMouseUp={pushHistory}
+                      className="w-full accent-primary" />
+                  </div>
+                )}
+                {/* Decay (point, spot) */}
+                {obj.light.type !== 'directional' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-semibold text-muted tracking-wide">Decay</span>
+                      <span className="text-[10px] text-muted tabular-nums">{(obj.light.decay ?? 2).toFixed(1)}</span>
+                    </div>
+                    <input type="range" min="0" max="3" step="0.1" value={obj.light.decay ?? 2}
+                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, decay: parseFloat(e.target.value) } })}
+                      onMouseUp={pushHistory}
+                      className="w-full accent-primary" />
+                  </div>
+                )}
+                {/* Angle + Penumbra (spot only) */}
+                {obj.light.type === 'spot' && (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold text-muted tracking-wide">Angle (°)</span>
+                        <span className="text-[10px] text-muted tabular-nums">
+                          {((obj.light.angle ?? Math.PI / 6) * 180 / Math.PI).toFixed(0)}°
+                        </span>
+                      </div>
+                      <input type="range" min="5" max="89" step="1"
+                        value={Math.round((obj.light.angle ?? Math.PI / 6) * 180 / Math.PI)}
+                        onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, angle: parseFloat(e.target.value) * Math.PI / 180 } })}
+                        onMouseUp={pushHistory}
+                        className="w-full accent-primary" />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold text-muted tracking-wide">Penumbra</span>
+                        <span className="text-[10px] text-muted tabular-nums">{(obj.light.penumbra ?? 0.1).toFixed(2)}</span>
+                      </div>
+                      <input type="range" min="0" max="1" step="0.01" value={obj.light.penumbra ?? 0.1}
+                        onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, penumbra: parseFloat(e.target.value) } })}
+                        onMouseUp={pushHistory}
+                        className="w-full accent-primary" />
+                    </div>
+                  </>
+                )}
+                {/* Cast Shadow */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-xs text-muted">Cast Shadow</span>
+                  <Toggle
+                    value={obj.light.castShadow ?? false}
+                    onChange={(v) => { updateObject(obj.id, { light: { ...obj.light!, castShadow: v } }); pushHistory(); }}
+                  />
+                </label>
+              </div>
+            )}
+          </>
+        )}
+
         {/* Physics */}
-        <SectionHeader title="Physics" icon="⬡" isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
+        {!obj.light && (
+        <><SectionHeader title="Physics" icon="⬡" isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
         {isOpen('physics') && <div className="px-3 py-3 space-y-3">
           <label className="flex items-center justify-between cursor-pointer">
             <span className="text-xs text-muted">Enable Physics</span>
@@ -969,7 +1120,7 @@ export function InspectorPanel() {
               </div>
             </>
           )}
-        </div>}
+        </div>}</>)}
 
         {/* Events */}
         <SectionHeader title="Events" icon="⚡" isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />

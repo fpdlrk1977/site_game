@@ -10,6 +10,7 @@ import {
   PrimitiveShape,
   ContentType,
   ParticlePreset,
+  LightType,
 } from '@/types/scene';
 
 interface HistoryEntry {
@@ -91,6 +92,7 @@ interface SceneActions {
   copyObjectProperties: () => void;
   pasteObjectProperties: () => void;
   batchUpdateObjects: (ids: string[], patch: (obj: ObjectNodeSchema) => Partial<ObjectNodeSchema>) => void;
+  addLightObject: (type: LightType) => void;
 }
 
 const SHAPE_NAMES: Record<PrimitiveShape, string> = {
@@ -539,13 +541,11 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   updateEnvironment: (patch) => {
-    const { environment, objects, past } = get();
+    const { environment, objects, _prevSnapshot } = get();
     set({
+      _prevSnapshot: _prevSnapshot ?? { objects, environment },
       environment: { ...environment, ...patch },
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
-      _prevSnapshot: null,
     });
   },
 
@@ -645,6 +645,37 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const { objects, environment, past } = get();
     set({
       objects: objects.map((o) => ids.includes(o.id) ? { ...o, ...patch(o) } : o),
+      isModified: true,
+      past: [...past.slice(-49), { objects, environment }],
+      future: [],
+    });
+  },
+
+  addLightObject: (type) => {
+    objectCounter += 1;
+    const LIGHT_NAMES: Record<LightType, string> = { point: '포인트 라이트', spot: '스팟 라이트', directional: '방향 라이트' };
+    const obj: ObjectNodeSchema = {
+      id: MathUtils.generateUUID(),
+      name: `${LIGHT_NAMES[type]} ${objectCounter}`,
+      assetId: null,
+      primitiveShape: undefined,
+      material: {},
+      parentId: null,
+      layer: 'default',
+      position: { x: 0, y: 3, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      visible: true,
+      locked: false,
+      physics: { ...DEFAULT_PHYSICS },
+      events: [],
+      light: { type, color: '#ffffff', intensity: 1, distance: 20, decay: 2, castShadow: false },
+    };
+    const { objects, environment, past } = get();
+    set({
+      objects: [...objects, obj],
+      selectedId: obj.id,
+      selectedIds: [obj.id],
       isModified: true,
       past: [...past.slice(-49), { objects, environment }],
       future: [],

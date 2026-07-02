@@ -5,15 +5,22 @@ import { useSceneStore } from '@/store/sceneStore';
 import { HierarchyPanel } from './HierarchyPanel';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
-import type { AssetRefSchema, ContentType, ParticlePreset } from '@/types/scene';
+import type { AssetRefSchema, ContentType, ParticlePreset, LightType } from '@/types/scene';
 
 type LeftTab = 'objects' | 'assets';
-type AssetTab = 'models' | 'content' | 'particle';
+type AssetTab = 'models' | 'content' | 'particle' | 'lights';
 
 const ASSET_TABS: { id: AssetTab; label: string }[] = [
   { id: 'models',   label: 'Models' },
   { id: 'content',  label: 'Content' },
   { id: 'particle', label: 'Particles' },
+  { id: 'lights',   label: 'Lights' },
+];
+
+const LIGHT_ITEMS: { type: LightType; label: string; emoji: string }[] = [
+  { type: 'point',       label: '포인트',   emoji: '💡' },
+  { type: 'spot',        label: '스팟',     emoji: '🔦' },
+  { type: 'directional', label: '방향 라이트', emoji: '☀️' },
 ];
 
 const CONTENT_ITEMS: { type: ContentType; label: string; emoji: string }[] = [
@@ -30,7 +37,7 @@ const PARTICLE_ITEMS: { preset: ParticlePreset; label: string; emoji: string }[]
 ];
 
 function AssetsTabContent() {
-  const { projectId, objects, assets, addAsset, addAssetObject, addContentObject, addParticleObject } = useSceneStore();
+  const { projectId, objects, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject } = useSceneStore();
   const [assetTab, setAssetTab] = useState<AssetTab>('models');
   const [uploading, setUploading] = useState(false);
   const { addToast } = useToast();
@@ -159,6 +166,21 @@ function AssetsTabContent() {
               >
                 <span className="text-xl leading-none">{emoji}</span>
                 <span className="text-[9px] text-muted">{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {assetTab === 'lights' && (
+          <div className="grid grid-cols-2 gap-2">
+            {LIGHT_ITEMS.map(({ type, label, emoji }) => (
+              <button
+                key={type}
+                onClick={() => addLightObject(type)}
+                className="h-[72px] rounded-xl bg-background border border-border hover:border-yellow-500/40 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+              >
+                <span className="text-xl leading-none">{emoji}</span>
+                <span className="text-[9px] text-muted text-center leading-snug">{label}</span>
               </button>
             ))}
           </div>

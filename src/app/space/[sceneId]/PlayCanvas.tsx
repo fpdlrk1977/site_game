@@ -46,8 +46,9 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
 
   const allObjects = scene.objects;
   const rootObjects = allObjects.filter((o) => !o.parentId);
-  const autoObjects = rootObjects.filter((o) => !o.physics.enabled);
-  const physicsObjects = rootObjects.filter((o) => o.physics.enabled);
+  const lightObjects = rootObjects.filter((o) => o.light && o.visible);
+  const autoObjects = rootObjects.filter((o) => !o.physics.enabled && !o.light);
+  const physicsObjects = rootObjects.filter((o) => o.physics.enabled && !o.light);
 
   const characterAsset = scene.environment.playerCharacterId
     ? assets.find((a) => a.id === scene.environment.playerCharacterId)
@@ -55,6 +56,28 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
 
   return (
     <Physics gravity={[0, -20, 0]} timeStep="vary">
+      {/* 씬 라이트 오브젝트 */}
+      {lightObjects.map((o) => (
+        <group key={o.id} position={[o.position.x, o.position.y, o.position.z]}
+          rotation={[o.rotation.x * DEG2RAD, o.rotation.y * DEG2RAD, o.rotation.z * DEG2RAD]}>
+          {o.light!.type === 'point' && (
+            <pointLight color={o.light!.color} intensity={o.light!.intensity}
+              distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
+              castShadow={o.light!.castShadow} />
+          )}
+          {o.light!.type === 'spot' && (
+            <spotLight color={o.light!.color} intensity={o.light!.intensity}
+              distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
+              angle={o.light!.angle ?? Math.PI / 6} penumbra={o.light!.penumbra ?? 0.1}
+              castShadow={o.light!.castShadow} />
+          )}
+          {o.light!.type === 'directional' && (
+            <directionalLight color={o.light!.color} intensity={o.light!.intensity}
+              castShadow={o.light!.castShadow} />
+          )}
+        </group>
+      ))}
+
       {/* 바닥 */}
       <RigidBody type="fixed" name="floor">
         <CuboidCollider args={[100, 0.1, 100]} position={[0, -0.1, 0]} />

@@ -9,7 +9,7 @@ import { useObjectRefs } from './ObjectRefsContext';
 import { GlbObject } from './GlbObject';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
 import { pointerDownOnObjectRef } from './boxSelectState';
-import type { ObjectNodeSchema } from '@/types/scene';
+import type { ObjectNodeSchema, LightType } from '@/types/scene';
 
 const markObjectHit = (e: { stopPropagation: () => void }) => {
   e.stopPropagation();
@@ -48,6 +48,97 @@ function ColliderOverlay({ object }: { object: ObjectNodeSchema }) {
         <meshBasicMaterial color="#3b82f6" transparent opacity={0.1} depthWrite={false} />
       </mesh>
     </>
+  );
+}
+
+const LIGHT_ICON_COLOR: Record<LightType, string> = {
+  point: '#fbbf24',
+  spot: '#f97316',
+  directional: '#60a5fa',
+};
+
+function LightObjectInstance({ object }: Props) {
+  const groupRef = useRef<THREE.Group>(null);
+  const refsMap = useObjectRefs();
+  const selectObject = useSceneStore((s) => s.selectObject);
+  const toggleSelectObject = useSceneStore((s) => s.toggleSelectObject);
+  const selectedId = useSceneStore((s) => s.selectedId);
+  const selectedIds = useSceneStore((s) => s.selectedIds);
+  const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
+  const lc = object.light!;
+  const iconColor = LIGHT_ICON_COLOR[lc.type];
+
+  useEffect(() => {
+    if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
+    return () => { refsMap.current.delete(object.id); };
+  }, [object.id, refsMap]);
+
+  useEffect(() => {
+    const g = groupRef.current;
+    if (!g) return;
+    g.position.set(object.position.x, object.position.y, object.position.z);
+    g.rotation.set(object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD);
+    g.scale.set(1, 1, 1);
+  }, [object.position.x, object.position.y, object.position.z,
+    object.rotation.x, object.rotation.y, object.rotation.z]);
+
+  if (!object.visible) return null;
+
+  const handleClick = (shiftKey: boolean) => {
+    if (object.locked) return;
+    if (shiftKey) toggleSelectObject(object.id);
+    else selectObject(object.id);
+  };
+
+  return (
+    <group ref={groupRef} onPointerDown={markObjectHit}>
+      {/* 실제 라이트 — 에디터에서도 조명 효과 미리보기 */}
+      {lc.type === 'point' && (
+        <pointLight
+          color={lc.color} intensity={lc.intensity}
+          distance={lc.distance ?? 20} decay={lc.decay ?? 2}
+          castShadow={lc.castShadow}
+        />
+      )}
+      {lc.type === 'spot' && (
+        <spotLight
+          color={lc.color} intensity={lc.intensity}
+          distance={lc.distance ?? 20} decay={lc.decay ?? 2}
+          angle={lc.angle ?? Math.PI / 6} penumbra={lc.penumbra ?? 0.1}
+          castShadow={lc.castShadow}
+        />
+      )}
+      {lc.type === 'directional' && (
+        <directionalLight color={lc.color} intensity={lc.intensity} castShadow={lc.castShadow} />
+      )}
+
+      {/* 아이콘 — 클릭 가능한 시각 표시자 */}
+      <mesh
+        onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+      >
+        <octahedronGeometry args={[0.18, 0]} />
+        <meshBasicMaterial color={iconColor} />
+      </mesh>
+      {/* 외곽 glow ring */}
+      <mesh>
+        <sphereGeometry args={[0.28, 8, 8]} />
+        <meshBasicMaterial color={iconColor} transparent opacity={0.12} depthWrite={false} />
+      </mesh>
+      {/* spot: 방향 콘 와이어프레임 */}
+      {lc.type === 'spot' && (
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[Math.tan(lc.angle ?? Math.PI / 6) * 3, 3, 12, 1, true]} />
+          <meshBasicMaterial color={iconColor} wireframe transparent opacity={0.3} />
+        </mesh>
+      )}
+      {/* 선택 하이라이트 */}
+      {isSelected && (
+        <mesh>
+          <sphereGeometry args={[0.4, 8, 8]} />
+          <meshBasicMaterial color="#7c3aed" wireframe />
+        </mesh>
+      )}
+    </group>
   );
 }
 
@@ -141,6 +232,7 @@ export function EditorObjectInstance({ object }: Props) {
 
   // 그룹 오브젝트는 별도 컴포넌트로 렌더 (hooks 이후에 early return)
   if (object.isGroup) return <GroupObjectInstance object={object} />;
+  if (object.light) return <LightObjectInstance object={object} />;
 
   if (!object.visible) return null;
 

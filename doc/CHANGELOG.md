@@ -1,5 +1,32 @@
 # CHANGELOG: 변경 이력 및 빌드 스냅샷
 
+## [0.6.0] - 2026-07-02
+### Wave 3 고도화 기능 (3개)
+
+#### 추가
+- **에셋 3D 프리뷰 (W3-1)**: AssetBrowser Models 탭에서 GLB 카드에 마우스를 올리면 160×160 팝업에 미니 R3F Canvas로 모델을 3D 렌더 + 자동 회전. `AssetPreviewPopup.tsx`(신규) — createPortal(document.body)로 overflow:hidden 탈출, Bounds(drei) 자동 fit, Suspense 로딩
+- **포스트 프로세싱 프리셋 (W3-2)**: `@react-three/postprocessing` 설치. `PostProcessingEffects.tsx` 공유 컴포넌트. 4가지 프리셋:
+  - **Cinematic**: Bloom(mild) + Vignette(moderate)
+  - **Dreamy**: Bloom(high) + ChromaticAberration + Vignette(soft)
+  - **Vintage**: Vignette(hard) + Noise
+  - **Sharp**: Bloom(very high threshold) + Vignette(subtle)
+  - Inspector Environment "Post Processing" 섹션 2열 버튼 UI. `EnvSchema.postProcessing?.preset` 저장. EditorCanvas + ViewerCanvas 적용
+- **라이트 오브젝트 (W3-3)**: PointLight / SpotLight / DirectionalLight를 씬 오브젝트로 추가.
+  - `LightType`, `LightConfig` 타입 (`types/scene.ts`), `ObjectNodeSchema.light?` 필드
+  - `sceneStore.addLightObject(type)` 액션
+  - LeftPanel Assets → Lights 탭 (💡/🔦/☀️ 버튼)
+  - CommandPalette에 라이트 추가 커맨드 3종
+  - 에디터: `LightObjectInstance` — 팔면체 아이콘(색상별), glow ring, Spot은 콘 와이어프레임, 선택 하이라이트, 실제 Three.js 라이트도 렌더(에디터에서 조명 효과 미리보기)
+  - Inspector "Light" 섹션: Type / Color / Intensity / Distance / Decay / Angle(spot) / Penumbra(spot) / Cast Shadow
+  - ViewerCanvas + PlayCanvas: 씬 라이트 오브젝트를 실제 Three.js 라이트로 렌더
+
+#### 변경
+- `EnvSchema`: `postProcessing?: { preset: PostProcessPreset }` 추가
+- `ObjectNodeSchema`: `light?: LightConfig` 추가
+- `PlayCanvas`: 라이트 오브젝트를 physics 체인에서 제외(콜라이더 부여 방지)
+
+---
+
 ## [0.5.0] - 2026-07-02
 ### Wave 2 UI/UX 개선 (9개 기능)
 

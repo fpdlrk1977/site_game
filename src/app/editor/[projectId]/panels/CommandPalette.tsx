@@ -23,7 +23,7 @@ export function CommandPalette({ onClose }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const {
-    objects, selectObject, addObject, requestFocusAll, requestCameraView,
+    objects, selectObject, addObject, addLightObject, requestFocusAll, requestCameraView,
     duplicateInPlace, duplicateSelected, deleteSelected, undo, redo,
     groupSelected, ungroupSelected, toggleWireframe, copyObjectProperties, pasteObjectProperties,
   } = useSceneStore();
@@ -47,6 +47,9 @@ export function CommandPalette({ onClose }: Props) {
     { id: 'add-sphere', label: '구체 추가', icon: '○', group: '추가', action: () => { addObject('sphere'); onClose(); } },
     { id: 'add-cylinder', label: '원기둥 추가', icon: '⬡', group: '추가', action: () => { addObject('cylinder'); onClose(); } },
     { id: 'add-plane', label: '평면 추가', icon: '▭', group: '추가', action: () => { addObject('plane'); onClose(); } },
+    { id: 'add-light-point', label: '포인트 라이트 추가', icon: '💡', group: '추가', action: () => { addLightObject('point'); onClose(); } },
+    { id: 'add-light-spot', label: '스팟 라이트 추가', icon: '🔦', group: '추가', action: () => { addLightObject('spot'); onClose(); } },
+    { id: 'add-light-dir', label: '방향 라이트 추가', icon: '☀️', group: '추가', action: () => { addLightObject('directional'); onClose(); } },
     ...objects.map((o) => ({
       id: `obj-${o.id}`,
       label: o.name,

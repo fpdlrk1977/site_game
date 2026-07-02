@@ -18,6 +18,7 @@ export interface EnvSchema {
   playerJumpForce?: number;
   playerStartPosition?: Vector3;
   notes?: string;
+  postProcessing?: { preset: PostProcessPreset };
 }
 
 export interface EventSchema {
@@ -54,6 +55,20 @@ export interface ContentConfig {
 
 export type ParticlePreset = 'fire' | 'dust' | 'light' | 'snow';
 
+export type PostProcessPreset = 'none' | 'cinematic' | 'dreamy' | 'vintage' | 'sharp';
+
+export type LightType = 'point' | 'spot' | 'directional';
+export interface LightConfig {
+  type: LightType;
+  color: string;
+  intensity: number;
+  distance?: number;
+  decay?: number;
+  angle?: number;
+  penumbra?: number;
+  castShadow?: boolean;
+}
+
 export interface ParticleConfig {
   preset: ParticlePreset;
   count?: number;
@@ -87,6 +102,7 @@ export interface ObjectNodeSchema {
   events: EventSchema[];
   content?: ContentConfig;
   particle?: ParticleConfig;
+  light?: LightConfig;
   isGroup?: boolean;
 }
 

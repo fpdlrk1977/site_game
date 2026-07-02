@@ -7,6 +7,7 @@ import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/
 import { ViewerObject } from './ViewerObject';
 import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
+import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
 
@@ -93,6 +94,30 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
           <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} />
         </Suspense>
       )}
+
+      {/* 씬 라이트 오브젝트 */}
+      {objects.filter((o) => o.light && o.visible).map((o) => (
+        <group key={o.id} position={[o.position.x, o.position.y, o.position.z]}
+          rotation={[o.rotation.x * Math.PI / 180, o.rotation.y * Math.PI / 180, o.rotation.z * Math.PI / 180]}>
+          {o.light!.type === 'point' && (
+            <pointLight color={o.light!.color} intensity={o.light!.intensity}
+              distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
+              castShadow={o.light!.castShadow} />
+          )}
+          {o.light!.type === 'spot' && (
+            <spotLight color={o.light!.color} intensity={o.light!.intensity}
+              distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
+              angle={o.light!.angle ?? Math.PI / 6} penumbra={o.light!.penumbra ?? 0.1}
+              castShadow={o.light!.castShadow} />
+          )}
+          {o.light!.type === 'directional' && (
+            <directionalLight color={o.light!.color} intensity={o.light!.intensity}
+              castShadow={o.light!.castShadow} />
+          )}
+        </group>
+      ))}
+
+      <PostProcessingEffects preset={environment.postProcessing?.preset ?? 'none'} />
 
       {!playMode && (
         <OrbitControls
