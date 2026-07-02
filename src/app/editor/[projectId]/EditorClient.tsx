@@ -12,6 +12,7 @@ import { EditorOnboarding } from './EditorOnboarding';
 import { ViewportStatusBar } from './canvas/ViewportStatusBar';
 import { ViewportFloatingToolbar } from './canvas/ViewportFloatingToolbar';
 import { ViewportOrientationGizmo } from './canvas/ViewportOrientationGizmo';
+import { CommandPalette } from './panels/CommandPalette';
 import { Toaster } from '@/components/ui/Toaster';
 import type { ProjectSceneSchema } from '@/types/scene';
 
@@ -30,10 +31,12 @@ export function EditorClient({ projectName, initialScene }: Props) {
     loadScene, undo, redo, deleteSelected, duplicateSelected, duplicateInPlace,
     setTransformMode, requestFocus, requestFocusAll, requestCameraView,
     groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark,
+    copyObjectProperties, pasteObjectProperties,
   } = useSceneStore();
   const [isMobile, setIsMobile] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [bottomOpen, setBottomOpen] = useState(true);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   // 씬 초기 로드 — ref로 캡처해 마운트 시 1회만 실행 (initialScene prop 재생성 시 재로드 방지)
   const initialSceneRef = useRef(initialScene);
@@ -55,14 +58,20 @@ export function EditorClient({ projectName, initialScene }: Props) {
       const tag = (e.target as HTMLElement)?.tagName;
       const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
 
-      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); return; }
-      if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); redo(); return; }
+      // 인풋에서도 동작해야 하는 단축키
       if (e.ctrlKey && e.key === 's') { e.preventDefault(); document.getElementById('save-btn')?.click(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setShowCommandPalette((v) => !v); return; }
+
+      // 인풋에서는 브라우저 기본 동작 허용 (텍스트 undo/redo/copy/paste)
+      if (isInput) return;
+
+      if (e.ctrlKey && e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+      if (e.ctrlKey && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ'))) { e.preventDefault(); redo(); return; }
       if (e.ctrlKey && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
       if (e.ctrlKey && e.shiftKey && e.key === 'G') { e.preventDefault(); ungroupSelected(); return; }
       if (e.ctrlKey && e.key === 'g') { e.preventDefault(); groupSelected(); return; }
-
-      if (isInput) return;
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') { e.preventDefault(); copyObjectProperties(); return; }
+      if (e.ctrlKey && e.shiftKey && e.key === 'V') { e.preventDefault(); pasteObjectProperties(); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
       if (e.key === 'w' || e.key === 'W') setTransformMode('translate');
       if (e.key === 'e' || e.key === 'E') setTransformMode('rotate');
@@ -78,7 +87,7 @@ export function EditorClient({ projectName, initialScene }: Props) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, deleteSelected, duplicateSelected, duplicateInPlace, setTransformMode, requestFocus, requestFocusAll, requestCameraView, groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark]);
+  }, [undo, redo, deleteSelected, duplicateSelected, duplicateInPlace, setTransformMode, requestFocus, requestFocusAll, requestCameraView, groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark, copyObjectProperties, pasteObjectProperties]);
 
   if (isMobile) {
     return (
@@ -150,6 +159,7 @@ export function EditorClient({ projectName, initialScene }: Props) {
 
       <EditorOnboarding />
       <Toaster />
+      {showCommandPalette && <CommandPalette onClose={() => setShowCommandPalette(false)} />}
     </div>
   );
 }

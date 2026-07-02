@@ -10,6 +10,26 @@ import { EditorObjectInstance } from './EditorObjectInstance';
 import { GizmoController } from './GizmoController';
 import { ObjectRefsContext } from './ObjectRefsContext';
 import { pointerDownOnObjectRef } from './boxSelectState';
+import type { Vector3 as Vec3 } from '@/types/scene';
+
+function SpawnMarker({ position }: { position: Vec3 }) {
+  return (
+    <group position={[position.x, position.y, position.z]}>
+      <mesh position={[0, 0.5, 0]}>
+        <cylinderGeometry args={[0.04, 0.04, 1, 8]} />
+        <meshBasicMaterial color="#10b981" />
+      </mesh>
+      <mesh position={[0, 1.2, 0]}>
+        <coneGeometry args={[0.14, 0.35, 8]} />
+        <meshBasicMaterial color="#10b981" />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.35, 0.45, 16]} />
+        <meshBasicMaterial color="#10b981" transparent opacity={0.6} />
+      </mesh>
+    </group>
+  );
+}
 
 function CameraCapture({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.Camera | null> }) {
   const { camera } = useThree();
@@ -216,6 +236,10 @@ export function EditorCanvas() {
           {objects.filter((o) => o.parentId === null).map((obj) => (
             <EditorObjectInstance key={obj.id} object={obj} />
           ))}
+
+          {environment.playerStartPosition && (
+            <SpawnMarker position={environment.playerStartPosition} />
+          )}
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 

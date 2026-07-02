@@ -25,17 +25,29 @@ interface Props {
 function ColliderOverlay({ object }: { object: ObjectNodeSchema }) {
   if (!object.physics.enabled) return null;
   const isSensor = object.physics.isSensor;
-  const color = isSensor ? '#3b82f6' : '#22c55e';
   const type = object.physics.colliderType ?? 'box';
+  const isSphere = type === 'sphere';
+
+  if (!isSensor) {
+    return (
+      <mesh>
+        {isSphere ? <sphereGeometry args={[0.51, 12, 12]} /> : <boxGeometry args={[1.02, 1.02, 1.02]} />}
+        <meshBasicMaterial color="#22c55e" wireframe transparent opacity={0.5} />
+      </mesh>
+    );
+  }
 
   return (
-    <mesh>
-      {type === 'sphere'
-        ? <sphereGeometry args={[0.51, 12, 12]} />
-        : <boxGeometry args={[1.02, 1.02, 1.02]} />
-      }
-      <meshBasicMaterial color={color} wireframe transparent opacity={0.5} />
-    </mesh>
+    <>
+      <mesh>
+        {isSphere ? <sphereGeometry args={[0.51, 12, 12]} /> : <boxGeometry args={[1.02, 1.02, 1.02]} />}
+        <meshBasicMaterial color="#3b82f6" wireframe transparent opacity={0.8} />
+      </mesh>
+      <mesh>
+        {isSphere ? <sphereGeometry args={[0.5, 12, 12]} /> : <boxGeometry args={[1.0, 1.0, 1.0]} />}
+        <meshBasicMaterial color="#3b82f6" transparent opacity={0.1} depthWrite={false} />
+      </mesh>
+    </>
   );
 }
 

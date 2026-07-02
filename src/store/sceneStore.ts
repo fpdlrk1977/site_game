@@ -47,6 +47,8 @@ interface SceneState {
   cameraBookmarks: Record<number, { position: [number, number, number]; target: [number, number, number] }>;
   bookmarkSaveRequest: { slot: number; _tick: number } | null;
   bookmarkRecallRequest: { slot: number; _tick: number } | null;
+  copiedProperties: { material?: ObjectNodeSchema['material']; physics?: ObjectNodeSchema['physics'] } | null;
+  _prevSnapshot: HistoryEntry | null;
 }
 
 interface SceneActions {
@@ -86,6 +88,9 @@ interface SceneActions {
   toggleLayerVisible: (name: string) => void;
   toggleLayerLocked: (name: string) => void;
   setObjectLayer: (id: string, layer: string) => void;
+  copyObjectProperties: () => void;
+  pasteObjectProperties: () => void;
+  batchUpdateObjects: (ids: string[], patch: (obj: ObjectNodeSchema) => Partial<ObjectNodeSchema>) => void;
 }
 
 const SHAPE_NAMES: Record<PrimitiveShape, string> = {
@@ -141,6 +146,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   cameraBookmarks: {},
   bookmarkSaveRequest: null,
   bookmarkRecallRequest: null,
+  copiedProperties: null,
+  _prevSnapshot: null,
 
   loadScene: (data) => {
     objectCounter = 0;
@@ -155,6 +162,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       isModified: false,
       past: [],
       future: [],
+      _prevSnapshot: null,
     });
   },
 
@@ -327,8 +335,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   updateObject: (id, patch) => {
-    const { objects } = get();
+    const { objects, environment, _prevSnapshot } = get();
     set({
+      _prevSnapshot: _prevSnapshot ?? { objects, environment },
       objects: objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
       isModified: true,
     });
@@ -536,12 +545,14 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       isModified: true,
       past: [...past.slice(-49), { objects, environment }],
       future: [],
+      _prevSnapshot: null,
     });
   },
 
   pushHistory: () => {
-    const { objects, environment, past } = get();
-    set({ past: [...past.slice(-49), { objects, environment }], future: [] });
+    const { _prevSnapshot, objects, environment, past } = get();
+    const snapshot = _prevSnapshot ?? { objects, environment };
+    set({ past: [...past.slice(-49), snapshot], future: [], _prevSnapshot: null });
   },
 
   undo: () => {
@@ -554,6 +565,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       past: past.slice(0, -1),
       future: [{ objects, environment }, ...future],
       isModified: true,
+      _prevSnapshot: null,
     });
   },
 
@@ -567,6 +579,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       past: [...past, { objects, environment }],
       future: future.slice(1),
       isModified: true,
+      _prevSnapshot: null,
     });
   },
 
@@ -600,4 +613,41 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     objects: s.objects.map((o) => o.id === id ? { ...o, layer } : o),
     isModified: true,
   })),
+
+  copyObjectProperties: () => {
+    const { selectedId, objects } = get();
+    if (!selectedId) return;
+    const obj = objects.find((o) => o.id === selectedId);
+    if (!obj) return;
+    set({ copiedProperties: { material: obj.material ? { ...obj.material } : undefined, physics: { ...obj.physics } } });
+  },
+
+  pasteObjectProperties: () => {
+    const { selectedId, objects, copiedProperties, environment, past } = get();
+    if (!selectedId || !copiedProperties) return;
+    set({
+      objects: objects.map((o) =>
+        o.id === selectedId
+          ? {
+              ...o,
+              ...(copiedProperties.material !== undefined ? { material: { ...copiedProperties.material } } : {}),
+              physics: copiedProperties.physics ? { ...copiedProperties.physics } : o.physics,
+            }
+          : o
+      ),
+      isModified: true,
+      past: [...past.slice(-49), { objects, environment }],
+      future: [],
+    });
+  },
+
+  batchUpdateObjects: (ids, patch) => {
+    const { objects, environment, past } = get();
+    set({
+      objects: objects.map((o) => ids.includes(o.id) ? { ...o, ...patch(o) } : o),
+      isModified: true,
+      past: [...past.slice(-49), { objects, environment }],
+      future: [],
+    });
+  },
 }));

@@ -73,8 +73,13 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
       <PlayModeController
         azimuthRef={azimuthRef}
         playerRef={playerRef}
+        spawnPosition={scene.environment.playerStartPosition
+          ? [scene.environment.playerStartPosition.x, scene.environment.playerStartPosition.y, scene.environment.playerStartPosition.z]
+          : undefined}
         characterUrl={characterAsset?.dracoUrl}
         characterScale={scene.environment.playerCharacterScale ?? 1}
+        playerSpeed={scene.environment.playerSpeed}
+        playerJumpForce={scene.environment.playerJumpForce}
         mobileInputRef={mobileInputRef}
       />
     </Physics>

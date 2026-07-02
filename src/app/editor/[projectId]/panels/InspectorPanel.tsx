@@ -4,7 +4,18 @@ import { useState, useEffect, useRef } from 'react';
 import { ArrowLeftRight } from 'lucide-react';
 import { MathUtils } from 'three';
 import { useSceneStore } from '@/store/sceneStore';
+import { useToast } from '@/hooks/useToast';
 import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset } from '@/types/scene';
+
+function evalMath(expr: string): number | null {
+  const s = expr.replace(/[^0-9+\-*/.()\s]/g, '').trim();
+  if (!s) return null;
+  try {
+    const result = Function(`'use strict'; return (${s})`)() as unknown;
+    if (typeof result === 'number' && isFinite(result)) return result;
+  } catch { /* ignore */ }
+  return null;
+}
 
 // 소수점 1자리까지만 표시, 정수면 소수점 생략
 const fmt = (v: number) => {
@@ -70,7 +81,8 @@ function NumInput({
         }}
         onBlur={() => {
           isFocused.current = false;
-          const n = parseFloat(local);
+          let n = parseFloat(local);
+          if (isNaN(n)) n = evalMath(local) ?? NaN;
           if (!isNaN(n)) { onChange(Math.round(n * 10) / 10); setLocal(fmt(Math.round(n * 10) / 10)); }
           else setLocal(fmt(value));
           onCommit();
@@ -182,6 +194,7 @@ const ACTION_LABELS: Record<string, string> = {
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 function EnvironmentPanel() {
   const { environment, updateEnvironment, pushHistory, assets } = useSceneStore();
+  const [notesOpen, setNotesOpen] = useState(true);
   const env = environment;
 
   return (
@@ -332,17 +345,83 @@ function EnvironmentPanel() {
                   />
                 </div>
               )}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-semibold text-muted tracking-wide">이동 속도</span>
+                  <span className="text-[10px] text-muted tabular-nums">{(env.playerSpeed ?? 5).toFixed(1)}</span>
+                </div>
+                <input type="range" min="1" max="20" step="0.5"
+                  value={env.playerSpeed ?? 5}
+                  onChange={(e) => updateEnvironment({ playerSpeed: parseFloat(e.target.value) })}
+                  onMouseUp={pushHistory}
+                  className="w-full accent-primary"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-semibold text-muted tracking-wide">점프력</span>
+                  <span className="text-[10px] text-muted tabular-nums">{(env.playerJumpForce ?? 12).toFixed(1)}</span>
+                </div>
+                <input type="range" min="2" max="30" step="1"
+                  value={env.playerJumpForce ?? 12}
+                  onChange={(e) => updateEnvironment({ playerJumpForce: parseFloat(e.target.value) })}
+                  onMouseUp={pushHistory}
+                  className="w-full accent-primary"
+                />
+              </div>
             </>
           );
         })()}
       </div>
+
+      {/* 스폰 포인트 */}
+      <SectionHeader title="Spawn Point" icon="📍" />
+      <div className="px-3 py-3 space-y-2">
+        <XYZRow
+          label="시작 위치"
+          x={env.playerStartPosition?.x ?? 0}
+          y={env.playerStartPosition?.y ?? 4}
+          z={env.playerStartPosition?.z ?? 0}
+          onChangeX={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 4, z: 0 }, x: v } })}
+          onChangeY={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 4, z: 0 }, y: v } })}
+          onChangeZ={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 4, z: 0 }, z: v } })}
+          onCommit={pushHistory} dragStep={0.5}
+        />
+        {env.playerStartPosition && (
+          <button
+            onClick={() => { updateEnvironment({ playerStartPosition: undefined }); pushHistory(); }}
+            className="w-full py-1 rounded-lg border border-dashed border-border text-[10px] text-muted hover:text-danger hover:border-danger/50 transition-colors"
+          >
+            스폰 포인트 초기화
+          </button>
+        )}
+        {!env.playerStartPosition && (
+          <p className="text-[10px] text-muted/60">기본값: X=0, Y=4, Z=0</p>
+        )}
+      </div>
+
+      {/* 씬 메모 */}
+      <SectionHeader title="씬 메모" icon="📝" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
+      {notesOpen && (
+        <div className="px-3 py-3">
+          <textarea
+            value={env.notes ?? ''}
+            onChange={(e) => updateEnvironment({ notes: e.target.value })}
+            onBlur={pushHistory}
+            placeholder="씬에 대한 메모를 입력하세요..."
+            rows={4}
+            className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+          />
+        </div>
+      )}
     </div>
   );
 }
 
 // ── 메인 ───────────────────────────────────────────────────────
 export function InspectorPanel() {
-  const { objects, selectedId, selectedIds, updateObject, pushHistory, alignSelected } = useSceneStore();
+  const { objects, selectedId, selectedIds, updateObject, pushHistory, alignSelected, batchUpdateObjects } = useSceneStore();
+  const { addToast } = useToast();
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
 
@@ -362,6 +441,9 @@ export function InspectorPanel() {
   const [newAction, setNewAction] = useState<EventSchema['action']>('show_popup');
   const [newValue, setNewValue] = useState('');
 
+  // 이벤트 프리뷰 팝업
+  const [previewPopup, setPreviewPopup] = useState<string | null>(null);
+
   if (isMultiSelect) {
     // 2개 선택 시 거리 계산
     let distance: number | null = null;
@@ -375,38 +457,88 @@ export function InspectorPanel() {
       }
     }
 
+    const allHaveMaterial = selectedIds.every((id) => {
+      const o = objects.find((x) => x.id === id);
+      return o && !o.assetId && !o.particle;
+    });
+    const firstColor = (() => {
+      const o = objects.find((x) => x.id === selectedIds[0]);
+      return o?.material?.color ?? '#a78bfa';
+    })();
+    const allVisible = selectedIds.every((id) => objects.find((x) => x.id === id)?.visible !== false);
+
     return (
       <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
         <div className="px-3 py-2 border-b border-border">
           <span className="text-xs font-semibold text-muted tracking-wide">{selectedIds.length}개 선택됨</span>
         </div>
-        <div className="px-3 py-4 space-y-3">
-          <p className="text-[10px] text-muted">Shift+클릭으로 오브젝트를 추가 선택하세요.</p>
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-3 py-3 space-y-3">
+            <p className="text-[10px] text-muted">Shift+클릭으로 오브젝트를 추가 선택하세요.</p>
 
-          {/* 2개 선택 시 거리 표시 */}
-          {distance !== null && (
-            <div className="bg-background border border-border rounded-lg px-3 py-2">
-              <p className="text-[10px] text-muted mb-0.5">선택 오브젝트 간 거리</p>
-              <p className="text-base font-bold text-foreground tabular-nums">{distance.toFixed(2)} m</p>
-            </div>
-          )}
-
-          {(['x', 'y', 'z'] as const).map((axis) => (
-            <div key={axis}>
-              <p className="text-[10px] font-semibold text-muted tracking-wide mb-1.5">{axis.toUpperCase()}축 정렬</p>
-              <div className="grid grid-cols-3 gap-1">
-                {(['min', 'center', 'max'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => alignSelected(axis, mode)}
-                    className="py-1 rounded-lg text-[10px] bg-background text-muted hover:bg-surface hover:text-foreground transition-colors"
-                  >
-                    {mode === 'min' ? '최소' : mode === 'center' ? '중앙' : '최대'}
-                  </button>
-                ))}
+            {/* 2개 선택 시 거리 표시 */}
+            {distance !== null && (
+              <div className="bg-background border border-border rounded-lg px-3 py-2">
+                <p className="text-[10px] text-muted mb-0.5">선택 오브젝트 간 거리</p>
+                <p className="text-base font-bold text-foreground tabular-nums">{distance.toFixed(2)} m</p>
               </div>
-            </div>
-          ))}
+            )}
+          </div>
+
+          {/* 일괄 편집 */}
+          <SectionHeader title="일괄 편집" icon="◈" />
+          <div className="px-3 py-3 space-y-3">
+            {allHaveMaterial && (
+              <div>
+                <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Color (전체 적용)</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    defaultValue={firstColor}
+                    onChange={(e) => batchUpdateObjects(selectedIds, (o) => ({ material: { ...o.material, color: e.target.value } }))}
+                    onBlur={pushHistory}
+                    className="w-8 h-8 rounded-lg border border-border bg-background cursor-pointer p-0.5"
+                  />
+                  <span className="text-[10px] text-muted">선택된 모든 오브젝트에 적용</span>
+                </div>
+              </div>
+            )}
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-xs text-muted">Visible (전체)</span>
+              <Toggle
+                value={allVisible}
+                onChange={(v) => { batchUpdateObjects(selectedIds, () => ({ visible: v })); pushHistory(); }}
+              />
+            </label>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-xs text-muted">Physics Enabled (전체)</span>
+              <Toggle
+                value={selectedIds.every((id) => objects.find((x) => x.id === id)?.physics.enabled === true)}
+                onChange={(v) => { batchUpdateObjects(selectedIds, (o) => ({ physics: { ...o.physics, enabled: v } })); pushHistory(); }}
+              />
+            </label>
+          </div>
+
+          {/* 정렬 */}
+          <SectionHeader title="정렬" icon="⊞" />
+          <div className="px-3 py-3 space-y-3">
+            {(['x', 'y', 'z'] as const).map((axis) => (
+              <div key={axis}>
+                <p className="text-[10px] font-semibold text-muted tracking-wide mb-1.5">{axis.toUpperCase()}축 정렬</p>
+                <div className="grid grid-cols-3 gap-1">
+                  {(['min', 'center', 'max'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => alignSelected(axis, mode)}
+                      className="py-1 rounded-lg text-[10px] bg-background text-muted hover:bg-surface hover:text-foreground transition-colors"
+                    >
+                      {mode === 'min' ? '최소' : mode === 'center' ? '중앙' : '최대'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </aside>
     );
@@ -505,7 +637,22 @@ export function InspectorPanel() {
   }
 
   return (
-    <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
+    <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden relative">
+      {/* 이벤트 프리뷰 팝업 오버레이 */}
+      {previewPopup !== null && (
+        <div className="absolute inset-0 z-10 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewPopup(null)}>
+          <div className="bg-sidebar border border-border rounded-2xl p-5 w-full max-w-xs shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[10px] text-muted/60 mb-2 font-semibold tracking-wide">팝업 미리보기</p>
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{previewPopup}</p>
+            <button
+              onClick={() => setPreviewPopup(null)}
+              className="mt-4 w-full py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/80 transition-colors"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
       <div className="px-3 py-2 border-b border-border flex items-center gap-2">
         <span className="text-xs font-semibold text-muted tracking-wide flex-1">Inspector</span>
       </div>
@@ -842,12 +989,25 @@ export function InspectorPanel() {
                     <span className="text-muted/60 text-[10px]">›</span>
                     <span className="text-foreground text-[10px] truncate font-medium">{ACTION_LABELS[ev.action] ?? ev.action}</span>
                   </div>
-                  <button
-                    onClick={() => removeEvent(ev.id)}
-                    className="text-muted/40 hover:text-danger text-[11px] shrink-0 transition-colors w-4 h-4 flex items-center justify-center rounded hover:bg-danger/10"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => {
+                        if (ev.action === 'open_url' && ev.value) window.open(ev.value, '_blank');
+                        else if (ev.action === 'show_popup') setPreviewPopup(ev.value || '(내용 없음)');
+                        else if (ev.action === 'emit_event') addToast(`이벤트 발송 테스트: "${ev.value}"`, 'success');
+                      }}
+                      title="미리보기"
+                      className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                    >
+                      ▶
+                    </button>
+                    <button
+                      onClick={() => removeEvent(ev.id)}
+                      className="text-muted/40 hover:text-danger text-[11px] w-4 h-4 flex items-center justify-center rounded hover:bg-danger/10 transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 {ev.value && (
                   <p className="text-muted/60 text-[10px] mt-1.5 truncate font-mono bg-background/50 rounded px-1.5 py-0.5">{ev.value}</p>

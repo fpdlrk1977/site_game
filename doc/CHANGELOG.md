@@ -1,5 +1,26 @@
 # CHANGELOG: 변경 이력 및 빌드 스냅샷
 
+## [0.5.0] - 2026-07-02
+### Wave 2 UI/UX 개선 (9개 기능)
+
+#### 추가
+- **커맨드 팔레트** (`CommandPalette.tsx`): Ctrl+K로 오픈, 오브젝트·에디터 액션 통합 검색. 그룹 분류(보기/편집/추가/오브젝트), 키보드 ↑↓ 탐색, Enter 실행, ESC 닫기
+- **스폰 포인트 설정**: `EnvSchema.playerStartPosition` 추가 → Inspector Environment "Spawn Point" 섹션 XYZ 입력. 뷰포트에 녹색 마커(기둥+화살표+링) 시각화 (`SpawnMarker` in EditorCanvas)
+- **플레이어 속도/점프 설정**: `EnvSchema.playerSpeed` / `EnvSchema.playerJumpForce` → Inspector 슬라이더 → `PlayModeController` props로 전달 (speed 기본 5, jumpForce 기본 12)
+- **트리거 영역 시각화 개선**: `ColliderOverlay`에서 센서 오브젝트는 wireframe + 반투명 채운 볼륨 동시 표시 (파란색), 일반 콜라이더는 녹색 wireframe
+- **이벤트 프리뷰**: 이벤트 카드에 ▶ 테스트 버튼 추가. `open_url`→ 새 탭 열기, `show_popup`→ Inspector 내 오버레이 팝업, `emit_event`→ 토스트 알림
+- **속성 복사/붙여넣기**: `Ctrl+Shift+C` material+physics 복사, `Ctrl+Shift+V` 선택 오브젝트에 붙여넣기. `sceneStore.copyObjectProperties` / `pasteObjectProperties` 액션
+- **씬 메모**: `EnvSchema.notes` → Environment 패널 하단 "씬 메모" textarea. 씬 데이터로 자동 저장
+- **다중 선택 일괄 편집**: 다중 선택 시 Inspector에 "일괄 편집" 섹션 추가 — Color 컬러피커(material 있는 오브젝트 전체), Visible/Physics Enabled 토글 일괄 적용 (`batchUpdateObjects` 스토어 액션)
+- **수식 입력**: `NumInput` onBlur 시 `1+2`, `3*0.5` 등 수식 자동 계산. `evalMath` 함수 — 숫자/연산자/괄호만 허용하는 안전한 `Function()` 평가
+
+#### 변경
+- `PlayCanvas`: `spawnPosition`, `playerSpeed`, `playerJumpForce` 환경 설정에서 읽어 `PlayModeController`에 전달
+- `sceneStore`: `copiedProperties` 상태, `copyObjectProperties`, `pasteObjectProperties`, `batchUpdateObjects` 추가
+- `EditorClient`: `Ctrl+K` 커맨드 팔레트, `Ctrl+Shift+C/V` 속성 복사/붙여넣기 단축키 등록
+
+---
+
 ## [0.4.0] - 2026-07-02
 ### 추가
 - **GLB 캐릭터 시스템** (FEAT-CHARACTER-01): AssetBrowser "Character" 탭에서 GLB 업로드 → Inspector "Player" 섹션에서 캐릭터/스케일 할당 → 플레이 모드에서 idle/walk/jump 애니메이션 자동 탐색 및 전환 (`GlbCharacter` 컴포넌트, `SkeletonUtils.clone`)

@@ -101,6 +101,8 @@ interface Props {
   spawnPosition?: [number, number, number];
   characterUrl?: string;
   characterScale?: number;
+  playerSpeed?: number;
+  playerJumpForce?: number;
   mobileInputRef?: MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
 }
 
@@ -110,6 +112,8 @@ export function PlayModeController({
   spawnPosition = [0, 4, 0],
   characterUrl,
   characterScale = 1,
+  playerSpeed = 5,
+  playerJumpForce = 12,
   mobileInputRef,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
@@ -194,7 +198,7 @@ export function PlayModeController({
     const vel = rb.linvel();
     const pos = rb.translation();
     const az = azimuthRef.current;
-    const speed = 5;
+    const speed = playerSpeed;
 
     // 카메라는 (sin(az), cos(az)) 방향 오프셋에서 캐릭터를 바라보므로,
     // 카메라가 실제로 바라보는(전진) 방향은 그 반대인 (-sin(az), -cos(az))다.
@@ -217,7 +221,7 @@ export function PlayModeController({
     // 점프
     const isGrounded = pos.y < 1.5 && vel.y <= 0.3;
     if ((keys.current.space || mobile?.jump) && isGrounded) {
-      rb.applyImpulse({ x: 0, y: 12, z: 0 }, true);
+      rb.applyImpulse({ x: 0, y: playerJumpForce, z: 0 }, true);
       keys.current.space = false;
       if (mobile) mobile.jump = false;
     }

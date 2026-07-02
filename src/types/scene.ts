@@ -14,6 +14,10 @@ export interface EnvSchema {
   };
   playerCharacterId?: string;
   playerCharacterScale?: number;
+  playerSpeed?: number;
+  playerJumpForce?: number;
+  playerStartPosition?: Vector3;
+  notes?: string;
 }
 
 export interface EventSchema {
