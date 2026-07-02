@@ -6,6 +6,7 @@ import { MathUtils } from 'three';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
+import { SelectBox } from '@/components/ui/SelectBox';
 import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset } from '@/types/scene';
 
 function evalMath(expr: string): number | null {
@@ -582,16 +583,14 @@ function EnvironmentPanel() {
               <>
                 <div>
                   <span className="text-[10px] text-muted/50 block mb-1.5 font-semibold tracking-wide">캐릭터</span>
-                  <select
+                  <SelectBox
                     value={env.playerCharacterId ?? ''}
-                    onChange={(e) => { updateEnvironment({ playerCharacterId: e.target.value || undefined }); pushHistory(); }}
-                    className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="">기본 캡슐</option>
-                    {characterAssets.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => { updateEnvironment({ playerCharacterId: v || undefined }); pushHistory(); }}
+                    options={[
+                      { value: '', label: '기본 캡슐' },
+                      ...characterAssets.map((a) => ({ value: a.id, label: a.name })),
+                    ]}
+                  />
                   {characterAssets.length === 0 && (
                     <p className="text-[10px] text-muted/60 mt-1.5">
                       Asset Browser → Character 탭에서 GLB를 업로드하세요
@@ -1073,16 +1072,16 @@ export function InspectorPanel() {
             {isOpen('particle') && <div className="px-3 pb-4 space-y-2">
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Preset</span>
-                <select
+                <SelectBox
                   value={obj.particle.preset}
-                  onChange={(e) => { updateObject(obj.id, { particle: { ...obj.particle!, preset: e.target.value as ParticlePreset } }); pushHistory(); }}
-                  className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="fire">🔥 불꽃 (Fire)</option>
-                  <option value="dust">💨 먼지 (Dust)</option>
-                  <option value="light">✨ 빛 파티클 (Light)</option>
-                  <option value="snow">❄️ 눈 (Snow)</option>
-                </select>
+                  onChange={(v) => { updateObject(obj.id, { particle: { ...obj.particle!, preset: v as ParticlePreset } }); pushHistory(); }}
+                  options={[
+                    { value: 'fire', label: '불꽃 (Fire)', icon: '🔥' },
+                    { value: 'dust', label: '먼지 (Dust)', icon: '💨' },
+                    { value: 'light', label: '빛 파티클 (Light)', icon: '✨' },
+                    { value: 'snow', label: '눈 (Snow)', icon: '❄️' },
+                  ]}
+                />
               </div>
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">색상 오버라이드</span>
@@ -1215,15 +1214,15 @@ export function InspectorPanel() {
                 {/* Type */}
                 <div>
                   <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Type</span>
-                  <select
+                  <SelectBox
                     value={obj.light.type}
-                    onChange={(e) => { updateObject(obj.id, { light: { ...obj.light!, type: e.target.value as 'point' | 'spot' | 'directional' } }); pushHistory(); }}
-                    className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="point">Point Light</option>
-                    <option value="spot">Spot Light</option>
-                    <option value="directional">Directional Light</option>
-                  </select>
+                    onChange={(v) => { updateObject(obj.id, { light: { ...obj.light!, type: v as 'point' | 'spot' | 'directional' } }); pushHistory(); }}
+                    options={[
+                      { value: 'point', label: 'Point Light', icon: '💡' },
+                      { value: 'spot', label: 'Spot Light', icon: '🔦' },
+                      { value: 'directional', label: 'Directional Light', icon: '☀️' },
+                    ]}
+                  />
                 </div>
                 {/* Color */}
                 <div className="">
@@ -1339,17 +1338,17 @@ export function InspectorPanel() {
             <>
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Collider Type</span>
-                <select
+                <SelectBox
                   value={obj.physics.colliderType}
-                  onChange={(e) => { updateObject(obj.id, { physics: { ...obj.physics, colliderType: e.target.value as ColliderType } }); pushHistory(); }}
-                  className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="box">Box (Cuboid)</option>
-                  <option value="sphere">Sphere (Ball)</option>
-                  <option value="capsule">Capsule</option>
-                  <option value="hull">Convex Hull</option>
-                  <option value="trimesh">Trimesh (정확/느림)</option>
-                </select>
+                  onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, colliderType: v as ColliderType } }); pushHistory(); }}
+                  options={[
+                    { value: 'box', label: 'Box (Cuboid)' },
+                    { value: 'sphere', label: 'Sphere (Ball)' },
+                    { value: 'capsule', label: 'Capsule' },
+                    { value: 'hull', label: 'Convex Hull' },
+                    { value: 'trimesh', label: 'Trimesh (정확/느림)' },
+                  ]}
+                />
               </div>
               <label className="flex items-center justify-between cursor-pointer">
                 <div>
@@ -1433,27 +1432,27 @@ export function InspectorPanel() {
                 <div className="grid grid-cols-2 gap-1.5">
                   <div>
                     <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Trigger</span>
-                    <select
+                    <SelectBox
                       value={newTrigger}
-                      onChange={(e) => setNewTrigger(e.target.value as EventSchema['trigger'])}
-                      className="w-full bg-surface border border-border rounded-xs px-1.5 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      <option value="click">Click</option>
-                      <option value="hover_enter">Hover</option>
-                      <option value="area_enter">Area Enter</option>
-                    </select>
+                      onChange={(v) => setNewTrigger(v as EventSchema['trigger'])}
+                      options={[
+                        { value: 'click', label: 'Click' },
+                        { value: 'hover_enter', label: 'Hover' },
+                        { value: 'area_enter', label: 'Area Enter' },
+                      ]}
+                    />
                   </div>
                   <div>
                     <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Action</span>
-                    <select
+                    <SelectBox
                       value={newAction}
-                      onChange={(e) => setNewAction(e.target.value as EventSchema['action'])}
-                      className="w-full bg-surface border border-border rounded-xs px-1.5 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      <option value="show_popup">팝업</option>
-                      <option value="open_url">URL 열기</option>
-                      <option value="emit_event">이벤트 발송</option>
-                    </select>
+                      onChange={(v) => setNewAction(v as EventSchema['action'])}
+                      options={[
+                        { value: 'show_popup', label: '팝업' },
+                        { value: 'open_url', label: 'URL 열기' },
+                        { value: 'emit_event', label: '이벤트 발송' },
+                      ]}
+                    />
                   </div>
                 </div>
 
