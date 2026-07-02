@@ -5,7 +5,8 @@ import { ArrowLeftRight } from 'lucide-react';
 import { MathUtils } from 'three';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
-import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset } from '@/types/scene';
+import { createBrowserSupabase } from '@/lib/supabase';
+import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset } from '@/types/scene';
 
 function evalMath(expr: string): number | null {
   const s = expr.replace(/[^0-9+\-*/.()\s]/g, '').trim();
@@ -212,9 +213,41 @@ const ACTION_LABELS: Record<string, string> = {
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 function EnvironmentPanel() {
-  const { environment, updateEnvironment, pushHistory, assets } = useSceneStore();
+  const { environment, updateEnvironment, pushHistory, assets, projectId } = useSceneStore();
+  const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(true);
+  const [groundTexUploading, setGroundTexUploading] = useState(false);
+  const groundTexInputRef = useRef<HTMLInputElement>(null);
   const env = environment;
+
+  const handleGroundTexUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !projectId) return;
+    if (file.size > 8 * 1024 * 1024) {
+      addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error');
+      return;
+    }
+    setGroundTexUploading(true);
+    try {
+      const supabase = createBrowserSupabase();
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const path = `ground/${projectId}/tex_${Date.now()}.${ext}`;
+      const { error: storageErr } = await supabase.storage
+        .from('assets')
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (storageErr) throw storageErr;
+      const { data } = await supabase.storage.from('assets').createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (!data?.signedUrl) throw new Error('URL 생성 실패');
+      updateEnvironment({ ground: { ...env.ground!, textureUrl: data.signedUrl } });
+      pushHistory();
+    } catch (err) {
+      addToast('텍스처 업로드 실패', 'error');
+      console.error(err);
+    } finally {
+      setGroundTexUploading(false);
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -222,39 +255,79 @@ function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader title="Sky" />
         <div className="px-3 pb-3 space-y-2">
-          <div className="flex gap-1">
-            {(['color', 'sky'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => { updateEnvironment({ sky: { ...env.sky, type: t } }); pushHistory(); }}
-                className={`flex-1 py-1 rounded-xs text-[10px] font-medium transition-all border ${
-                  env.sky.type === t
-                    ? 'bg-primary border-primary text-white'
-                    : 'bg-background border-border text-muted hover:text-foreground'
-                }`}
-              >
-                {t === 'color' ? '단색' : '하늘'}
-              </button>
-            ))}
-          </div>
-          {env.sky.type !== 'sky' && (
-            <div className="px-2 flex items-center border border-border rounded-xs">
-              <input
-                type="color"
-                value={env.sky.value}
-                onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
-                onBlur={pushHistory}
-                className="w-5 h-5 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={env.sky.value}
-                onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
-                onBlur={pushHistory}
-                className="flex-1 px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-          )}
+          {/* 모드 탭 */}
+          {(() => {
+            const useHdr = (env.hdrPreset ?? 'none') !== 'none';
+            const mode = useHdr ? 'hdr' : env.sky.type === 'sky' ? 'sky' : 'color';
+            const HDR_PRESETS: { id: HdrPreset; label: string }[] = [
+              { id: 'sunset',    label: 'Sunset'   },
+              { id: 'dawn',      label: 'Dawn'     },
+              { id: 'night',     label: 'Night'    },
+              { id: 'forest',    label: 'Forest'   },
+              { id: 'park',      label: 'Park'     },
+              { id: 'city',      label: 'City'     },
+              { id: 'warehouse', label: 'Factory'  },
+              { id: 'apartment', label: 'Indoor'   },
+              { id: 'lobby',     label: 'Lobby'    },
+              { id: 'studio',    label: 'Studio'   },
+            ];
+            return (
+              <>
+                <div className="flex gap-1">
+                  {([['color', '단색'], ['sky', '하늘'], ['hdr', 'HDR']] as const).map(([t, label]) => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        if (t === 'hdr') {
+                          updateEnvironment({ hdrPreset: env.hdrPreset && env.hdrPreset !== 'none' ? env.hdrPreset : 'sunset' });
+                        } else {
+                          updateEnvironment({ sky: { ...env.sky, type: t }, hdrPreset: 'none' });
+                        }
+                        pushHistory();
+                      }}
+                      className={`flex-1 py-1 rounded-xs text-[10px] font-medium transition-all border ${
+                        mode === t
+                          ? 'bg-primary border-primary text-white'
+                          : 'bg-background border-border text-muted hover:text-foreground'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {mode === 'color' && (
+                  <div className="px-2 flex items-center border border-border rounded-xs">
+                    <input type="color" value={env.sky.value}
+                      onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
+                      onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
+                    <input type="text" value={env.sky.value}
+                      onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="flex-1 px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+                  </div>
+                )}
+
+                {mode === 'hdr' && (
+                  <div className="grid grid-cols-2 gap-1">
+                    {HDR_PRESETS.map(({ id, label }) => (
+                      <button
+                        key={id}
+                        onClick={() => { updateEnvironment({ hdrPreset: id }); pushHistory(); }}
+                        className={`py-1 rounded-xs text-[10px] font-medium transition-all border ${
+                          env.hdrPreset === id
+                            ? 'bg-primary border-primary text-white'
+                            : 'bg-background border-border text-muted hover:text-foreground'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </GroupBox>
 
@@ -270,23 +343,92 @@ function EnvironmentPanel() {
           </label>
         </div>
         {env.ground?.enabled && (
-          <div className="px-3 pb-3">
-            <div className="px-2 flex items-center border border-border rounded-xs">
-              <input
-                type="color"
-                value={env.ground.color}
-                onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
-                onBlur={pushHistory}
-                className="w-5 h-5 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={env.ground.color}
-                onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
-                onBlur={pushHistory}
-                className="flex-1 px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
+          <div className="px-3 pb-3 space-y-2">
+            {/* 프리셋 */}
+            {(() => {
+              const GROUND_PRESETS: { id: GroundPreset; label: string; color: string }[] = [
+                { id: 'grass',  label: '🌿 잔디', color: '#5a8a3c' },
+                { id: 'dirt',   label: '🟤 흙',   color: '#8b5a2b' },
+                { id: 'sand',   label: '🏖 모래', color: '#d4b483' },
+                { id: 'stone',  label: '🪨 돌',   color: '#777777' },
+                { id: 'water',  label: '💧 물',   color: '#1a6b9a' },
+                { id: 'custom', label: '🎨 직접', color: env.ground!.color },
+              ];
+              const current = env.ground!.preset ?? 'custom';
+              return (
+                <div className="grid grid-cols-3 gap-1">
+                  {GROUND_PRESETS.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      onClick={() => { updateEnvironment({ ground: { ...env.ground!, preset: id } }); pushHistory(); }}
+                      className={`py-1 rounded-xs text-[9px] font-medium transition-all border ${
+                        current === id
+                          ? 'bg-primary border-primary text-white'
+                          : 'bg-background border-border text-muted hover:text-foreground'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            {/* 직접 설정 시 텍스처 업로드 + 컬러 피커 */}
+            {(env.ground.preset ?? 'custom') === 'custom' && (
+              <div className="space-y-2">
+                {/* 텍스처 미리보기 or 업로드 버튼 */}
+                {env.ground.textureUrl ? (
+                  <div className="relative rounded-xs overflow-hidden border border-border group">
+                    <img src={env.ground.textureUrl} alt="ground texture" className="w-full h-16 object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                      <button
+                        onClick={() => groundTexInputRef.current?.click()}
+                        className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-primary/80 transition-colors"
+                      >
+                        교체
+                      </button>
+                      <button
+                        onClick={() => {
+                          const { textureUrl: _removed, ...rest } = env.ground!;
+                          updateEnvironment({ ground: rest });
+                          pushHistory();
+                        }}
+                        className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-danger/80 transition-colors"
+                      >
+                        제거
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => groundTexInputRef.current?.click()}
+                    disabled={groundTexUploading}
+                    className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {groundTexUploading ? '업로드 중...' : '텍스처 이미지 업로드\nJPG · PNG · WEBP'}
+                  </button>
+                )}
+                <input
+                  ref={groundTexInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleGroundTexUpload}
+                />
+                {/* 텍스처 없을 때 단색 폴백 컬러 */}
+                {!env.ground.textureUrl && (
+                  <div className="px-2 flex items-center border border-border rounded-xs">
+                    <input type="color" value={env.ground.color}
+                      onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
+                      onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
+                    <input type="text" value={env.ground.color}
+                      onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="flex-1 px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </GroupBox>

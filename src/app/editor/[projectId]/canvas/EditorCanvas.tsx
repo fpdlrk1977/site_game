@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid } from '@react-three/drei';
+import { OrbitControls, Grid, Sky, Environment } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { useSceneStore } from '@/store/sceneStore';
@@ -11,7 +11,8 @@ import { GizmoController } from './GizmoController';
 import { ObjectRefsContext } from './ObjectRefsContext';
 import { pointerDownOnObjectRef } from './boxSelectState';
 import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
-import type { Vector3 as Vec3 } from '@/types/scene';
+import { GroundPlane } from '@/components/three/GroundPlane';
+import type { Vector3 as Vec3, HdrPreset } from '@/types/scene';
 
 function BoundaryGizmo({ size }: { size: number }) {
   const b = size;
@@ -205,6 +206,8 @@ export function EditorCanvas() {
     resetDrag();
   }, [resetDrag]);
 
+  const useHdr = (environment.hdrPreset ?? 'none') !== 'none';
+  const isSkyMode = !useHdr && environment.sky.type === 'sky';
   const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#1a1a2e';
 
   return (
@@ -228,8 +231,29 @@ export function EditorCanvas() {
           style={{ width: '100%', height: '100%' }}
         >
           <CameraCapture cameraRef={cameraRef} />
-          <color attach="background" args={[skyColor]} />
 
+          {/* ── 배경 (HDR / Sky / 단색 — 상호 배타) ── */}
+          {!useHdr && !isSkyMode && <color attach="background" args={[skyColor]} />}
+          {isSkyMode && (
+            <Sky
+              sunPosition={[
+                environment.lights.directionalPosition.x,
+                environment.lights.directionalPosition.y,
+                environment.lights.directionalPosition.z,
+              ]}
+              turbidity={8}
+              rayleigh={2}
+              mieCoefficient={0.005}
+              mieDirectionalG={0.85}
+            />
+          )}
+          {useHdr && (
+            <Suspense fallback={null}>
+              <Environment preset={environment.hdrPreset as Exclude<HdrPreset, 'none'>} background />
+            </Suspense>
+          )}
+
+          <hemisphereLight args={['#b9d5ff', '#4a5568', 0.2]} />
           <ambientLight intensity={environment.lights.ambientIntensity} />
           <directionalLight
             position={[
@@ -262,6 +286,15 @@ export function EditorCanvas() {
 
           {(environment.boundary ?? 0) > 0 && (
             <BoundaryGizmo size={environment.boundary!} />
+          )}
+
+          {environment.ground?.enabled && (
+            <GroundPlane
+              preset={environment.ground.preset ?? 'custom'}
+              color={environment.ground.color}
+              textureUrl={environment.ground.textureUrl}
+              positionY={-0.002}
+            />
           )}
 
           {environment.playerStartPosition && (

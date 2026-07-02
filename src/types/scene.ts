@@ -4,9 +4,13 @@ export interface Vector3 {
   z: number;
 }
 
+export type HdrPreset = 'none' | 'sunset' | 'dawn' | 'night' | 'warehouse' | 'forest' | 'apartment' | 'studio' | 'city' | 'park' | 'lobby';
+export type GroundPreset = 'custom' | 'grass' | 'dirt' | 'sand' | 'stone' | 'water';
+
 export interface EnvSchema {
   sky: { type: 'color' | 'hdr' | 'sky'; value: string };
-  ground?: { enabled: boolean; color: string };
+  hdrPreset?: HdrPreset;
+  ground?: { enabled: boolean; color: string; preset?: GroundPreset; textureUrl?: string };
   boundary?: number;
   fog: { enabled: boolean; color: string; near: number; far: number };
   lights: {

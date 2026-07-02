@@ -2,30 +2,28 @@
 
 import { useRef, Suspense, lazy, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid, Sky } from '@react-three/drei';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
+import { OrbitControls, Grid, Sky, Environment } from '@react-three/drei';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset } from '@/types/scene';
 import { ViewerObject } from './ViewerObject';
 import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
 import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
+import { GroundPlane } from '@/components/three/GroundPlane';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
 
 function BoundaryGizmo({ size }: { size: number }) {
   const b = size;
   const positions = useMemo(() => new Float32Array([
-    // 바닥 사각형
     -b, 0.02, -b,   b, 0.02, -b,
      b, 0.02, -b,   b, 0.02,  b,
      b, 0.02,  b,  -b, 0.02,  b,
     -b, 0.02,  b,  -b, 0.02, -b,
-    // 네 모서리 수직선
     -b, 0, -b,  -b, 8, -b,
      b, 0, -b,   b, 8, -b,
      b, 0,  b,   b, 8,  b,
     -b, 0,  b,  -b, 8,  b,
   ]), [b]);
-
   return (
     <lineSegments>
       <bufferGeometry>
@@ -45,13 +43,15 @@ interface Props {
 
 export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }: Props) {
   const { environment, objects } = scene;
-  const isSkyMode = environment.sky.type === 'sky';
-  const skyColor = isSkyMode ? '#87ceeb' : environment.sky.value;
   const azimuthRef = useRef(0);
+
+  const useHdr = (environment.hdrPreset ?? 'none') !== 'none';
+  const isSkyMode = !useHdr && environment.sky.type === 'sky';
+  // 단색 배경 — HDR/Sky 모두 아닐 때만 사용
+  const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#1a1a2e';
 
   const instancedIds = useMemo(() => getInstancedIds(objects), [objects]);
   const particleObjects = useMemo(() => objects.filter((o) => o.visible && o.particle), [objects]);
-  // 루트 오브젝트만 렌더 (자식은 ViewerObject 내부에서 처리)
   const rootObjects = useMemo(() => objects.filter((o) => o.parentId === null), [objects]);
   const nonInstancedObjects = useMemo(
     () => rootObjects.filter((o) => !instancedIds.has(o.id) && !o.particle && !o.isGroup),
@@ -65,8 +65,8 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
       camera={{ position: [5, 4, 8], fov: 60 }}
       style={{ width: '100%', height: '100%' }}
     >
-      <color attach="background" args={[skyColor]} />
-
+      {/* ── 배경 (HDR / Sky / 단색 — 상호 배타) ── */}
+      {!useHdr && !isSkyMode && <color attach="background" args={[skyColor]} />}
       {isSkyMode && (
         <Sky
           sunPosition={[
@@ -80,18 +80,19 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
           mieDirectionalG={0.85}
         />
       )}
-
-      {playMode && environment.ground?.enabled && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-          <planeGeometry args={[1000, 1000]} />
-          <meshStandardMaterial color={environment.ground.color} />
-        </mesh>
+      {useHdr && (
+        <Suspense fallback={null}>
+          <Environment preset={environment.hdrPreset as Exclude<HdrPreset, 'none'>} background />
+        </Suspense>
       )}
 
+      {/* ── Fog ── */}
       {environment.fog.enabled && (
         <fog attach="fog" args={[environment.fog.color, environment.fog.near, environment.fog.far]} />
       )}
 
+      {/* ── 조명 ── */}
+      <hemisphereLight args={['#b9d5ff', '#4a5568', 0.2]} />
       <ambientLight intensity={environment.lights.ambientIntensity} />
       <directionalLight
         position={[
@@ -104,23 +105,36 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
         shadow-mapSize={[2048, 2048]}
       />
 
-      <Grid
-        position={[0, 0, 0]}
-        cellSize={1}
-        cellThickness={0.3}
-        cellColor="#27272a"
-        sectionSize={5}
-        sectionThickness={0.6}
-        sectionColor="#3f3f46"
-        fadeDistance={60}
-        fadeStrength={1.5}
-        infiniteGrid
-      />
-
+      {/* ── 에디터 전용: 그리드 + 경계 기즈모 ── */}
+      {!playMode && (
+        <Grid
+          position={[0, 0, 0]}
+          cellSize={1}
+          cellThickness={0.3}
+          cellColor="#27272a"
+          sectionSize={5}
+          sectionThickness={0.6}
+          sectionColor="#3f3f46"
+          fadeDistance={60}
+          fadeStrength={1.5}
+          infiniteGrid
+        />
+      )}
       {!playMode && (environment.boundary ?? 0) > 0 && (
         <BoundaryGizmo size={environment.boundary!} />
       )}
 
+      {/* ── 바닥 ── */}
+      {environment.ground?.enabled && (
+        <GroundPlane
+          preset={environment.ground.preset ?? 'custom'}
+          color={environment.ground.color}
+          textureUrl={environment.ground?.textureUrl}
+          positionY={playMode ? 0 : -0.002}
+        />
+      )}
+
+      {/* ── 씬 오브젝트 (에디터 뷰) ── */}
       {!playMode && (
         <>
           <InstancedPrimitives objects={objects} />
@@ -140,16 +154,19 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
         </>
       )}
 
+      {/* ── 플레이 모드 ── */}
       {playMode && (
         <Suspense fallback={null}>
           <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} />
         </Suspense>
       )}
 
-      {/* 씬 라이트 오브젝트 */}
+      {/* ── 씬 라이트 오브젝트 ── */}
       {objects.filter((o) => o.light && o.visible).map((o) => (
-        <group key={o.id} position={[o.position.x, o.position.y, o.position.z]}
-          rotation={[o.rotation.x * Math.PI / 180, o.rotation.y * Math.PI / 180, o.rotation.z * Math.PI / 180]}>
+        <group key={o.id}
+          position={[o.position.x, o.position.y, o.position.z]}
+          rotation={[o.rotation.x * Math.PI / 180, o.rotation.y * Math.PI / 180, o.rotation.z * Math.PI / 180]}
+        >
           {o.light!.type === 'point' && (
             <pointLight color={o.light!.color} intensity={o.light!.intensity}
               distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
