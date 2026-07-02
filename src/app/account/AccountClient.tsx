@@ -76,14 +76,14 @@ export function AccountClient({ email, displayName, planTier }: Props) {
       {/* 헤더 */}
       <header className="relative border-b border-border/60 px-6 py-4 flex items-center justify-between backdrop-blur-sm bg-sidebar/80">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm shadow-lg shadow-violet-500/25">
+          <div className="w-8 h-8 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm shadow-lg shadow-violet-500/25">
             ⬡
           </div>
           <span className="font-bold text-lg tracking-tight">Park3D</span>
         </div>
         <Link
           href="/dashboard"
-          className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-surface"
+          className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-xs hover:bg-surface"
         >
           ← 대시보드
         </Link>
@@ -100,7 +100,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
           {/* 이메일 */}
           <div>
             <label className="block text-xs font-medium text-muted mb-1.5">이메일</label>
-            <div className="flex items-center px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-muted select-all">
+            <div className="flex items-center px-3 py-2.5 bg-background border border-border rounded-xs text-sm text-muted select-all">
               {email}
             </div>
             <p className="text-[11px] text-muted/60 mt-1">이메일은 변경할 수 없습니다.</p>
@@ -117,12 +117,12 @@ export function AccountClient({ email, displayName, planTier }: Props) {
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
                 placeholder="이름을 입력하세요"
                 maxLength={40}
-                className="flex-1 px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                className="flex-1 px-3 py-2.5 bg-background border border-border rounded-xs text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
               />
               <button
                 onClick={handleSaveName}
                 disabled={nameSaving || !name.trim()}
-                className="px-4 py-2.5 bg-primary hover:bg-primary/80 disabled:bg-background disabled:text-muted text-white text-sm font-medium rounded-lg transition-colors shrink-0"
+                className="px-4 py-2.5 bg-primary hover:bg-primary/80 disabled:bg-background disabled:text-muted text-white text-sm font-medium rounded-xs transition-colors shrink-0"
               >
                 {nameSaving ? '저장 중…' : '저장'}
               </button>
@@ -146,7 +146,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
               value={currentPw}
               onChange={(e) => setCurrentPw(e.target.value)}
               placeholder="현재 비밀번호 입력"
-              className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+              className="w-full px-3 py-2.5 bg-background border border-border rounded-xs text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             />
           </div>
 
@@ -157,7 +157,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
               value={pw}
               onChange={(e) => setPw(e.target.value)}
               placeholder="8자 이상"
-              className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+              className="w-full px-3 py-2.5 bg-background border border-border rounded-xs text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             />
           </div>
 
@@ -169,7 +169,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
               onChange={(e) => setPwConfirm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleChangePw()}
               placeholder="동일한 비밀번호 입력"
-              className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+              className="w-full px-3 py-2.5 bg-background border border-border rounded-xs text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             />
           </div>
 
@@ -182,7 +182,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
           <button
             onClick={handleChangePw}
             disabled={pwSaving || !currentPw || !pw || !pwConfirm}
-            className="w-full py-2.5 bg-background hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm font-medium rounded-lg border border-border transition-all"
+            className="w-full py-2.5 bg-background hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm font-medium rounded-xs border border-border transition-all"
           >
             {pwSaving ? '변경 중…' : '비밀번호 변경'}
           </button>
@@ -199,7 +199,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
               <span className="text-sm text-muted">현재 플랜</span>
             </div>
             {planTier === 'free' && (
-              <button className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all">
+              <button className="text-xs px-3 py-1.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all">
                 업그레이드
               </button>
             )}

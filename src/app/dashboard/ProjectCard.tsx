@@ -76,7 +76,7 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
           </div>
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <span className="bg-white/10 backdrop-blur-sm border border-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-lg">
+          <span className="bg-white/10 backdrop-blur-sm border border-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-xs">
             편집하기 →
           </span>
         </div>
@@ -109,7 +109,7 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
                 if (e.key === 'Enter') handleRename();
                 if (e.key === 'Escape') { setNameValue(project.name); setRenaming(false); }
               }}
-              className="w-full bg-background border border-primary rounded-lg px-2 py-0.5 text-sm text-foreground focus:outline-none"
+              className="w-full bg-background border border-primary rounded-xs px-2 py-0.5 text-sm text-foreground focus:outline-none"
             />
           ) : (
             <p className="text-sm font-medium text-foreground truncate">{project.name}</p>
@@ -128,12 +128,12 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
         <div ref={menuRef} className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all opacity-0 group-hover:opacity-100"
+            className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all opacity-0 group-hover:opacity-100"
           >
             ···
           </button>
           {menuOpen && (
-            <div className="absolute right-0 bottom-full mb-1 w-40 bg-surface border border-border rounded-xl shadow-dropdown overflow-hidden z-10 py-1">
+            <div className="absolute right-0 bottom-full mb-1 w-40 bg-surface border border-border rounded-xs shadow-dropdown overflow-hidden z-10 py-1">
               <Link
                 href={`/editor/${project.id}`}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"

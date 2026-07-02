@@ -156,7 +156,7 @@ export function AssetBrowser() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`mx-1.5 px-2 py-1.5 text-[11px] font-medium text-left rounded-lg transition-all ${
+            className={`mx-1.5 px-2 py-1.5 text-[11px] font-medium text-left rounded-xs transition-all ${
               tab === t.id
                 ? 'bg-background text-foreground'
                 : t.wip
@@ -179,7 +179,7 @@ export function AssetBrowser() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="에셋 검색..."
-              className="w-full max-w-xs bg-background border border-border rounded-lg px-2.5 py-1 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
+              className="w-full max-w-xs bg-background border border-border rounded-xs px-2.5 py-1 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
           </div>
         )}
@@ -230,7 +230,7 @@ export function AssetBrowser() {
                 <button
                   key={type}
                   onClick={() => addContentObject(type)}
-                  className="w-[72px] h-[72px] shrink-0 rounded-xl bg-background border border-border hover:border-border/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+                  className="w-[72px] h-[72px] shrink-0 rounded-xs bg-background border border-border hover:border-border/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
                 >
                   <span className="text-xl leading-none">{emoji}</span>
                   <span className="text-[9px] text-muted">{label}</span>
@@ -248,7 +248,7 @@ export function AssetBrowser() {
                 <button
                   key={preset}
                   onClick={() => addParticleObject(preset)}
-                  className="w-[72px] h-[72px] shrink-0 rounded-xl bg-background border border-border hover:border-primary/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+                  className="w-[72px] h-[72px] shrink-0 rounded-xs bg-background border border-border hover:border-primary/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
                 >
                   <span className="text-xl leading-none">{emoji}</span>
                   <span className="text-[9px] text-muted">{label}</span>
@@ -278,7 +278,7 @@ function UploadButton({ uploading, onClick, label = '.glb', title }: { uploading
       onClick={onClick}
       disabled={uploading}
       title={title}
-      className="w-[72px] h-[72px] shrink-0 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
+      className="w-[72px] h-[72px] shrink-0 rounded-xs border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {uploading ? (
         <span className="text-xs animate-pulse">...</span>
@@ -300,7 +300,7 @@ function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string
   return (
     <div
       ref={cardRef}
-      className="group relative w-[72px] h-[72px] shrink-0 rounded-xl bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
+      className="group relative w-[72px] h-[72px] shrink-0 rounded-xs bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
       onMouseEnter={() => {
         if (isModel && cardRef.current) setHoverRect(cardRef.current.getBoundingClientRect());
       }}

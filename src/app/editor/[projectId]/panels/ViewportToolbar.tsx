@@ -126,14 +126,14 @@ export function ViewportToolbar({ projectName }: Props) {
         <Tooltip content="대시보드로 이동">
           <Link
             href="/dashboard"
-            className="w-7 h-7 flex items-center justify-center text-muted hover:text-foreground hover:bg-background rounded-lg transition-all shrink-0"
+            className="w-7 h-7 flex items-center justify-center text-muted hover:text-foreground hover:bg-background rounded-xs transition-all shrink-0"
           >
             <ArrowLeft size={15} />
           </Link>
         </Tooltip>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold shadow-md shadow-primary/30">
+          <div className="w-5 h-5 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold shadow-md shadow-primary/30">
             ⬡
           </div>
           <span className="text-xs font-bold text-foreground hidden xl:block">Park3D</span>
@@ -165,7 +165,7 @@ export function ViewportToolbar({ projectName }: Props) {
         <Tooltip content="버전 히스토리">
           <button
             onClick={() => setShowHistory(true)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0"
+            className="w-7 h-7 flex items-center justify-center rounded-xs border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0"
           >
             <History size={14} />
           </button>
@@ -176,7 +176,7 @@ export function ViewportToolbar({ projectName }: Props) {
             id="save-btn"
             onClick={handleSave}
             disabled={!isModified}
-            className={`flex items-center gap-1.5 px-3 h-7 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 h-7 rounded-xs text-xs font-semibold transition-all shrink-0 ${
               isModified
                 ? 'bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-md shadow-primary/25 hover:from-violet-500 hover:to-cyan-500'
                 : 'bg-background/40 text-muted cursor-not-allowed'
@@ -194,7 +194,7 @@ export function ViewportToolbar({ projectName }: Props) {
                 if (isModified) await handleSave();
                 window.open(`/space/${sceneId}`, '_blank');
               }}
-              className="flex items-center gap-1.5 px-3 h-7 rounded-lg border border-border text-foreground hover:bg-background hover:border-border/60 transition-all text-xs font-medium shrink-0"
+              className="flex items-center gap-1.5 px-3 h-7 rounded-xs border border-border text-foreground hover:bg-background hover:border-border/60 transition-all text-xs font-medium shrink-0"
             >
               <ExternalLink size={12} />
               <span className="hidden md:block">미리보기</span>
@@ -207,7 +207,7 @@ export function ViewportToolbar({ projectName }: Props) {
         <Tooltip content={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}>
           <button
             onClick={toggleTheme}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0 text-sm"
+            className="w-7 h-7 flex items-center justify-center rounded-xs border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0 text-sm"
           >
             {theme === 'dark' ? '☀' : '🌙'}
           </button>

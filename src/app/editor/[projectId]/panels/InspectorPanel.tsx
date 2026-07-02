@@ -675,7 +675,7 @@ function EnvironmentPanel() {
                 <button
                   key={preset}
                   onClick={() => { updateEnvironment({ postProcessing: { preset } }); pushHistory(); }}
-                  className={`px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+                  className={`px-2 py-1.5 rounded-xs text-[10px] font-medium transition-all ${
                     current === preset
                       ? 'bg-primary text-white'
                       : 'bg-background border border-border text-muted hover:text-foreground hover:border-border/60'
@@ -769,7 +769,7 @@ export function InspectorPanel() {
 
             {/* 2개 선택 시 거리 표시 */}
             {distance !== null && (
-              <div className="bg-background border border-border rounded-lg px-3 py-2">
+              <div className="bg-background border border-border rounded-xs px-3 py-2">
                 <p className="text-[10px] text-muted mb-0.5">선택 오브젝트 간 거리</p>
                 <p className="text-base font-bold text-foreground tabular-nums">{distance.toFixed(2)} m</p>
               </div>
@@ -788,7 +788,7 @@ export function InspectorPanel() {
                     defaultValue={firstColor}
                     onChange={(e) => batchUpdateObjects(selectedIds, (o) => ({ material: { ...o.material, color: e.target.value } }))}
                     onBlur={pushHistory}
-                    className="w-8 h-8 rounded-lg border border-border bg-background cursor-pointer p-0.5"
+                    className="w-8 h-8 rounded-xs border border-border bg-background cursor-pointer p-0.5"
                   />
                   <span className="text-[10px] text-muted">선택된 모든 오브젝트에 적용</span>
                 </div>
@@ -821,7 +821,7 @@ export function InspectorPanel() {
                     <button
                       key={mode}
                       onClick={() => alignSelected(axis, mode)}
-                      className="py-1 rounded-lg text-[10px] bg-background text-muted hover:bg-surface hover:text-foreground transition-colors"
+                      className="py-1 rounded-xs text-[10px] bg-background text-muted hover:bg-surface hover:text-foreground transition-colors"
                     >
                       {mode === 'min' ? '최소' : mode === 'center' ? '중앙' : '최대'}
                     </button>
@@ -884,7 +884,7 @@ export function InspectorPanel() {
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-2 border-b border-border">
             <input value={obj.name} onChange={(e) => updateObject(obj.id, { name: e.target.value })} onBlur={pushHistory}
-              className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+              className="w-full bg-background border border-border rounded-xs px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
             />
           </div>
           <SectionHeader title="Transform" />
@@ -937,7 +937,7 @@ export function InspectorPanel() {
             <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{previewPopup}</p>
             <button
               onClick={() => setPreviewPopup(null)}
-              className="mt-4 w-full py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/80 transition-colors"
+              className="mt-4 w-full py-1.5 rounded-xs bg-primary text-white text-xs font-semibold hover:bg-primary/80 transition-colors"
             >
               닫기
             </button>
@@ -1407,7 +1407,7 @@ export function InspectorPanel() {
               <div key={ev.id} className="bg-surface border border-border/80 rounded-xs p-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <span className="bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-md text-[10px] font-medium shrink-0">
+                    <span className="bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-xs text-[10px] font-medium shrink-0">
                       {TRIGGER_LABELS[ev.trigger]}
                     </span>
                     <span className="text-muted/60 text-[10px]">›</span>

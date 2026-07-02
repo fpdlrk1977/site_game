@@ -40,7 +40,7 @@ function TemplatePickerModal({
               <button
                 key={t.id}
                 onClick={() => setSelected(t.id)}
-                className={`p-3 rounded-xl border text-left transition-all ${
+                className={`p-3 rounded-xs border text-left transition-all ${
                   selected === t.id
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:border-border/60 bg-background/50'
@@ -63,7 +63,7 @@ function TemplatePickerModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && name.trim() && onSelect(selected, name.trim())}
-              className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full bg-background border border-border rounded-xs px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="씬 이름..."
               autoFocus
             />
@@ -73,14 +73,14 @@ function TemplatePickerModal({
         <div className="px-5 pb-4 flex gap-2 justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm text-muted hover:bg-background transition-colors"
+            className="px-4 py-2 rounded-xs text-sm text-muted hover:bg-background transition-colors"
           >
             취소
           </button>
           <button
             onClick={() => name.trim() && onSelect(selected, name.trim())}
             disabled={!name.trim()}
-            className="px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-violet-600 to-cyan-600 text-white hover:from-violet-500 hover:to-cyan-500 transition-all disabled:opacity-40"
+            className="px-4 py-2 rounded-xs text-sm font-semibold bg-gradient-to-r from-violet-600 to-cyan-600 text-white hover:from-violet-500 hover:to-cyan-500 transition-all disabled:opacity-40"
           >
             씬 만들기
           </button>
@@ -192,7 +192,7 @@ export function SceneSwitcher() {
         <button
           onClick={() => setOpen(!open)}
           disabled={busy}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-background text-foreground hover:bg-surface transition-colors text-xs max-w-[140px] disabled:opacity-50"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-xs bg-background text-foreground hover:bg-surface transition-colors text-xs max-w-[140px] disabled:opacity-50"
         >
           <span className="text-[10px] text-muted shrink-0">씬</span>
           <span className="truncate flex-1 text-left">{currentScene?.name ?? '...'}</span>
@@ -200,7 +200,7 @@ export function SceneSwitcher() {
         </button>
 
         {open && (
-          <div className="absolute top-full left-0 mt-1 w-52 bg-surface border border-border rounded-xl shadow-dropdown z-50 py-1 overflow-hidden">
+          <div className="absolute top-full left-0 mt-1 w-52 bg-surface border border-border rounded-xs shadow-dropdown z-50 py-1 overflow-hidden">
             <div className="px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider">
               씬 목록
             </div>

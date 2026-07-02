@@ -79,7 +79,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
         <div className="p-5">
           {/* 비공개 경고 */}
           {!isPublished && (
-            <div className="mb-4 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30 text-warning text-xs flex items-center gap-2">
+            <div className="mb-4 px-3 py-2 rounded-xs bg-warning/10 border border-warning/30 text-warning text-xs flex items-center gap-2">
               <span>⚠</span>
               현재 비공개입니다. 공개 전환 후 공유하세요.
             </div>
@@ -90,18 +90,18 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
               {/* QR */}
               <div className="flex justify-center">
                 {qrDataUrl ? (
-                  <img src={qrDataUrl} alt="QR code" width={140} height={140} className="rounded-xl" />
+                  <img src={qrDataUrl} alt="QR code" width={140} height={140} className="rounded-xs" />
                 ) : (
-                  <div className="w-36 h-36 rounded-xl bg-background animate-pulse" />
+                  <div className="w-36 h-36 rounded-xs bg-background animate-pulse" />
                 )}
               </div>
 
               {/* URL 복사 */}
-              <div className="flex items-center gap-2 bg-background rounded-xl px-3 py-2">
+              <div className="flex items-center gap-2 bg-background rounded-xs px-3 py-2">
                 <span className="text-xs text-muted truncate flex-1 font-mono">{spaceUrl}</span>
                 <button
                   onClick={copyUrl}
-                  className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg transition-all ${
+                  className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-xs transition-all ${
                     copied ? 'bg-success text-white' : 'bg-surface border border-border text-foreground hover:bg-background'
                   }`}
                 >
@@ -112,7 +112,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
               <a
                 href={spaceUrl}
                 target="_blank"
-                className="block w-full text-center py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all"
+                className="block w-full text-center py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all"
               >
                 새 탭으로 열기 ↗
               </a>
@@ -123,7 +123,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
             <div className="space-y-4">
               {!canEmbed ? (
                 /* Pro 플랜 배너 */
-                <div className="bg-gradient-to-br from-violet-600/20 to-cyan-600/20 border border-violet-500/30 rounded-xl p-4 text-center space-y-3">
+                <div className="bg-gradient-to-br from-violet-600/20 to-cyan-600/20 border border-violet-500/30 rounded-xs p-4 text-center space-y-3">
                   <div className="text-2xl">✨</div>
                   <div>
                     <p className="text-foreground font-semibold text-sm">Pro 플랜 전용</p>
@@ -132,7 +132,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
                       나의 3D 공간을 어디든 삽입하세요.
                     </p>
                   </div>
-                  <button className="w-full py-2 rounded-lg bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all">
+                  <button className="w-full py-2 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all">
                     Pro로 업그레이드
                   </button>
                 </div>
@@ -144,12 +144,12 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
 
                   {/* 임베드 코드 */}
                   <div className="relative">
-                    <pre className="bg-background border border-border rounded-xl p-3 text-[10px] text-foreground font-mono overflow-x-auto whitespace-pre leading-relaxed">
+                    <pre className="bg-background border border-border rounded-xs p-3 text-[10px] text-foreground font-mono overflow-x-auto whitespace-pre leading-relaxed">
                       {embedCode}
                     </pre>
                     <button
                       onClick={copyEmbed}
-                      className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-1 rounded-md transition-all ${
+                      className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-1 rounded-xs transition-all ${
                         embedCopied ? 'bg-success text-white' : 'bg-surface border border-border text-foreground hover:bg-background'
                       }`}
                     >
@@ -158,7 +158,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
                   </div>
 
                   {/* Event Bridge 안내 */}
-                  <div className="bg-background/50 border border-border rounded-xl p-3 space-y-2">
+                  <div className="bg-background/50 border border-border rounded-xs p-3 space-y-2">
                     <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Event Bridge</p>
                     <p className="text-[10px] text-muted leading-relaxed">
                       오브젝트에 <code className="text-primary">emit_event</code> 액션을 설정하면 부모 페이지로 메시지를 전송해요.
@@ -174,14 +174,14 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
                     <a
                       href={embedUrl}
                       target="_blank"
-                      className="flex-1 text-center py-2 rounded-xl border border-border text-muted text-xs hover:bg-background transition-colors"
+                      className="flex-1 text-center py-2 rounded-xs border border-border text-muted text-xs hover:bg-background transition-colors"
                     >
                       임베드 미리보기 ↗
                     </a>
                     <a
                       href={`/test/event-bridge?url=${encodeURIComponent(embedUrl)}`}
                       target="_blank"
-                      className="flex-1 text-center py-2 rounded-xl border border-primary/40 text-primary text-xs hover:bg-primary/10 transition-colors"
+                      className="flex-1 text-center py-2 rounded-xs border border-primary/40 text-primary text-xs hover:bg-primary/10 transition-colors"
                     >
                       Event Bridge 테스트 ↗
                     </a>

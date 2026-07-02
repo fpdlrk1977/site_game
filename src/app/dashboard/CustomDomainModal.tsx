@@ -67,7 +67,7 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
       <div className="relative bg-surface border border-border rounded-2xl w-full max-w-md shadow-modal overflow-hidden">
         {/* 헤더 */}
         <div className="px-5 py-4 border-b border-border flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-base">
+          <div className="w-8 h-8 rounded-xs bg-primary/20 flex items-center justify-center text-base">
             🌐
           </div>
           <div className="flex-1 min-w-0">
@@ -80,7 +80,7 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
         <div className="px-5 py-5 space-y-4">
           {!canCustomDomain ? (
             /* Pro 플랜 업그레이드 배너 */
-            <div className="bg-gradient-to-br from-violet-600/20 to-cyan-600/20 border border-violet-500/30 rounded-xl p-4 text-center space-y-3">
+            <div className="bg-gradient-to-br from-violet-600/20 to-cyan-600/20 border border-violet-500/30 rounded-xs p-4 text-center space-y-3">
               <div className="text-2xl">✨</div>
               <div>
                 <p className="text-foreground font-semibold text-sm">Pro 플랜 전용</p>
@@ -89,7 +89,7 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
                   나만의 도메인으로 3D 공간을 제공하세요.
                 </p>
               </div>
-              <button className="w-full py-2 rounded-lg bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all">
+              <button className="w-full py-2 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all">
                 Pro로 업그레이드
               </button>
             </div>
@@ -111,7 +111,7 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
                   onChange={(e) => { setDomain(e.target.value); setError(null); }}
                   onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                   placeholder="mysite.com"
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                  className="w-full bg-background border border-border rounded-xs px-3 py-2 text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
                 />
                 {error && (
                   <p className="text-danger text-[11px] mt-1.5">{error}</p>
@@ -119,12 +119,12 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
               </div>
 
               {/* DNS 안내 */}
-              <div className="bg-background/60 border border-border rounded-xl p-3.5 space-y-2">
+              <div className="bg-background/60 border border-border rounded-xs p-3.5 space-y-2">
                 <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">DNS 설정 방법</p>
                 <p className="text-muted text-[11px] leading-relaxed">
                   도메인 DNS 설정에서 CNAME 레코드를 추가하세요.
                 </p>
-                <div className="bg-sidebar rounded-lg px-3 py-2 font-mono text-[11px] space-y-1">
+                <div className="bg-sidebar rounded-xs px-3 py-2 font-mono text-[11px] space-y-1">
                   <div className="grid grid-cols-[60px_1fr] gap-2 text-muted">
                     <span>Type</span><span className="text-foreground">CNAME</span>
                     <span>Name</span><span className="text-foreground">@  <span className="text-muted/60">(또는 www)</span></span>
@@ -138,7 +138,7 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
 
               {/* 현재 도메인 */}
               {currentDomain && (
-                <div className="flex items-center justify-between text-[11px] bg-background/40 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between text-[11px] bg-background/40 rounded-xs px-3 py-2">
                   <span className="text-muted">현재: <span className="text-foreground font-mono">{currentDomain}</span></span>
                   <button
                     onClick={handleClear}
@@ -154,14 +154,14 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={onClose}
-                  className="flex-1 py-2 rounded-lg bg-background hover:bg-surface text-foreground text-sm transition-colors"
+                  className="flex-1 py-2 rounded-xs bg-background hover:bg-surface text-foreground text-sm transition-colors"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={isPending || !domain.trim()}
-                  className="flex-1 py-2 rounded-lg bg-primary hover:bg-primary/80 disabled:opacity-40 text-white text-sm font-semibold transition-colors"
+                  className="flex-1 py-2 rounded-xs bg-primary hover:bg-primary/80 disabled:opacity-40 text-white text-sm font-semibold transition-colors"
                 >
                   {isPending ? '저장 중…' : '저장'}
                 </button>

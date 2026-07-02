@@ -26,7 +26,7 @@ export function NewProjectCard() {
         onClick={() => setOpen(true)}
         className="relative bg-surface/50 border border-border border-dashed rounded-2xl overflow-hidden flex flex-col items-center justify-center gap-2 group hover:border-border/60 hover:bg-surface transition-all duration-200 min-h-[160px]"
       >
-        <div className="w-10 h-10 rounded-xl bg-background group-hover:bg-gradient-to-br group-hover:from-violet-600 group-hover:to-cyan-600 flex items-center justify-center text-muted group-hover:text-white text-xl transition-all duration-200 group-hover:shadow-lg group-hover:shadow-violet-500/25">
+        <div className="w-10 h-10 rounded-xs bg-background group-hover:bg-gradient-to-br group-hover:from-violet-600 group-hover:to-cyan-600 flex items-center justify-center text-muted group-hover:text-white text-xl transition-all duration-200 group-hover:shadow-lg group-hover:shadow-violet-500/25">
           +
         </div>
         <span className="text-sm text-muted group-hover:text-foreground transition-colors">새 프로젝트</span>
@@ -43,20 +43,20 @@ export function NewProjectCard() {
                 ref={inputRef}
                 name="name"
                 placeholder="나의 첫 번째 3D 공간"
-                className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-foreground placeholder-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                className="w-full bg-background border border-border rounded-xs px-4 py-2.5 text-foreground placeholder-muted/60 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
               />
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-foreground hover:bg-background text-sm transition-colors"
+                  className="flex-1 py-2.5 rounded-xs border border-border text-foreground hover:bg-background text-sm transition-colors"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
                   disabled={pending}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold text-sm transition-all disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold text-sm transition-all disabled:opacity-50"
                 >
                   {pending ? '생성 중...' : '만들기 →'}
                 </button>

@@ -54,7 +54,7 @@ function EventBridgeTester() {
     <div className="min-h-screen bg-sidebar text-foreground flex flex-col">
       {/* 헤더 */}
       <header className="border-b border-border px-5 py-3 flex items-center gap-3 shrink-0 bg-surface">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-xs shadow-lg shadow-violet-500/25">
+        <div className="w-7 h-7 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-xs shadow-lg shadow-violet-500/25">
           ⬡
         </div>
         <span className="font-bold text-sm">Park3D</span>
@@ -71,12 +71,12 @@ function EventBridgeTester() {
           onChange={(e) => setEmbedUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && loadScene()}
           placeholder="/embed/<sceneId> 또는 전체 URL 입력"
-          className="flex-1 px-3 py-1.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary transition-all font-mono"
+          className="flex-1 px-3 py-1.5 bg-background border border-border rounded-xs text-sm text-foreground placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-primary transition-all font-mono"
         />
         <button
           onClick={loadScene}
           disabled={!embedUrl.trim()}
-          className="px-4 py-1.5 bg-primary hover:bg-primary/80 disabled:bg-background disabled:text-muted text-white text-sm font-medium rounded-lg transition-colors shrink-0"
+          className="px-4 py-1.5 bg-primary hover:bg-primary/80 disabled:bg-background disabled:text-muted text-white text-sm font-medium rounded-xs transition-colors shrink-0"
         >
           로드
         </button>
@@ -131,7 +131,7 @@ function EventBridgeTester() {
               </div>
             ) : (
               log.map((entry) => (
-                <div key={entry.id} className="bg-surface border border-border rounded-lg p-2.5 space-y-1.5">
+                <div key={entry.id} className="bg-surface border border-border rounded-xs p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className={`font-bold ${TYPE_STYLE[entry.type] ?? 'text-muted'}`}>
                       {entry.type}

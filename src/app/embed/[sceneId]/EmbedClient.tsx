@@ -10,7 +10,7 @@ const ViewerCanvas = dynamic(
     ssr: false,
     loading: () => (
       <div className="w-full h-full flex items-center justify-center bg-sidebar">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 animate-pulse" />
+        <div className="w-8 h-8 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 animate-pulse" />
       </div>
     ),
   },
@@ -72,7 +72,7 @@ export function EmbedClient({ scene }: Props) {
       {/* 플레이 토글 — 우하단 미니 버튼 */}
       <button
         onClick={() => setPlayMode((v) => !v)}
-        className={`absolute bottom-3 right-3 flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border backdrop-blur-sm transition-all ${
+        className={`absolute bottom-3 right-3 flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-xs border backdrop-blur-sm transition-all ${
           playMode
             ? 'bg-primary/80 border-primary/50 text-white'
             : 'bg-black/40 border-white/10 text-white/60 hover:bg-black/60'
@@ -83,7 +83,7 @@ export function EmbedClient({ scene }: Props) {
 
       {/* Park3D 워터마크 */}
       <div className="absolute bottom-3 left-3 pointer-events-none">
-        <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm text-white/30 text-[9px] px-2 py-1 rounded-md">
+        <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm text-white/30 text-[9px] px-2 py-1 rounded-xs">
           <span className="text-xs leading-none">⬡</span>
           Park3D
         </div>

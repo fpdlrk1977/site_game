@@ -36,7 +36,7 @@ export function AssetPreviewPopup({ url, name, anchorRect }: Props) {
   return createPortal(
     <div
       style={{ position: 'fixed', left, top: finalTop, width: PREVIEW_SIZE, height: PREVIEW_SIZE, zIndex: 9999 }}
-      className="rounded-xl overflow-hidden border border-border shadow-2xl bg-sidebar pointer-events-none"
+      className="rounded-xs overflow-hidden border border-border shadow-2xl bg-sidebar pointer-events-none"
     >
       <Canvas
         camera={{ position: [0, 1, 4], fov: 50 }}

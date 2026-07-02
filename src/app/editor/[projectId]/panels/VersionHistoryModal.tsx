@@ -96,7 +96,7 @@ export function VersionHistoryModal({ onClose }: Props) {
                   <button
                     onClick={() => restore(v.id)}
                     disabled={restoring === v.id}
-                    className="opacity-0 group-hover:opacity-100 text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-primary text-white hover:bg-primary/80 transition-all disabled:opacity-40"
+                    className="opacity-0 group-hover:opacity-100 text-[10px] font-semibold px-2.5 py-1 rounded-xs bg-primary text-white hover:bg-primary/80 transition-all disabled:opacity-40"
                   >
                     {restoring === v.id ? '복구 중...' : '이 버전으로 복구'}
                   </button>

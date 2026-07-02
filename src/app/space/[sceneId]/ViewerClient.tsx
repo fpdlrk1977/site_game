@@ -84,19 +84,19 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
                 if (window.opener) window.close();
                 else window.location.href = `/editor/${projectId}`;
               }}
-              className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm border border-white/10 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-black/70 transition-colors"
+              className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm border border-white/10 text-white text-xs px-3 py-1.5 rounded-xs hover:bg-black/70 transition-colors"
             >
               ← 에디터로
             </button>
           )}
         </div>
         <div className="flex items-center gap-2 pointer-events-auto">
-          <span className="text-white/60 text-xs font-medium bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+          <span className="text-white/60 text-xs font-medium bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-xs">
             {projectName}
           </span>
           <button
             onClick={() => setPlayMode((v) => !v)}
-            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border backdrop-blur-sm transition-all ${
+            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xs border backdrop-blur-sm transition-all ${
               playMode
                 ? 'bg-primary/80 border-primary/50 text-white'
                 : 'bg-black/40 border-white/10 text-white/70 hover:bg-black/60'
@@ -109,7 +109,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
 
       {playMode && !isTouch && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 pointer-events-none">
-          <div className="bg-black/50 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2 text-white/50 text-xs flex items-center gap-3">
+          <div className="bg-black/50 backdrop-blur-sm border border-white/10 rounded-xs px-4 py-2 text-white/50 text-xs flex items-center gap-3">
             <span>WASD 이동</span>
             <span className="text-white/20">|</span>
             <span>Space 점프</span>
@@ -127,7 +127,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           href="https://park3d.io"
           target="_blank"
           rel="noopener noreferrer"
-          className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 text-white/50 hover:text-white/80 text-[10px] px-2.5 py-1.5 rounded-lg transition-colors"
+          className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 text-white/50 hover:text-white/80 text-[10px] px-2.5 py-1.5 rounded-xs transition-colors"
         >
           <span className="text-sm leading-none">⬡</span>
           Powered by Park3D
@@ -148,7 +148,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
             </p>
             <button
               onClick={() => setPopup(null)}
-              className="mt-5 w-full py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold text-sm hover:from-violet-500 hover:to-cyan-500 transition-all"
+              className="mt-5 w-full py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold text-sm hover:from-violet-500 hover:to-cyan-500 transition-all"
             >
               닫기
             </button>

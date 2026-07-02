@@ -71,7 +71,7 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
         onContextMenu={(e) => { e.preventDefault(); selectObject(obj.id); setMenuOpen(true); }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
-        className={`flex items-center gap-1.5 pr-2 py-[3px] rounded-md cursor-pointer group transition-all text-xs ${
+        className={`flex items-center gap-1.5 pr-2 py-[3px] rounded-xs cursor-pointer group transition-all text-xs ${
           isSelected
             ? 'bg-primary/20 text-foreground'
             : 'text-foreground/70 hover:bg-surface'
@@ -153,7 +153,7 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
       {menuOpen && isSelected && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute left-2 top-full mt-0.5 w-44 bg-surface border border-border rounded-xl shadow-2xl shadow-black/30 z-50 py-1 overflow-hidden">
+          <div className="absolute left-2 top-full mt-0.5 w-44 bg-surface border border-border rounded-xs shadow-2xl shadow-black/30 z-50 py-1 overflow-hidden">
             {!obj.isGroup && (
               <button
                 onClick={() => { setMenuOpen(false); setEditing(true); }}
@@ -262,7 +262,7 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
       <div className="px-2 pt-2 pb-1 shrink-0">
         <input type="text" placeholder="검색..." value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-background border border-border rounded-lg px-2.5 py-1 text-xs text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
+          className="w-full bg-background border border-border rounded-xs px-2.5 py-1 text-xs text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
         />
       </div>
       <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">

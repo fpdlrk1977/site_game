@@ -59,7 +59,7 @@ export default async function DashboardPage() {
       {/* 헤더 */}
       <header className="relative border-b border-border/60 px-6 py-4 flex items-center justify-between backdrop-blur-sm bg-sidebar/80">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm shadow-lg shadow-violet-500/25">
+          <div className="w-8 h-8 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm shadow-lg shadow-violet-500/25">
             ⬡
           </div>
           <span className="font-bold text-lg tracking-tight">Park3D</span>
@@ -68,14 +68,14 @@ export default async function DashboardPage() {
           <span className="text-sm text-muted mr-1">{user.email}</span>
           <Link
             href="/account"
-            className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-surface"
+            className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-xs hover:bg-surface"
           >
             계정 설정
           </Link>
           <form action="/api/auth/signout" method="POST">
             <button
               type="submit"
-              className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-surface"
+              className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-xs hover:bg-surface"
             >
               로그아웃
             </button>
@@ -116,7 +116,7 @@ export default async function DashboardPage() {
               <input type="hidden" name="name" value="나의 첫 번째 3D 공간" />
               <button
                 type="submit"
-                className="group flex items-center gap-2 bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:-translate-y-0.5"
+                className="group flex items-center gap-2 bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold px-6 py-3 rounded-xs transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:-translate-y-0.5"
               >
                 <span className="text-base leading-none transition-transform group-hover:rotate-90 duration-200">+</span>
                 첫 프로젝트 만들기

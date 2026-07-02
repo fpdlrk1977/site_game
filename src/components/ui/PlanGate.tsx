@@ -60,7 +60,7 @@ export function UpgradeBanner({ requiredPlan = 'pro', compact = false }: Upgrade
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-border bg-surface/50 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 p-4 rounded-xs border border-border bg-surface/50 text-center">
       <span className={`text-xs font-bold px-2.5 py-1 rounded-full bg-gradient-to-r ${gradientClass} text-white`}>
         {PLAN_LABELS[requiredPlan]} 플랜 필요
       </span>
@@ -69,7 +69,7 @@ export function UpgradeBanner({ requiredPlan = 'pro', compact = false }: Upgrade
       </p>
       <a
         href="/pricing"
-        className={`text-xs font-semibold px-3 py-1.5 rounded-lg bg-gradient-to-r ${gradientClass} text-white hover:opacity-90 transition-opacity`}
+        className={`text-xs font-semibold px-3 py-1.5 rounded-xs bg-gradient-to-r ${gradientClass} text-white hover:opacity-90 transition-opacity`}
       >
         업그레이드 →
       </a>

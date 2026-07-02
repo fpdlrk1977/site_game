@@ -12,7 +12,7 @@ export function Toaster() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl backdrop-blur-sm pointer-events-auto animate-in fade-in slide-in-from-bottom-2 ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xs text-sm font-medium shadow-xl backdrop-blur-sm pointer-events-auto animate-in fade-in slide-in-from-bottom-2 ${
             t.type === 'error'
               ? 'bg-red-950/90 border border-red-500/40 text-red-200'
               : t.type === 'success'

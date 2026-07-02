@@ -13,7 +13,7 @@ export function ViewportStatusBar() {
 
   return (
     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none select-none">
-      <div className="flex items-center gap-3 px-3.5 py-2 bg-surface/95 backdrop-blur-sm border border-border/80 rounded-xl shadow-floating text-[11px] font-mono">
+      <div className="flex items-center gap-3 px-3.5 py-2 bg-surface/95 backdrop-blur-sm border border-border/80 rounded-xs shadow-floating text-[11px] font-mono">
         <div className="flex items-center gap-1.5">
           <span className="text-muted text-[9px] uppercase tracking-wider font-sans font-semibold">Pos</span>
           <span className="text-foreground">{f(obj.position.x)}</span>

@@ -100,7 +100,7 @@ export function EditorOnboarding() {
 
           {/* 단축키 테이블 */}
           {'table' in current && current.table && (
-            <div className="bg-background/60 rounded-xl px-3 py-2 space-y-1.5">
+            <div className="bg-background/60 rounded-xs px-3 py-2 space-y-1.5">
               {current.table.map(({ key, label }) => (
                 <div key={key} className="flex items-center gap-2.5">
                   <kbd className="bg-background border border-border text-foreground text-[10px] font-mono px-1.5 py-0.5 rounded min-w-[28px] text-center">
@@ -134,7 +134,7 @@ export function EditorOnboarding() {
               {!isFirst && (
                 <button
                   onClick={() => setStep((s) => s - 1)}
-                  className="px-3 py-1.5 rounded-lg bg-background hover:bg-surface text-foreground text-xs transition-colors"
+                  className="px-3 py-1.5 rounded-xs bg-background hover:bg-surface text-foreground text-xs transition-colors"
                 >
                   이전
                 </button>
@@ -142,14 +142,14 @@ export function EditorOnboarding() {
               {isLast ? (
                 <button
                   onClick={dismiss}
-                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white text-xs font-semibold transition-all"
+                  className="px-3 py-1.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white text-xs font-semibold transition-all"
                 >
                   시작하기 🎉
                 </button>
               ) : (
                 <button
                   onClick={() => setStep((s) => s + 1)}
-                  className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/80 text-white text-xs font-semibold transition-colors"
+                  className="px-3 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-xs font-semibold transition-colors"
                 >
                   다음
                 </button>

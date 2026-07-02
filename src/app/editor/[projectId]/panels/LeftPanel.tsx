@@ -87,7 +87,7 @@ function AssetsTabContent() {
           <button
             key={t.id}
             onClick={() => setAssetTab(t.id)}
-            className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-all ${
+            className={`px-2.5 py-1 text-[10px] font-medium rounded-xs transition-all ${
               assetTab === t.id
                 ? 'bg-background text-foreground'
                 : 'text-muted hover:text-foreground hover:bg-surface'
@@ -107,7 +107,7 @@ function AssetsTabContent() {
               <button
                 onClick={() => inputRef.current?.click()}
                 disabled={uploading}
-                className="h-[72px] rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40"
+                className="h-[72px] rounded-xs border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40"
               >
                 {uploading ? (
                   <span className="text-xs animate-pulse">...</span>
@@ -123,7 +123,7 @@ function AssetsTabContent() {
                   key={asset.id}
                   onClick={() => addAssetObject(asset)}
                   title={asset.name}
-                  className="group relative h-[72px] rounded-xl bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
+                  className="group relative h-[72px] rounded-xs bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
                 >
                   <span className="text-xl leading-none">📦</span>
                   <span className="text-[9px] text-muted truncate w-full text-center px-1">{asset.name}</span>
@@ -147,7 +147,7 @@ function AssetsTabContent() {
               <button
                 key={type}
                 onClick={() => addContentObject(type)}
-                className="h-[72px] rounded-xl bg-background border border-border hover:border-border/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+                className="h-[72px] rounded-xs bg-background border border-border hover:border-border/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
               >
                 <span className="text-xl leading-none">{emoji}</span>
                 <span className="text-[9px] text-muted">{label}</span>
@@ -162,7 +162,7 @@ function AssetsTabContent() {
               <button
                 key={preset}
                 onClick={() => addParticleObject(preset)}
-                className="h-[72px] rounded-xl bg-background border border-border hover:border-primary/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+                className="h-[72px] rounded-xs bg-background border border-border hover:border-primary/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
               >
                 <span className="text-xl leading-none">{emoji}</span>
                 <span className="text-[9px] text-muted">{label}</span>
@@ -177,7 +177,7 @@ function AssetsTabContent() {
               <button
                 key={type}
                 onClick={() => addLightObject(type)}
-                className="h-[72px] rounded-xl bg-background border border-border hover:border-yellow-500/40 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+                className="h-[72px] rounded-xs bg-background border border-border hover:border-yellow-500/40 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
               >
                 <span className="text-xl leading-none">{emoji}</span>
                 <span className="text-[9px] text-muted text-center leading-snug">{label}</span>
