@@ -91,3 +91,34 @@ canvas, * > canvas { transition: none !important; }
 ::-webkit-scrollbar-track { background: var(--background); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+
+/* Chrome, Safari, Edge, Opera */
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; /* 👈 여기서 바의 높이를 조절합니다 */
+  border-radius: 4px; /* 바의 둥글기 */
+}
+
+/* Firefox */
+input[type="range"]::-moz-range-track {
+  height: 8px; /* 👈 여기서 바의 높이를 조절합니다 */
+  border-radius: 4px;
+}
+
+
+/* Chrome, Safari, Edge */
+input[type="range"]::-webkit-slider-thumb {
+  height: 8px; /* 동그라미 높이 */
+  width: 8px;  /* 동그라미 너비 */
+  border-radius: 50%;
+  margin-top: -6px; /* (바 높이 - 동그라미 높이) / 2 값으로 세로 중앙 정렬 */
+  cursor: pointer;
+}
+
+/* Firefox */
+input[type="range"]::-moz-range-thumb {
+  height: 8px;
+  width: 8px;
+  border: none;
+  border-radius: 50%;
+}

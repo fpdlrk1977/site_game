@@ -195,7 +195,7 @@ export function LeftPanel() {
   const { objects } = useSceneStore();
 
   return (
-    <div className="flex flex-col bg-sidebar border-r border-border overflow-hidden h-full">
+    <div className="flex flex-col bg-surface border-r border-border overflow-hidden h-full">
       {/* 탭 헤더 */}
       <div className="flex items-center gap-0 border-b border-border shrink-0 px-2 pt-1.5">
         <button

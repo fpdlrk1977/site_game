@@ -100,10 +100,10 @@ function NumInput({
           else setLocal(fmt(value));
           onCommit();
         }}
-        className="w-full bg-background border border-border rounded-md pl-6 pr-5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+        className="w-full bg-surface border border-border rounded-xs pl-6 pr-5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
       />
       <span
-        className="absolute right-1 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-ew-resize select-none transition-colors"
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-ew-resize select-none transition-colors"
         onPointerDown={onDragDown}
         onPointerMove={onDragMove}
         onPointerUp={onDragUp}
@@ -132,7 +132,7 @@ function XYZRow({
 }) {
   return (
     <div className="space-y-1">
-      <span className="text-[10px] font-semibold text-muted tracking-wide">{label}</span>
+      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">{label}</span>
       <div className="grid grid-cols-3 gap-1">
         {[
           { axis: 'X', val: x, change: onChangeX },
@@ -140,7 +140,7 @@ function XYZRow({
           { axis: 'Z', val: z, change: onChangeZ },
         ].map(({ axis, val, change }) => (
           <div key={axis} className="relative">
-            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted pointer-events-none z-10">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted/70 pointer-events-none z-10">
               {axis}
             </span>
             <NumInput value={val} onChange={change} onCommit={onCommit} dragStep={dragStep} />
@@ -166,16 +166,16 @@ function SectionHeader({
   const collapsible = onToggle !== undefined;
   return (
     <div
-      onClick={onToggle}
-      className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-semibold text-muted tracking-wide border-b border-border bg-surface/40 select-none ${
-        collapsible ? 'cursor-pointer hover:text-foreground hover:bg-surface/70 transition-colors' : ''
+      // onClick={onToggle}
+      className={`flex items-center gap-2 px-3 py-3 text-[12px] font-semibold text-muted tracking-wide bg-surface/40 select-none ${
+        collapsible ? 'hover:text-foreground hover:bg-surface/70 transition-colors' : ''
       }`}
     >
       {icon && <span className="text-[12px] opacity-60 font-normal not-italic">{icon}</span>}
-      <span className="flex-1">{title}</span>
-      {collapsible && (
+      <span className="flex-1 text-foreground">{title}</span>
+      {/* {collapsible && (
         <span className="text-muted/40 text-[10px]">{isOpen ? '▾' : '▸'}</span>
-      )}
+      )} */}
     </div>
   );
 }
@@ -185,11 +185,17 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   return (
     <div
       onClick={() => onChange(!value)}
-      className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer flex-shrink-0 ${value ? 'bg-primary' : 'bg-border'}`}
+      className={`relative w-7.5 h-4 rounded-full transition-colors cursor-pointer flex-shrink-0 ${value ? 'bg-primary' : 'bg-border'}`}
     >
-      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-4' : 'left-0.5'}`} />
+      <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all ${value ? 'left-4' : 'left-0.5'}`} />
     </div>
   );
+}
+
+function GroupBox({ children, className}: { children: React.ReactNode, className?:string }) {
+  return <div className={`border-t border-border`}>
+      {children}
+    </div>
 }
 
 // ── 트리거/액션 라벨 ───────────────────────────────────────────
@@ -212,250 +218,277 @@ function EnvironmentPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {/* Sky */}
-      <SectionHeader title="Sky" />
-      <div className="px-3 py-3">
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={env.sky.value}
-            onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
-            onBlur={pushHistory}
-            className="w-8 h-8 rounded-lg border border-border bg-background cursor-pointer p-0.5"
-          />
-          <input
-            type="text"
-            value={env.sky.value}
-            onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
-            onBlur={pushHistory}
-            className="flex-1 bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+        {/* Sky */}
+      <GroupBox>
+        <SectionHeader title="Sky" />
+        <div className="px-3 pb-3">
+          <div className="px-2 flex items-center border border-border rounded-xs">
+            <input
+              type="color"
+              value={env.sky.value}
+              onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
+              onBlur={pushHistory}
+              className="w-5 h-5 cursor-pointer"
+            />
+            <input
+              type="text"
+              value={env.sky.value}
+              onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
+              onBlur={pushHistory}
+              className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
         </div>
-      </div>
+      </GroupBox>
+      
 
-      {/* Fog */}
-      <SectionHeader title="Fog" />
-      <div className="px-3 py-3 space-y-3">
-        <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-xs text-muted">Enable Fog</span>
-          <Toggle
-            value={env.fog.enabled}
-            onChange={(v) => { updateEnvironment({ fog: { ...env.fog, enabled: v } }); pushHistory(); }}
-          />
-        </label>
-        {env.fog.enabled && (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted w-12">Color</span>
-              <input
-                type="color"
-                value={env.fog.color}
-                onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
-                onBlur={pushHistory}
-                className="w-8 h-7 rounded border border-border bg-background cursor-pointer p-0.5"
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-muted tracking-wide">Near</span>
-                <span className="text-[10px] text-muted tabular-nums">{env.fog.near}</span>
+
+      <GroupBox>
+        {/* Fog */}
+        <div className='relative'>
+        <SectionHeader title="Fog" />
+        <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+            {/* <span className="text-xs text-muted">Enable Fog</span> */}
+            <Toggle
+              value={env.fog.enabled}
+              onChange={(v) => { updateEnvironment({ fog: { ...env.fog, enabled: v } }); pushHistory(); }}
+            />
+          </label>
+        </div>
+        {env.fog.enabled && <div className="px-3 pb-3">
+          
+              <div className="">
+                <span className="text-[10px] text-muted/50 w-12 font-semibold">Color</span>
+
+                <div className="px-2 flex items-center border border-border rounded-xs">
+                  <input
+                    type="color"
+                    value={env.fog.color}
+                    onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
+                    onBlur={pushHistory}
+                    className="w-5 h-5 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={env.fog.color}
+                    onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
+                    onBlur={pushHistory}
+                    className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
               </div>
-              <input type="range" min="1" max="200" step="1" value={env.fog.near}
-                onChange={(e) => updateEnvironment({ fog: { ...env.fog, near: parseFloat(e.target.value) } })}
-                onMouseUp={pushHistory}
-                className="w-full accent-primary"
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-semibold text-muted tracking-wide">Far</span>
-                <span className="text-[10px] text-muted tabular-nums">{env.fog.far}</span>
+              <div className='mt-2'>
+                <div className="flex items-center -mb-1.5">
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Near : </span>
+                  <span className="text-[10px] text-foreground font-semibold tabular-nums">{env.fog.near}</span>
+                </div>
+                <input type="range" min="1" max="200" step="1" value={env.fog.near}
+                  onChange={(e) => updateEnvironment({ fog: { ...env.fog, near: parseFloat(e.target.value) } })}
+                  onMouseUp={pushHistory}
+                  className="w-full text-primary"
+                />
               </div>
-              <input type="range" min="10" max="500" step="5" value={env.fog.far}
-                onChange={(e) => updateEnvironment({ fog: { ...env.fog, far: parseFloat(e.target.value) } })}
-                onMouseUp={pushHistory}
-                className="w-full accent-primary"
-              />
-            </div>
-          </>
-        )}
-      </div>
+              <div className='mt-2'>
+                <div className="flex items-center -mb-1.5">
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Far : </span>
+                  <span className="text-[10px] text-foreground font-semibold tabular-nums">{env.fog.far}</span>
+                </div>
+                <input type="range" min="10" max="500" step="5" value={env.fog.far}
+                  onChange={(e) => updateEnvironment({ fog: { ...env.fog, far: parseFloat(e.target.value) } })}
+                  onMouseUp={pushHistory}
+                  className="w-full accent-primary"
+                />
+              </div>
+ 
+        </div>}
+      </GroupBox>
+      
 
       {/* Lights */}
-      <SectionHeader title="Lights" />
-      <div className="px-3 py-3 space-y-3">
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-semibold text-muted tracking-wide">Ambient</span>
-            <span className="text-[10px] text-muted tabular-nums">{env.lights.ambientIntensity.toFixed(2)}</span>
+      <GroupBox>
+        <SectionHeader title="Lights" />
+        <div className="px-3 space-y-1 pb-4">
+          <div>
+            <div className="-mb-1.5">
+              <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Ambient : </span>
+              <span className="text-[10px] text-foreground font-semibold tabular-nums">{env.lights.ambientIntensity.toFixed(2)}</span>
+            </div>
+            <input type="range" min="0" max="3" step="0.05" value={env.lights.ambientIntensity}
+              onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientIntensity: parseFloat(e.target.value) } })}
+              onMouseUp={pushHistory}
+              className="w-full accent-primary"
+            />
           </div>
-          <input type="range" min="0" max="3" step="0.05" value={env.lights.ambientIntensity}
-            onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientIntensity: parseFloat(e.target.value) } })}
-            onMouseUp={pushHistory}
-            className="w-full accent-primary"
+          <div>
+            <div className="-mb-1.5">
+              <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Directional : </span>
+              <span className="text-[10px] text-foreground font-semibold tabular-nums">{env.lights.directionalIntensity.toFixed(2)}</span>
+            </div>
+            <input type="range" min="0" max="5" step="0.1" value={env.lights.directionalIntensity}
+              onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: parseFloat(e.target.value) } })}
+              onMouseUp={pushHistory}
+              className="w-full accent-primary"
+            />
+          </div>
+          <XYZRow
+            label="Sun Position"
+            x={env.lights.directionalPosition.x}
+            y={env.lights.directionalPosition.y}
+            z={env.lights.directionalPosition.z}
+            onChangeX={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, x: v } } })}
+            onChangeY={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, y: v } } })}
+            onChangeZ={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, z: v } } })}
+            onCommit={pushHistory} dragStep={0.5}
           />
         </div>
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-semibold text-muted tracking-wide">Directional</span>
-            <span className="text-[10px] text-muted tabular-nums">{env.lights.directionalIntensity.toFixed(2)}</span>
-          </div>
-          <input type="range" min="0" max="5" step="0.1" value={env.lights.directionalIntensity}
-            onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: parseFloat(e.target.value) } })}
-            onMouseUp={pushHistory}
-            className="w-full accent-primary"
-          />
-        </div>
-        <XYZRow
-          label="Sun Position"
-          x={env.lights.directionalPosition.x}
-          y={env.lights.directionalPosition.y}
-          z={env.lights.directionalPosition.z}
-          onChangeX={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, x: v } } })}
-          onChangeY={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, y: v } } })}
-          onChangeZ={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, z: v } } })}
-          onCommit={pushHistory} dragStep={0.5}
-        />
-      </div>
+      </GroupBox>
 
       {/* Player */}
-      <SectionHeader title="Player" icon="🧍" />
-      <div className="px-3 py-3 space-y-3">
-        {(() => {
-          const characterAssets = assets.filter((a) => a.type === 'character');
-          return (
-            <>
-              <div>
-                <span className="text-[10px] text-muted block mb-1.5 font-semibold tracking-wide">캐릭터</span>
-                <select
-                  value={env.playerCharacterId ?? ''}
-                  onChange={(e) => { updateEnvironment({ playerCharacterId: e.target.value || undefined }); pushHistory(); }}
-                  className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">기본 캡슐</option>
-                  {characterAssets.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-                {characterAssets.length === 0 && (
-                  <p className="text-[10px] text-muted/60 mt-1.5">
-                    Asset Browser → Character 탭에서 GLB를 업로드하세요
-                  </p>
-                )}
-              </div>
-              {env.playerCharacterId && (
+      <GroupBox>
+        <SectionHeader title="Player" />
+        <div className="px-3 pb-4 space-y-1">
+          {(() => {
+            const characterAssets = assets.filter((a) => a.type === 'character');
+            return (
+              <>
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted tracking-wide">Scale</span>
-                    <span className="text-[10px] text-muted tabular-nums">{(env.playerCharacterScale ?? 1).toFixed(2)}</span>
+                  <span className="text-[10px] text-muted/50 block mb-1.5 font-semibold tracking-wide">캐릭터</span>
+                  <select
+                    value={env.playerCharacterId ?? ''}
+                    onChange={(e) => { updateEnvironment({ playerCharacterId: e.target.value || undefined }); pushHistory(); }}
+                    className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">기본 캡슐</option>
+                    {characterAssets.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                  {characterAssets.length === 0 && (
+                    <p className="text-[10px] text-muted/60 mt-1.5">
+                      Asset Browser → Character 탭에서 GLB를 업로드하세요
+                    </p>
+                  )}
+                </div>
+                {env.playerCharacterId && (
+                  <div>
+                    <div className="-mb-1.5">
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Scale : </span>
+                      <span className="text-[10px] text-foreground font-semibold tabular-nums">{(env.playerCharacterScale ?? 1).toFixed(2)}</span>
+                    </div>
+                    <input
+                      type="range" min="0.1" max="3" step="0.05"
+                      value={env.playerCharacterScale ?? 1}
+                      onChange={(e) => updateEnvironment({ playerCharacterScale: parseFloat(e.target.value) })}
+                      onMouseUp={pushHistory}
+                      className="w-full accent-primary"
+                    />
                   </div>
-                  <input
-                    type="range" min="0.1" max="3" step="0.05"
-                    value={env.playerCharacterScale ?? 1}
-                    onChange={(e) => updateEnvironment({ playerCharacterScale: parseFloat(e.target.value) })}
+                )}
+                <div>
+                  <div className="-mb-1.5">
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">이동 속도 : </span>
+                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(env.playerSpeed ?? 5).toFixed(1)}</span>
+                  </div>
+                  <input type="range" min="1" max="20" step="0.5"
+                    value={env.playerSpeed ?? 5}
+                    onChange={(e) => updateEnvironment({ playerSpeed: parseFloat(e.target.value) })}
                     onMouseUp={pushHistory}
                     className="w-full accent-primary"
                   />
                 </div>
-              )}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-semibold text-muted tracking-wide">이동 속도</span>
-                  <span className="text-[10px] text-muted tabular-nums">{(env.playerSpeed ?? 5).toFixed(1)}</span>
+                <div>
+                  <div className="-mb-1.5">
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">점프력 : </span>
+                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(env.playerJumpForce ?? 12).toFixed(1)}</span>
+                  </div>
+                  <input type="range" min="2" max="30" step="1"
+                    value={env.playerJumpForce ?? 12}
+                    onChange={(e) => updateEnvironment({ playerJumpForce: parseFloat(e.target.value) })}
+                    onMouseUp={pushHistory}
+                    className="w-full accent-primary"
+                  />
                 </div>
-                <input type="range" min="1" max="20" step="0.5"
-                  value={env.playerSpeed ?? 5}
-                  onChange={(e) => updateEnvironment({ playerSpeed: parseFloat(e.target.value) })}
-                  onMouseUp={pushHistory}
-                  className="w-full accent-primary"
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-semibold text-muted tracking-wide">점프력</span>
-                  <span className="text-[10px] text-muted tabular-nums">{(env.playerJumpForce ?? 12).toFixed(1)}</span>
-                </div>
-                <input type="range" min="2" max="30" step="1"
-                  value={env.playerJumpForce ?? 12}
-                  onChange={(e) => updateEnvironment({ playerJumpForce: parseFloat(e.target.value) })}
-                  onMouseUp={pushHistory}
-                  className="w-full accent-primary"
-                />
-              </div>
-            </>
-          );
-        })()}
-      </div>
+              </>
+            );
+          })()}
+        </div>
+      </GroupBox>
 
       {/* 스폰 포인트 */}
-      <SectionHeader title="Spawn Point" icon="📍" />
-      <div className="px-3 py-3 space-y-2">
-        <XYZRow
-          label="시작 위치"
-          x={env.playerStartPosition?.x ?? 0}
-          y={env.playerStartPosition?.y ?? 4}
-          z={env.playerStartPosition?.z ?? 0}
-          onChangeX={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 4, z: 0 }, x: v } })}
-          onChangeY={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 4, z: 0 }, y: v } })}
-          onChangeZ={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 4, z: 0 }, z: v } })}
-          onCommit={pushHistory} dragStep={0.5}
-        />
-        {env.playerStartPosition && (
-          <button
-            onClick={() => { updateEnvironment({ playerStartPosition: undefined }); pushHistory(); }}
-            className="w-full py-1 rounded-lg border border-dashed border-border text-[10px] text-muted hover:text-danger hover:border-danger/50 transition-colors"
-          >
-            스폰 포인트 초기화
-          </button>
-        )}
-        {!env.playerStartPosition && (
-          <p className="text-[10px] text-muted/60">기본값: X=0, Y=4, Z=0</p>
-        )}
-      </div>
+      <GroupBox>
+        <SectionHeader title="Spawn Point" />
+        <div className="px-3 pb-4 space-y-1">
+          <XYZRow
+            label="시작 위치"
+            x={env.playerStartPosition?.x ?? 0}
+            y={env.playerStartPosition?.y ?? 0}
+            z={env.playerStartPosition?.z ?? 0}
+            onChangeX={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, x: v } })}
+            onChangeY={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, y: v } })}
+            onChangeZ={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, z: v } })}
+            onCommit={pushHistory} dragStep={0.5}
+          />
+          {env.playerStartPosition && (
+            <button
+              onClick={() => { updateEnvironment({ playerStartPosition: undefined }); pushHistory(); }}
+              className="w-full py-1 rounded-xs border border-dashed text-[10px] text-danger border-danger/50 hover:bg-danger/2 transition-colors cursor-pointer"
+            >
+              스폰 포인트 초기화
+            </button>
+          )}
+          {/* {!env.playerStartPosition && (
+            <p className="mt-1 text-[10px] text-muted/60">기본값: X=0, Y=4, Z=0</p>
+          )} */}
+        </div>
+      </GroupBox>
 
       {/* Post Processing */}
-      <SectionHeader title="Post Processing" icon="✦" />
-      <div className="px-3 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-semibold text-muted tracking-wide">Preset</span>
+      <GroupBox>
+        <SectionHeader title="Post Processing" />
+        <div className="px-3 pb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-semibold text-muted/60 tracking-wide">Preset</span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {(['none', 'cinematic', 'dreamy', 'vintage', 'sharp'] as PostProcessPreset[]).map((preset) => {
+              const current = env.postProcessing?.preset ?? 'none';
+              const LABELS: Record<PostProcessPreset, string> = {
+                none: 'None', cinematic: 'Cinematic', dreamy: 'Dreamy', vintage: 'Vintage', sharp: 'Sharp',
+              };
+              return (
+                <button
+                  key={preset}
+                  onClick={() => { updateEnvironment({ postProcessing: { preset } }); pushHistory(); }}
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+                    current === preset
+                      ? 'bg-primary text-white'
+                      : 'bg-background border border-border text-muted hover:text-foreground hover:border-border/60'
+                  }`}
+                >
+                  {LABELS[preset]}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {(['none', 'cinematic', 'dreamy', 'vintage', 'sharp'] as PostProcessPreset[]).map((preset) => {
-            const current = env.postProcessing?.preset ?? 'none';
-            const LABELS: Record<PostProcessPreset, string> = {
-              none: 'None', cinematic: 'Cinematic', dreamy: 'Dreamy', vintage: 'Vintage', sharp: 'Sharp',
-            };
-            return (
-              <button
-                key={preset}
-                onClick={() => { updateEnvironment({ postProcessing: { preset } }); pushHistory(); }}
-                className={`px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
-                  current === preset
-                    ? 'bg-primary text-white'
-                    : 'bg-background border border-border text-muted hover:text-foreground hover:border-border/60'
-                }`}
-              >
-                {LABELS[preset]}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      </GroupBox>
 
       {/* 씬 메모 */}
-      <SectionHeader title="씬 메모" icon="📝" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
-      {notesOpen && (
-        <div className="px-3 py-3">
-          <textarea
-            value={env.notes ?? ''}
-            onChange={(e) => updateEnvironment({ notes: e.target.value })}
-            onBlur={pushHistory}
-            placeholder="씬에 대한 메모를 입력하세요..."
-            rows={4}
-            className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-          />
-        </div>
-      )}
+      <GroupBox>
+        <SectionHeader title="씬 메모" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
+        {notesOpen && (
+          <div className="px-3 pb-4">
+            <textarea
+              value={env.notes ?? ''}
+              onChange={(e) => updateEnvironment({ notes: e.target.value })}
+              onBlur={pushHistory}
+              placeholder="씬에 대한 메모를 입력하세요..."
+              rows={4}
+              className="w-full bg-background border border-border rounded-xs px-2.5 py-1.5 text-xs text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+            />
+          </div>
+        )}
+      </GroupBox>
     </div>
   );
 }
@@ -588,9 +621,9 @@ export function InspectorPanel() {
 
   if (!obj) {
     return (
-      <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
-        <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-          <span className="text-xs font-semibold text-muted tracking-wide flex-1">Environment</span>
+      <aside className="flex flex-col bg-surface border-l border-border overflow-hidden">
+        <div className="px-3 py-2 border-border flex items-center gap-2">
+          <span className="text-xs font-semibold text-foreground tracking-wide flex-1">Environment</span>
         </div>
         <EnvironmentPanel />
       </aside>
@@ -679,7 +712,7 @@ export function InspectorPanel() {
   }
 
   return (
-    <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden relative">
+    <aside className="flex flex-col bg-surface border-l border-border overflow-hidden relative">
       {/* 이벤트 프리뷰 팝업 오버레이 */}
       {previewPopup !== null && (
         <div className="absolute inset-0 z-10 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewPopup(null)}>
@@ -696,56 +729,58 @@ export function InspectorPanel() {
         </div>
       )}
       <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-        <span className="text-xs font-semibold text-muted tracking-wide flex-1">Inspector</span>
+        <span className="text-xs font-semibold text-foreground tracking-wide flex-1">Inspector</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {/* 이름 */}
-        <div className="px-3 py-2 border-b border-border">
+        <div className="px-3 py-2">
           <input
             value={obj.name}
             onChange={(e) => updateObject(obj.id, { name: e.target.value })}
             onBlur={pushHistory}
-            className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+            className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
           />
         </div>
 
         {/* Transform */}
-        <SectionHeader title="Transform" icon="⊹" isOpen={isOpen('transform')} onToggle={() => toggleSection('transform')} />
-        {isOpen('transform') && (
-          <div className="px-3 py-3 space-y-3">
-            <XYZRow
-              label="Position"
-              x={obj.position.x} y={obj.position.y} z={obj.position.z}
-              onChangeX={(v) => setPos('x', v)}
-              onChangeY={(v) => setPos('y', v)}
-              onChangeZ={(v) => setPos('z', v)}
-              onCommit={pushHistory} dragStep={0.1}
-            />
-            <XYZRow
-              label="Rotation °"
-              x={obj.rotation.x} y={obj.rotation.y} z={obj.rotation.z}
-              onChangeX={(v) => setRot('x', v)}
-              onChangeY={(v) => setRot('y', v)}
-              onChangeZ={(v) => setRot('z', v)}
-              onCommit={pushHistory} dragStep={1}
-            />
-            <XYZRow
-              label="Scale"
-              x={obj.scale.x} y={obj.scale.y} z={obj.scale.z}
-              onChangeX={(v) => setScl('x', v)}
-              onChangeY={(v) => setScl('y', v)}
-              onChangeZ={(v) => setScl('z', v)}
-              onCommit={pushHistory} dragStep={0.05}
-            />
-          </div>
-        )}
+        <GroupBox>
+          <SectionHeader title="Transform" isOpen={isOpen('transform')} onToggle={() => toggleSection('transform')} />
+          {isOpen('transform') && (
+            <div className="px-3 pb-4 space-y-1">
+              <XYZRow
+                label="Position"
+                x={obj.position.x} y={obj.position.y} z={obj.position.z}
+                onChangeX={(v) => setPos('x', v)}
+                onChangeY={(v) => setPos('y', v)}
+                onChangeZ={(v) => setPos('z', v)}
+                onCommit={pushHistory} dragStep={0.1}
+              />
+              <XYZRow
+                label="Rotation °"
+                x={obj.rotation.x} y={obj.rotation.y} z={obj.rotation.z}
+                onChangeX={(v) => setRot('x', v)}
+                onChangeY={(v) => setRot('y', v)}
+                onChangeZ={(v) => setRot('z', v)}
+                onCommit={pushHistory} dragStep={1}
+              />
+              <XYZRow
+                label="Scale"
+                x={obj.scale.x} y={obj.scale.y} z={obj.scale.z}
+                onChangeX={(v) => setScl('x', v)}
+                onChangeY={(v) => setScl('y', v)}
+                onChangeZ={(v) => setScl('z', v)}
+                onCommit={pushHistory} dragStep={0.05}
+              />
+            </div>
+          )}
+        </GroupBox>
 
         {/* Content (content 오브젝트만) */}
         {obj.content && (
-          <>
-            <SectionHeader title="Content" icon="🖼" isOpen={isOpen('content')} onToggle={() => toggleSection('content')} />
-            {isOpen('content') && <div className="px-3 py-3 space-y-2.5">
+          <GroupBox>
+            <SectionHeader title="Content" isOpen={isOpen('content')} onToggle={() => toggleSection('content')} />
+            {isOpen('content') && <div className="px-3 pb-4 space-y-1">
               {obj.content.type === 'text' && (
                 <>
                   <div>
@@ -755,13 +790,13 @@ export function InspectorPanel() {
                       onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, text: e.target.value } })}
                       onBlur={pushHistory}
                       rows={3}
-                      className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                      className="w-full bg-background border border-border rounded-xs px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                     />
                   </div>
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-semibold text-muted tracking-wide">글자 크기</span>
-                      <span className="text-[10px] text-muted">{(obj.content.fontSize ?? 0.5).toFixed(1)}</span>
+                    <div className="flex items-center justify-between -mb-1.5">
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">글자 크기 : </span>
+                      <span className="text-[10px] text-foreground font-semibold">{(obj.content.fontSize ?? 0.5).toFixed(1)}</span>
                     </div>
                     <input type="range" min="0.1" max="3" step="0.1"
                       value={obj.content.fontSize ?? 0.5}
@@ -770,10 +805,10 @@ export function InspectorPanel() {
                       className="w-full accent-primary"
                     />
                   </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-semibold text-muted tracking-wide">두께</span>
-                      <span className="text-[10px] text-muted">{(obj.content.depth ?? 0.1).toFixed(2)}</span>
+                  <div className='mt-2'>
+                    <div className="flex items-center justify-between -mb-1.5">
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">두께 : </span>
+                      <span className="text-[10px] text-foreground font-semibold">{(obj.content.depth ?? 0.1).toFixed(2)}</span>
                     </div>
                     <input type="range" min="0" max="1" step="0.01"
                       value={obj.content.depth ?? 0.1}
@@ -786,7 +821,7 @@ export function InspectorPanel() {
               )}
               {(obj.content.type === 'image' || obj.content.type === 'video') && (
                 <div>
-                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">
                     {obj.content.type === 'image' ? '이미지 URL' : '동영상 URL'}
                   </span>
                   <input
@@ -795,25 +830,25 @@ export function InspectorPanel() {
                     onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, url: e.target.value } })}
                     onBlur={pushHistory}
                     placeholder={obj.content.type === 'image' ? 'https://example.com/img.jpg' : 'https://www.youtube.com/...'}
-                    className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               )}
             </div>}
-          </>
+          </GroupBox>
         )}
 
         {/* Particle (파티클 이미터만) */}
         {obj.particle && (
-          <>
-            <SectionHeader title="Particle" icon="✨" isOpen={isOpen('particle')} onToggle={() => toggleSection('particle')} />
-            {isOpen('particle') && <div className="px-3 py-3 space-y-2.5">
+          <GroupBox>
+            <SectionHeader title="Particle" isOpen={isOpen('particle')} onToggle={() => toggleSection('particle')} />
+            {isOpen('particle') && <div className="px-3 pb-4 space-y-2">
               <div>
-                <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Preset</span>
+                <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Preset</span>
                 <select
                   value={obj.particle.preset}
                   onChange={(e) => { updateObject(obj.id, { particle: { ...obj.particle!, preset: e.target.value as ParticlePreset } }); pushHistory(); }}
-                  className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="fire">🔥 불꽃 (Fire)</option>
                   <option value="dust">💨 먼지 (Dust)</option>
@@ -822,20 +857,20 @@ export function InspectorPanel() {
                 </select>
               </div>
               <div>
-                <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">색상 오버라이드</span>
-                <div className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">색상 오버라이드</span>
+                <div className="px-2 flex items-center border border-border rounded-xs">
                   <input type="color"
                     value={obj.particle.color ?? '#ffffff'}
                     onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
                     onBlur={pushHistory}
-                    className="w-8 h-8 rounded-lg border border-border bg-background cursor-pointer p-0.5"
+                    className="w-5 h-5 cursor-pointer"
                   />
                   <input type="text"
-                    value={obj.particle.color ?? ''}
+                    value={obj.particle.color ?? '#ffffff'}
                     onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
                     onBlur={pushHistory}
                     placeholder="프리셋 기본값"
-                    className="flex-1 bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary placeholder-muted/60"
+                    className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -846,9 +881,9 @@ export function InspectorPanel() {
                 { key: 'size',  label: '크기',       min: 0.01, max: 0.5, step: 0.01 },
               ] as const).map(({ key, label, min, max, step }) => (
                 <div key={key}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted tracking-wide">{label}</span>
-                    <span className="text-[10px] text-muted tabular-nums">{(obj.particle![key] ?? '기본').toString()}</span>
+                  <div className="flex items-center justify-between -mb-1.5">
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">{label}</span>
+                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.particle![key] ?? '기본').toString()}</span>
                   </div>
                   <input type="range" min={min} max={max} step={step}
                     value={obj.particle![key] as number | undefined ?? (key === 'count' ? 80 : key === 'speed' ? 0.8 : key === 'spread' ? 1 : 0.08)}
@@ -859,38 +894,38 @@ export function InspectorPanel() {
                 </div>
               ))}
             </div>}
-          </>
+          </GroupBox>
         )}
 
         {/* Material (primitive + text content 오브젝트) */}
         {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && (
-          <>
-            <SectionHeader title="Material" icon="◉" isOpen={isOpen('material')} onToggle={() => toggleSection('material')} />
+          <GroupBox>
+            <SectionHeader title="Material" isOpen={isOpen('material')} onToggle={() => toggleSection('material')} />
             {isOpen('material') && (
-              <div className="px-3 py-3 space-y-2.5">
+              <div className="px-3 pb-4 space-y-2">
                 <div>
-                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Color</span>
-                  <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Color</span>
+                  <div className="px-2 flex items-center border border-border rounded-xs">
                     <input
                       type="color"
                       value={obj.material?.color ?? '#a78bfa'}
                       onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
                       onBlur={pushHistory}
-                      className="w-8 h-8 rounded-lg border border-border bg-background cursor-pointer p-0.5"
+                      className="w-5 h-5 cursor-pointer"
                     />
                     <input
                       type="text"
                       value={obj.material?.color ?? '#a78bfa'}
                       onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
                       onBlur={pushHistory}
-                      className="flex-1 bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted tracking-wide">Roughness</span>
-                    <span className="text-[10px] text-muted tabular-nums">{(obj.material?.roughness ?? 0.5).toFixed(2)}</span>
+                  <div className="flex items-center justify-between -mb-1.5">
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Roughness</span>
+                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.material?.roughness ?? 0.5).toFixed(2)}</span>
                   </div>
                   <input type="range" min="0" max="1" step="0.01"
                     value={obj.material?.roughness ?? 0.5}
@@ -900,9 +935,9 @@ export function InspectorPanel() {
                   />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted tracking-wide">Metalness</span>
-                    <span className="text-[10px] text-muted tabular-nums">{(obj.material?.metalness ?? 0.1).toFixed(2)}</span>
+                  <div className="flex items-center justify-between -mb-1.5">
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Metalness</span>
+                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.material?.metalness ?? 0.1).toFixed(2)}</span>
                   </div>
                   <input type="range" min="0" max="1" step="0.01"
                     value={obj.material?.metalness ?? 0.1}
@@ -912,36 +947,37 @@ export function InspectorPanel() {
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Emissive</span>
-                  <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Emissive</span>
+                  <div className="px-2 flex items-center border border-border rounded-xs">
                     <input
                       type="color"
                       value={obj.material?.emissive ?? '#000000'}
                       onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
                       onBlur={pushHistory}
-                      className="w-8 h-8 rounded-lg border border-border bg-background cursor-pointer p-0.5"
+                      className="w-5 h-5 cursor-pointer"
                     />
                     <input
                       type="text"
                       value={obj.material?.emissive ?? '#000000'}
                       onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
                       onBlur={pushHistory}
-                      className="flex-1 bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                 </div>
               </div>
             )}
-          </>
+          </GroupBox>
         )}
 
         {/* Visibility */}
-        <SectionHeader title="Visibility" icon="👁" isOpen={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
+        <GroupBox>
+        <SectionHeader title="Visibility" isOpen={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
         {isOpen('visibility') && (
-          <div className="px-3 py-3 space-y-2">
+          <div className="px-3 pb-4 space-y-2">
             {(['visible', 'locked'] as const).map((key) => (
               <label key={key} className="flex items-center justify-between cursor-pointer">
-                <span className="text-xs text-muted capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
+                <span className="text-[10px] font-semibold text-muted/50 capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
                 <Toggle
                   value={obj[key]}
                   onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }}
@@ -951,19 +987,21 @@ export function InspectorPanel() {
           </div>
         )}
 
+        </GroupBox>
+
         {/* Light */}
         {obj.light && (
-          <>
-            <SectionHeader title="Light" icon="💡" isOpen={isOpen('light')} onToggle={() => toggleSection('light')} />
+          <GroupBox>
+            <SectionHeader title="Light" isOpen={isOpen('light')} onToggle={() => toggleSection('light')} />
             {isOpen('light') && (
-              <div className="px-3 py-3 space-y-3">
+              <div className="px-3 pb-4 space-y-2">
                 {/* Type */}
                 <div>
-                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Type</span>
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Type</span>
                   <select
                     value={obj.light.type}
                     onChange={(e) => { updateObject(obj.id, { light: { ...obj.light!, type: e.target.value as 'point' | 'spot' | 'directional' } }); pushHistory(); }}
-                    className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
                     <option value="point">Point Light</option>
                     <option value="spot">Spot Light</option>
@@ -971,21 +1009,39 @@ export function InspectorPanel() {
                   </select>
                 </div>
                 {/* Color */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted">Color</span>
-                  <div className="flex items-center gap-2">
+                <div className="">
+                  <span className="text-[10px] font-semibold text-muted/50">Color</span>
+                  {/* <div className="flex items-center gap-2">
                     <input type="color" value={obj.light.color}
                       onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
                       onBlur={pushHistory}
                       className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent" />
-                    <span className="text-[10px] font-mono text-muted">{obj.light.color}</span>
+                    <span className="text-[10px]  text-muted">{obj.light.color}</span>
+                  </div> */}
+
+                  <div className="px-2 flex items-center border border-border rounded-xs">
+                    <input
+                      type="color"
+                      value={obj.light.color}
+                    onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="w-5 h-5 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={obj.light.color}
+                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
                   </div>
+
                 </div>
                 {/* Intensity */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted tracking-wide">Intensity</span>
-                    <span className="text-[10px] text-muted tabular-nums">{obj.light.intensity.toFixed(1)}</span>
+                  <div className="flex items-center justify-between -mb-1.5">
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Intensity</span>
+                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{obj.light.intensity.toFixed(1)}</span>
                   </div>
                   <input type="range" min="0" max="10" step="0.1" value={obj.light.intensity}
                     onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, intensity: parseFloat(e.target.value) } })}
@@ -995,9 +1051,9 @@ export function InspectorPanel() {
                 {/* Distance (point, spot) */}
                 {obj.light.type !== 'directional' && (
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-semibold text-muted tracking-wide">Distance</span>
-                      <span className="text-[10px] text-muted tabular-nums">{(obj.light.distance ?? 20).toFixed(0)}</span>
+                    <div className="flex items-center justify-between -mb-1.5">
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Distance</span>
+                      <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.light.distance ?? 20).toFixed(0)}</span>
                     </div>
                     <input type="range" min="1" max="100" step="1" value={obj.light.distance ?? 20}
                       onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, distance: parseFloat(e.target.value) } })}
@@ -1008,9 +1064,9 @@ export function InspectorPanel() {
                 {/* Decay (point, spot) */}
                 {obj.light.type !== 'directional' && (
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-semibold text-muted tracking-wide">Decay</span>
-                      <span className="text-[10px] text-muted tabular-nums">{(obj.light.decay ?? 2).toFixed(1)}</span>
+                    <div className="flex items-center justify-between -mb-1.5">
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Decay</span>
+                      <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.light.decay ?? 2).toFixed(1)}</span>
                     </div>
                     <input type="range" min="0" max="3" step="0.1" value={obj.light.decay ?? 2}
                       onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, decay: parseFloat(e.target.value) } })}
@@ -1022,9 +1078,9 @@ export function InspectorPanel() {
                 {obj.light.type === 'spot' && (
                   <>
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold text-muted tracking-wide">Angle (°)</span>
-                        <span className="text-[10px] text-muted tabular-nums">
+                      <div className="flex items-center justify-between -mb-1.5">
+                        <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Angle (°)</span>
+                        <span className="text-[10px] text-foreground font-semibold tabular-nums">
                           {((obj.light.angle ?? Math.PI / 6) * 180 / Math.PI).toFixed(0)}°
                         </span>
                       </div>
@@ -1035,9 +1091,9 @@ export function InspectorPanel() {
                         className="w-full accent-primary" />
                     </div>
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold text-muted tracking-wide">Penumbra</span>
-                        <span className="text-[10px] text-muted tabular-nums">{(obj.light.penumbra ?? 0.1).toFixed(2)}</span>
+                      <div className="flex items-center justify-between -mb-1.5">
+                        <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Penumbra</span>
+                        <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.light.penumbra ?? 0.1).toFixed(2)}</span>
                       </div>
                       <input type="range" min="0" max="1" step="0.01" value={obj.light.penumbra ?? 0.1}
                         onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, penumbra: parseFloat(e.target.value) } })}
@@ -1048,7 +1104,7 @@ export function InspectorPanel() {
                 )}
                 {/* Cast Shadow */}
                 <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-xs text-muted">Cast Shadow</span>
+                  <span className="text-[10px] font-semibold text-muted/50">Cast Shadow</span>
                   <Toggle
                     value={obj.light.castShadow ?? false}
                     onChange={(v) => { updateObject(obj.id, { light: { ...obj.light!, castShadow: v } }); pushHistory(); }}
@@ -1056,15 +1112,15 @@ export function InspectorPanel() {
                 </label>
               </div>
             )}
-          </>
+          </GroupBox>
         )}
 
         {/* Physics */}
         {!obj.light && (
-        <><SectionHeader title="Physics" icon="⬡" isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
-        {isOpen('physics') && <div className="px-3 py-3 space-y-3">
+        <GroupBox><SectionHeader title="Physics" isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
+        {isOpen('physics') && <div className="px-3 pb-4 space-y-2">
           <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-xs text-muted">Enable Physics</span>
+            <span className="text-[10px] font-semibold text-muted/50">Enable Physics</span>
             <Toggle
               value={obj.physics.enabled}
               onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, enabled: v } }); pushHistory(); }}
@@ -1073,11 +1129,11 @@ export function InspectorPanel() {
           {obj.physics.enabled && (
             <>
               <div>
-                <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Collider Type</span>
+                <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Collider Type</span>
                 <select
                   value={obj.physics.colliderType}
                   onChange={(e) => { updateObject(obj.id, { physics: { ...obj.physics, colliderType: e.target.value as ColliderType } }); pushHistory(); }}
-                  className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="box">Box (Cuboid)</option>
                   <option value="sphere">Sphere (Ball)</option>
@@ -1088,8 +1144,8 @@ export function InspectorPanel() {
               </div>
               <label className="flex items-center justify-between cursor-pointer">
                 <div>
-                  <span className="text-xs text-muted">Is Sensor (Area)</span>
-                  <p className="text-[10px] text-muted/60 mt-0.5">진입 시 이벤트 발생</p>
+                  <p className="text-[10px] font-semibold text-muted/50">Is Sensor  <span className="text-[10px] font-normal text-muted/60 mt-0.5">(Area 진입 시 이벤트 발생)</span></p>
+                  
                 </div>
                 <Toggle
                   value={obj.physics.isSensor}
@@ -1097,9 +1153,9 @@ export function InspectorPanel() {
                 />
               </label>
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-semibold text-muted tracking-wide">Friction</span>
-                  <span className="text-[10px] text-muted tabular-nums">{obj.physics.friction.toFixed(2)}</span>
+                <div className="flex items-center justify-between -mb-1.5">
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Friction</span>
+                  <span className="text-[10px] text-foreground font-semibold tabular-nums">{obj.physics.friction.toFixed(2)}</span>
                 </div>
                 <input type="range" min="0" max="1" step="0.01" value={obj.physics.friction}
                   onChange={(e) => updateObject(obj.id, { physics: { ...obj.physics, friction: parseFloat(e.target.value) } })}
@@ -1108,9 +1164,9 @@ export function InspectorPanel() {
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-semibold text-muted tracking-wide">Restitution</span>
-                  <span className="text-[10px] text-muted tabular-nums">{obj.physics.restitution.toFixed(2)}</span>
+                <div className="flex items-center justify-between -mb-1.5">
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Restitution</span>
+                  <span className="text-[10px] text-foreground font-semibold tabular-nums">{obj.physics.restitution.toFixed(2)}</span>
                 </div>
                 <input type="range" min="0" max="1" step="0.01" value={obj.physics.restitution}
                   onChange={(e) => updateObject(obj.id, { physics: { ...obj.physics, restitution: parseFloat(e.target.value) } })}
@@ -1120,18 +1176,19 @@ export function InspectorPanel() {
               </div>
             </>
           )}
-        </div>}</>)}
+        </div>}</GroupBox>)}
 
         {/* Events */}
-        <SectionHeader title="Events" icon="⚡" isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
+        <GroupBox>
+        <SectionHeader title="Events" isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
         {isOpen('events') && (
-          <div className="px-3 py-3 space-y-2">
+          <div className="px-3 pb-4 space-y-2">
             {obj.events.length === 0 && !showAddEvent && (
               <p className="text-muted/60 text-xs py-1">이벤트 없음</p>
             )}
 
             {obj.events.map((ev) => (
-              <div key={ev.id} className="bg-surface border border-border/80 rounded-xl p-2.5">
+              <div key={ev.id} className="bg-surface border border-border/80 rounded-xs p-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
                     <span className="bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-md text-[10px] font-medium shrink-0">
@@ -1161,20 +1218,20 @@ export function InspectorPanel() {
                   </div>
                 </div>
                 {ev.value && (
-                  <p className="text-muted/60 text-[10px] mt-1.5 truncate font-mono bg-background/50 rounded px-1.5 py-0.5">{ev.value}</p>
+                  <p className="text-muted/60 text-[10px] mt-1.5 truncate  bg-background/50 rounded px-1.5 py-0.5">{ev.value}</p>
                 )}
               </div>
             ))}
 
             {showAddEvent ? (
-              <div className="bg-surface border border-border/60 rounded-xl p-2.5 space-y-2">
+              <div className="bg-surface border border-border/60 rounded-xs p-2.5 space-y-2">
                 <div className="grid grid-cols-2 gap-1.5">
                   <div>
-                    <span className="text-[10px] text-muted block mb-1 font-semibold tracking-wide">Trigger</span>
+                    <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Trigger</span>
                     <select
                       value={newTrigger}
                       onChange={(e) => setNewTrigger(e.target.value as EventSchema['trigger'])}
-                      className="w-full bg-background border border-border rounded-lg px-1.5 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full bg-surface border border-border rounded-xs px-1.5 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     >
                       <option value="click">Click</option>
                       <option value="hover_enter">Hover</option>
@@ -1182,11 +1239,11 @@ export function InspectorPanel() {
                     </select>
                   </div>
                   <div>
-                    <span className="text-[10px] text-muted block mb-1 font-semibold tracking-wide">Action</span>
+                    <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Action</span>
                     <select
                       value={newAction}
                       onChange={(e) => setNewAction(e.target.value as EventSchema['action'])}
-                      className="w-full bg-background border border-border rounded-lg px-1.5 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full bg-surface border border-border rounded-xs px-1.5 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     >
                       <option value="show_popup">팝업</option>
                       <option value="open_url">URL 열기</option>
@@ -1196,13 +1253,13 @@ export function InspectorPanel() {
                 </div>
 
                 {areaEnterNeedsPhysics && (
-                  <p className="text-amber-400/80 text-[10px] bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1.5">
+                  <p className="text-danger text-[10px] bg-danger/2 border border-amber-500/20 rounded-xs px-2 py-1.5">
                     ⚠ Area Enter는 Physics 활성화 + Is Sensor 필요
                   </p>
                 )}
 
                 <div>
-                  <span className="text-[10px] text-muted block mb-1 font-semibold tracking-wide">
+                  <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">
                     {newAction === 'open_url' ? 'URL' : newAction === 'emit_event' ? '이벤트 이름' : '팝업 내용'}
                   </span>
                   <input
@@ -1210,7 +1267,7 @@ export function InspectorPanel() {
                     value={newValue}
                     onChange={(e) => setNewValue(e.target.value)}
                     placeholder={newAction === 'open_url' ? 'https://...' : newAction === 'emit_event' ? 'my_event_name' : '표시할 텍스트'}
-                    className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                     onKeyDown={(e) => e.key === 'Enter' && addEvent()}
                   />
                 </div>
@@ -1218,13 +1275,13 @@ export function InspectorPanel() {
                 <div className="flex gap-1.5">
                   <button
                     onClick={addEvent}
-                    className="flex-1 py-1.5 rounded-lg bg-primary hover:bg-primary/80 text-white text-xs font-semibold transition-colors"
+                    className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-xs font-semibold transition-colors"
                   >
                     추가
                   </button>
                   <button
                     onClick={() => { setShowAddEvent(false); setNewValue(''); }}
-                    className="flex-1 py-1.5 rounded-lg bg-background hover:bg-surface text-foreground text-xs transition-colors"
+                    className="flex-1 py-1.5 rounded-xs bg-background hover:bg-surface text-foreground text-xs transition-colors"
                   >
                     취소
                   </button>
@@ -1233,13 +1290,14 @@ export function InspectorPanel() {
             ) : (
               <button
                 onClick={() => setShowAddEvent(true)}
-                className="w-full py-1.5 rounded-lg border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-xs transition-all"
+                className="w-full py-1.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-xs transition-all cursor-pointer"
               >
-                + 이벤트 추가
+                이벤트 추가
               </button>
             )}
           </div>
         )}
+        </GroupBox>
       </div>
     </aside>
   );
