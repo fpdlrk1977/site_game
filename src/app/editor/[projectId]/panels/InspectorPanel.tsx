@@ -18,10 +18,10 @@ function evalMath(expr: string): number | null {
   return null;
 }
 
-// 소수점 1자리까지만 표시, 정수면 소수점 생략
-const fmt = (v: number) => {
-  const s = v.toFixed(1);
-  return s.endsWith('.0') ? String(Math.round(v)) : s;
+// 지정한 소수 자릿수까지만 표시, 정수면 소수점 생략
+const fmt = (v: number, precision = 1) => {
+  const s = v.toFixed(precision);
+  return Number(s) === Math.trunc(Number(s)) ? String(Math.trunc(Number(s))) : s;
 };
 
 // ── 드래그 스크럽 숫자 입력 ─────────────────────────────────────
@@ -30,13 +30,19 @@ function NumInput({
   onChange,
   onCommit,
   dragStep = 0.1,
+  precision = 1,
+  min,
+  max,
 }: {
   value: number;
   onChange: (v: number) => void;
   onCommit: () => void;
   dragStep?: number;
+  precision?: number;
+  min?: number;
+  max?: number;
 }) {
-  const [local, setLocal] = useState(fmt(value));
+  const [local, setLocal] = useState(fmt(value, precision));
   const isFocused = useRef(false);
   const isDragging = useRef(false);
   const dragOrigin = useRef({ x: 0, val: 0 });
@@ -45,9 +51,20 @@ function NumInput({
   // can process SyncLane renders (especially with DevTools open).
   const rafRef = useRef<{ id: number; val: number } | null>(null);
 
+  const clamp = (n: number) => {
+    let v = n;
+    if (min !== undefined) v = Math.max(min, v);
+    if (max !== undefined) v = Math.min(max, v);
+    return v;
+  };
+  const round = (n: number) => {
+    const mult = 10 ** precision;
+    return Math.round(n * mult) / mult;
+  };
+
   useEffect(() => {
-    if (!isFocused.current) setLocal(fmt(value));
-  }, [value]);
+    if (!isFocused.current) setLocal(fmt(value, precision));
+  }, [value, precision]);
 
   const onDragDown = (e: React.PointerEvent<HTMLSpanElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -60,8 +77,8 @@ function NumInput({
   const onDragMove = (e: React.PointerEvent<HTMLSpanElement>) => {
     if (!isDragging.current) return;
     const dx = e.clientX - dragOrigin.current.x;
-    const newVal = Math.round((dragOrigin.current.val + dx * dragStep) * 10) / 10;
-    setLocal(fmt(newVal));
+    const newVal = clamp(round(dragOrigin.current.val + dx * dragStep));
+    setLocal(fmt(newVal, precision));
     if (rafRef.current) cancelAnimationFrame(rafRef.current.id);
     rafRef.current = {
       val: newVal,
@@ -97,8 +114,8 @@ function NumInput({
           isFocused.current = false;
           let n = parseFloat(local);
           if (isNaN(n)) n = evalMath(local) ?? NaN;
-          if (!isNaN(n)) { onChange(Math.round(n * 10) / 10); setLocal(fmt(Math.round(n * 10) / 10)); }
-          else setLocal(fmt(value));
+          if (!isNaN(n)) { const c = clamp(round(n)); onChange(c); setLocal(fmt(c, precision)); }
+          else setLocal(fmt(value, precision));
           onCommit();
         }}
         className="w-full bg-surface border border-border rounded-xs pl-6 pr-5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
@@ -111,6 +128,34 @@ function NumInput({
       >
         <ArrowLeftRight size={10} />
       </span>
+    </div>
+  );
+}
+
+// ── 라벨 + 드래그 스크럽 숫자 입력 (단일 값, range 슬라이더 대체) ──
+function LabeledNum({
+  label,
+  value,
+  onChange,
+  onCommit,
+  min,
+  max,
+  precision = 1,
+  dragStep = 0.1,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  onCommit: () => void;
+  min?: number;
+  max?: number;
+  precision?: number;
+  dragStep?: number;
+}) {
+  return (
+    <div>
+      <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">{label}</span>
+      <NumInput value={value} onChange={onChange} onCommit={onCommit} min={min} max={max} precision={precision} dragStep={dragStep} />
     </div>
   );
 }
@@ -470,25 +515,21 @@ function EnvironmentPanel() {
                 </div>
               </div>
               <div className='mt-2'>
-                <div className="flex items-center -mb-1.5">
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Near : </span>
-                  <span className="text-[10px] text-foreground font-semibold tabular-nums">{env.fog.near}</span>
-                </div>
-                <input type="range" min="1" max="200" step="1" value={env.fog.near}
-                  onChange={(e) => updateEnvironment({ fog: { ...env.fog, near: parseFloat(e.target.value) } })}
-                  onMouseUp={pushHistory}
-                  className="w-full text-primary"
+                <LabeledNum
+                  label="Near"
+                  value={env.fog.near}
+                  onChange={(v) => updateEnvironment({ fog: { ...env.fog, near: v } })}
+                  onCommit={pushHistory}
+                  min={1} max={200} precision={0} dragStep={1}
                 />
               </div>
               <div className='mt-2'>
-                <div className="flex items-center -mb-1.5">
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Far : </span>
-                  <span className="text-[10px] text-foreground font-semibold tabular-nums">{env.fog.far}</span>
-                </div>
-                <input type="range" min="10" max="500" step="5" value={env.fog.far}
-                  onChange={(e) => updateEnvironment({ fog: { ...env.fog, far: parseFloat(e.target.value) } })}
-                  onMouseUp={pushHistory}
-                  className="w-full accent-primary"
+                <LabeledNum
+                  label="Far"
+                  value={env.fog.far}
+                  onChange={(v) => updateEnvironment({ fog: { ...env.fog, far: v } })}
+                  onCommit={pushHistory}
+                  min={10} max={500} precision={0} dragStep={2}
                 />
               </div>
  
@@ -501,25 +542,21 @@ function EnvironmentPanel() {
         <SectionHeader title="Lights" />
         <div className="px-3 space-y-1 pb-4">
           <div>
-            <div className="-mb-1.5">
-              <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Ambient : </span>
-              <span className="text-[10px] text-foreground font-semibold tabular-nums">{env.lights.ambientIntensity.toFixed(2)}</span>
-            </div>
-            <input type="range" min="0" max="3" step="0.05" value={env.lights.ambientIntensity}
-              onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientIntensity: parseFloat(e.target.value) } })}
-              onMouseUp={pushHistory}
-              className="w-full accent-primary"
+            <LabeledNum
+              label="Ambient"
+              value={env.lights.ambientIntensity}
+              onChange={(v) => updateEnvironment({ lights: { ...env.lights, ambientIntensity: v } })}
+              onCommit={pushHistory}
+              min={0} max={3} precision={2} dragStep={0.02}
             />
           </div>
           <div>
-            <div className="-mb-1.5">
-              <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Directional : </span>
-              <span className="text-[10px] text-foreground font-semibold tabular-nums">{env.lights.directionalIntensity.toFixed(2)}</span>
-            </div>
-            <input type="range" min="0" max="5" step="0.1" value={env.lights.directionalIntensity}
-              onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: parseFloat(e.target.value) } })}
-              onMouseUp={pushHistory}
-              className="w-full accent-primary"
+            <LabeledNum
+              label="Directional"
+              value={env.lights.directionalIntensity}
+              onChange={(v) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: v } })}
+              onCommit={pushHistory}
+              min={0} max={5} precision={1} dragStep={0.05}
             />
           </div>
           <XYZRow
@@ -563,41 +600,31 @@ function EnvironmentPanel() {
                 </div>
                 {env.playerCharacterId && (
                   <div>
-                    <div className="-mb-1.5">
-                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Scale : </span>
-                      <span className="text-[10px] text-foreground font-semibold tabular-nums">{(env.playerCharacterScale ?? 1).toFixed(2)}</span>
-                    </div>
-                    <input
-                      type="range" min="0.1" max="3" step="0.05"
+                    <LabeledNum
+                      label="Scale"
                       value={env.playerCharacterScale ?? 1}
-                      onChange={(e) => updateEnvironment({ playerCharacterScale: parseFloat(e.target.value) })}
-                      onMouseUp={pushHistory}
-                      className="w-full accent-primary"
+                      onChange={(v) => updateEnvironment({ playerCharacterScale: v })}
+                      onCommit={pushHistory}
+                      min={0.1} max={3} precision={2} dragStep={0.02}
                     />
                   </div>
                 )}
                 <div>
-                  <div className="-mb-1.5">
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">이동 속도 : </span>
-                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(env.playerSpeed ?? 5).toFixed(1)}</span>
-                  </div>
-                  <input type="range" min="1" max="20" step="0.5"
+                  <LabeledNum
+                    label="이동 속도"
                     value={env.playerSpeed ?? 5}
-                    onChange={(e) => updateEnvironment({ playerSpeed: parseFloat(e.target.value) })}
-                    onMouseUp={pushHistory}
-                    className="w-full accent-primary"
+                    onChange={(v) => updateEnvironment({ playerSpeed: v })}
+                    onCommit={pushHistory}
+                    min={1} max={20} precision={1} dragStep={0.1}
                   />
                 </div>
                 <div>
-                  <div className="-mb-1.5">
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">점프력 : </span>
-                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(env.playerJumpForce ?? 12).toFixed(1)}</span>
-                  </div>
-                  <input type="range" min="2" max="30" step="1"
+                  <LabeledNum
+                    label="점프력"
                     value={env.playerJumpForce ?? 12}
-                    onChange={(e) => updateEnvironment({ playerJumpForce: parseFloat(e.target.value) })}
-                    onMouseUp={pushHistory}
-                    className="w-full accent-primary"
+                    onChange={(v) => updateEnvironment({ playerJumpForce: v })}
+                    onCommit={pushHistory}
+                    min={2} max={30} precision={0} dragStep={0.5}
                   />
                 </div>
               </>
@@ -638,21 +665,12 @@ function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader title="Boundary" />
         <div className="px-3 pb-4">
-          <div className="-mb-1.5">
-            <span className="text-[10px] font-semibold text-muted/50 tracking-wide">크기 : </span>
-            <span className="text-[10px] text-foreground font-semibold tabular-nums">
-              {(env.boundary ?? 0) === 0 ? '무한' : `±${env.boundary}m`}
-            </span>
-          </div>
-          <input
-            type="range" min="0" max="200" step="5"
+          <LabeledNum
+            label="크기"
             value={env.boundary ?? 0}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              updateEnvironment({ boundary: v === 0 ? undefined : v });
-            }}
-            onMouseUp={pushHistory}
-            className="w-full accent-primary"
+            onChange={(v) => updateEnvironment({ boundary: v === 0 ? undefined : v })}
+            onCommit={pushHistory}
+            min={0} max={200} precision={0} dragStep={1}
           />
           <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음</p>
         </div>
@@ -1010,27 +1028,21 @@ export function InspectorPanel() {
                     />
                   </div>
                   <div>
-                    <div className="flex items-center justify-between -mb-1.5">
-                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">글자 크기 : </span>
-                      <span className="text-[10px] text-foreground font-semibold">{(obj.content.fontSize ?? 0.5).toFixed(1)}</span>
-                    </div>
-                    <input type="range" min="0.1" max="3" step="0.1"
+                    <LabeledNum
+                      label="글자 크기"
                       value={obj.content.fontSize ?? 0.5}
-                      onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, fontSize: parseFloat(e.target.value) } })}
-                      onMouseUp={pushHistory}
-                      className="w-full accent-primary"
+                      onChange={(v) => updateObject(obj.id, { content: { ...obj.content!, fontSize: v } })}
+                      onCommit={pushHistory}
+                      min={0.1} max={3} precision={1} dragStep={0.05}
                     />
                   </div>
                   <div className='mt-2'>
-                    <div className="flex items-center justify-between -mb-1.5">
-                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">두께 : </span>
-                      <span className="text-[10px] text-foreground font-semibold">{(obj.content.depth ?? 0.1).toFixed(2)}</span>
-                    </div>
-                    <input type="range" min="0" max="1" step="0.01"
+                    <LabeledNum
+                      label="두께"
                       value={obj.content.depth ?? 0.1}
-                      onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, depth: parseFloat(e.target.value) } })}
-                      onMouseUp={pushHistory}
-                      className="w-full accent-primary"
+                      onChange={(v) => updateObject(obj.id, { content: { ...obj.content!, depth: v } })}
+                      onCommit={pushHistory}
+                      min={0} max={1} precision={2} dragStep={0.01}
                     />
                   </div>
                 </>
@@ -1091,23 +1103,18 @@ export function InspectorPanel() {
                 </div>
               </div>
               {([
-                { key: 'count', label: '파티클 수', min: 10, max: 500, step: 10 },
-                { key: 'speed', label: '속도',       min: 0.1, max: 5,   step: 0.1 },
-                { key: 'spread', label: '확산 범위', min: 0.1, max: 5,   step: 0.1 },
-                { key: 'size',  label: '크기',       min: 0.01, max: 0.5, step: 0.01 },
-              ] as const).map(({ key, label, min, max, step }) => (
-                <div key={key}>
-                  <div className="flex items-center justify-between -mb-1.5">
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">{label}</span>
-                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.particle![key] ?? '기본').toString()}</span>
-                  </div>
-                  <input type="range" min={min} max={max} step={step}
-                    value={obj.particle![key] as number | undefined ?? (key === 'count' ? 80 : key === 'speed' ? 0.8 : key === 'spread' ? 1 : 0.08)}
-                    onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, [key]: parseFloat(e.target.value) } })}
-                    onMouseUp={pushHistory}
-                    className="w-full accent-primary"
-                  />
-                </div>
+                { key: 'count', label: '파티클 수', min: 10, max: 500, precision: 0, dragStep: 2, fallback: 80 },
+                { key: 'speed', label: '속도',       min: 0.1, max: 5,   precision: 1, dragStep: 0.05, fallback: 0.8 },
+                { key: 'spread', label: '확산 범위', min: 0.1, max: 5,   precision: 1, dragStep: 0.05, fallback: 1 },
+                { key: 'size',  label: '크기',       min: 0.01, max: 0.5, precision: 2, dragStep: 0.005, fallback: 0.08 },
+              ] as const).map(({ key, label, min, max, precision, dragStep, fallback }) => (
+                <LabeledNum key={key}
+                  label={label}
+                  value={(obj.particle![key] as number | undefined) ?? fallback}
+                  onChange={(v) => updateObject(obj.id, { particle: { ...obj.particle!, [key]: v } })}
+                  onCommit={pushHistory}
+                  min={min} max={max} precision={precision} dragStep={dragStep}
+                />
               ))}
             </div>}
           </GroupBox>
@@ -1139,27 +1146,21 @@ export function InspectorPanel() {
                   </div>
                 </div>
                 <div>
-                  <div className="flex items-center justify-between -mb-1.5">
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Roughness</span>
-                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.material?.roughness ?? 0.5).toFixed(2)}</span>
-                  </div>
-                  <input type="range" min="0" max="1" step="0.01"
+                  <LabeledNum
+                    label="Roughness"
                     value={obj.material?.roughness ?? 0.5}
-                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, roughness: parseFloat(e.target.value) } })}
-                    onMouseUp={pushHistory}
-                    className="w-full accent-primary"
+                    onChange={(v) => updateObject(obj.id, { material: { ...obj.material, roughness: v } })}
+                    onCommit={pushHistory}
+                    min={0} max={1} precision={2} dragStep={0.005}
                   />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between -mb-1.5">
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Metalness</span>
-                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.material?.metalness ?? 0.1).toFixed(2)}</span>
-                  </div>
-                  <input type="range" min="0" max="1" step="0.01"
+                  <LabeledNum
+                    label="Metalness"
                     value={obj.material?.metalness ?? 0.1}
-                    onChange={(e) => updateObject(obj.id, { material: { ...obj.material, metalness: parseFloat(e.target.value) } })}
-                    onMouseUp={pushHistory}
-                    className="w-full accent-primary"
+                    onChange={(v) => updateObject(obj.id, { material: { ...obj.material, metalness: v } })}
+                    onCommit={pushHistory}
+                    min={0} max={1} precision={2} dragStep={0.005}
                   />
                 </div>
                 <div>
@@ -1255,66 +1256,58 @@ export function InspectorPanel() {
                 </div>
                 {/* Intensity */}
                 <div>
-                  <div className="flex items-center justify-between -mb-1.5">
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Intensity</span>
-                    <span className="text-[10px] text-foreground font-semibold tabular-nums">{obj.light.intensity.toFixed(1)}</span>
-                  </div>
-                  <input type="range" min="0" max="10" step="0.1" value={obj.light.intensity}
-                    onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, intensity: parseFloat(e.target.value) } })}
-                    onMouseUp={pushHistory}
-                    className="w-full accent-primary" />
+                  <LabeledNum
+                    label="Intensity"
+                    value={obj.light.intensity}
+                    onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, intensity: v } })}
+                    onCommit={pushHistory}
+                    min={0} max={10} precision={1} dragStep={0.05}
+                  />
                 </div>
                 {/* Distance (point, spot) */}
                 {obj.light.type !== 'directional' && (
                   <div>
-                    <div className="flex items-center justify-between -mb-1.5">
-                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Distance</span>
-                      <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.light.distance ?? 20).toFixed(0)}</span>
-                    </div>
-                    <input type="range" min="1" max="100" step="1" value={obj.light.distance ?? 20}
-                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, distance: parseFloat(e.target.value) } })}
-                      onMouseUp={pushHistory}
-                      className="w-full accent-primary" />
+                    <LabeledNum
+                      label="Distance"
+                      value={obj.light.distance ?? 20}
+                      onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, distance: v } })}
+                      onCommit={pushHistory}
+                      min={1} max={100} precision={0} dragStep={1}
+                    />
                   </div>
                 )}
                 {/* Decay (point, spot) */}
                 {obj.light.type !== 'directional' && (
                   <div>
-                    <div className="flex items-center justify-between -mb-1.5">
-                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Decay</span>
-                      <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.light.decay ?? 2).toFixed(1)}</span>
-                    </div>
-                    <input type="range" min="0" max="3" step="0.1" value={obj.light.decay ?? 2}
-                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, decay: parseFloat(e.target.value) } })}
-                      onMouseUp={pushHistory}
-                      className="w-full accent-primary" />
+                    <LabeledNum
+                      label="Decay"
+                      value={obj.light.decay ?? 2}
+                      onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, decay: v } })}
+                      onCommit={pushHistory}
+                      min={0} max={3} precision={1} dragStep={0.02}
+                    />
                   </div>
                 )}
                 {/* Angle + Penumbra (spot only) */}
                 {obj.light.type === 'spot' && (
                   <>
                     <div>
-                      <div className="flex items-center justify-between -mb-1.5">
-                        <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Angle (°)</span>
-                        <span className="text-[10px] text-foreground font-semibold tabular-nums">
-                          {((obj.light.angle ?? Math.PI / 6) * 180 / Math.PI).toFixed(0)}°
-                        </span>
-                      </div>
-                      <input type="range" min="5" max="89" step="1"
+                      <LabeledNum
+                        label="Angle (°)"
                         value={Math.round((obj.light.angle ?? Math.PI / 6) * 180 / Math.PI)}
-                        onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, angle: parseFloat(e.target.value) * Math.PI / 180 } })}
-                        onMouseUp={pushHistory}
-                        className="w-full accent-primary" />
+                        onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, angle: v * Math.PI / 180 } })}
+                        onCommit={pushHistory}
+                        min={5} max={89} precision={0} dragStep={1}
+                      />
                     </div>
                     <div>
-                      <div className="flex items-center justify-between -mb-1.5">
-                        <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Penumbra</span>
-                        <span className="text-[10px] text-foreground font-semibold tabular-nums">{(obj.light.penumbra ?? 0.1).toFixed(2)}</span>
-                      </div>
-                      <input type="range" min="0" max="1" step="0.01" value={obj.light.penumbra ?? 0.1}
-                        onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, penumbra: parseFloat(e.target.value) } })}
-                        onMouseUp={pushHistory}
-                        className="w-full accent-primary" />
+                      <LabeledNum
+                        label="Penumbra"
+                        value={obj.light.penumbra ?? 0.1}
+                        onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, penumbra: v } })}
+                        onCommit={pushHistory}
+                        min={0} max={1} precision={2} dragStep={0.005}
+                      />
                     </div>
                   </>
                 )}
@@ -1369,25 +1362,21 @@ export function InspectorPanel() {
                 />
               </label>
               <div>
-                <div className="flex items-center justify-between -mb-1.5">
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Friction</span>
-                  <span className="text-[10px] text-foreground font-semibold tabular-nums">{obj.physics.friction.toFixed(2)}</span>
-                </div>
-                <input type="range" min="0" max="1" step="0.01" value={obj.physics.friction}
-                  onChange={(e) => updateObject(obj.id, { physics: { ...obj.physics, friction: parseFloat(e.target.value) } })}
-                  onMouseUp={pushHistory}
-                  className="w-full accent-primary"
+                <LabeledNum
+                  label="Friction"
+                  value={obj.physics.friction}
+                  onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, friction: v } })}
+                  onCommit={pushHistory}
+                  min={0} max={1} precision={2} dragStep={0.005}
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between -mb-1.5">
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Restitution</span>
-                  <span className="text-[10px] text-foreground font-semibold tabular-nums">{obj.physics.restitution.toFixed(2)}</span>
-                </div>
-                <input type="range" min="0" max="1" step="0.01" value={obj.physics.restitution}
-                  onChange={(e) => updateObject(obj.id, { physics: { ...obj.physics, restitution: parseFloat(e.target.value) } })}
-                  onMouseUp={pushHistory}
-                  className="w-full accent-primary"
+                <LabeledNum
+                  label="Restitution"
+                  value={obj.physics.restitution}
+                  onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, restitution: v } })}
+                  onCommit={pushHistory}
+                  min={0} max={1} precision={2} dragStep={0.005}
                 />
               </div>
             </>
