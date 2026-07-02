@@ -3,7 +3,7 @@
 import { useRef, useEffect, MutableRefObject, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
-import { RigidBody, CapsuleCollider, type RapierRigidBody } from '@react-three/rapier';
+import { RigidBody, CapsuleCollider, CoefficientCombineRule, type RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 
@@ -134,6 +134,10 @@ export function PlayModeController({
   const characterGroupRef = useRef<THREE.Group>(null);
   const movingRef = useRef(false);
   const jumpingRef = useRef(false);
+  // 점프 중 플래그 — 점프 Y속도와 경사면 Y속도를 구별하는 데 사용
+  const jumpActiveRef = useRef(false);
+  // 직전 프레임의 Y 위치 — 경사면이 올려놓은 위치를 복원하는 기준점
+  const prevPosYRef = useRef(spawnPosition[1]);
 
   // 키보드
   useEffect(() => {
@@ -203,6 +207,11 @@ export function PlayModeController({
     const az = azimuthRef.current;
     const speed = playerSpeed;
 
+    // 점프 Y속도가 정점을 지나 하강 시작하면 점프 플래그 해제
+    if (jumpActiveRef.current && vel.y <= 0) {
+      jumpActiveRef.current = false;
+    }
+
     // 카메라는 (sin(az), cos(az)) 방향 오프셋에서 캐릭터를 바라보므로,
     // 카메라가 실제로 바라보는(전진) 방향은 그 반대인 (-sin(az), -cos(az))다.
     let vx = 0, vz = 0;
@@ -219,12 +228,29 @@ export function PlayModeController({
 
     const len = Math.sqrt(vx * vx + vz * vz);
     if (len > 0) { vx = (vx / len) * speed; vz = (vz / len) * speed; }
-    rb.setLinvel({ x: vx, y: vel.y, z: vz }, true);
+
+    if (jumpActiveRef.current) {
+      // 점프 중: Y 속도를 그대로 유지하고 현재 위치를 기준점으로 갱신
+      rb.setLinvel({ x: vx, y: vel.y, z: vz }, true);
+      prevPosYRef.current = pos.y;
+    } else {
+      // 점프 없이 Y 위치가 올라갔으면 이전 위치로 강제 복원 (경사면 타기 방지)
+      // — vel.y 취소만으로는 물리 스텝이 이미 올려놓은 위치를 막지 못함
+      if (pos.y > prevPosYRef.current + 0.01) {
+        rb.setTranslation({ x: pos.x, y: prevPosYRef.current, z: pos.z }, true);
+        rb.setLinvel({ x: vx, y: 0, z: vz }, true);
+      } else {
+        prevPosYRef.current = pos.y;
+        // 낙하(음수)는 허용, 경사면 반발력의 양수 Y는 차단
+        rb.setLinvel({ x: vx, y: Math.min(vel.y, 0), z: vz }, true);
+      }
+    }
 
     // 점프
     const isGrounded = pos.y < 1.5 && vel.y <= 0.3;
     if ((keys.current.space || mobile?.jump) && isGrounded) {
       rb.applyImpulse({ x: 0, y: playerJumpForce, z: 0 }, true);
+      jumpActiveRef.current = true;
       keys.current.space = false;
       if (mobile) mobile.jump = false;
     }
@@ -274,7 +300,7 @@ export function PlayModeController({
       linearDamping={4}
       colliders={false}
     >
-      <CapsuleCollider args={[0.5, 0.4]} />
+      <CapsuleCollider args={[0.5, 0.4]} friction={0} frictionCombineRule={CoefficientCombineRule.Min} />
       <group ref={characterGroupRef}>
         {characterUrl ? (
           <GlbCharacter
