@@ -363,6 +363,18 @@ export function InspectorPanel() {
   const [newValue, setNewValue] = useState('');
 
   if (isMultiSelect) {
+    // 2개 선택 시 거리 계산
+    let distance: number | null = null;
+    if (selectedIds.length === 2) {
+      const [a, b] = selectedIds.map((id) => objects.find((o) => o.id === id));
+      if (a && b) {
+        const dx = a.position.x - b.position.x;
+        const dy = a.position.y - b.position.y;
+        const dz = a.position.z - b.position.z;
+        distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      }
+    }
+
     return (
       <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
         <div className="px-3 py-2 border-b border-border">
@@ -370,6 +382,15 @@ export function InspectorPanel() {
         </div>
         <div className="px-3 py-4 space-y-3">
           <p className="text-[10px] text-muted">Shift+클릭으로 오브젝트를 추가 선택하세요.</p>
+
+          {/* 2개 선택 시 거리 표시 */}
+          {distance !== null && (
+            <div className="bg-background border border-border rounded-lg px-3 py-2">
+              <p className="text-[10px] text-muted mb-0.5">선택 오브젝트 간 거리</p>
+              <p className="text-base font-bold text-foreground tabular-nums">{distance.toFixed(2)} m</p>
+            </div>
+          )}
+
           {(['x', 'y', 'z'] as const).map((axis) => (
             <div key={axis}>
               <p className="text-[10px] font-semibold text-muted tracking-wide mb-1.5">{axis.toUpperCase()}축 정렬</p>

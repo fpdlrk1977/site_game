@@ -38,6 +38,8 @@ interface SceneState {
   snapTranslate: number;
   snapRotate: number;
   focusTarget: { x: number; y: number; z: number; _tick: number } | null;
+  focusAllRequest: number | null;
+  cameraViewRequest: { view: 'top' | 'front' | 'right'; _tick: number } | null;
   isModified: boolean;
   wireframeMode: boolean;
   past: HistoryEntry[];
@@ -63,6 +65,9 @@ interface SceneActions {
   addParticleObject: (preset: ParticlePreset) => void;
   setSnap: (enabled: boolean, translate?: number, rotate?: number) => void;
   requestFocus: () => void;
+  requestFocusAll: () => void;
+  requestCameraView: (view: 'top' | 'front' | 'right') => void;
+  duplicateInPlace: () => void;
   requestSaveBookmark: (slot: number) => void;
   requestRecallBookmark: (slot: number) => void;
   setCameraBookmark: (slot: number, position: [number, number, number], target: [number, number, number]) => void;
@@ -127,6 +132,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   layers: { default: { name: 'Default', visible: true, locked: false } },
   selectedIds: [],
   focusTarget: null,
+  focusAllRequest: null,
+  cameraViewRequest: null,
   isModified: false,
   wireframeMode: false,
   past: [],
@@ -190,6 +197,28 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const obj = objects.find((o) => o.id === selectedId);
     if (!obj) return;
     set({ focusTarget: { ...obj.position, _tick: Date.now() } });
+  },
+
+  requestFocusAll: () => set({ focusAllRequest: Date.now() }),
+
+  requestCameraView: (view) => set({ cameraViewRequest: { view, _tick: Date.now() } }),
+
+  duplicateInPlace: () => {
+    const { selectedId, objects, environment, past } = get();
+    if (!selectedId) return;
+    const src = objects.find((o) => o.id === selectedId);
+    if (!src) return;
+    objectCounter += 1;
+    if (src.isGroup) {
+      const newGroupId = MathUtils.generateUUID();
+      const newGroup: ObjectNodeSchema = { ...src, id: newGroupId, name: `${src.name} 복사` };
+      const children = objects.filter((o) => o.parentId === src.id);
+      const newChildren = children.map((c) => ({ ...c, id: MathUtils.generateUUID(), parentId: newGroupId }));
+      set({ objects: [...objects, newGroup, ...newChildren], selectedId: newGroupId, selectedIds: [newGroupId], isModified: true, past: [...past.slice(-49), { objects, environment }], future: [] });
+    } else {
+      const copy: ObjectNodeSchema = { ...src, id: MathUtils.generateUUID(), name: `${src.name} 복사`, parentId: null };
+      set({ objects: [...objects, copy], selectedId: copy.id, selectedIds: [copy.id], isModified: true, past: [...past.slice(-49), { objects, environment }], future: [] });
+    }
   },
 
   requestSaveBookmark: (slot) => set({ bookmarkSaveRequest: { slot, _tick: Date.now() } }),

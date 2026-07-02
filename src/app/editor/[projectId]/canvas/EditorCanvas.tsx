@@ -32,13 +32,42 @@ export function EditorCanvas() {
   const dragRectRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [selBox, setSelBox] = useState<SelBox | null>(null);
 
-  const { environment, focusTarget, objects, bookmarkSaveRequest, bookmarkRecallRequest, setCameraBookmark } = useSceneStore();
+  const { environment, focusTarget, focusAllRequest, cameraViewRequest, objects, bookmarkSaveRequest, bookmarkRecallRequest, setCameraBookmark } = useSceneStore();
 
   useEffect(() => {
     if (!focusTarget || !orbitRef.current) return;
     orbitRef.current.target.set(focusTarget.x, focusTarget.y, focusTarget.z);
     orbitRef.current.update();
   }, [focusTarget]);
+
+  // Focus All — 모든 오브젝트가 화면에 들어오도록 카메라 이동
+  useEffect(() => {
+    if (!focusAllRequest || !orbitRef.current) return;
+    const visible = objects.filter((o) => o.visible && !o.parentId);
+    if (visible.length === 0) return;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const o of visible) {
+      minX = Math.min(minX, o.position.x); maxX = Math.max(maxX, o.position.x);
+      minY = Math.min(minY, o.position.y); maxY = Math.max(maxY, o.position.y);
+      minZ = Math.min(minZ, o.position.z); maxZ = Math.max(maxZ, o.position.z);
+    }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+    const spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
+    orbitRef.current.target.set(cx, cy, cz);
+    orbitRef.current.object.position.set(cx + spread * 0.8, cy + spread * 0.6, cz + spread * 0.8);
+    orbitRef.current.update();
+  }, [focusAllRequest, objects]);
+
+  // Camera view preset (Numpad7=Top, Numpad1=Front, Numpad3=Right)
+  useEffect(() => {
+    if (!cameraViewRequest || !orbitRef.current) return;
+    const { view } = cameraViewRequest;
+    orbitRef.current.target.set(0, 0, 0);
+    if (view === 'top') orbitRef.current.object.position.set(0, 20, 0.001);
+    else if (view === 'front') orbitRef.current.object.position.set(0, 3, 20);
+    else orbitRef.current.object.position.set(20, 3, 0);
+    orbitRef.current.update();
+  }, [cameraViewRequest]);
 
   useEffect(() => {
     if (!bookmarkSaveRequest || !orbitRef.current) return;

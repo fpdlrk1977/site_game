@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Save, History, ExternalLink } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -27,8 +27,10 @@ export function ViewportToolbar({ projectName }: Props) {
   const { addToast } = useToast();
   const { theme, toggleTheme } = useThemeStore();
   const [showHistory, setShowHistory] = useState(false);
+  const [autoSaveAt, setAutoSaveAt] = useState<number | null>(null);
+  const [autoSaveAgo, setAutoSaveAgo] = useState('');
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!sceneId) return;
     const supabase = createBrowserSupabase();
     const sceneData: ProjectSceneSchema = {
@@ -88,7 +90,33 @@ export function ViewportToolbar({ projectName }: Props) {
 
     markSaved();
     addToast('저장되었습니다.', 'success');
-  };
+  }, [sceneId, projectId, objects, assets, environment, markSaved, addToast]);
+
+  // 오토세이브: 60초마다 변경사항 있으면 자동 저장
+  const handleSaveRef = useRef(handleSave);
+  useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const state = useSceneStore.getState();
+      if (!state.isModified || !state.sceneId) return;
+      await handleSaveRef.current();
+      setAutoSaveAt(Date.now());
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // "N분 전" 표시 갱신
+  useEffect(() => {
+    if (!autoSaveAt) return;
+    const update = () => {
+      const mins = Math.floor((Date.now() - autoSaveAt) / 60_000);
+      setAutoSaveAgo(mins === 0 ? '방금 전' : `${mins}분 전`);
+    };
+    update();
+    const id = setInterval(update, 30_000);
+    return () => clearInterval(id);
+  }, [autoSaveAt]);
 
   return (
     <>
@@ -125,6 +153,13 @@ export function ViewportToolbar({ projectName }: Props) {
         </div>
 
         <div className="flex-1" />
+
+        {/* 오토세이브 표시 */}
+        {autoSaveAt && (
+          <span className="text-[10px] text-muted hidden lg:block shrink-0">
+            자동저장 {autoSaveAgo}
+          </span>
+        )}
 
         {/* 오른쪽: 액션 */}
         <Tooltip content="버전 히스토리">
