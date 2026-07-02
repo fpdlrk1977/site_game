@@ -319,28 +319,23 @@ function EnvironmentPanel() {
             ];
             return (
               <>
-                <div className="flex gap-1">
-                  {([['color', '단색'], ['sky', '하늘'], ['hdr', 'HDR']] as const).map(([t, label]) => (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        if (t === 'hdr') {
-                          updateEnvironment({ hdrPreset: env.hdrPreset && env.hdrPreset !== 'none' ? env.hdrPreset : 'sunset' });
-                        } else {
-                          updateEnvironment({ sky: { ...env.sky, type: t }, hdrPreset: 'none' });
-                        }
-                        pushHistory();
-                      }}
-                      className={`flex-1 py-1 rounded-xs text-[10px] font-medium transition-all border ${
-                        mode === t
-                          ? 'bg-primary border-primary text-white'
-                          : 'bg-background border-border text-muted hover:text-foreground'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <SelectBox
+                  value={mode}
+                  onChange={(v) => {
+                    const t = v as 'color' | 'sky' | 'hdr';
+                    if (t === 'hdr') {
+                      updateEnvironment({ hdrPreset: env.hdrPreset && env.hdrPreset !== 'none' ? env.hdrPreset : 'sunset' });
+                    } else {
+                      updateEnvironment({ sky: { ...env.sky, type: t }, hdrPreset: 'none' });
+                    }
+                    pushHistory();
+                  }}
+                  options={[
+                    { value: 'color', label: '단색' },
+                    { value: 'sky', label: '하늘' },
+                    { value: 'hdr', label: 'HDR' },
+                  ]}
+                />
 
                 {mode === 'color' && (
                   <div className="px-2 flex items-center border border-border rounded-xs">
@@ -355,21 +350,11 @@ function EnvironmentPanel() {
                 )}
 
                 {mode === 'hdr' && (
-                  <div className="grid grid-cols-2 gap-1">
-                    {HDR_PRESETS.map(({ id, label }) => (
-                      <button
-                        key={id}
-                        onClick={() => { updateEnvironment({ hdrPreset: id }); pushHistory(); }}
-                        className={`py-1 rounded-xs text-[10px] font-medium transition-all border ${
-                          env.hdrPreset === id
-                            ? 'bg-primary border-primary text-white'
-                            : 'bg-background border-border text-muted hover:text-foreground'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  <SelectBox
+                    value={env.hdrPreset ?? 'sunset'}
+                    onChange={(v) => { updateEnvironment({ hdrPreset: v as HdrPreset }); pushHistory(); }}
+                    options={HDR_PRESETS.map(({ id, label }) => ({ value: id, label }))}
+                  />
                 )}
               </>
             );
@@ -392,31 +377,21 @@ function EnvironmentPanel() {
           <div className="px-3 pb-3 space-y-2">
             {/* 프리셋 */}
             {(() => {
-              const GROUND_PRESETS: { id: GroundPreset; label: string; color: string }[] = [
-                { id: 'grass',  label: '🌿 잔디', color: '#5a8a3c' },
-                { id: 'dirt',   label: '🟤 흙',   color: '#8b5a2b' },
-                { id: 'sand',   label: '🏖 모래', color: '#d4b483' },
-                { id: 'stone',  label: '🪨 돌',   color: '#777777' },
-                { id: 'water',  label: '💧 물',   color: '#1a6b9a' },
-                { id: 'custom', label: '🎨 직접', color: env.ground!.color },
+              const GROUND_PRESETS: { id: GroundPreset; label: string; emoji: string }[] = [
+                { id: 'grass',  label: '잔디', emoji: '🌿' },
+                { id: 'dirt',   label: '흙',   emoji: '🟤' },
+                { id: 'sand',   label: '모래', emoji: '🏖' },
+                { id: 'stone',  label: '돌',   emoji: '🪨' },
+                { id: 'water',  label: '물',   emoji: '💧' },
+                { id: 'custom', label: '직접', emoji: '🎨' },
               ];
               const current = env.ground!.preset ?? 'custom';
               return (
-                <div className="grid grid-cols-3 gap-1">
-                  {GROUND_PRESETS.map(({ id, label }) => (
-                    <button
-                      key={id}
-                      onClick={() => { updateEnvironment({ ground: { ...env.ground!, preset: id } }); pushHistory(); }}
-                      className={`py-1 rounded-xs text-[9px] font-medium transition-all border ${
-                        current === id
-                          ? 'bg-primary border-primary text-white'
-                          : 'bg-background border-border text-muted hover:text-foreground'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <SelectBox
+                  value={current}
+                  onChange={(v) => { updateEnvironment({ ground: { ...env.ground!, preset: v as GroundPreset } }); pushHistory(); }}
+                  options={GROUND_PRESETS.map(({ id, label, emoji }) => ({ value: id, label, icon: emoji }))}
+                />
               );
             })()}
             {/* 직접 설정 시 텍스처 업로드 + 컬러 피커 */}
@@ -686,30 +661,14 @@ function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader title="Post Processing" />
         <div className="px-3 pb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold text-muted/60 tracking-wide">Preset</span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(['none', 'cinematic', 'dreamy', 'vintage', 'sharp'] as PostProcessPreset[]).map((preset) => {
-              const current = env.postProcessing?.preset ?? 'none';
-              const LABELS: Record<PostProcessPreset, string> = {
-                none: 'None', cinematic: 'Cinematic', dreamy: 'Dreamy', vintage: 'Vintage', sharp: 'Sharp',
-              };
-              return (
-                <button
-                  key={preset}
-                  onClick={() => { updateEnvironment({ postProcessing: { preset } }); pushHistory(); }}
-                  className={`px-2 py-1.5 rounded-xs text-[10px] font-medium transition-all ${
-                    current === preset
-                      ? 'bg-primary text-white'
-                      : 'bg-background border border-border text-muted hover:text-foreground hover:border-border/60'
-                  }`}
-                >
-                  {LABELS[preset]}
-                </button>
-              );
-            })}
-          </div>
+          <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">Preset</span>
+          <SelectBox
+            value={env.postProcessing?.preset ?? 'none'}
+            onChange={(v) => { updateEnvironment({ postProcessing: { preset: v as PostProcessPreset } }); pushHistory(); }}
+            options={([
+              ['none', 'None'], ['cinematic', 'Cinematic'], ['dreamy', 'Dreamy'], ['vintage', 'Vintage'], ['sharp', 'Sharp'],
+            ] as [PostProcessPreset, string][]).map(([value, label]) => ({ value, label }))}
+          />
         </div>
       </GroupBox>
 
