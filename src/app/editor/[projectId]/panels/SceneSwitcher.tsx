@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useSceneStore } from '@/store/sceneStore';
 import { usePlan } from '@/hooks/usePlan';
+import { useDropdown } from '@/hooks/useDropdown';
+import { useListNav } from '@/hooks/useListNav';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { normalizeSceneData } from '@/types/scene';
 import { SCENE_TEMPLATES } from '@/lib/sceneTemplates';
@@ -94,11 +96,12 @@ function TemplatePickerModal({
 export function SceneSwitcher() {
   const { projectId, sceneId, isModified, loadScene } = useSceneStore();
   const { can } = usePlan();
-  const [open, setOpen] = useState(false);
+  const { open, openMenu, close, triggerRef, panelRef, panelStyle } = useDropdown<HTMLButtonElement>();
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [scenes, setScenes] = useState<SceneItem[]>([]);
   const [busy, setBusy] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  // 씬 목록 + "새 씬 추가" 항목까지 합쳐 순환 탐색 (삭제 버튼은 키보드 탐색 대상 아님)
+  const [highlight, setHighlight] = useListNav(scenes.length + 1, open);
 
   const currentScene = scenes.find((s) => s.id === sceneId);
 
@@ -112,16 +115,14 @@ export function SceneSwitcher() {
       .then(({ data }) => setScenes(data ?? []));
   }, [open, projectId]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  const openSwitcher = () => {
+    const idx = scenes.findIndex((s) => s.id === sceneId);
+    setHighlight(idx >= 0 ? idx : 0);
+    openMenu();
+  };
 
   const switchScene = async (targetId: string) => {
-    if (targetId === sceneId) { setOpen(false); return; }
+    if (targetId === sceneId) { close(); return; }
     if (isModified && !confirm('저장하지 않은 변경사항이 있습니다. 전환하면 사라집니다.')) return;
     setBusy(true);
     try {
@@ -138,7 +139,7 @@ export function SceneSwitcher() {
           data.id,
         ));
       }
-      setOpen(false);
+      close();
     } finally {
       setBusy(false);
     }
@@ -149,9 +150,31 @@ export function SceneSwitcher() {
       alert('다중 씬은 Pro 플랜 이상에서 사용 가능합니다.');
       return;
     }
-    setOpen(false);
+    close();
     setShowTemplatePicker(true);
   };
+
+  // 하이라이트가 바뀌면(키보드 이동) 스크롤 위치를 따라간다
+  useEffect(() => {
+    if (!open) return;
+    panelRef.current?.querySelector<HTMLElement>(`[data-idx="${highlight}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [highlight, open, panelRef]);
+
+  // Enter/Space로 하이라이트된 항목 실행, Tab 닫기
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (highlight < scenes.length) switchScene(scenes[highlight].id);
+        else handleAddScene();
+      }
+      if (e.key === 'Tab') close();
+    };
+    window.addEventListener('keydown', handler, { capture: true });
+    return () => window.removeEventListener('keydown', handler, { capture: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, highlight, scenes]);
 
   const createFromTemplate = async (templateId: string, sceneName: string) => {
     if (!projectId) return;
@@ -188,61 +211,87 @@ export function SceneSwitcher() {
 
   return (
     <>
-      <div ref={ref} className="relative">
-        <button
-          onClick={() => setOpen(!open)}
-          disabled={busy}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-xs bg-background text-foreground hover:bg-surface transition-colors text-xs max-w-[140px] disabled:opacity-50"
-        >
-          <span className="text-[10px] text-muted shrink-0">씬</span>
-          <span className="truncate flex-1 text-left">{currentScene?.name ?? '...'}</span>
-          <span className="text-muted shrink-0">▾</span>
-        </button>
+      <button
+        ref={triggerRef}
+        onClick={() => {
+          if (busy) return;
+          if (open) close(); else openSwitcher();
+        }}
+        onKeyDown={(e) => {
+          if (busy || open) return;
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            openSwitcher();
+          }
+        }}
+        disabled={busy}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-xs bg-background text-foreground hover:bg-surface transition-colors text-xs max-w-[140px] disabled:opacity-50"
+      >
+        <span className="text-[10px] text-muted shrink-0">씬</span>
+        <span className="truncate flex-1 text-left">{currentScene?.name ?? '...'}</span>
+        <span className="text-muted shrink-0">▾</span>
+      </button>
 
-        {open && (
-          <div className="absolute top-full left-0 mt-1 w-52 bg-surface border border-border rounded-xs shadow-dropdown z-50 py-1 overflow-hidden">
-            <div className="px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider">
-              씬 목록
-            </div>
-            {scenes.map((scene) => (
-              <div key={scene.id} className="flex items-center group">
-                <button
-                  onClick={() => switchScene(scene.id)}
-                  className={`flex-1 text-left px-3 py-2 text-xs transition-colors ${
-                    scene.id === sceneId
-                      ? 'text-primary bg-primary/10'
-                      : 'text-foreground hover:bg-background'
-                  }`}
-                >
-                  {scene.id === sceneId && <span className="mr-1.5 opacity-70">✓</span>}
-                  {scene.name}
-                </button>
-                {scene.id !== sceneId && (
-                  <button
-                    onClick={() => deleteScene(scene.id, scene.name)}
-                    className="hidden group-hover:flex w-7 items-center justify-center py-2 text-muted/60 hover:text-danger transition-colors text-xs"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
-            <div className="border-t border-border my-1" />
-            <button
-              onClick={handleAddScene}
-              disabled={busy}
-              className="w-full text-left px-3 py-2 text-xs text-muted hover:bg-background hover:text-foreground transition-colors flex items-center gap-1.5 disabled:opacity-40"
-            >
-              <span>+</span> 새 씬 추가
-              {!can('multiScene') && (
-                <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-cyan-600 text-white">
-                  Pro
-                </span>
-              )}
-            </button>
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={panelRef}
+          role="listbox"
+          style={panelStyle}
+          className="w-52 bg-surface border border-border rounded-xs shadow-dropdown py-1 overflow-hidden"
+        >
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider">
+            씬 목록
           </div>
-        )}
-      </div>
+          {scenes.map((scene, idx) => (
+            <div
+              key={scene.id}
+              data-idx={idx}
+              onMouseEnter={() => setHighlight(idx)}
+              className={`flex items-center group ${idx === highlight ? 'bg-background' : ''}`}
+            >
+              <button
+                onClick={() => switchScene(scene.id)}
+                className={`flex-1 text-left px-3 py-2 text-xs transition-colors ${
+                  scene.id === sceneId
+                    ? 'text-primary bg-primary/10'
+                    : 'text-foreground hover:bg-background'
+                }`}
+              >
+                {scene.id === sceneId && <span className="mr-1.5 opacity-70">✓</span>}
+                {scene.name}
+              </button>
+              {scene.id !== sceneId && (
+                <button
+                  onClick={() => deleteScene(scene.id, scene.name)}
+                  className="hidden group-hover:flex w-7 items-center justify-center py-2 text-muted/60 hover:text-danger transition-colors text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          <div className="border-t border-border my-1" />
+          <button
+            data-idx={scenes.length}
+            onMouseEnter={() => setHighlight(scenes.length)}
+            onClick={handleAddScene}
+            disabled={busy}
+            className={`w-full text-left px-3 py-2 text-xs text-muted hover:bg-background hover:text-foreground transition-colors flex items-center gap-1.5 disabled:opacity-40 ${
+              highlight === scenes.length ? 'bg-background text-foreground' : ''
+            }`}
+          >
+            <span>+</span> 새 씬 추가
+            {!can('multiScene') && (
+              <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-cyan-600 text-white">
+                Pro
+              </span>
+            )}
+          </button>
+        </div>,
+        document.body,
+      )}
 
       {showTemplatePicker && typeof document !== 'undefined' && createPortal(
         <TemplatePickerModal

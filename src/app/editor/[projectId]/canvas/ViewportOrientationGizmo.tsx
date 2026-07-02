@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { SelectBox } from '@/components/ui/SelectBox';
 
 type Projection = 'Perspective' | 'Orthographic';
 
 export function ViewportOrientationGizmo() {
   const [projection, setProjection] = useState<Projection>('Perspective');
-  const [open, setOpen] = useState(false);
 
   return (
     <div className="absolute top-3 right-3 z-20 flex flex-col items-center gap-1.5 pointer-events-auto select-none">
@@ -32,35 +32,16 @@ export function ViewportOrientationGizmo() {
       </div>
 
       {/* Perspective 드롭다운 */}
-      <div className="relative">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1 px-2.5 py-1 bg-surface/90 backdrop-blur-sm border border-border/80 rounded-xs shadow-card text-[10px] font-medium text-foreground hover:border-border transition-all whitespace-nowrap"
-        >
-          {projection}
-          <span className="text-[8px] text-muted ml-0.5">▾</span>
-        </button>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-xs shadow-dropdown z-50 overflow-hidden min-w-[120px]">
-              {(['Perspective', 'Orthographic'] as Projection[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => { setProjection(p); setOpen(false); }}
-                  className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors ${
-                    projection === p
-                      ? 'text-primary bg-primary/10'
-                      : 'text-foreground hover:bg-background'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+      <SelectBox
+        value={projection}
+        onChange={(v) => setProjection(v as Projection)}
+        options={[
+          { value: 'Perspective', label: 'Perspective' },
+          { value: 'Orthographic', label: 'Orthographic' },
+        ]}
+        fullWidth={false}
+        className="bg-surface/90 backdrop-blur-sm border border-border/80 rounded-xs px-2.5 py-1 shadow-card text-[10px] font-medium hover:border-border transition-all whitespace-nowrap"
+      />
     </div>
   );
 }

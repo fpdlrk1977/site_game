@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
+import { useDropdown } from '@/hooks/useDropdown';
+import { useListNav } from '@/hooks/useListNav';
 
 export interface SelectOption {
   value: string;
@@ -15,25 +17,25 @@ interface Props {
   options: SelectOption[];
   onChange: (value: string) => void;
   placeholder?: string;
+  /** 트리거의 배경/테두리/크기 등 외형 클래스. 지정 시 기본 외형을 완전히 대체한다. */
   className?: string;
+  /** 컨테이너 폭에 꽉 채울지(기본 true), 내용 크기만큼만 차지할지(false, 예: 툴바 칩 버튼) */
+  fullWidth?: boolean;
   disabled?: boolean;
 }
 
-export function SelectBox({ value, options, onChange, placeholder = '선택', className = '', disabled }: Props) {
-  const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState(0);
-  const [style, setStyle] = useState<CSSProperties>({ position: 'fixed', top: -9999, left: -9999, opacity: 0 });
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+const DEFAULT_TRIGGER_CLASS = 'bg-surface border border-border rounded-xs px-2 py-1.5 text-xs';
+
+export function SelectBox({ value, options, onChange, placeholder = '선택', className, fullWidth = true, disabled }: Props) {
+  const { open, openMenu, close, triggerRef, panelRef, panelStyle } = useDropdown<HTMLButtonElement>();
+  const [highlight, setHighlight] = useListNav(options.length, open);
 
   const selectedIndex = options.findIndex((o) => o.value === value);
   const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
 
-  const close = () => setOpen(false);
-
   const openDropdown = () => {
     setHighlight(Math.max(0, selectedIndex));
-    setOpen(true);
+    openMenu();
   };
 
   const commit = (idx: number) => {
@@ -44,67 +46,16 @@ export function SelectBox({ value, options, onChange, placeholder = '선택', cl
     triggerRef.current?.focus();
   };
 
-  // 트리거 하단(공간 부족 시 상단)에 위치, 스크롤/리사이즈 추적
+  // 하이라이트가 바뀌면(키보드 이동) 스크롤 위치를 따라간다
   useEffect(() => {
     if (!open) return;
-    const update = () => {
-      if (!triggerRef.current) return;
-      const tr = triggerRef.current.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const listH = listRef.current?.offsetHeight ?? 240;
-      const below = tr.bottom + listH + 4 <= vh || tr.top < listH;
-      setStyle({
-        position: 'fixed',
-        left: tr.left,
-        width: tr.width,
-        top: below ? tr.bottom + 4 : undefined,
-        bottom: below ? undefined : vh - tr.top + 4,
-        opacity: 1,
-        zIndex: 9999,
-      });
-    };
-    update();
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
-    };
-  }, [open]);
+    (panelRef.current?.children[highlight] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' });
+  }, [highlight, open, panelRef]);
 
-  // 바깥 클릭 시 닫기
-  useEffect(() => {
-    if (!open) return;
-    const onDocDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (triggerRef.current?.contains(t) || listRef.current?.contains(t)) return;
-      close();
-    };
-    window.addEventListener('mousedown', onDocDown);
-    return () => window.removeEventListener('mousedown', onDocDown);
-  }, [open]);
-
-  // 키보드 탐색: ↑↓ 이동, Enter/Space 선택, Esc 닫기
+  // Enter/Space 선택, Tab 닫기 (↑↓ 순환 이동은 useListNav, Esc/바깥클릭 닫기는 useDropdown이 처리)
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); close(); triggerRef.current?.focus(); return; }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setHighlight((h) => {
-          const next = Math.min(h + 1, options.length - 1);
-          (listRef.current?.children[next] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' });
-          return next;
-        });
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setHighlight((h) => {
-          const next = Math.max(h - 1, 0);
-          (listRef.current?.children[next] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' });
-          return next;
-        });
-      }
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); commit(highlight); }
       if (e.key === 'Tab') close();
     };
@@ -132,7 +83,7 @@ export function SelectBox({ value, options, onChange, placeholder = '선택', cl
         }}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`w-full flex items-center gap-1.5 bg-surface border border-border rounded-xs px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+        className={`${fullWidth ? 'w-full flex' : 'inline-flex'} items-center gap-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${className ?? DEFAULT_TRIGGER_CLASS}`}
       >
         {selected?.icon && <span className="shrink-0 flex items-center">{selected.icon}</span>}
         <span className={`flex-1 text-left truncate ${selected ? '' : 'text-muted/60'}`}>
@@ -142,9 +93,9 @@ export function SelectBox({ value, options, onChange, placeholder = '선택', cl
       </button>
       {open && typeof document !== 'undefined' && createPortal(
         <div
-          ref={listRef}
+          ref={panelRef}
           role="listbox"
-          style={style}
+          style={{ ...panelStyle, maxWidth: 320 }}
           className="max-h-60 overflow-y-auto bg-sidebar border border-border rounded-xs shadow-2xl shadow-black/30 py-1"
         >
           {options.map((opt, idx) => (
