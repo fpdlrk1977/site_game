@@ -111,6 +111,7 @@ export interface AssetRefSchema {
   dracoUrl: string;
   name: string;
   type?: 'model' | 'character';
+  thumbnailUrl?: string;
 }
 
 export interface ProjectSceneSchema {

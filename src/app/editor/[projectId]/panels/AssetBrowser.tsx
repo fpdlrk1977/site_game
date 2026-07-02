@@ -5,6 +5,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { tryEmbedTextures } from '@/lib/glbEmbed';
+import { generateGlbThumbnail } from '@/lib/glbThumbnail';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import type { AssetRefSchema, ContentType, ParticlePreset } from '@/types/scene';
 
@@ -80,11 +81,31 @@ export function AssetBrowser() {
         mime_type: 'model/gltf-binary', size_bytes: uploadBody.size,
       });
       if (dbErr) { await supabase.storage.from('assets').remove([path]); throw dbErr; }
+
+      // 썸네일 생성 (실패해도 업로드 자체는 성공으로 처리)
+      let thumbnailUrl: string | undefined;
+      try {
+        const thumbBlob = await generateGlbThumbnail(uploadBody);
+        if (thumbBlob) {
+          const thumbPath = `assets/${projectId}/${assetId}_thumb.png`;
+          const { error: thumbErr } = await supabase.storage
+            .from('assets')
+            .upload(thumbPath, thumbBlob, { contentType: 'image/png', upsert: false });
+          if (!thumbErr) {
+            const { data: thumbData } = await supabase.storage
+              .from('assets')
+              .createSignedUrl(thumbPath, 60 * 60 * 24 * 365);
+            if (thumbData?.signedUrl) thumbnailUrl = thumbData.signedUrl;
+          }
+        }
+      } catch { /* non-critical */ }
+
       const asset: AssetRefSchema = {
         id: assetId,
         name: file.name.replace(/\.glb$/i, ''),
         dracoUrl: signedData.signedUrl,
         type: assetType,
+        thumbnailUrl,
       };
       addAsset(asset);
     } catch (err) {
@@ -285,8 +306,19 @@ function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string
       }}
       onMouseLeave={() => setHoverRect(null)}
     >
-      <span className="text-2xl leading-none">{icon}</span>
-      <span className="text-[9px] text-muted truncate w-full text-center px-1">{asset.name}</span>
+      {asset.thumbnailUrl ? (
+        <>
+          <img src={asset.thumbnailUrl} alt={asset.name} className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 bg-background/70 backdrop-blur-sm">
+            <span className="text-[9px] text-foreground/80 truncate w-full text-center block">{asset.name}</span>
+          </div>
+        </>
+      ) : (
+        <>
+          <span className="text-2xl leading-none">{icon}</span>
+          <span className="text-[9px] text-muted truncate w-full text-center px-1">{asset.name}</span>
+        </>
+      )}
       {onAdd && (
         <button
           onClick={onAdd}

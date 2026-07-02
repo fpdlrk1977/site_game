@@ -86,8 +86,9 @@ function GlbCharacter({ url, scale, movingRef, jumpingRef }: GlbCharacterProps) 
     }
   });
 
+  // 캡슐 콜라이더 중심 → 바닥 오프셋: -(halfHeight + radius) = -(0.5 + 0.4)
   return (
-    <group ref={groupRef} scale={scale}>
+    <group ref={groupRef} scale={scale} position={[0, -0.9, 0]}>
       <primitive object={scene} />
     </group>
   );
