@@ -1,5 +1,28 @@
 # CHANGELOG: 변경 이력 및 빌드 스냅샷
 
+## [0.7.0] - 2026-07-03
+### 에디터 레이아웃 재구성 — GNB 레일 도입, 에셋 브라우저 통합
+
+#### 배경
+좌측 패널의 Assets 탭(`LeftPanel`의 `AssetsTabContent`)과 하단 Asset Browser가 기능 중복이었음. 하단 쪽이 상위 호환(썸네일·검색·hover 3D 프리뷰·텍스처 자동 임베드·Character 탭)이므로 하단 것을 좌측 패널로 이동시키고 좌측 자체 Assets 탭은 제거. ROADMAP Phase B(B-1/B-2)에 계획되어 있던 방향과 일치.
+
+#### 추가
+- **GNB 레일** (`EditorGnb.tsx` 신규): 헤더 아래 최좌측 48px 세로 레일. 좌측 패널과 별개의 상시 고정 영역(패널을 접어도 유지)
+  - 상단 그룹: **Object** / **Assets** — 클릭 시 좌측 패널 콘텐츠 전환, 활성 탭 재클릭 시 패널 접기/펼치기
+  - 하단 그룹: **설정** / **계정** — `useDropdown({ placement: 'right' })` 기반 우측 드롭다운 메뉴
+  - 설정 메뉴: 다크/라이트 테마 전환(헤더에서 이동), 공유/임베드(`ShareModal` 재사용, `scenes.is_published` 지연 조회), 커스텀 도메인(`CustomDomainModal` 재사용, `projects.custom_domain` 지연 조회)
+  - 계정 메뉴: 로그인 이메일 표시(지연 조회), 계정 설정(`/account`) 링크, 로그아웃(POST `/api/auth/signout`)
+- `useDropdown`에 `placement: 'bottom' | 'right'` 옵션 추가 — 세로 레일에서 오른쪽으로 펼쳐지는 메뉴 지원
+
+#### 변경
+- **`AssetBrowser.tsx`**: 하단 전체폭 독(가로 스크롤 행 + 88px 세로 탭) → 좌측 패널 폭(240px)용 세로 레이아웃(탭 pill 줄바꿈 + 2열 카드 그리드)으로 재구성. 기능(업로드·썸네일·검색·프리뷰·텍스처 임베드)은 전부 유지. **Lights 탭 추가**(기존 좌측 Assets 탭에만 있던 라이트 배치 기능 이식 — 기능 손실 방지)
+- **`LeftPanel.tsx`**: 자체 Objects/Assets 탭바와 중복 `AssetsTabContent`(구식 업로드 로직 포함) 삭제 → GNB 선택을 받아 `HierarchyPanel` 또는 `AssetBrowser`를 표시하는 단순 호스트로 축소
+- **`EditorClient.tsx`**: 그리드 `[좌측패널|뷰포트|Inspector] × [헤더|본문|하단독]` → `[GNB|좌측패널|뷰포트|Inspector] × [헤더|본문]`으로 단순화. 하단 독과 `bottomOpen` 토글 제거. 좌측 토글은 콘텐츠 패널만 접고 GNB 레일은 유지
+- **`ViewportToolbar.tsx`**: 테마 토글 버튼 제거 (GNB 설정 메뉴로 이동)
+- **`EditorOnboarding.tsx`**: "하단 에셋 브라우저" 안내 문구를 GNB Assets 기준으로 수정
+
+---
+
 ## [0.6.2] - 2026-07-02
 ### 플레이어 컨트롤러 재작성 — 경사면/지형 통과 버그 근본 수정
 

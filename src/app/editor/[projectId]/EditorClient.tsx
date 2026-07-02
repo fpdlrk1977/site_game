@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { ViewportToolbar } from './panels/ViewportToolbar';
+import { EditorGnb, type GnbTab } from './panels/EditorGnb';
 import { LeftPanel } from './panels/LeftPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
-import { AssetBrowser } from './panels/AssetBrowser';
 import { EditorOnboarding } from './EditorOnboarding';
 import { ViewportStatusBar } from './canvas/ViewportStatusBar';
 import { ViewportFloatingToolbar } from './canvas/ViewportFloatingToolbar';
@@ -35,8 +35,18 @@ export function EditorClient({ projectName, initialScene }: Props) {
   } = useSceneStore();
   const [isMobile, setIsMobile] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
-  const [bottomOpen, setBottomOpen] = useState(true);
+  const [gnbTab, setGnbTab] = useState<GnbTab>('objects');
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+
+  // GNB 탭 클릭: 같은 탭을 다시 누르면 패널 접기/펼치기, 다른 탭이면 전환 + 펼치기
+  const handleGnbTabClick = (tab: GnbTab) => {
+    if (tab === gnbTab && leftOpen) {
+      setLeftOpen(false);
+    } else {
+      setGnbTab(tab);
+      setLeftOpen(true);
+    }
+  };
 
   // 씬 초기 로드 — ref로 캡처해 마운트 시 1회만 실행 (initialScene prop 재생성 시 재로드 방지)
   const initialSceneRef = useRef(initialScene);
@@ -106,29 +116,34 @@ export function EditorClient({ projectName, initialScene }: Props) {
       className="w-screen h-screen bg-sidebar overflow-hidden"
       style={{
         display: 'grid',
-        gridTemplateColumns: `${leftOpen ? '240px' : '0px'} 1fr 280px`,
-        gridTemplateRows: `48px 1fr ${bottomOpen ? '200px' : '0px'}`,
-        transition: 'grid-template-columns 0.18s ease, grid-template-rows 0.18s ease',
+        gridTemplateColumns: `48px ${leftOpen ? '240px' : '0px'} 1fr 280px`,
+        gridTemplateRows: '48px 1fr',
+        transition: 'grid-template-columns 0.18s ease',
       }}
     >
-      {/* 헤더 — 3열 전체 */}
+      {/* 헤더 — 전체 열 */}
       <div style={{ gridColumn: '1 / -1', gridRow: '1' }}>
         <ViewportToolbar projectName={projectName} />
       </div>
 
-      {/* 왼쪽 패널 (Objects / Assets 탭) */}
+      {/* GNB 레일 — 좌측 패널과 별개, 항상 표시 */}
       <div style={{ gridColumn: '1', gridRow: '2', overflow: 'hidden' }}>
-        <LeftPanel />
+        <EditorGnb tab={gnbTab} panelOpen={leftOpen} onTabClick={handleGnbTabClick} projectName={projectName} />
+      </div>
+
+      {/* 왼쪽 패널 (GNB 선택에 따라 Objects / Assets) */}
+      <div style={{ gridColumn: '2', gridRow: '2', overflow: 'hidden' }}>
+        <LeftPanel tab={gnbTab} />
       </div>
 
       {/* Viewport */}
-      <div style={{ gridColumn: '2', gridRow: '2' }} className="relative overflow-hidden">
+      <div style={{ gridColumn: '3', gridRow: '2' }} className="relative overflow-hidden">
         <EditorCanvas />
         <ViewportFloatingToolbar />
         <ViewportOrientationGizmo />
         <ViewportStatusBar />
 
-        {/* 왼쪽 패널 토글 버튼 */}
+        {/* 왼쪽 패널 토글 버튼 (GNB 레일은 항상 유지) */}
         <button
           onClick={() => setLeftOpen((v) => !v)}
           title={leftOpen ? '왼쪽 패널 숨기기' : '왼쪽 패널 표시'}
@@ -136,25 +151,11 @@ export function EditorClient({ projectName, initialScene }: Props) {
         >
           {leftOpen ? <ChevronLeft size={10} /> : <ChevronRight size={10} />}
         </button>
-
-        {/* 하단 패널 토글 버튼 */}
-        <button
-          onClick={() => setBottomOpen((v) => !v)}
-          title={bottomOpen ? '에셋 브라우저 숨기기' : '에셋 브라우저 표시'}
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 w-9 h-3.5 bg-surface border border-b-0 border-border rounded-t-md flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
-        >
-          {bottomOpen ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
-        </button>
       </div>
 
-      {/* Inspector — 헤더 제외 전체 높이 */}
-      <div style={{ gridColumn: '3', gridRow: '2 / 4', overflow: 'hidden' }}>
+      {/* Inspector */}
+      <div style={{ gridColumn: '4', gridRow: '2', overflow: 'hidden' }}>
         <InspectorPanel />
-      </div>
-
-      {/* Asset Browser — Inspector 제외 하단 */}
-      <div style={{ gridColumn: '1 / 3', gridRow: '3', overflow: 'hidden' }}>
-        <AssetBrowser />
       </div>
 
       <EditorOnboarding />

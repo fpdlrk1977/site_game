@@ -7,15 +7,17 @@ import { createBrowserSupabase } from '@/lib/supabase';
 import { tryEmbedTextures } from '@/lib/glbEmbed';
 import { generateGlbThumbnail } from '@/lib/glbThumbnail';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
-import type { AssetRefSchema, ContentType, ParticlePreset } from '@/types/scene';
+import { SelectBox } from '@/components/ui/SelectBox';
+import type { AssetRefSchema, ContentType, ParticlePreset, LightType } from '@/types/scene';
 
-type Tab = 'models' | 'character' | 'content' | 'particle' | 'materials' | 'textures' | 'hdr' | 'audio';
+type Tab = 'models' | 'character' | 'content' | 'particle' | 'lights' | 'materials' | 'textures' | 'hdr' | 'audio';
 
 const TABS: { id: Tab; label: string; wip?: boolean }[] = [
   { id: 'models',    label: 'Models' },
   { id: 'character', label: 'Character' },
   { id: 'content',   label: 'Content' },
   { id: 'particle',  label: 'Particle' },
+  { id: 'lights',    label: 'Lights' },
   { id: 'materials', label: 'Materials', wip: true },
   { id: 'textures',  label: 'Textures',  wip: true },
   { id: 'hdr',       label: 'HDR',       wip: true },
@@ -35,8 +37,14 @@ const PARTICLE_ITEMS: { preset: ParticlePreset; label: string; emoji: string }[]
   { preset: 'snow',  label: '눈',     emoji: '❄️' },
 ];
 
+const LIGHT_ITEMS: { type: LightType; label: string; emoji: string }[] = [
+  { type: 'point',       label: '포인트',     emoji: '💡' },
+  { type: 'spot',        label: '스팟',       emoji: '🔦' },
+  { type: 'directional', label: '방향 라이트', emoji: '☀️' },
+];
+
 export function AssetBrowser() {
-  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject } = useSceneStore();
+  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject } = useSceneStore();
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -148,46 +156,32 @@ export function AssetBrowser() {
     : modelAssets;
 
   return (
-    <div className="flex h-full bg-sidebar border-t border-border overflow-hidden">
-      {/* 왼쪽 세로 탭 사이드바 */}
-      <div className="flex flex-col w-[88px] shrink-0 border-r border-border/80 py-2 gap-0.5">
-        <p className="px-3 pb-1 text-[9px] font-semibold text-muted/60 uppercase tracking-widest">Assets</p>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`mx-1.5 px-2 py-1.5 text-[11px] font-medium text-left rounded-xs transition-all ${
-              tab === t.id
-                ? 'bg-background text-foreground'
-                : t.wip
-                  ? 'text-muted/40 hover:text-muted hover:bg-surface/50'
-                  : 'text-muted hover:text-foreground hover:bg-surface/50'
-            }`}
-          >
-            {t.label}
-            {t.wip && <span className="ml-1 text-[8px] opacity-50">·</span>}
-          </button>
-        ))}
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* 카테고리 선택 */}
+      <div className="px-2 pt-2 pb-1.5 border-b border-border/60 shrink-0">
+        <SelectBox
+          value={tab}
+          onChange={(v) => setTab(v as Tab)}
+          options={TABS.map((t) => ({
+            value: t.id,
+            label: t.wip ? `${t.label} (준비 중)` : t.label,
+          }))}
+        />
       </div>
 
-      {/* 콘텐츠 영역 */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* 콘텐츠 */}
+      <div className="flex-1 overflow-y-auto p-2">
         {tab === 'models' && (
-          <div className="px-3 pt-2 pb-1.5 shrink-0">
+          <>
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="에셋 검색..."
-              className="w-full max-w-xs bg-background border border-border rounded-xs px-2.5 py-1 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
+              className="w-full bg-background border border-border rounded-xs px-2.5 py-1 mb-2 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
-          </div>
-        )}
-
-        {tab === 'models' && (
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="flex items-center gap-2 px-3 pb-2 h-full">
-              <input ref={modelInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleModelFile} />
+            <input ref={modelInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleModelFile} />
+            <div className="grid grid-cols-2 gap-2">
               <UploadButton
                 uploading={uploading}
                 onClick={() => modelInputRef.current?.click()}
@@ -196,17 +190,19 @@ export function AssetBrowser() {
               {filteredModels.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} icon="📦" onAdd={() => addAssetObject(asset)} />
               ))}
-              {modelAssets.length === 0 && (
-                <p className="text-[11px] text-muted ml-2">.glb 파일을 업로드하면 씬에 배치할 수 있습니다</p>
-              )}
             </div>
-          </div>
+            {modelAssets.length === 0 && (
+              <p className="text-[10px] text-muted text-center py-4 leading-relaxed">
+                .glb 파일을 업로드하면<br />씬에 배치할 수 있습니다
+              </p>
+            )}
+          </>
         )}
 
         {tab === 'character' && (
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="flex items-center gap-2 px-3 pb-2 h-full">
-              <input ref={characterInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleCharacterFile} />
+          <>
+            <input ref={characterInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleCharacterFile} />
+            <div className="grid grid-cols-2 gap-2">
               <UploadButton
                 uploading={uploading}
                 onClick={() => characterInputRef.current?.click()}
@@ -216,51 +212,62 @@ export function AssetBrowser() {
               {characterAssets.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} icon="🧍" />
               ))}
-              {characterAssets.length === 0 && (
-                <p className="text-[11px] text-muted ml-2">캐릭터 GLB를 업로드하세요. Inspector → Player에서 씬에 적용합니다</p>
-              )}
             </div>
-          </div>
+            {characterAssets.length === 0 && (
+              <p className="text-[10px] text-muted text-center py-4 leading-relaxed">
+                캐릭터 GLB를 업로드하세요.<br />Inspector → Player에서 씬에 적용합니다
+              </p>
+            )}
+          </>
         )}
 
         {tab === 'content' && (
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="flex items-center gap-2 px-3 pb-2 h-full pt-2">
-              {CONTENT_ITEMS.map(({ type, label, emoji }) => (
-                <button
-                  key={type}
-                  onClick={() => addContentObject(type)}
-                  className="w-[72px] h-[72px] shrink-0 rounded-xs bg-background border border-border hover:border-border/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
-                >
-                  <span className="text-xl leading-none">{emoji}</span>
-                  <span className="text-[9px] text-muted">{label}</span>
-                </button>
-              ))}
-              <p className="text-[11px] text-muted ml-2">클릭하면 씬에 배치됩니다</p>
-            </div>
+          <div className="grid grid-cols-2 gap-2">
+            {CONTENT_ITEMS.map(({ type, label, emoji }) => (
+              <button
+                key={type}
+                onClick={() => addContentObject(type)}
+                className="h-[72px] rounded-xs bg-background border border-border hover:border-border/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+              >
+                <span className="text-xl leading-none">{emoji}</span>
+                <span className="text-[9px] text-muted">{label}</span>
+              </button>
+            ))}
           </div>
         )}
 
         {tab === 'particle' && (
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
-            <div className="flex items-center gap-2 px-3 pb-2 h-full pt-2">
-              {PARTICLE_ITEMS.map(({ preset, label, emoji }) => (
-                <button
-                  key={preset}
-                  onClick={() => addParticleObject(preset)}
-                  className="w-[72px] h-[72px] shrink-0 rounded-xs bg-background border border-border hover:border-primary/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
-                >
-                  <span className="text-xl leading-none">{emoji}</span>
-                  <span className="text-[9px] text-muted">{label}</span>
-                </button>
-              ))}
-              <p className="text-[11px] text-muted ml-2">클릭하면 씬에 파티클이 배치됩니다</p>
-            </div>
+          <div className="grid grid-cols-2 gap-2">
+            {PARTICLE_ITEMS.map(({ preset, label, emoji }) => (
+              <button
+                key={preset}
+                onClick={() => addParticleObject(preset)}
+                className="h-[72px] rounded-xs bg-background border border-border hover:border-primary/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+              >
+                <span className="text-xl leading-none">{emoji}</span>
+                <span className="text-[9px] text-muted">{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === 'lights' && (
+          <div className="grid grid-cols-2 gap-2">
+            {LIGHT_ITEMS.map(({ type, label, emoji }) => (
+              <button
+                key={type}
+                onClick={() => addLightObject(type)}
+                className="h-[72px] rounded-xs bg-background border border-border hover:border-yellow-500/40 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
+              >
+                <span className="text-xl leading-none">{emoji}</span>
+                <span className="text-[9px] text-muted text-center leading-snug">{label}</span>
+              </button>
+            ))}
           </div>
         )}
 
         {currentTab.wip && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-1.5 select-none">
+          <div className="flex flex-col items-center justify-center gap-1.5 select-none py-10">
             <span className="text-2xl opacity-20">
               {tab === 'materials' ? '🎨' : tab === 'textures' ? '🖼' : tab === 'hdr' ? '🌅' : '🎵'}
             </span>
@@ -278,7 +285,7 @@ function UploadButton({ uploading, onClick, label = '.glb', title }: { uploading
       onClick={onClick}
       disabled={uploading}
       title={title}
-      className="w-[72px] h-[72px] shrink-0 rounded-xs border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
+      className="h-[72px] rounded-xs border-2 border-dashed border-border flex flex-col items-center justify-center text-muted hover:border-primary hover:text-primary transition-all gap-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {uploading ? (
         <span className="text-xs animate-pulse">...</span>
@@ -300,7 +307,7 @@ function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string
   return (
     <div
       ref={cardRef}
-      className="group relative w-[72px] h-[72px] shrink-0 rounded-xs bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
+      className="group relative h-[72px] rounded-xs bg-background border border-border hover:border-border/60 transition-all flex flex-col items-center justify-center gap-1 overflow-hidden"
       onMouseEnter={() => {
         if (isModel && cardRef.current) setHoverRect(cardRef.current.getBoundingClientRect());
       }}

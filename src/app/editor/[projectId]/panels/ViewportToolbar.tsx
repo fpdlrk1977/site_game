@@ -7,7 +7,6 @@ import { ArrowLeft, Save, History, ExternalLink } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
-import { useThemeStore } from '@/store/themeStore';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SceneSwitcher } from './SceneSwitcher';
 import { VersionHistoryModal } from './VersionHistoryModal';
@@ -25,7 +24,6 @@ export function ViewportToolbar({ projectName }: Props) {
     projectId, sceneId, objects, assets, environment, markSaved,
   } = useSceneStore();
   const { addToast } = useToast();
-  const { theme, toggleTheme } = useThemeStore();
   const [showHistory, setShowHistory] = useState(false);
   const [autoSaveAt, setAutoSaveAt] = useState<number | null>(null);
   const [autoSaveAgo, setAutoSaveAgo] = useState('');
@@ -202,16 +200,6 @@ export function ViewportToolbar({ projectName }: Props) {
           </Tooltip>
         )}
 
-        <div className="w-px h-4 bg-border shrink-0" />
-
-        <Tooltip content={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}>
-          <button
-            onClick={toggleTheme}
-            className="w-7 h-7 flex items-center justify-center rounded-xs border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0 text-sm"
-          >
-            {theme === 'dark' ? '☀' : '🌙'}
-          </button>
-        </Tooltip>
       </header>
 
       {showHistory && typeof document !== 'undefined' && createPortal(

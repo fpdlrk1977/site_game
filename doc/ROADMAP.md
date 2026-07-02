@@ -22,8 +22,8 @@
 
 | 태스크 | 파일 | 내용 |
 |---|---|---|
-| B-1 | `EditorClient.tsx` | 레이아웃 재구성: AssetBrowser를 하단 띠 → 왼쪽 패널 하단으로 이동 |
-| B-2 | `AssetBrowser.tsx` | 가로 스크롤 → 세로 2열 그리드로 전환 |
+| B-1 | `EditorClient.tsx` | ✅ 완료 (2026-07-03, 변형): AssetBrowser를 하단 띠 → 왼쪽 패널 콘텐츠로 이동. GNB 레일(Object/Assets/설정/계정) 신설 — CHANGELOG 0.7.0 참조 |
+| B-2 | `AssetBrowser.tsx` | ✅ 완료 (2026-07-03): 가로 스크롤 → 세로 2열 그리드로 전환, Lights 탭 추가 |
 | B-3 | `InspectorPanel.tsx` | 섹션 구분 헤더 디자인 개선, Material 타입 선택기 추가 |
 | B-4 | `InspectorPanel.tsx` | Interactions 섹션 UI 개선 (URL 입력 + Add 버튼 스타일) |
 
