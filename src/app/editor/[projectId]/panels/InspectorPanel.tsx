@@ -759,8 +759,8 @@ export function InspectorPanel() {
     const allVisible = selectedIds.every((id) => objects.find((x) => x.id === id)?.visible !== false);
 
     return (
-      <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
-        <div className="px-3 py-2 border-b border-border">
+      <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden h-full">
+        <div className="px-3 py-2 border-b border-border shrink-0">
           <span className="text-xs font-semibold text-muted tracking-wide">{selectedIds.length}개 선택됨</span>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -837,8 +837,8 @@ export function InspectorPanel() {
 
   if (!obj) {
     return (
-      <aside className="flex flex-col bg-surface border-l border-border overflow-hidden">
-        <div className="px-3 py-2 border-border flex items-center gap-2">
+      <aside className="flex flex-col bg-surface border-l border-border overflow-hidden h-full">
+        <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
           <span className="text-xs font-semibold text-foreground tracking-wide flex-1">Environment</span>
         </div>
         <EnvironmentPanel />
@@ -877,8 +877,8 @@ export function InspectorPanel() {
   // 그룹 오브젝트 전용 인스펙터
   if (obj.isGroup) {
     return (
-      <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden">
-        <div className="px-3 py-2 border-b border-border flex items-center gap-2">
+      <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden h-full">
+        <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
           <span className="text-xs font-semibold text-muted tracking-wide flex-1">Inspector — 그룹</span>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -928,7 +928,7 @@ export function InspectorPanel() {
   }
 
   return (
-    <aside className="flex flex-col bg-surface border-l border-border overflow-hidden relative">
+    <aside className="flex flex-col bg-surface border-l border-border overflow-hidden relative h-full">
       {/* 이벤트 프리뷰 팝업 오버레이 */}
       {previewPopup !== null && (
         <div className="absolute inset-0 z-10 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewPopup(null)}>
@@ -944,7 +944,7 @@ export function InspectorPanel() {
           </div>
         </div>
       )}
-      <div className="px-3 py-2 border-b border-border flex items-center gap-2">
+      <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
         <span className="text-xs font-semibold text-foreground tracking-wide flex-1">Inspector</span>
       </div>
 

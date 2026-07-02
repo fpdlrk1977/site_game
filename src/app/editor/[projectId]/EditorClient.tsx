@@ -148,7 +148,7 @@ export function EditorClient({ projectName, initialScene }: Props) {
       </div>
 
       {/* Inspector — 헤더 제외 전체 높이 */}
-      <div style={{ gridColumn: '3', gridRow: '2 / 4' }}>
+      <div style={{ gridColumn: '3', gridRow: '2 / 4', overflow: 'hidden' }}>
         <InspectorPanel />
       </div>
 
