@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, User } from 'lucide-react';
 import { MathUtils } from 'three';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
@@ -586,9 +586,16 @@ function EnvironmentPanel() {
                   <SelectBox
                     value={env.playerCharacterId ?? ''}
                     onChange={(v) => { updateEnvironment({ playerCharacterId: v || undefined }); pushHistory(); }}
+                    iconSize={32}
                     options={[
-                      { value: '', label: '기본 캡슐' },
-                      ...characterAssets.map((a) => ({ value: a.id, label: a.name })),
+                      { value: '', label: '기본 캡슐', icon: <User className="text-muted" /> },
+                      ...characterAssets.map((a) => ({
+                        value: a.id,
+                        label: a.name,
+                        icon: a.thumbnailUrl
+                          ? <img src={a.thumbnailUrl} alt="" className="rounded-xs" />
+                          : <User className="text-muted" />,
+                      })),
                     ]}
                   />
                   {characterAssets.length === 0 && (
