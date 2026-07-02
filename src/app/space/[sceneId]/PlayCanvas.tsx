@@ -83,15 +83,15 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
         <CuboidCollider args={[500, 0.1, 500]} position={[0, -0.1, 0]} />
       </RigidBody>
 
-      {/* 경계 벽 */}
+      {/* 경계 벽 — args는 half-extent이므로 벽 중심을 b+0.5에 배치해야 내면이 정확히 ±b에 맞음 */}
       {(scene.environment.boundary ?? 0) > 0 && (() => {
         const b = scene.environment.boundary!;
         return (
           <>
-            <RigidBody type="fixed"><CuboidCollider args={[b + 1, 30, 0.5]} position={[0, 15, -b]} /></RigidBody>
-            <RigidBody type="fixed"><CuboidCollider args={[b + 1, 30, 0.5]} position={[0, 15,  b]} /></RigidBody>
-            <RigidBody type="fixed"><CuboidCollider args={[0.5, 30, b + 1]} position={[ b, 15, 0]} /></RigidBody>
-            <RigidBody type="fixed"><CuboidCollider args={[0.5, 30, b + 1]} position={[-b, 15, 0]} /></RigidBody>
+            <RigidBody type="fixed"><CuboidCollider args={[b + 1, 30, 0.5]} position={[0, 15, -(b + 0.5)]} /></RigidBody>
+            <RigidBody type="fixed"><CuboidCollider args={[b + 1, 30, 0.5]} position={[0, 15,   b + 0.5 ]} /></RigidBody>
+            <RigidBody type="fixed"><CuboidCollider args={[0.5, 30, b + 1]} position={[  b + 0.5,  15, 0]} /></RigidBody>
+            <RigidBody type="fixed"><CuboidCollider args={[0.5, 30, b + 1]} position={[-(b + 0.5), 15, 0]} /></RigidBody>
           </>
         );
       })()}

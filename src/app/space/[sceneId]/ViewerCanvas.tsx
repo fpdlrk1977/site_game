@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, Suspense, lazy, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, Sky, Environment } from '@react-three/drei';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset } from '@/types/scene';
 import { ViewerObject } from './ViewerObject';
@@ -12,26 +12,80 @@ import { GroundPlane } from '@/components/three/GroundPlane';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
 
-function BoundaryGizmo({ size }: { size: number }) {
+function BoundaryGizmo({ size, playMode }: { size: number; playMode: boolean }) {
   const b = size;
+  const H = 8; // 기즈모 높이
   const positions = useMemo(() => new Float32Array([
+    // 바닥 사각형
     -b, 0.02, -b,   b, 0.02, -b,
      b, 0.02, -b,   b, 0.02,  b,
      b, 0.02,  b,  -b, 0.02,  b,
     -b, 0.02,  b,  -b, 0.02, -b,
-    -b, 0, -b,  -b, 8, -b,
-     b, 0, -b,   b, 8, -b,
-     b, 0,  b,   b, 8,  b,
-    -b, 0,  b,  -b, 8,  b,
+    // 모서리 기둥
+    -b, 0, -b,  -b, H, -b,
+     b, 0, -b,   b, H, -b,
+     b, 0,  b,   b, H,  b,
+    -b, 0,  b,  -b, H,  b,
+    // 상단 사각형
+    -b, H, -b,   b, H, -b,
+     b, H, -b,   b, H,  b,
+     b, H,  b,  -b, H,  b,
+    -b, H,  b,  -b, H, -b,
   ]), [b]);
+
   return (
-    <lineSegments>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
-      <lineBasicMaterial color="#f59e0b" />
-    </lineSegments>
+    <>
+      <lineSegments>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        </bufferGeometry>
+        <lineBasicMaterial color="#f59e0b" />
+      </lineSegments>
+      {/* 플레이 모드에서 반투명 벽면 표시 — 실제 충돌 위치와 일치 */}
+      {playMode && (
+        <>
+          <mesh position={[0, H / 2, -b]} rotation={[0, 0, 0]}>
+            <planeGeometry args={[b * 2, H]} />
+            <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={2} />
+          </mesh>
+          <mesh position={[0, H / 2, b]} rotation={[0, Math.PI, 0]}>
+            <planeGeometry args={[b * 2, H]} />
+            <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={2} />
+          </mesh>
+          <mesh position={[b, H / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
+            <planeGeometry args={[b * 2, H]} />
+            <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={2} />
+          </mesh>
+          <mesh position={[-b, H / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <planeGeometry args={[b * 2, H]} />
+            <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={2} />
+          </mesh>
+        </>
+      )}
+    </>
   );
+}
+
+// 탐색 모드 → 플레이 모드 전환 시 현재 카메라 방향을 azimuthRef에 캡처
+// 플레이 카메라가 같은 수평 방향에서 시작되어 씬이 동일하게 보임
+function CameraAzimuthCapture({
+  playMode,
+  azimuthRef,
+}: {
+  playMode: boolean;
+  azimuthRef: React.MutableRefObject<number>;
+}) {
+  const { camera } = useThree();
+  const prevRef = useRef(false);
+
+  useFrame(() => {
+    if (playMode && !prevRef.current) {
+      azimuthRef.current = Math.atan2(camera.position.x, camera.position.z);
+    }
+    prevRef.current = playMode;
+  });
+
+  return null;
 }
 
 interface Props {
@@ -65,6 +119,9 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
       camera={{ position: [5, 4, 8], fov: 60 }}
       style={{ width: '100%', height: '100%' }}
     >
+      {/* 탐색→플레이 전환 시 카메라 수평 방향을 캡처해 플레이 카메라 초기값으로 사용 */}
+      <CameraAzimuthCapture playMode={playMode} azimuthRef={azimuthRef} />
+
       {/* ── 배경 (HDR / Sky / 단색 — 상호 배타) ── */}
       {!useHdr && !isSkyMode && <color attach="background" args={[skyColor]} />}
       {isSkyMode && (
@@ -105,7 +162,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
         shadow-mapSize={[2048, 2048]}
       />
 
-      {/* ── 에디터 전용: 그리드 + 경계 기즈모 ── */}
+      {/* ── 에디터 전용: 그리드 ── */}
       {!playMode && (
         <Grid
           position={[0, 0, 0]}
@@ -120,8 +177,9 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
           infiniteGrid
         />
       )}
-      {!playMode && (environment.boundary ?? 0) > 0 && (
-        <BoundaryGizmo size={environment.boundary!} />
+      {/* 경계 기즈모 — 플레이 중에도 표시해 충돌 영역 확인 가능 */}
+      {(environment.boundary ?? 0) > 0 && (
+        <BoundaryGizmo size={environment.boundary!} playMode={playMode} />
       )}
 
       {/* ── 바닥 ── */}

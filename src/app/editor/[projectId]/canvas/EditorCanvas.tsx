@@ -16,15 +16,20 @@ import type { Vector3 as Vec3, HdrPreset } from '@/types/scene';
 
 function BoundaryGizmo({ size }: { size: number }) {
   const b = size;
+  const H = 8;
   const positions = useMemo(() => new Float32Array([
     -b, 0.02, -b,   b, 0.02, -b,
      b, 0.02, -b,   b, 0.02,  b,
      b, 0.02,  b,  -b, 0.02,  b,
     -b, 0.02,  b,  -b, 0.02, -b,
-    -b, 0, -b,  -b, 8, -b,
-     b, 0, -b,   b, 8, -b,
-     b, 0,  b,   b, 8,  b,
-    -b, 0,  b,  -b, 8,  b,
+    -b, 0, -b,  -b, H, -b,
+     b, 0, -b,   b, H, -b,
+     b, 0,  b,   b, H,  b,
+    -b, 0,  b,  -b, H,  b,
+    -b, H, -b,   b, H, -b,
+     b, H, -b,   b, H,  b,
+     b, H,  b,  -b, H,  b,
+    -b, H,  b,  -b, H, -b,
   ]), [b]);
   return (
     <lineSegments>

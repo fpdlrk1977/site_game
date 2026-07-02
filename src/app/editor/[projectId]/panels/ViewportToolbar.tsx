@@ -188,15 +188,17 @@ export function ViewportToolbar({ projectName }: Props) {
         </Tooltip>
 
         {sceneId && (
-          <Tooltip content="새 탭으로 미리보기">
-            <a
-              href={`/space/${sceneId}`}
-              target="_blank"
+          <Tooltip content={isModified ? '저장 후 새 탭으로 미리보기' : '새 탭으로 미리보기'}>
+            <button
+              onClick={async () => {
+                if (isModified) await handleSave();
+                window.open(`/space/${sceneId}`, '_blank');
+              }}
               className="flex items-center gap-1.5 px-3 h-7 rounded-lg border border-border text-foreground hover:bg-background hover:border-border/60 transition-all text-xs font-medium shrink-0"
             >
               <ExternalLink size={12} />
               <span className="hidden md:block">미리보기</span>
-            </a>
+            </button>
           </Tooltip>
         )}
 

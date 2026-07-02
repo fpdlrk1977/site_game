@@ -105,6 +105,7 @@ interface Props {
   playerSpeed?: number;
   playerJumpForce?: number;
   mobileInputRef?: MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
+  onPositionChange?: (x: number, z: number) => void;
 }
 
 export function PlayModeController({
@@ -116,6 +117,7 @@ export function PlayModeController({
   playerSpeed = 5,
   playerJumpForce = 12,
   mobileInputRef,
+  onPositionChange,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   const { camera } = useThree();
