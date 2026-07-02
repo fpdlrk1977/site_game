@@ -50,17 +50,22 @@ AI에게 특정 기능을 구현하라고 요청할 때, 아래의 인수 조건
 
 ---
 
-### FEAT-ENV-01: 환경 설정 에디터
-**설명**: 에디터에서 씬의 하늘, 안개, 조명을 실시간으로 편집한다.
+### FEAT-ENV-01: 환경 설정 에디터 ✅ 완료 (범위 확장, 2026-07-02)
+**설명**: 에디터에서 씬의 하늘, 바닥, 경계, 안개, 조명을 실시간으로 편집한다.
 
-**AC:**
-- [ ] ViewportToolbar에 `[환경]` 버튼이 있으며 클릭 시 EnvironmentPanel이 표시된다
-- [ ] Sky 타입을 `color` / `hdr` 중 선택할 수 있다
-- [ ] `color` 선택 시 컬러피커로 배경색을 선택하면 씬에 즉시 반영된다
-- [ ] Fog enabled 토글 및 Color / Near / Far 값 변경이 씬에 즉시 반영된다
-- [ ] Ambient Intensity, Directional Position/Intensity 변경이 씬에 즉시 반영된다
-- [ ] 변경된 환경 설정이 씬 저장 시 `ProjectSceneSchema.environment`에 포함된다
-- [ ] 뷰어는 `environment` 값을 읽어 동일한 하늘/안개/조명을 재현한다
+> **⚠️ 설계 변경**: 원래 스펙은 ViewportToolbar `[환경]` 버튼 → 별도 EnvironmentPanel이었으나, 실제 구현은 오브젝트 미선택 시 InspectorPanel에 `EnvironmentPanel`이 표시되는 방식으로 대체됨.
+
+**AC (변경 후):**
+- [x] 캔버스에서 오브젝트를 선택하지 않은 상태면 InspectorPanel에 `EnvironmentPanel`이 표시된다
+- [x] Sky 타입을 `color` / `sky`(물리 기반 하늘) / `hdr`(프리셋) 3-way로 선택할 수 있다 (상호 배타)
+- [x] `color` 선택 시 컬러피커로 배경색을 선택하면 씬에 즉시 반영된다
+- [x] `hdr` 선택 시 10종 프리셋(sunset/dawn/night/warehouse/forest/apartment/studio/city/park/lobby) 중 선택해 즉시 반영된다 (drei `<Environment preset>`)
+- [x] **Ground**: enabled 토글 + grass/dirt/sand/stone(절차적 텍스처)/water(실시간 반사)/custom(색상 또는 업로드 URL) 프리셋 선택
+- [x] **Boundary**: 값 입력 시 에디터·뷰어에 노란 와이어프레임 박스가 표시되고, 플레이 모드에서 실제 충돌 벽으로 작동한다
+- [x] Fog enabled 토글 및 Color / Near / Far 값 변경이 씬에 즉시 반영된다
+- [x] Ambient Intensity, Directional Position/Intensity 변경이 씬에 즉시 반영된다
+- [x] 변경된 환경 설정이 씬 저장 시 `ProjectSceneSchema.environment`에 포함된다
+- [x] 뷰어는 `environment` 값을 읽어 동일한 하늘/바닥/경계/안개/조명을 재현한다
 
 ---
 

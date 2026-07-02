@@ -35,7 +35,7 @@
 | C-1 | ✅ 완료 | CSS 변수 기반 테마 토큰 정의 — `globals.css` `@layer base` + `@theme inline` 2-tier 구조 |
 | C-2 | ✅ 완료 | 에디터/대시보드/계정 페이지 전체 하드코딩 색상 → Tailwind CSS 변수 클래스 교체 |
 | C-3 | ✅ 완료 | 라이트/다크 토글 버튼 + `localStorage` 저장 (`ThemeProvider`, `ThemeToggle`) |
-| C-4 | ⬜ 미구현 | HDR 환경맵 업로드/적용 (Three.js `RGBELoader` + Supabase storage) |
+| C-4 | 🟡 부분 구현 (2026-07-02) | drei `<Environment preset>` 기반 HDR 프리셋 10종(sunset/dawn/night 등) 적용 완료. 사용자 커스텀 HDR 파일 업로드(`RGBELoader` + Supabase storage)는 미구현 |
 
 ---
 

@@ -1,5 +1,24 @@
 # CHANGELOG: 변경 이력 및 빌드 스냅샷
 
+## [0.6.1] - 2026-07-02
+### 환경 편집 고도화 + 버그 수정
+
+#### 추가
+- **바닥(Ground) 시스템**: `GroundPlane.tsx`(신규), `groundTextures.ts`(신규) — grass/dirt/sand/stone 절차적 노이즈 텍스처(노멀맵 자동 생성) + water 프리셋(`MeshReflectorMaterial` 실시간 반사) + 커스텀 URL 텍스처 업로드. `EnvSchema.ground: { enabled, color, preset?, textureUrl? }`. Inspector Environment "Ground" 섹션. EditorCanvas + ViewerCanvas 적용
+- **HDR 환경 프리셋**: `sky.type`에 `'sky'`(물리 기반 하늘, drei `<Sky>`) 추가. `HdrPreset` 10종(sunset/dawn/night/warehouse/forest/apartment/studio/city/park/lobby, drei `<Environment preset>`) — Sky/HDR/단색 배경 상호 배타 렌더링. Inspector Environment "Sky" 섹션에서 3-way 선택
+- **씬 경계(Boundary)**: `EnvSchema.boundary` — 에디터·뷰어에 노란색 와이어프레임 박스(`BoundaryGizmo`)로 시각화, 플레이 모드에서는 4면 `RigidBody`(friction=0) 충돌 벽으로 실제 이동 제한. Inspector Environment "Boundary" 섹션
+- **GLB 에셋 썸네일 자동 생성**: `glbThumbnail.ts`(신규) — 업로드 시 오프스크린 WebGL 렌더로 256×256 PNG 캡처 → Storage 업로드 → `AssetRefSchema.thumbnailUrl`. AssetBrowser 카드에 실제 모델 썸네일 표시 (실패해도 업로드는 정상 처리)
+
+#### 수정
+- **PlayModeController 경사면 버그**: 점프 Y속도와 경사면(cuboid 모서리 등) 반발력의 양수 Y속도가 구분되지 않아 캐릭터가 경사면에 걸려 공중에 뜨는 현상 → `jumpActiveRef` + 이전 프레임 Y위치 비교로 분리, 낙하(음수)는 허용하고 경사면 반발(양수)만 차단
+- **경계 벽 물리**: `friction=0`으로 벽에 눌렸을 때 공중에 걸리는 현상 방지
+
+#### 변경
+- `EnvSchema`: `sky.type`에 `'sky'` 추가, `hdrPreset?`, `ground?`, `boundary?` 필드 추가
+- `AssetRefSchema`: `thumbnailUrl?` 추가
+
+---
+
 ## [0.6.0] - 2026-07-02
 ### Wave 3 고도화 기능 (3개)
 
