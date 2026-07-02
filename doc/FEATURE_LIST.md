@@ -315,7 +315,7 @@ AI에게 특정 기능을 구현하라고 요청할 때, 아래의 인수 조건
 
 ---
 
-### FEAT-GROUP-01: 그룹 선택 + 오브젝트 그룹화
+### FEAT-GROUP-01: 그룹 선택 + 오브젝트 그룹화 ✅ 완료 (2026-07-02)
 **설명**: 여러 오브젝트를 동시에 선택하여 일괄 조작하고, Ctrl+G로 그룹으로 묶는다.
 
 **AC:**
@@ -325,8 +325,8 @@ AI에게 특정 기능을 구현하라고 요청할 때, 아래의 인수 조건
 - [x] 다중 선택 상태에서 `Delete` 입력 시 선택된 모든 오브젝트가 삭제된다
 - [x] `Ctrl+G` 입력 시 선택 오브젝트들이 그룹으로 묶이고, 자식 position이 그룹 로컬 좌표로 변환된다
 - [x] `Ctrl+Shift+G` 입력 시 그룹이 해제되고 자식 position이 월드 좌표로 복원된다
-- [ ] 뷰포트 빈 공간 드래그 박스 선택 (미구현)
-- [ ] X/Y/Z 축 기준 정렬 (미구현)
+- [x] 뷰포트 빈 공간 좌클릭 드래그 → 보라색 박스 범위 내 오브젝트 다중 선택 (`boxSelectState.ts`, Ctrl+드래그는 오빗)
+- [x] Inspector Multi-select 패널에서 X/Y/Z 축 × min/center/max 정렬 버튼 (`alignSelected` 스토어 액션)
 
 ---
 
@@ -378,14 +378,16 @@ AI에게 특정 기능을 구현하라고 요청할 때, 아래의 인수 조건
 
 ---
 
-### FEAT-PHYSICS-01: Rapier 물리 세팅
+### FEAT-PHYSICS-01: Rapier 물리 세팅 ✅ 완료 (행동 변경 포함)
 **설명**: `physics.enabled`에 따라 Rapier 콜라이더를 오브젝트에 자동 적용한다.
 
-**AC:**
-- [ ] `physics.enabled: false` 오브젝트는 콜라이더 없이 렌더링되며 플레이어가 통과한다
-- [ ] `physics.enabled: true, isSensor: false` 오브젝트는 `RigidBody type="fixed"` + 자동 콜라이더가 적용되어 플레이어를 막는다
-- [ ] `physics.enabled: true, isSensor: true` 오브젝트는 sensor 콜라이더가 적용되어 플레이어가 통과하지만 진입 이벤트를 감지한다
-- [ ] `colliderType`에 따라 box / sphere / capsule / hull / trimesh 콜라이더가 정확히 적용된다
+> **⚠️ 설계 변경 (2026-07-02)**: 원래 스펙은 `physics.enabled: false` 오브젝트는 플레이어가 통과 가능이었으나, 게임 맥락상 모든 씬 오브젝트가 기본적으로 충돌해야 한다는 결정으로 변경. `AutoCollider` 컴포넌트가 physics=false 오브젝트에도 고정 충돌체를 부여한다.
+
+**AC (변경 후):**
+- [x] `physics.enabled: false` 오브젝트도 플레이 모드에서 `AutoCollider`로 `RigidBody type="fixed"` + 자동 콜라이더가 부여되어 플레이어를 막는다 (box→cuboid, sphere→ball, 그 외→hull)
+- [x] `physics.enabled: true, isSensor: false` 오브젝트는 사용자 설정 콜라이더로 플레이어를 막는다
+- [x] `physics.enabled: true, isSensor: true` 오브젝트는 sensor 콜라이더가 적용되어 플레이어가 통과하지만 진입 이벤트를 감지한다
+- [x] `colliderType`에 따라 box / sphere / capsule / hull / trimesh 콜라이더가 정확히 적용된다
 
 ---
 
@@ -406,10 +408,24 @@ AI에게 특정 기능을 구현하라고 요청할 때, 아래의 인수 조건
 **설명**: 캐릭터를 항상 중심에 두는 쿼터뷰 카메라.
 
 **AC:**
-- [ ] 캐릭터 이동 시 카메라가 부드럽게 따라온다 (lerp 적용)
-- [ ] 카메라와 캐릭터 간 거리 및 각도가 고정 유지된다
-- [ ] 점프 시 카메라 Y축이 자연스럽게 보정된다
-- [ ] 마우스 우클릭 드래그로 카메라 수평 회전이 가능하다 (선택 구현)
+- [x] 캐릭터 이동 시 카메라가 부드럽게 따라온다 (lerp 적용)
+- [x] 카메라와 캐릭터 간 거리 및 각도가 고정 유지된다
+- [x] 점프 시 카메라 Y축이 자연스럽게 보정된다
+- [x] 마우스 드래그로 카메라 azimuth/elevation 회전이 가능하다
+
+---
+
+### FEAT-CHARACTER-01: GLB 캐릭터 시스템 ✅ 완료 (2026-07-02)
+**설명**: .glb 파일을 캐릭터로 등록하여 플레이 모드에서 3D 애니메이션 캐릭터로 조종한다.
+
+**AC:**
+- [x] AssetBrowser "Character" 탭에서 캐릭터 GLB 파일을 업로드할 수 있다 (`AssetRefSchema.type: 'character'`로 저장)
+- [x] Inspector → "Player" 섹션에서 씬에 사용할 캐릭터를 드롭다운으로 선택하고 Scale을 조정할 수 있다
+- [x] 선택된 캐릭터가 `EnvSchema.playerCharacterId`와 `playerCharacterScale`에 저장된다
+- [x] 플레이/임베드 모드에서 해당 GLB가 `SkeletonUtils.clone`으로 클론되어 캡슐 콜라이더 내부에 렌더링된다
+- [x] GLB 애니메이션 클립에서 'idle'/'walk'/'run'/'jump' 키워드 자동 탐색 후 상태 전환 (0.2초 fadeIn/Out)
+- [x] 이동 방향으로 캐릭터 그룹이 lerp 회전한다 (t=0.15)
+- [x] 캐릭터 미설정 시 기본 보라색 캡슐 메시(`DefaultCharacter`)가 사용된다
 
 ---
 
@@ -474,15 +490,16 @@ AI에게 특정 기능을 구현하라고 요청할 때, 아래의 인수 조건
 
 ---
 
-### FEAT-VERSION-01: 버전 히스토리 (씬 롤백)
+### FEAT-VERSION-01: 버전 히스토리 (씬 롤백) ✅ 완료 (2026-07-02)
 **설명**: 씬의 저장 이력을 보관하고 특정 시점으로 롤백한다.
 
 **AC:**
-- [ ] 씬 저장마다 `scene_versions` 테이블에 스냅샷이 자동 저장된다 (최대 30개)
-- [ ] 에디터 상단에 "히스토리" 버튼이 있으며 저장 이력 목록(날짜/시간)이 표시된다
-- [ ] 특정 이력 항목 선택 후 "이 버전으로 복구" 클릭 시 해당 씬 데이터로 복원된다
-- [ ] 복구 전 확인 다이얼로그가 표시된다
-- [ ] 30개 초과 시 가장 오래된 버전이 자동 삭제된다
+- [x] 씬 저장마다 `scene_versions` 테이블에 스냅샷이 자동 저장된다 (최대 30개)
+- [x] 에디터 상단에 "히스토리" 버튼이 있으며 저장 이력 목록(날짜/시간)이 표시된다
+- [x] 특정 이력 항목 선택 후 "이 버전으로 복구" 클릭 시 해당 씬 데이터로 복원된다
+- [x] 복구 전 확인 다이얼로그가 표시된다
+- [x] 30개 초과 시 가장 오래된 버전이 자동 삭제된다
+- [x] 복구 후 `markModified()` 호출로 저장 버튼이 즉시 활성화된다
 
 ---
 

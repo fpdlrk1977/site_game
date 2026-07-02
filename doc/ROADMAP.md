@@ -30,12 +30,12 @@
 ### Phase C — 높은 리스크 (테마 시스템)
 전체 컴포넌트 색상 클래스 교체. 충분한 일정 확보 후 진행.
 
-| 태스크 | 내용 |
-|---|---|
-| C-1 | CSS 변수 기반 테마 토큰 정의 (`--color-bg`, `--color-panel` 등) |
-| C-2 | 에디터/대시보드/계정 페이지 전체 하드코딩 색상 → CSS 변수 교체 |
-| C-3 | 라이트/다크 토글 버튼 + `localStorage` 저장 |
-| C-4 | HDR 환경맵 업로드/적용 (Three.js `RGBELoader` + Supabase storage) |
+| 태스크 | 상태 | 내용 |
+|---|---|---|
+| C-1 | ✅ 완료 | CSS 변수 기반 테마 토큰 정의 — `globals.css` `@layer base` + `@theme inline` 2-tier 구조 |
+| C-2 | ✅ 완료 | 에디터/대시보드/계정 페이지 전체 하드코딩 색상 → Tailwind CSS 변수 클래스 교체 |
+| C-3 | ✅ 완료 | 라이트/다크 토글 버튼 + `localStorage` 저장 (`ThemeProvider`, `ThemeToggle`) |
+| C-4 | ⬜ 미구현 | HDR 환경맵 업로드/적용 (Three.js `RGBELoader` + Supabase storage) |
 
 ---
 
@@ -262,13 +262,13 @@
 - `enabled` 토글, `colliderType` 드롭다운, `isSensor` 체크박스
 - `events[]` 배열 편집 UI (trigger/action/value 입력)
 
-#### [P3-07] 그룹 선택 + 오브젝트 그룹화 ✅ 부분 완료 (2026-06-30)
+#### [P3-07] 그룹 선택 + 오브젝트 그룹화 ✅ 완료 (2026-07-02)
 - [x] Shift+클릭 다중 선택 (캔버스 + HierarchyPanel 범위 선택)
 - [x] 다중 선택 시 centroid 피벗 기즈모 (MultiGizmo) — 일괄 이동
 - [x] Ctrl+G 그룹화 / Ctrl+Shift+G 해제 (레이어 탭 대신 트리+그룹 방식 채택)
 - [x] 다중 선택 상태에서 Delete로 일괄 삭제
-- [ ] 뷰포트 드래그 박스 선택 (미구현)
-- [ ] X/Y/Z 축 기준 정렬 (미구현)
+- [x] 뷰포트 빈 공간 드래그 박스 선택 (`boxSelectState.ts`, Ctrl+드래그는 오빗 유지)
+- [x] X/Y/Z 축 기준 정렬 — ViewportToolbar 정렬 드롭다운 (min/center/max × 3축 = 9버튼)
 
 #### [P3-08] 씬 템플릿 라이브러리
 - 신규 씬 생성 시 "빈 씬 / 쇼룸 / 갤러리 / 전시장 / 카페" 등 템플릿 선택 가능
@@ -331,10 +331,10 @@
 - `ObjectNodeSchema`에 `prefabId` 필드 추가
 - 예상 소요: 3일
 
-#### [P4-05] 버전 히스토리 (씬 롤백)
-- 씬 저장 시마다 `scene_versions` 테이블에 스냅샷 보관 (최대 30개)
-- 에디터 UI에서 저장 이력 목록 확인 + 특정 시점으로 롤백
-- 예상 소요: 2일
+#### [P4-05] 버전 히스토리 (씬 롤백) ✅ 완료 (2026-07-02)
+- [x] 씬 저장 시마다 `scene_versions` 테이블에 스냅샷 보관 (최대 30개, 초과 시 자동 삭제)
+- [x] 에디터 툴바 히스토리 버튼 → `VersionHistoryModal` (날짜/시간 목록)
+- [x] "이 버전으로 복구" 클릭 → 확인 다이얼로그 → 씬 복원 + `markModified()` 호출 (저장 버튼 활성화)
 
 #### [P4-06] 뷰포트 분할 (에디터 + 플레이어 시점 동시 표시)
 - 에디터 화면을 좌우 분할: 좌측 에디터 뷰 / 우측 플레이어 시점 실시간 미리보기
