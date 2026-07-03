@@ -231,13 +231,14 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   if (!object.visible) return null;
 
   // 그룹 오브젝트: 자식들을 Three.js group 안에 렌더
+  // noTransform=true 일 때는 부모(RigidBody 등)가 transform을 담당하므로 identity로 설정
   if (object.isGroup) {
     const children = allObjects.filter((o) => o.parentId === object.id && o.visible);
     return (
       <group
-        position={[object.position.x, object.position.y, object.position.z]}
-        rotation={[object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD]}
-        scale={[object.scale.x, object.scale.y, object.scale.z]}
+        position={noTransform ? [0, 0, 0] : [object.position.x, object.position.y, object.position.z]}
+        rotation={noTransform ? [0, 0, 0] : [object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD]}
+        scale={noTransform ? [1, 1, 1] : [object.scale.x, object.scale.y, object.scale.z]}
       >
         {children.map((child) => (
           <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />

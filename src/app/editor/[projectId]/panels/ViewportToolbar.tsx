@@ -90,19 +90,19 @@ export function ViewportToolbar({ projectName }: Props) {
     addToast('저장되었습니다.', 'success');
   }, [sceneId, projectId, objects, assets, environment, markSaved, addToast]);
 
-  // 오토세이브: 60초마다 변경사항 있으면 자동 저장
+  // 오토세이브: 60초마다 변경사항 있으면 자동 저장 (임시 비활성화)
   const handleSaveRef = useRef(handleSave);
   useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
 
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const state = useSceneStore.getState();
-      if (!state.isModified || !state.sceneId) return;
-      await handleSaveRef.current();
-      setAutoSaveAt(Date.now());
-    }, 60_000);
-    return () => clearInterval(interval);
-  }, []);
+  // useEffect(() => {
+  //   const interval = setInterval(async () => {
+  //     const state = useSceneStore.getState();
+  //     if (!state.isModified || !state.sceneId) return;
+  //     await handleSaveRef.current();
+  //     setAutoSaveAt(Date.now());
+  //   }, 60_000);
+  //   return () => clearInterval(interval);
+  // }, []);
 
   // "N분 전" 표시 갱신
   useEffect(() => {

@@ -86,8 +86,9 @@ function LightObjectInstance({ object }: Props) {
 
   const handleClick = (shiftKey: boolean) => {
     if (object.locked) return;
-    if (shiftKey) toggleSelectObject(object.id);
-    else selectObject(object.id);
+    const targetId = findRootAncestorId(object);
+    if (shiftKey) toggleSelectObject(targetId);
+    else selectObject(targetId);
   };
 
   return (
@@ -142,6 +143,20 @@ function LightObjectInstance({ object }: Props) {
   );
 }
 
+// 중첩 그룹 클릭 시 최상위 조상 그룹 ID를 반환
+function findRootAncestorId(object: ObjectNodeSchema): string {
+  if (!object.parentId) return object.id;
+  const allObjects = useSceneStore.getState().objects;
+  let targetId = object.id;
+  let parentId: string | null = object.parentId;
+  while (parentId) {
+    targetId = parentId;
+    const parent = allObjects.find((o) => o.id === parentId);
+    parentId = parent?.parentId ?? null;
+  }
+  return targetId;
+}
+
 function GroupObjectInstance({ object }: Props) {
   const groupRef = useRef<THREE.Group>(null);
   const refsMap = useObjectRefs();
@@ -171,8 +186,10 @@ function GroupObjectInstance({ object }: Props) {
 
   const handleClick = (shiftKey: boolean) => {
     if (object.locked) return;
-    if (shiftKey) toggleSelectObject(object.id);
-    else selectObject(object.id);
+    // 중첩 그룹인 경우 최상위 조상 그룹을 선택
+    const targetId = findRootAncestorId(object);
+    if (shiftKey) toggleSelectObject(targetId);
+    else selectObject(targetId);
   };
 
   return (
@@ -243,8 +260,10 @@ export function EditorObjectInstance({ object }: Props) {
   const emissive = object.material?.emissive ?? '#000000';
   const handleClick = (shiftKey: boolean) => {
     if (object.locked) return;
-    if (shiftKey) toggleSelectObject(object.id);
-    else selectObject(object.id);
+    // 그룹 내부 오브젝트면 최상위 조상 그룹을 선택
+    const targetId = findRootAncestorId(object);
+    if (shiftKey) toggleSelectObject(targetId);
+    else selectObject(targetId);
   };
 
   // 파티클 이미터 렌더링

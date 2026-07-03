@@ -50,7 +50,10 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
   const allObjects = scene.objects;
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);
-  const autoObjects = rootObjects.filter((o) => !o.physics.enabled && !o.light);
+  // 그룹은 AutoCollider에서 제외: AutoCollider는 RigidBody로 감싸는데 ViewerObject(그룹)이
+  // 자체 transform도 적용해서 2중으로 적용되는 버그가 생김 → 그룹은 별도로 직접 렌더
+  const groupObjects = rootObjects.filter((o) => o.isGroup && o.visible);
+  const autoObjects = rootObjects.filter((o) => !o.physics.enabled && !o.light && !o.isGroup);
   const physicsObjects = rootObjects.filter((o) => o.physics.enabled && !o.light);
 
   const characterAsset = scene.environment.playerCharacterId
@@ -98,6 +101,11 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
           </>
         );
       })()}
+
+      {/* 그룹 오브젝트 — transform을 ViewerObject가 직접 처리 (AutoCollider 금지) */}
+      {groupObjects.map((obj) => (
+        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
 
       {/* physics 미설정 오브젝트 — 자동 고정 콜라이더 */}
       {autoObjects.map((obj) => (

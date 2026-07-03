@@ -59,13 +59,17 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
           onMouseDown={() => {
             gizmoDraggingRef.current = true;
             if (orbitRef.current) orbitRef.current.enabled = false;
+            // 이전 드래그에서 pivotEl에 누적된 rotation/scale 초기화
+            // 초기화하지 않으면 두 번째 rotate/scale 시 변환이 중첩 적용돼 좌표가 깨짐
+            pivotEl.rotation.set(0, 0, 0);
+            pivotEl.scale.set(1, 1, 1);
             dragStartPivot.current.copy(pivotEl.position);
             dragStartPositions.current.clear();
             dragStartQuaternions.current.clear();
             dragStartScales.current.clear();
             for (const id of selectedIds) {
               const ref = refsMap.current.get(id);
-              if (ref) {
+              if (ref && ref.parent) {
                 dragStartPositions.current.set(id, ref.position.clone());
                 dragStartQuaternions.current.set(id, ref.quaternion.clone());
                 dragStartScales.current.set(id, ref.scale.clone());
@@ -77,10 +81,12 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
               const dx = pivotEl.position.x - dragStartPivot.current.x;
               const dy = pivotEl.position.y - dragStartPivot.current.y;
               const dz = pivotEl.position.z - dragStartPivot.current.z;
+              const { objects: objs } = useSceneStore.getState();
               for (const id of selectedIds) {
                 const ref = refsMap.current.get(id);
                 const start = dragStartPositions.current.get(id);
-                if (ref && start) ref.position.set(start.x + dx, Math.max(0, start.y + dy), start.z + dz);
+                const insideGroup = objs.find((o) => o.id === id)?.parentId != null;
+                if (ref && start) ref.position.set(start.x + dx, insideGroup ? start.y + dy : Math.max(0, start.y + dy), start.z + dz);
               }
             } else if (transformMode === 'rotate') {
               for (const id of selectedIds) {
@@ -110,11 +116,13 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
           onMouseUp={() => {
             gizmoDraggingRef.current = false;
             if (orbitRef.current) orbitRef.current.enabled = true;
+            const { objects: objs } = useSceneStore.getState();
             for (const id of selectedIds) {
               const ref = refsMap.current.get(id);
               if (!ref) continue;
+              const insideGroup = objs.find((o) => o.id === id)?.parentId != null;
               updateObject(id, {
-                position: { x: ref.position.x, y: Math.max(0, ref.position.y), z: ref.position.z },
+                position: { x: ref.position.x, y: insideGroup ? ref.position.y : Math.max(0, ref.position.y), z: ref.position.z },
                 rotation: { x: ref.rotation.x * RAD2DEG, y: ref.rotation.y * RAD2DEG, z: ref.rotation.z * RAD2DEG },
                 scale: { x: ref.scale.x, y: ref.scale.y, z: ref.scale.z },
               });
@@ -139,10 +147,15 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   if (!isCharPreview && (!selectedObject || selectedObject.locked || !selectedObject.visible)) return null;
 
   const target = refsMap.current.get(selectedId);
-  if (!target) return null;
+  // target이 없거나 씬 그래프에서 분리된 상태면 TransformControls 연결 금지
+  // (그룹 중첩 시 언마운트→리마운트 전환 구간에서 에러 루프 발생 방지)
+  if (!target || !target.parent) return null;
 
   // 캐릭터 프리뷰는 위치만 조정 가능 (스케일은 Inspector Player 섹션에서)
   const effectiveMode = isCharPreview ? 'translate' : transformMode;
+
+  // 그룹 내부 오브젝트는 로컬 y가 음수여도 월드 y는 양수일 수 있어 클램프 금지
+  const isInsideGroup = !isCharPreview && (selectedObject?.parentId != null);
 
   return (
     <TransformControls
@@ -154,7 +167,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
       scaleSnap={snapEnabled ? 0.1 : null}
       onMouseDown={() => { gizmoDraggingRef.current = true; if (orbitRef.current) orbitRef.current.enabled = false; }}
       onChange={() => {
-        if (effectiveMode === 'translate') {
+        if (effectiveMode === 'translate' && !isInsideGroup) {
           target.position.y = Math.max(0, target.position.y);
         }
       }}
@@ -165,11 +178,10 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
         const rot = target.rotation;
         const scl = target.scale;
         if (isCharPreview) {
-          // 스폰 위치 업데이트
           updateEnvironment({ playerStartPosition: { x: pos.x, y: Math.max(0, pos.y), z: pos.z } });
         } else {
           updateObject(selectedId, {
-            position: { x: pos.x, y: Math.max(0, pos.y), z: pos.z },
+            position: { x: pos.x, y: isInsideGroup ? pos.y : Math.max(0, pos.y), z: pos.z },
             rotation: { x: rot.x * RAD2DEG, y: rot.y * RAD2DEG, z: rot.z * RAD2DEG },
             scale: { x: scl.x, y: scl.y, z: scl.z },
           });

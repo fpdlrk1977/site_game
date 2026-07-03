@@ -192,6 +192,13 @@ export function EditorCanvas() {
     const { objects, selectObjects } = useSceneStore.getState();
     const matchingIds: string[] = [];
 
+    // 최상위 조상 ID 반환 (그룹 내부 오브젝트 → 루트 그룹 선택)
+    const getRootId = (obj: (typeof objects)[number]): string => {
+      if (!obj.parentId) return obj.id;
+      const parent = objects.find((o) => o.id === obj.parentId);
+      return parent ? getRootId(parent) : obj.id;
+    };
+
     for (const obj of objects) {
       if (obj.locked || !obj.visible || obj.isGroup) continue;
       const obj3d = objectRefsRef.current.get(obj.id);
@@ -203,7 +210,8 @@ export function EditorCanvas() {
       const sx = (wp.x * 0.5 + 0.5) * wr.width;
       const sy = (-wp.y * 0.5 + 0.5) * wr.height;
       if (sx >= x1 && sx <= x2 && sy >= y1 && sy <= y2) {
-        matchingIds.push(obj.id);
+        const rootId = getRootId(obj);
+        if (!matchingIds.includes(rootId)) matchingIds.push(rootId);
       }
     }
 

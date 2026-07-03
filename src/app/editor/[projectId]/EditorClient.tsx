@@ -77,18 +77,18 @@ export function EditorClient({ projectName, initialScene }: Props) {
 
       if (e.ctrlKey && e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
       if (e.ctrlKey && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ'))) { e.preventDefault(); redo(); return; }
-      if (e.ctrlKey && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
-      if (e.ctrlKey && e.shiftKey && e.key === 'G') { e.preventDefault(); ungroupSelected(); return; }
-      if (e.ctrlKey && e.key === 'g') { e.preventDefault(); groupSelected(); return; }
-      if (e.ctrlKey && e.shiftKey && e.key === 'C') { e.preventDefault(); copyObjectProperties(); return; }
-      if (e.ctrlKey && e.shiftKey && e.key === 'V') { e.preventDefault(); pasteObjectProperties(); return; }
+      if (e.ctrlKey && e.code === 'KeyD') { e.preventDefault(); duplicateSelected(); return; }
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyG') { e.preventDefault(); ungroupSelected(); return; }
+      if (e.ctrlKey && e.code === 'KeyG') { e.preventDefault(); groupSelected(); return; }
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') { e.preventDefault(); copyObjectProperties(); return; }
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyV') { e.preventDefault(); pasteObjectProperties(); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
-      if (e.key === 'w' || e.key === 'W') setTransformMode('translate');
-      if (e.key === 'e' || e.key === 'E') setTransformMode('rotate');
-      if (e.key === 'r' || e.key === 'R') setTransformMode('scale');
-      if (e.shiftKey && (e.key === 'f' || e.key === 'F')) { requestFocusAll(); return; }
-      if (e.key === 'f' || e.key === 'F') requestFocus();
-      if (e.shiftKey && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); duplicateInPlace(); return; }
+      if (e.code === 'KeyW') setTransformMode('translate');
+      if (e.code === 'KeyE') setTransformMode('rotate');
+      if (e.code === 'KeyR') setTransformMode('scale');
+      if (e.shiftKey && e.code === 'KeyF') { requestFocusAll(); return; }
+      if (e.code === 'KeyF') requestFocus();
+      if (e.shiftKey && e.code === 'KeyD') { e.preventDefault(); duplicateInPlace(); return; }
       if (e.code === 'Numpad7') { e.preventDefault(); requestCameraView('top'); return; }
       if (e.code === 'Numpad1') { e.preventDefault(); requestCameraView('front'); return; }
       if (e.code === 'Numpad3') { e.preventDefault(); requestCameraView('right'); return; }

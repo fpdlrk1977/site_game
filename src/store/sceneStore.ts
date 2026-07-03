@@ -205,9 +205,16 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   requestFocus: () => {
     const { selectedId, objects } = get();
     if (!selectedId) return;
-    const obj = objects.find((o) => o.id === selectedId);
-    if (!obj) return;
-    set({ focusTarget: { ...obj.position, _tick: Date.now() } });
+    // 중첩 구조에서 월드 위치 근사 계산 (부모 체인 translation 합산)
+    const approxWorldPos = (id: string): { x: number; y: number; z: number } => {
+      const o = objects.find((x) => x.id === id);
+      if (!o) return { x: 0, y: 0, z: 0 };
+      if (!o.parentId) return o.position;
+      const p = approxWorldPos(o.parentId);
+      return { x: o.position.x + p.x, y: o.position.y + p.y, z: o.position.z + p.z };
+    };
+    const wp = approxWorldPos(selectedId);
+    set({ focusTarget: { ...wp, _tick: Date.now() } });
   },
 
   requestFocusAll: () => set({ focusAllRequest: Date.now() }),
@@ -221,13 +228,30 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     if (!src) return;
     objectCounter += 1;
     if (src.isGroup) {
+      // 중첩 그룹 포함 전체 하위 계층 재귀 복제
+      const idMap = new Map<string, string>();
+      const newDescendants: ObjectNodeSchema[] = [];
+      const collectAll = (parentId: string): void => {
+        const children = objects.filter((o) => o.parentId === parentId);
+        for (const child of children) {
+          const newId = MathUtils.generateUUID();
+          idMap.set(child.id, newId);
+          newDescendants.push({ ...child, id: newId });
+          if (child.isGroup) collectAll(child.id);
+        }
+      };
       const newGroupId = MathUtils.generateUUID();
+      idMap.set(src.id, newGroupId);
+      collectAll(src.id);
       const newGroup: ObjectNodeSchema = { ...src, id: newGroupId, name: `${src.name} 복사` };
-      const children = objects.filter((o) => o.parentId === src.id);
-      const newChildren = children.map((c) => ({ ...c, id: MathUtils.generateUUID(), parentId: newGroupId }));
-      set({ objects: [...objects, newGroup, ...newChildren], selectedId: newGroupId, selectedIds: [newGroupId], isModified: true, past: [...past.slice(-49), { objects, environment }], future: [] });
+      const fixedDescendants = newDescendants.map((o) => ({
+        ...o,
+        parentId: idMap.get(o.parentId!) ?? o.parentId,
+      }));
+      set({ objects: [...objects, newGroup, ...fixedDescendants], selectedId: newGroupId, selectedIds: [newGroupId], isModified: true, past: [...past.slice(-49), { objects, environment }], future: [] });
     } else {
-      const copy: ObjectNodeSchema = { ...src, id: MathUtils.generateUUID(), name: `${src.name} 복사`, parentId: null };
+      // 그룹 내부 오브젝트는 같은 부모 아래에 제자리 복제
+      const copy: ObjectNodeSchema = { ...src, id: MathUtils.generateUUID(), name: `${src.name} 복사`, parentId: src.parentId };
       set({ objects: [...objects, copy], selectedId: copy.id, selectedIds: [copy.id], isModified: true, past: [...past.slice(-49), { objects, environment }], future: [] });
     }
   },
@@ -396,21 +420,37 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     objectCounter += 1;
 
     if (src.isGroup) {
+      // 중첩 그룹 포함 전체 하위 계층 재귀 복제
+      const idMap = new Map<string, string>();
+      const newDescendants: ObjectNodeSchema[] = [];
+
+      const collectAll = (parentId: string): void => {
+        const children = objects.filter((o) => o.parentId === parentId);
+        for (const child of children) {
+          const newId = MathUtils.generateUUID();
+          idMap.set(child.id, newId);
+          newDescendants.push({ ...child, id: newId });
+          if (child.isGroup) collectAll(child.id);
+        }
+      };
+
       const newGroupId = MathUtils.generateUUID();
+      idMap.set(src.id, newGroupId);
+      collectAll(src.id);
+
       const newGroup: ObjectNodeSchema = {
         ...src,
         id: newGroupId,
         name: `${src.name} 복사`,
         position: { ...src.position, x: src.position.x + 1 },
       };
-      const children = objects.filter((o) => o.parentId === src.id);
-      const newChildren = children.map((c) => ({
-        ...c,
-        id: MathUtils.generateUUID(),
-        parentId: newGroupId,
+      // parentId를 새로 생성된 ID로 교체
+      const fixedDescendants = newDescendants.map((o) => ({
+        ...o,
+        parentId: idMap.get(o.parentId!) ?? o.parentId,
       }));
       set({
-        objects: [...objects, newGroup, ...newChildren],
+        objects: [...objects, newGroup, ...fixedDescendants],
         selectedId: newGroupId,
         selectedIds: [newGroupId],
         isModified: true,
@@ -418,12 +458,13 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         future: [],
       });
     } else {
+      // 그룹 내부 오브젝트는 같은 부모 아래에 복제 (parentId 유지)
       const copy: ObjectNodeSchema = {
         ...src,
         id: MathUtils.generateUUID(),
         name: `${src.name} 복사`,
         position: { ...src.position, x: src.position.x + 1 },
-        parentId: null,
+        parentId: src.parentId,
       };
       set({
         objects: [...objects, copy],
@@ -439,9 +480,20 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   groupSelected: () => {
     const { selectedIds, objects, environment, past } = get();
     if (selectedIds.length < 2) return;
-    const toGroup = objects.filter((o) => selectedIds.includes(o.id));
 
-    // centroid 계산 (world 좌표 기준)
+    // 그룹 내부 아이템 선택 시 최상위 조상으로 정규화
+    // (로컬 좌표와 월드 좌표 혼용 방지)
+    const getRootId = (id: string): string => {
+      const o = objects.find((x) => x.id === id);
+      if (!o || !o.parentId) return id;
+      return getRootId(o.parentId);
+    };
+    const normalizedIds = [...new Set(selectedIds.map(getRootId))];
+    if (normalizedIds.length < 2) return;
+
+    const toGroup = objects.filter((o) => normalizedIds.includes(o.id));
+
+    // 정규화된 아이템은 모두 최상위(world 좌표) → centroid 계산 정확
     let cx = 0, cy = 0, cz = 0;
     toGroup.forEach((o) => { cx += o.position.x; cy += o.position.y; cz += o.position.z; });
     cx /= toGroup.length; cy /= toGroup.length; cz /= toGroup.length;
@@ -467,7 +519,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     };
 
     const updatedObjects = objects.map((o) =>
-      selectedIds.includes(o.id)
+      normalizedIds.includes(o.id)
         ? { ...o, parentId: groupId, position: { x: o.position.x - cx, y: o.position.y - cy, z: o.position.z - cz } }
         : o
     );
