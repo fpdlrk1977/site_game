@@ -91,22 +91,23 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
           </span>
         ))}
 
-        {/* 그룹 펼치기/접기 */}
-        <span style={{ marginLeft: depth === 0 ? 8 : 0 }} className="shrink-0">
-          {hasChildren ? (
+        {/* 그룹 펼치기/접기 (그룹일 때만 화살표 표시, 일반 오브젝트는 spacer 없음) */}
+        {hasChildren && (
+          <span style={{ marginLeft: depth === 0 ? 8 : 0 }} className="shrink-0">
             <button
               onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
               className="w-4 h-4 flex items-center justify-center text-[9px] text-muted hover:text-foreground transition-colors rounded"
             >
               {isExpanded ? '▾' : '▸'}
             </button>
-          ) : (
-            <span className="w-4 h-4 inline-block" />
-          )}
-        </span>
+          </span>
+        )}
 
         {/* 오브젝트 아이콘 */}
-        <span className={`text-[11px] w-4 text-center shrink-0 ${isSelected ? 'opacity-90' : 'opacity-50'}`}>
+        <span
+          style={{ marginLeft: !hasChildren && depth === 0 ? 8 : 0 }}
+          className={`text-[11px] w-4 text-center shrink-0 ${isSelected ? 'opacity-90' : 'opacity-50'}`}
+        >
           {getIcon(obj)}
         </span>
 
