@@ -10,29 +10,89 @@ import { PlayModeController } from './PlayModeController';
 
 const DEG2RAD = Math.PI / 180;
 
-// physics.enabled가 꺼진 오브젝트도 플레이 모드에서 고정 콜라이더를 부여
-function AutoCollider({ object, assets, onEvent, allObjects }: {
-  object: ObjectNodeSchema;
-  assets: Parameters<typeof ViewerObject>[0]['assets'];
-  onEvent: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
-  allObjects: ObjectNodeSchema[];
-}) {
+type ColliderAssets = Parameters<typeof ViewerObject>[0]['assets'];
+type ColliderOnEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
+
+function getColliderType(object: ObjectNodeSchema) {
   // GLB(산·바위 등 오목한 지형 포함)는 trimesh로 실제 메쉬 형태 그대로 충돌 처리.
   // hull(볼록 껍질)은 오목한 형태를 매끈하게 뭉개버려 절벽/급경사가 실제보다 완만한
   // 경사로 처리되는 원인이 되므로 사용하지 않는다 (fixed 바디는 trimesh 사용 가능).
-  const colliders = object.primitiveShape === 'box' ? 'cuboid'
+  return object.primitiveShape === 'box' ? 'cuboid'
     : object.primitiveShape === 'sphere' ? 'ball'
     : 'trimesh';
+}
 
+// physics.enabled가 꺼진 오브젝트도 플레이 모드에서 고정 콜라이더를 부여
+function AutoCollider({ object, assets, onEvent, allObjects }: {
+  object: ObjectNodeSchema;
+  assets: ColliderAssets;
+  onEvent: ColliderOnEvent;
+  allObjects: ObjectNodeSchema[];
+}) {
   return (
     <RigidBody
       type="fixed"
-      colliders={colliders}
+      colliders={getColliderType(object)}
       position={[object.position.x, object.position.y, object.position.z]}
       rotation={[object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD]}
     >
       <ViewerObject object={object} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform />
     </RigidBody>
+  );
+}
+
+// 그룹 오브젝트를 재귀적으로 렌더링하면서 자식 오브젝트 각각에 콜라이더를 부여.
+// THREE.js group으로 부모 transform을 적용하고, 그 안의 RigidBody position은 로컬 좌표로
+// 해석되어 Rapier가 최종 world position을 올바르게 계산한다.
+function GroupWithCollision({ object, assets, onEvent, allObjects }: {
+  object: ObjectNodeSchema;
+  assets: ColliderAssets;
+  onEvent: ColliderOnEvent;
+  allObjects: ObjectNodeSchema[];
+}) {
+  const children = allObjects.filter((o) => o.parentId === object.id && o.visible);
+
+  return (
+    <group
+      position={[object.position.x, object.position.y, object.position.z]}
+      rotation={[object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD]}
+      scale={[object.scale.x, object.scale.y, object.scale.z]}
+    >
+      {children.map((child) => {
+        if (child.isGroup) {
+          return (
+            <GroupWithCollision
+              key={child.id}
+              object={child}
+              assets={assets}
+              onEvent={onEvent}
+              allObjects={allObjects}
+            />
+          );
+        }
+        if (child.physics.enabled) {
+          return <PhysicsObject key={child.id} object={child} assets={assets} onEvent={onEvent} />;
+        }
+        if (child.light) {
+          // 라이트는 콜라이더 불필요, 위치만 적용
+          return (
+            <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform />
+          );
+        }
+        // 일반 오브젝트: RigidBody position이 부모 group 기준 로컬 좌표로 처리됨
+        return (
+          <RigidBody
+            key={child.id}
+            type="fixed"
+            colliders={getColliderType(child)}
+            position={[child.position.x, child.position.y, child.position.z]}
+            rotation={[child.rotation.x * DEG2RAD, child.rotation.y * DEG2RAD, child.rotation.z * DEG2RAD]}
+          >
+            <ViewerObject object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform />
+          </RigidBody>
+        );
+      })}
+    </group>
   );
 }
 
@@ -50,8 +110,7 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
   const allObjects = scene.objects;
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);
-  // 그룹은 AutoCollider에서 제외: AutoCollider는 RigidBody로 감싸는데 ViewerObject(그룹)이
-  // 자체 transform도 적용해서 2중으로 적용되는 버그가 생김 → 그룹은 별도로 직접 렌더
+  // 그룹은 GroupWithCollision으로 처리: 자식 오브젝트 각각에 콜라이더 적용
   const groupObjects = rootObjects.filter((o) => o.isGroup && o.visible);
   const autoObjects = rootObjects.filter((o) => !o.physics.enabled && !o.light && !o.isGroup);
   const physicsObjects = rootObjects.filter((o) => o.physics.enabled && !o.light);
@@ -102,9 +161,9 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
         );
       })()}
 
-      {/* 그룹 오브젝트 — transform을 ViewerObject가 직접 처리 (AutoCollider 금지) */}
+      {/* 그룹 오브젝트 — 자식 각각에 재귀적으로 콜라이더 부여 */}
       {groupObjects.map((obj) => (
-        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+        <GroupWithCollision key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
       {/* physics 미설정 오브젝트 — 자동 고정 콜라이더 */}

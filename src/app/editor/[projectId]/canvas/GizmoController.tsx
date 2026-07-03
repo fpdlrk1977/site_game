@@ -85,8 +85,21 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
               for (const id of selectedIds) {
                 const ref = refsMap.current.get(id);
                 const start = dragStartPositions.current.get(id);
-                const insideGroup = objs.find((o) => o.id === id)?.parentId != null;
-                if (ref && start) ref.position.set(start.x + dx, insideGroup ? start.y + dy : Math.max(0, start.y + dy), start.z + dz);
+                const obj = objs.find((o) => o.id === id);
+                const skipClamp = obj?.parentId != null;
+                if (ref && start) {
+                  let newY: number;
+                  if (skipClamp) {
+                    newY = start.y + dy;
+                  } else if (obj?.isGroup) {
+                    const kids = objs.filter(o => o.parentId === id && !o.isGroup && !o.assetId && !o.content && !o.particle && !o.light);
+                    const minY = kids.reduce((m, c) => Math.max(m, (c.scale?.y ?? 1) * 0.5 - (c.position?.y ?? 0)), 0);
+                    newY = Math.max(minY, start.y + dy);
+                  } else {
+                    newY = Math.max(0, start.y + dy);
+                  }
+                  ref.position.set(start.x + dx, newY, start.z + dz);
+                }
               }
             } else if (transformMode === 'rotate') {
               for (const id of selectedIds) {
@@ -120,9 +133,20 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
             for (const id of selectedIds) {
               const ref = refsMap.current.get(id);
               if (!ref) continue;
-              const insideGroup = objs.find((o) => o.id === id)?.parentId != null;
+              const obj = objs.find((o) => o.id === id);
+              const skipClamp = obj?.parentId != null;
+              let finalY = ref.position.y;
+              if (!skipClamp) {
+                if (obj?.isGroup) {
+                  const kids = objs.filter(o => o.parentId === id && !o.isGroup && !o.assetId && !o.content && !o.particle && !o.light);
+                  const minY = kids.reduce((m, c) => Math.max(m, (c.scale?.y ?? 1) * 0.5 - (c.position?.y ?? 0)), 0);
+                  finalY = Math.max(minY, ref.position.y);
+                } else {
+                  finalY = Math.max(0, ref.position.y);
+                }
+              }
               updateObject(id, {
-                position: { x: ref.position.x, y: insideGroup ? ref.position.y : Math.max(0, ref.position.y), z: ref.position.z },
+                position: { x: ref.position.x, y: finalY, z: ref.position.z },
                 rotation: { x: ref.rotation.x * RAD2DEG, y: ref.rotation.y * RAD2DEG, z: ref.rotation.z * RAD2DEG },
                 scale: { x: ref.scale.x, y: ref.scale.y, z: ref.scale.z },
               });
@@ -155,7 +179,18 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const effectiveMode = isCharPreview ? 'translate' : transformMode;
 
   // 그룹 내부 오브젝트는 로컬 y가 음수여도 월드 y는 양수일 수 있어 클램프 금지
-  const isInsideGroup = !isCharPreview && (selectedObject?.parentId != null);
+  const skipYClamp = !isCharPreview && (selectedObject?.parentId != null);
+
+  // 그룹의 최소 허용 y: 자식들의 바닥이 world y=0 아래로 안 내려가도록 계산
+  // min_group_y = max(child.scale.y/2 - child.localY) for primitive children
+  const getGroupMinY = () => {
+    const { objects: objs } = useSceneStore.getState();
+    const kids = objs.filter(o =>
+      o.parentId === selectedId &&
+      !o.isGroup && !o.assetId && !o.content && !o.particle && !o.light,
+    );
+    return kids.reduce((m, c) => Math.max(m, (c.scale?.y ?? 1) * 0.5 - (c.position?.y ?? 0)), 0);
+  };
 
   return (
     <TransformControls
@@ -167,8 +202,12 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
       scaleSnap={snapEnabled ? 0.1 : null}
       onMouseDown={() => { gizmoDraggingRef.current = true; if (orbitRef.current) orbitRef.current.enabled = false; }}
       onChange={() => {
-        if (effectiveMode === 'translate' && !isInsideGroup) {
-          target.position.y = Math.max(0, target.position.y);
+        if (effectiveMode === 'translate' && !skipYClamp) {
+          if (selectedObject?.isGroup) {
+            target.position.y = Math.max(getGroupMinY(), target.position.y);
+          } else {
+            target.position.y = Math.max(0, target.position.y);
+          }
         }
       }}
       onMouseUp={() => {
@@ -180,8 +219,14 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
         if (isCharPreview) {
           updateEnvironment({ playerStartPosition: { x: pos.x, y: Math.max(0, pos.y), z: pos.z } });
         } else {
+          let finalY = pos.y;
+          if (!skipYClamp) {
+            finalY = selectedObject?.isGroup
+              ? Math.max(getGroupMinY(), pos.y)
+              : Math.max(0, pos.y);
+          }
           updateObject(selectedId, {
-            position: { x: pos.x, y: isInsideGroup ? pos.y : Math.max(0, pos.y), z: pos.z },
+            position: { x: pos.x, y: finalY, z: pos.z },
             rotation: { x: rot.x * RAD2DEG, y: rot.y * RAD2DEG, z: rot.z * RAD2DEG },
             scale: { x: scl.x, y: scl.y, z: scl.z },
           });

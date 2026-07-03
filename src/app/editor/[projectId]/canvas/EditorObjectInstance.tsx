@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, Suspense } from 'react';
+import { useRef, useEffect, useLayoutEffect, useState, Suspense } from 'react';
 import * as THREE from 'three';
 import { Text3D, Center } from '@react-three/drei';
 import { useShallow } from 'zustand/react/shallow';
@@ -73,7 +73,7 @@ function LightObjectInstance({ object }: Props) {
     return () => { refsMap.current.delete(object.id); };
   }, [object.id, refsMap]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const g = groupRef.current;
     if (!g) return;
     g.position.set(object.position.x, object.position.y, object.position.z);
@@ -172,7 +172,9 @@ function GroupObjectInstance({ object }: Props) {
     return () => { refsMap.current.delete(object.id); };
   }, [object.id, refsMap]);
 
-  useEffect(() => {
+  // useLayoutEffect: 브라우저 페인트 전(R3F 렌더 전) 동기 실행
+  // useEffect는 페인트 후 실행되므로 그룹 신규 마운트 시 첫 프레임에 (0,0,0)으로 렌더됨 → 바닥 통과 flash 발생
+  useLayoutEffect(() => {
     const g = groupRef.current;
     if (!g) return;
     g.position.set(object.position.x, object.position.y, object.position.z);
@@ -231,7 +233,7 @@ export function EditorObjectInstance({ object }: Props) {
     return () => { refsMap.current.delete(object.id); };
   }, [object.id, refsMap]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const g = groupRef.current;
     if (!g) return;
     g.position.set(object.position.x, object.position.y, object.position.z);

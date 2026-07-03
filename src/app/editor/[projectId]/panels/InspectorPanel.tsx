@@ -959,7 +959,11 @@ function InspectorInner() {
           <div className="px-3 py-3 space-y-3">
             <XYZRow label="Position" x={obj.position.x} y={obj.position.y} z={obj.position.z}
               onChangeX={(v) => updateObject(obj.id, { position: { ...obj.position, x: v } })}
-              onChangeY={(v) => updateObject(obj.id, { position: { ...obj.position, y: Math.max(0, v) } })}
+              onChangeY={(v) => {
+                const kids = objects.filter(o => o.parentId === obj.id && !o.isGroup && !o.assetId && !o.content && !o.particle && !o.light);
+                const minY = kids.reduce((m, c) => Math.max(m, (c.scale?.y ?? 1) * 0.5 - (c.position?.y ?? 0)), 0);
+                updateObject(obj.id, { position: { ...obj.position, y: Math.max(minY, v) } });
+              }}
               onChangeZ={(v) => updateObject(obj.id, { position: { ...obj.position, z: v } })}
               onCommit={pushHistory} dragStep={0.1}
             />
@@ -1545,7 +1549,7 @@ function InspectorInner() {
                             : newAction === 'emit_event' ? 'my_event_name'
                             : newAction === 'play_animation' ? 'Armature|Walk'
                             : '표시할 텍스트'}
-                          className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                           onKeyDown={(e) => e.key === 'Enter' && addEvent()}
                         />
                         {newAction === 'play_animation' && (
