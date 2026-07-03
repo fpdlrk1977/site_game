@@ -12,6 +12,7 @@ import { ObjectRefsContext } from './ObjectRefsContext';
 import { pointerDownOnObjectRef } from './boxSelectState';
 import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
 import { GroundPlane } from '@/components/three/GroundPlane';
+import { CharacterPreview } from './CharacterPreview';
 import type { Vector3 as Vec3, HdrPreset } from '@/types/scene';
 
 function BoundaryGizmo({ size }: { size: number }) {
@@ -81,7 +82,7 @@ export function EditorCanvas() {
   const dragRectRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [selBox, setSelBox] = useState<SelBox | null>(null);
 
-  const { environment, focusTarget, focusAllRequest, cameraViewRequest, objects, bookmarkSaveRequest, bookmarkRecallRequest, setCameraBookmark } = useSceneStore();
+  const { environment, assets, focusTarget, focusAllRequest, cameraViewRequest, objects, bookmarkSaveRequest, bookmarkRecallRequest, setCameraBookmark } = useSceneStore();
 
   useEffect(() => {
     if (!focusTarget || !orbitRef.current) return;
@@ -302,9 +303,17 @@ export function EditorCanvas() {
             />
           )}
 
-          {environment.playerStartPosition && (
-            <SpawnMarker position={environment.playerStartPosition} />
-          )}
+          {environment.playerCharacterId
+            ? (() => {
+                const charAsset = assets.find((a) => a.id === environment.playerCharacterId);
+                return charAsset
+                  ? <CharacterPreview url={charAsset.dracoUrl} scale={environment.playerCharacterScale ?? 1} />
+                  : null;
+              })()
+            : environment.playerStartPosition
+              ? <SpawnMarker position={environment.playerStartPosition} />
+              : null
+          }
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 

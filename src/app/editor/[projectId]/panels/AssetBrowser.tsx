@@ -162,6 +162,21 @@ export function AssetBrowser() {
         thumbnailUrl,
       };
       addAsset(asset);
+
+      // scenes.scene_data 즉시 업데이트 (새로고침 후 에셋이 사라지는 버그 방지)
+      const state = useSceneStore.getState();
+      if (state.sceneId) {
+        const sceneData: ProjectSceneSchema = {
+          projectId: state.projectId ?? '',
+          sceneId: state.sceneId,
+          version: SCENE_VERSION,
+          environment: state.environment,
+          assets: state.assets,
+          objects: state.objects,
+        };
+        await supabase.from('scenes').update({ scene_data: sceneData }).eq('id', state.sceneId);
+        markSaved();
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '알 수 없는 오류';
       addToast(`에셋 업로드 실패: ${msg}`, 'error');

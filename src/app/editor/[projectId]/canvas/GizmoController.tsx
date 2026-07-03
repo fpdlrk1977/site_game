@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
+import { CHARACTER_PREVIEW_ID } from './CharacterPreview';
 
 const RAD2DEG = 180 / Math.PI;
 const DEG2RAD = Math.PI / 180;
@@ -128,26 +129,32 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
 
 function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate,
-    objects, updateObject, pushHistory } = useSceneStore();
+    objects, updateObject, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
 
-  const selectedObject = objects.find((o) => o.id === selectedId);
-  if (!selectedId || !selectedObject || selectedObject.locked || !selectedObject.visible) return null;
+  const isCharPreview = selectedId === CHARACTER_PREVIEW_ID;
+  const selectedObject = isCharPreview ? null : objects.find((o) => o.id === selectedId);
+
+  if (!selectedId) return null;
+  if (!isCharPreview && (!selectedObject || selectedObject.locked || !selectedObject.visible)) return null;
 
   const target = refsMap.current.get(selectedId);
   if (!target) return null;
 
+  // 캐릭터 프리뷰는 위치만 조정 가능 (스케일은 Inspector Player 섹션에서)
+  const effectiveMode = isCharPreview ? 'translate' : transformMode;
+
   return (
     <TransformControls
       object={target}
-      mode={transformMode}
+      mode={effectiveMode}
       space={transformSpace}
       translationSnap={snapEnabled ? snapTranslate : null}
       rotationSnap={snapEnabled ? snapRotate * DEG2RAD : null}
       scaleSnap={snapEnabled ? 0.1 : null}
       onMouseDown={() => { gizmoDraggingRef.current = true; if (orbitRef.current) orbitRef.current.enabled = false; }}
       onChange={() => {
-        if (transformMode === 'translate') {
+        if (effectiveMode === 'translate') {
           target.position.y = Math.max(0, target.position.y);
         }
       }}
@@ -157,11 +164,16 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
         const pos = target.position;
         const rot = target.rotation;
         const scl = target.scale;
-        updateObject(selectedId, {
-          position: { x: pos.x, y: Math.max(0, pos.y), z: pos.z },
-          rotation: { x: rot.x * RAD2DEG, y: rot.y * RAD2DEG, z: rot.z * RAD2DEG },
-          scale: { x: scl.x, y: scl.y, z: scl.z },
-        });
+        if (isCharPreview) {
+          // 스폰 위치 업데이트
+          updateEnvironment({ playerStartPosition: { x: pos.x, y: Math.max(0, pos.y), z: pos.z } });
+        } else {
+          updateObject(selectedId, {
+            position: { x: pos.x, y: Math.max(0, pos.y), z: pos.z },
+            rotation: { x: rot.x * RAD2DEG, y: rot.y * RAD2DEG, z: rot.z * RAD2DEG },
+            scale: { x: scl.x, y: scl.y, z: scl.z },
+          });
+        }
         pushHistory();
       }}
     />

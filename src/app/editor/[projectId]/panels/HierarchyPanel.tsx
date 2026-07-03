@@ -131,18 +131,18 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
           </span>
         )}
 
-        {/* 호버 시 액션 아이콘 */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        {/* 호버 시 액션 아이콘 (락은 잠긴 경우 항상 표시) */}
+        <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); }}
-            className="w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded"
+            className="w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded opacity-0 group-hover:opacity-100"
             title={obj.visible ? '숨기기' : '표시'}
           >
             <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); }}
-            className="w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded"
+            className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${obj.locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             title={obj.locked ? '잠금 해제' : '잠금'}
           >
             <span className="text-[10px]">{obj.locked ? '🔒' : '🔓'}</span>

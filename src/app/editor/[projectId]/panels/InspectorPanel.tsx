@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
 import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset } from '@/types/scene';
+import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
 function evalMath(expr: string): number | null {
   const s = expr.replace(/[^0-9+\-*/.()\s]/g, '').trim();
@@ -895,11 +896,19 @@ function InspectorInner() {
   }
 
   if (!obj) {
+    const isCharSelected = selectedId === CHARACTER_PREVIEW_ID;
     return (
       <aside className="flex flex-col bg-surface border-l border-border overflow-hidden h-full">
         <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
-          <span className="text-xs font-semibold text-foreground tracking-wide flex-1">Environment</span>
+          <span className="text-xs font-semibold text-foreground tracking-wide flex-1">
+            {isCharSelected ? 'Player Character' : 'Environment'}
+          </span>
         </div>
+        {isCharSelected && (
+          <div className="px-3 py-2 bg-primary/5 border-b border-border shrink-0">
+            <p className="text-[10px] text-primary">뷰포트에서 드래그해 위치 조정 · 스케일/속성은 Player 섹션에서</p>
+          </div>
+        )}
         <EnvironmentPanel />
       </aside>
     );
