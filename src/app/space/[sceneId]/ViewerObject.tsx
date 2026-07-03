@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, Suspense, useEffect, useMemo } from 'react';
-import { useGLTF, Text3D, Center, Html, Outlines } from '@react-three/drei';
+import { useState, useRef, Suspense, useEffect, useMemo } from 'react';
+import { useGLTF, useAnimations, Text3D, Center, Html, Outlines } from '@react-three/drei';
+import { SkeletonUtils } from 'three-stdlib';
 import * as THREE from 'three';
 import { useLoader } from '@react-three/fiber';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
@@ -142,18 +143,29 @@ function ImagePlane({ position, rotation, scale, url, hovered, onClick, onPointe
   );
 }
 
-function GlbViewer({ url, hovered, onClick, onPointerOver, onPointerOut }: {
+function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOut }: {
   url: string;
   hovered: boolean;
+  playClip: string | null;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
 }) {
-  const { scene } = useGLTF(url);
-  const clone = useMemo(() => scene.clone(true), [scene]);
-  // Outlines는 단일 mesh(geometry를 직접 가진 부모)에서만 동작하므로,
-  // 여러 mesh로 구성된 GLB에는 bounding box 하이라이트를 대신 사용한다.
+  const groupRef = useRef<THREE.Group>(null);
+  const { scene: rawScene, animations } = useGLTF(url);
+  // 스킨드 메시(bone 애니메이션) 포함 GLB는 SkeletonUtils.clone 필수 — scene.clone(true)는 bone 참조를 공유해 버린다
+  const clone = useMemo(() => SkeletonUtils.clone(rawScene), [rawScene]);
+  const { actions } = useAnimations(animations, groupRef);
   const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
+
+  // 요청된 클립 재생 — 기존 클립 페이드아웃 후 새 클립 페이드인
+  useEffect(() => {
+    if (!playClip) return;
+    const action = actions[playClip];
+    if (!action) return;
+    Object.values(actions).forEach((a) => a?.fadeOut(0.2));
+    action.reset().fadeIn(0.2).play();
+  }, [playClip, actions]);
 
   useEffect(() => {
     clone.traverse((child) => {
@@ -183,7 +195,7 @@ function GlbViewer({ url, hovered, onClick, onPointerOver, onPointerOut }: {
   }, [clone]);
 
   return (
-    <>
+    <group ref={groupRef}>
       <primitive
         object={clone}
         onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onClick(); }}
@@ -191,7 +203,7 @@ function GlbViewer({ url, hovered, onClick, onPointerOver, onPointerOut }: {
         onPointerOut={() => onPointerOut()}
       />
       {hovered && <box3Helper args={[bbox, new THREE.Color('#22d3ee')]} />}
-    </>
+    </group>
   );
 }
 
@@ -202,10 +214,16 @@ interface Props {
   allObjects?: ObjectNodeSchema[];
   /** RigidBody 내부에서 사용할 때 — position/rotation은 부모 RigidBody가 담당, scale만 적용 */
   noTransform?: boolean;
+  /** PhysicsObject가 area_enter 시 직접 전달하는 클립 이름 */
+  activeClip?: string | null;
 }
 
-export function ViewerObject({ object, assets, onEvent, allObjects = [], noTransform = false }: Props) {
+export function ViewerObject({ object, assets, onEvent, allObjects = [], noTransform = false, activeClip: activeClipProp = null }: Props) {
   const [hovered, setHovered] = useState(false);
+  const [internalClip, setInternalClip] = useState<string | null>(null);
+  // PhysicsObject(area_enter)와 내부(click/hover) 중 최근 것을 사용
+  const effectiveClip = activeClipProp ?? internalClip;
+
   const hasClick = object.events.some((e) => e.trigger === 'click');
   const hasHover = object.events.some((e) => e.trigger === 'hover_enter');
   const isInteractive = hasClick || hasHover;
@@ -242,7 +260,11 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
     if (!isInteractive) return;
     setHovered(true);
     document.body.style.cursor = 'pointer';
-    if (hasHover) onEvent(object, 'hover_enter');
+    if (hasHover) {
+      const clip = object.events.find((e) => e.trigger === 'hover_enter' && e.action === 'play_animation' && e.value);
+      if (clip) setInternalClip(clip.value);
+      onEvent(object, 'hover_enter');
+    }
   };
   const handlePointerOut = () => {
     if (!isInteractive) return;
@@ -251,6 +273,8 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   };
   const handleClick = () => {
     if (!hasClick) return;
+    const clip = object.events.find((e) => e.trigger === 'click' && e.action === 'play_animation' && e.value);
+    if (clip) setInternalClip(clip.value);
     onEvent(object, 'click');
   };
 
@@ -261,6 +285,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           <GlbViewer
             url={assetRef.dracoUrl}
             hovered={hovered}
+            playClip={effectiveClip}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}

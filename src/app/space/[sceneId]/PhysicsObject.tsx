@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { RigidBody } from '@react-three/rapier';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 import { ViewerObject } from './ViewerObject';
@@ -21,6 +22,8 @@ const COLLIDER_MAP: Record<string, 'hull' | 'trimesh' | 'cuboid' | 'ball'> = {
 };
 
 export function PhysicsObject({ object, assets, onEvent }: Props) {
+  const [activeClip, setActiveClip] = useState<string | null>(null);
+
   const colliders = COLLIDER_MAP[
     object.primitiveShape === 'box' ? 'box'
     : object.primitiveShape === 'sphere' ? 'sphere'
@@ -34,6 +37,12 @@ export function PhysicsObject({ object, assets, onEvent }: Props) {
     object.rotation.z * DEG2RAD,
   ];
 
+  const handleAreaEnter = () => {
+    onEvent(object, 'area_enter');
+    const clip = object.events.find((e) => e.trigger === 'area_enter' && e.action === 'play_animation' && e.value);
+    if (clip) setActiveClip(clip.value);
+  };
+
   return (
     <RigidBody
       type={object.physics.mass > 0 ? 'dynamic' : 'fixed'}
@@ -43,9 +52,9 @@ export function PhysicsObject({ object, assets, onEvent }: Props) {
       friction={object.physics.friction}
       restitution={object.physics.restitution}
       sensor={object.physics.isSensor}
-      onIntersectionEnter={object.physics.isSensor ? () => onEvent(object, 'area_enter') : undefined}
+      onIntersectionEnter={object.physics.isSensor ? handleAreaEnter : undefined}
     >
-      <ViewerObject object={object} assets={assets} onEvent={onEvent} noTransform />
+      <ViewerObject object={object} assets={assets} onEvent={onEvent} noTransform activeClip={activeClip} />
     </RigidBody>
   );
 }

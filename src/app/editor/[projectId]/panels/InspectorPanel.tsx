@@ -255,7 +255,66 @@ const ACTION_LABELS: Record<string, string> = {
   open_url: 'URL 열기',
   show_popup: '팝업',
   emit_event: '이벤트 발송',
+  play_animation: '애니메이션 재생',
 };
+
+// ── GLB 애니메이션 클립 선택기 ─────────────────────────────────
+// three-stdlib GLTFLoader가 이 GLB의 animations를 파싱 못하는 문제 우회:
+// GLB 바이너리의 JSON 청크를 직접 읽어 animation 이름만 추출
+async function parseGlbAnimationNames(url: string): Promise<string[]> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const buffer = await res.arrayBuffer();
+  const view = new DataView(buffer);
+  if (view.getUint32(0, true) !== 0x46546c67) throw new Error('Not a GLB');
+  const jsonChunkLen = view.getUint32(12, true);
+  const jsonStr = new TextDecoder().decode(new Uint8Array(buffer, 20, jsonChunkLen));
+  const gltf = JSON.parse(jsonStr) as { animations?: { name: string }[] };
+  return (gltf.animations ?? []).map((a) => a.name);
+}
+
+function GlbClipPicker({ url, value, onChange }: { url: string; value: string; onChange: (v: string) => void }) {
+  const [clips, setClips] = useState<string[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setClips(null);
+    setLoadError(null);
+    parseGlbAnimationNames(url)
+      .then((names) => { if (!cancelled) setClips(names); })
+      .catch((err) => { if (!cancelled) { setLoadError(String(err)); setClips([]); } });
+    return () => { cancelled = true; };
+  }, [url]);
+
+  if (clips === null) {
+    return (
+      <div className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-muted/50">
+        클립 목록 로딩 중…
+      </div>
+    );
+  }
+  if (loadError || clips.length === 0) {
+    return (
+      <>
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
+          placeholder="clip name"
+          className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary" />
+        {loadError
+          ? <p className="text-danger text-[10px] mt-1">로드 실패: {loadError.slice(0, 80)}</p>
+          : <p className="text-muted/50 text-[10px] mt-1">이 GLB에 애니메이션 클립이 없습니다.</p>}
+      </>
+    );
+  }
+  return (
+    <SelectBox
+      value={value}
+      options={clips.map((n) => ({ value: n, label: n }))}
+      onChange={onChange}
+      placeholder="클립 선택"
+    />
+  );
+}
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 function EnvironmentPanel() {
@@ -693,8 +752,14 @@ function EnvironmentPanel() {
 }
 
 // ── 메인 ───────────────────────────────────────────────────────
+// 외부: selectedId를 key로 넘겨 오브젝트 전환 시 내부 상태 완전 초기화
 export function InspectorPanel() {
-  const { objects, selectedId, selectedIds, updateObject, pushHistory, alignSelected, batchUpdateObjects } = useSceneStore();
+  const { selectedId } = useSceneStore();
+  return <InspectorInner key={selectedId ?? '__none__'} />;
+}
+
+function InspectorInner() {
+  const { objects, assets, selectedId, selectedIds, updateObject, pushHistory, alignSelected, batchUpdateObjects } = useSceneStore();
   const { addToast } = useToast();
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
@@ -717,6 +782,7 @@ export function InspectorPanel() {
 
   // 이벤트 프리뷰 팝업
   const [previewPopup, setPreviewPopup] = useState<string | null>(null);
+
 
   if (isMultiSelect) {
     // 2개 선택 시 거리 계산
@@ -1373,6 +1439,7 @@ export function InspectorPanel() {
                         if (ev.action === 'open_url' && ev.value) window.open(ev.value, '_blank');
                         else if (ev.action === 'show_popup') setPreviewPopup(ev.value || '(내용 없음)');
                         else if (ev.action === 'emit_event') addToast(`이벤트 발송 테스트: "${ev.value}"`, 'success');
+                        else if (ev.action === 'play_animation') addToast(`애니메이션 클립: "${ev.value}"`, 'info');
                       }}
                       title="미리보기"
                       className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
@@ -1417,6 +1484,7 @@ export function InspectorPanel() {
                         { value: 'show_popup', label: '팝업' },
                         { value: 'open_url', label: 'URL 열기' },
                         { value: 'emit_event', label: '이벤트 발송' },
+                        { value: 'play_animation', label: '애니메이션 재생' },
                       ]}
                     />
                   </div>
@@ -1430,16 +1498,36 @@ export function InspectorPanel() {
 
                 <div>
                   <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">
-                    {newAction === 'open_url' ? 'URL' : newAction === 'emit_event' ? '이벤트 이름' : '팝업 내용'}
+                    {newAction === 'open_url' ? 'URL'
+                      : newAction === 'emit_event' ? '이벤트 이름'
+                      : newAction === 'play_animation' ? '클립 이름'
+                      : '팝업 내용'}
                   </span>
-                  <input
-                    type="text"
-                    value={newValue}
-                    onChange={(e) => setNewValue(e.target.value)}
-                    placeholder={newAction === 'open_url' ? 'https://...' : newAction === 'emit_event' ? 'my_event_name' : '표시할 텍스트'}
-                    className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                    onKeyDown={(e) => e.key === 'Enter' && addEvent()}
-                  />
+                  {(() => {
+                    const glbUrl = newAction === 'play_animation' && obj?.assetId
+                      ? assets.find((a) => a.id === obj.assetId)?.dracoUrl
+                      : null;
+                    return glbUrl ? (
+                      <GlbClipPicker url={glbUrl} value={newValue} onChange={setNewValue} />
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          value={newValue}
+                          onChange={(e) => setNewValue(e.target.value)}
+                          placeholder={newAction === 'open_url' ? 'https://...'
+                            : newAction === 'emit_event' ? 'my_event_name'
+                            : newAction === 'play_animation' ? 'Armature|Walk'
+                            : '표시할 텍스트'}
+                          className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                          onKeyDown={(e) => e.key === 'Enter' && addEvent()}
+                        />
+                        {newAction === 'play_animation' && (
+                          <p className="text-muted/50 text-[10px] mt-1">GLB 오브젝트를 선택하면 클립 목록이 자동으로 표시됩니다.</p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex gap-1.5">
