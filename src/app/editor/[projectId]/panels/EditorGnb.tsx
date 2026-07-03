@@ -183,7 +183,7 @@ function AccountMenu() {
 // ── GNB 레일 ────────────────────────────────────────────────────
 export function EditorGnb({ tab, panelOpen, onTabClick, projectName }: Props) {
   return (
-    <div className="flex flex-col w-12 h-full bg-sidebar border-r border-border py-2 gap-1 shrink-0 select-none">
+    <div className="flex flex-col w-12 h-full bg-surface border-r border-border py-2 gap-1 shrink-0 select-none">
       <RailButton
         icon={<Layers size={16} />}
         label="Object"

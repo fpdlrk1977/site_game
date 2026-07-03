@@ -34,6 +34,7 @@ function NumInput({
   precision = 1,
   min,
   max,
+  prefix
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -42,6 +43,7 @@ function NumInput({
   precision?: number;
   min?: number;
   max?: number;
+  prefix?:boolean
 }) {
   const [local, setLocal] = useState(fmt(value, precision));
   const isFocused = useRef(false);
@@ -119,7 +121,7 @@ function NumInput({
           else setLocal(fmt(value, precision));
           onCommit();
         }}
-        className="w-full bg-surface border border-border rounded-xs pl-6 pr-5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+        className={`w-full bg-surface border border-border rounded-xs pr-5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums ${prefix ? 'pl-6' : 'pl-2'}`}
       />
       <span
         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-ew-resize select-none transition-colors"
@@ -156,7 +158,7 @@ function LabeledNum({
   return (
     <div>
       <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">{label}</span>
-      <NumInput value={value} onChange={onChange} onCommit={onCommit} min={min} max={max} precision={precision} dragStep={dragStep} />
+      <NumInput value={value} onChange={onChange} onCommit={onCommit} min={min} max={max} precision={precision} dragStep={dragStep} prefix={false} />
     </div>
   );
 }
@@ -190,7 +192,7 @@ function XYZRow({
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted/70 pointer-events-none z-10">
               {axis}
             </span>
-            <NumInput value={val} onChange={change} onCommit={onCommit} dragStep={dragStep} />
+            <NumInput value={val} onChange={change} onCommit={onCommit} dragStep={dragStep} prefix={true} />
           </div>
         ))}
       </div>
@@ -232,7 +234,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   return (
     <div
       onClick={() => onChange(!value)}
-      className={`relative w-7.5 h-4 rounded-full transition-colors cursor-pointer flex-shrink-0 ${value ? 'bg-primary' : 'bg-border'}`}
+      className={`relative w-7.5 h-4 rounded-full transition-colors cursor-pointer shrink-0 ${value ? 'bg-primary' : 'bg-border'}`}
     >
       <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all ${value ? 'left-4' : 'left-0.5'}`} />
     </div>
@@ -378,6 +380,7 @@ function EnvironmentPanel() {
             ];
             return (
               <>
+              <div className='flex gap-2'>
                 <SelectBox
                   value={mode}
                   onChange={(v) => {
@@ -397,7 +400,7 @@ function EnvironmentPanel() {
                 />
 
                 {mode === 'color' && (
-                  <div className="px-2 flex items-center border border-border rounded-xs">
+                  <div className="px-2 flex  items-center border border-border rounded-xs">
                     <input type="color" value={env.sky.value}
                       onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
                       onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
@@ -415,7 +418,9 @@ function EnvironmentPanel() {
                     options={HDR_PRESETS.map(({ id, label }) => ({ value: id, label }))}
                   />
                 )}
+                </div>
               </>
+              
             );
           })()}
         </div>
@@ -549,25 +554,26 @@ function EnvironmentPanel() {
                   />
                 </div>
               </div>
-              <div className='mt-2'>
-                <LabeledNum
-                  label="Near"
-                  value={env.fog.near}
-                  onChange={(v) => updateEnvironment({ fog: { ...env.fog, near: v } })}
-                  onCommit={pushHistory}
-                  min={1} max={200} precision={0} dragStep={1}
-                />
+              <div className='flex gap-2'>
+                <div className='mt-2'>
+                  <LabeledNum
+                    label="Near"
+                    value={env.fog.near}
+                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, near: v } })}
+                    onCommit={pushHistory}
+                    min={1} max={200} precision={0} dragStep={1}
+                  />
+                </div>
+                <div className='mt-2'>
+                  <LabeledNum
+                    label="Far"
+                    value={env.fog.far}
+                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, far: v } })}
+                    onCommit={pushHistory}
+                    min={10} max={500} precision={0} dragStep={2}
+                  />
+                </div>
               </div>
-              <div className='mt-2'>
-                <LabeledNum
-                  label="Far"
-                  value={env.fog.far}
-                  onChange={(v) => updateEnvironment({ fog: { ...env.fog, far: v } })}
-                  onCommit={pushHistory}
-                  min={10} max={500} precision={0} dragStep={2}
-                />
-              </div>
- 
         </div>}
       </GroupBox>
       
@@ -576,23 +582,25 @@ function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader title="Lights" />
         <div className="px-3 space-y-1 pb-4">
-          <div>
-            <LabeledNum
-              label="Ambient"
-              value={env.lights.ambientIntensity}
-              onChange={(v) => updateEnvironment({ lights: { ...env.lights, ambientIntensity: v } })}
-              onCommit={pushHistory}
-              min={0} max={3} precision={2} dragStep={0.02}
-            />
-          </div>
-          <div>
-            <LabeledNum
-              label="Directional"
-              value={env.lights.directionalIntensity}
-              onChange={(v) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: v } })}
-              onCommit={pushHistory}
-              min={0} max={5} precision={1} dragStep={0.05}
-            />
+          <div className='flex gap-2'>
+            <div>
+              <LabeledNum
+                label="Ambient"
+                value={env.lights.ambientIntensity}
+                onChange={(v) => updateEnvironment({ lights: { ...env.lights, ambientIntensity: v } })}
+                onCommit={pushHistory}
+                min={0} max={3} precision={2} dragStep={0.02}
+              />
+            </div>
+            <div>
+              <LabeledNum
+                label="Directional"
+                value={env.lights.directionalIntensity}
+                onChange={(v) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: v } })}
+                onCommit={pushHistory}
+                min={0} max={5} precision={1} dragStep={0.05}
+              />
+            </div>
           </div>
           <XYZRow
             label="Sun Position"
@@ -638,34 +646,36 @@ function EnvironmentPanel() {
                     </p>
                   )}
                 </div>
-                {env.playerCharacterId && (
+                <div className='flex gap-2 pt-1'>
+                  {env.playerCharacterId && (
+                    <div>
+                      <LabeledNum
+                        label="Scale"
+                        value={env.playerCharacterScale ?? 1}
+                        onChange={(v) => updateEnvironment({ playerCharacterScale: v })}
+                        onCommit={pushHistory}
+                        min={0.1} max={3} precision={2} dragStep={0.02}
+                      />
+                    </div>
+                  )}
                   <div>
                     <LabeledNum
-                      label="Scale"
-                      value={env.playerCharacterScale ?? 1}
-                      onChange={(v) => updateEnvironment({ playerCharacterScale: v })}
+                      label="이동 속도"
+                      value={env.playerSpeed ?? 5}
+                      onChange={(v) => updateEnvironment({ playerSpeed: v })}
                       onCommit={pushHistory}
-                      min={0.1} max={3} precision={2} dragStep={0.02}
+                      min={1} max={20} precision={1} dragStep={0.1}
                     />
                   </div>
-                )}
-                <div>
-                  <LabeledNum
-                    label="이동 속도"
-                    value={env.playerSpeed ?? 5}
-                    onChange={(v) => updateEnvironment({ playerSpeed: v })}
-                    onCommit={pushHistory}
-                    min={1} max={20} precision={1} dragStep={0.1}
-                  />
-                </div>
-                <div>
-                  <LabeledNum
-                    label="점프력"
-                    value={env.playerJumpForce ?? 12}
-                    onChange={(v) => updateEnvironment({ playerJumpForce: v })}
-                    onCommit={pushHistory}
-                    min={2} max={30} precision={0} dragStep={0.5}
-                  />
+                  <div>
+                    <LabeledNum
+                      label="점프력"
+                      value={env.playerJumpForce ?? 12}
+                      onChange={(v) => updateEnvironment({ playerJumpForce: v })}
+                      onCommit={pushHistory}
+                      min={2} max={30} precision={0} dragStep={0.5}
+                    />
+                  </div>
                 </div>
               </>
             );
@@ -742,7 +752,7 @@ function EnvironmentPanel() {
               onBlur={pushHistory}
               placeholder="씬에 대한 메모를 입력하세요..."
               rows={4}
-              className="w-full bg-background border border-border rounded-xs px-2.5 py-1.5 text-xs text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+              className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             />
           </div>
         )}
@@ -1357,17 +1367,19 @@ function InspectorInner() {
 
         {/* Physics */}
         {!obj.light && (
-        <GroupBox><SectionHeader title="Physics" isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
-        {isOpen('physics') && <div className="px-3 pb-4 space-y-2">
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-[10px] font-semibold text-muted/50">Enable Physics</span>
+        <GroupBox>
+          <div className="relative">
+          <SectionHeader title="Physics" isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
+          {isOpen('physics') &&<label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+            {/* <span className="text-[10px] font-semibold text-muted/50">Enable Physics</span> */}
             <Toggle
               value={obj.physics.enabled}
               onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, enabled: v } }); pushHistory(); }}
             />
           </label>
+          }
           {obj.physics.enabled && (
-            <>
+            <div className='px-3 pb-3 space-y-1'>
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Collider Type</span>
                 <SelectBox
@@ -1392,27 +1404,32 @@ function InspectorInner() {
                   onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, isSensor: v } }); pushHistory(); }}
                 />
               </label>
-              <div>
-                <LabeledNum
-                  label="Friction"
-                  value={obj.physics.friction}
-                  onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, friction: v } })}
-                  onCommit={pushHistory}
-                  min={0} max={1} precision={2} dragStep={0.005}
-                />
+              <div className='flex gap-2'>
+                <div>
+                  <LabeledNum
+                    label="Friction"
+                    value={obj.physics.friction}
+                    onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, friction: v } })}
+                    onCommit={pushHistory}
+                    min={0} max={1} precision={2} dragStep={0.005}
+                  />
+                </div>
+                <div>
+                  <LabeledNum
+                    label="Restitution"
+                    value={obj.physics.restitution}
+                    onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, restitution: v } })}
+                    onCommit={pushHistory}
+                    min={0} max={1} precision={2} dragStep={0.005}
+                  />
+                </div>
               </div>
-              <div>
-                <LabeledNum
-                  label="Restitution"
-                  value={obj.physics.restitution}
-                  onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, restitution: v } })}
-                  onCommit={pushHistory}
-                  min={0} max={1} precision={2} dragStep={0.005}
-                />
-              </div>
-            </>
+            </div>
           )}
-        </div>}</GroupBox>)}
+        
+        </div>
+
+          </GroupBox>)}
 
         {/* Events */}
         <GroupBox>

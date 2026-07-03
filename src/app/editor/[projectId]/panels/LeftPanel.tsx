@@ -12,7 +12,7 @@ export function LeftPanel({ tab }: { tab: GnbTab }) {
   return (
     <div className="flex flex-col bg-surface border-r border-border overflow-hidden h-full">
       {/* 타이틀 바 */}
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
+      <div className="flex items-center gap-1.5 px-3 py-2 pb-0 shrink-0">
         <span className="text-[11px] font-semibold text-foreground">
           {tab === 'objects' ? 'Objects' : 'Assets'}
         </span>

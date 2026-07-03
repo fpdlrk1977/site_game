@@ -204,7 +204,7 @@ export function AssetBrowser() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* 카테고리 선택 */}
-      <div className="px-2 pt-2 pb-1.5 border-b border-border/60 shrink-0">
+      <div className="px-2 pt-2 shrink-0">
         <SelectBox
           value={tab}
           onChange={(v) => setTab(v as Tab)}
@@ -216,7 +216,7 @@ export function AssetBrowser() {
       </div>
 
       {/* 콘텐츠 */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-2 pt-1">
         {tab === 'models' && (
           <>
             <input
@@ -224,7 +224,7 @@ export function AssetBrowser() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="에셋 검색..."
-              className="w-full bg-background border border-border rounded-xs px-2.5 py-1 mb-2 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
+              className="w-full bg-surface border border-border rounded-xs px-2.5 py-1 mb-2 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
             <input ref={modelInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleModelFile} />
             <div className="grid grid-cols-2 gap-2">
