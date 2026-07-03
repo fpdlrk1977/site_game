@@ -8,7 +8,8 @@ import { tryEmbedTextures } from '@/lib/glbEmbed';
 import { generateGlbThumbnail } from '@/lib/glbThumbnail';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
-import type { AssetRefSchema, ContentType, ParticlePreset, LightType } from '@/types/scene';
+import type { AssetRefSchema, ContentType, ParticlePreset, LightType, ProjectSceneSchema } from '@/types/scene';
+import { SCENE_VERSION } from '@/types/scene';
 
 type Tab = 'models' | 'character' | 'content' | 'particle' | 'lights' | 'materials' | 'textures' | 'hdr' | 'audio';
 
@@ -44,13 +45,58 @@ const LIGHT_ITEMS: { type: LightType; label: string; emoji: string }[] = [
 ];
 
 export function AssetBrowser() {
-  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject } = useSceneStore();
+  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset, markSaved } = useSceneStore();
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { addToast } = useToast();
   const modelInputRef = useRef<HTMLInputElement>(null);
   const characterInputRef = useRef<HTMLInputElement>(null);
+
+  const deleteAsset = async (asset: AssetRefSchema) => {
+    if (deletingId) return;
+    setDeletingId(asset.id);
+    try {
+      const supabase = createBrowserSupabase();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Storage 파일 삭제 (실패해도 DB·스토어는 계속 진행)
+      const storagePath = asset.dracoUrl.match(/assets\/[^?]+/)?.[0];
+      if (storagePath) {
+        await supabase.storage.from('assets').remove([storagePath]).catch(() => {});
+      }
+
+      // DB 삭제
+      const { error } = await supabase.from('assets').delete().eq('id', asset.id);
+      if (error) throw error;
+
+      removeAsset(asset.id);
+
+      // scenes.scene_data도 즉시 업데이트 (새로고침 시 삭제된 에셋이 복원되는 버그 방지)
+      const state = useSceneStore.getState();
+      if (state.sceneId) {
+        const sceneData: ProjectSceneSchema = {
+          projectId: state.projectId ?? '',
+          sceneId: state.sceneId,
+          version: SCENE_VERSION,
+          environment: state.environment,
+          assets: state.assets,
+          objects: state.objects,
+        };
+        await supabase.from('scenes').update({ scene_data: sceneData }).eq('id', state.sceneId);
+        markSaved();
+      }
+
+      addToast(`"${asset.name}" 삭제됨`, 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '삭제 실패';
+      addToast(msg, 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const uploadGlb = async (file: File, assetType: AssetRefSchema['type'], textureFiles: File[] = []) => {
     if (!projectId) return;
@@ -188,7 +234,11 @@ export function AssetBrowser() {
                 title="glb 선택 시 텍스처 이미지 파일도 함께(Ctrl/Cmd로 다중 선택) 고르면 자동으로 파일에 포함됩니다"
               />
               {filteredModels.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} icon="📦" onAdd={() => addAssetObject(asset)} />
+                <AssetCard key={asset.id} asset={asset} icon="📦"
+                  onAdd={() => addAssetObject(asset)}
+                  onDelete={() => deleteAsset(asset)}
+                  deleting={deletingId === asset.id}
+                />
               ))}
             </div>
             {modelAssets.length === 0 && (
@@ -210,7 +260,10 @@ export function AssetBrowser() {
                 title="glb 선택 시 텍스처 이미지 파일도 함께(Ctrl/Cmd로 다중 선택) 고르면 자동으로 파일에 포함됩니다"
               />
               {characterAssets.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} icon="🧍" />
+                <AssetCard key={asset.id} asset={asset} icon="🧍"
+                  onDelete={() => deleteAsset(asset)}
+                  deleting={deletingId === asset.id}
+                />
               ))}
             </div>
             {characterAssets.length === 0 && (
@@ -299,8 +352,15 @@ function UploadButton({ uploading, onClick, label = '.glb', title }: { uploading
   );
 }
 
-function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string; onAdd?: () => void }) {
+function AssetCard({ asset, icon, onAdd, onDelete, deleting }: {
+  asset: AssetRefSchema;
+  icon: string;
+  onAdd?: () => void;
+  onDelete?: () => void;
+  deleting?: boolean;
+}) {
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const isModel = !!asset.dracoUrl;
 
@@ -311,7 +371,7 @@ function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string
       onMouseEnter={() => {
         if (isModel && cardRef.current) setHoverRect(cardRef.current.getBoundingClientRect());
       }}
-      onMouseLeave={() => setHoverRect(null)}
+      onMouseLeave={() => { setHoverRect(null); setConfirmDelete(false); }}
     >
       {asset.thumbnailUrl ? (
         <>
@@ -326,7 +386,9 @@ function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string
           <span className="text-[9px] text-muted truncate w-full text-center px-1">{asset.name}</span>
         </>
       )}
-      {onAdd && (
+
+      {/* 호버 오버레이 */}
+      {!confirmDelete && onAdd && (
         <button
           onClick={onAdd}
           className="absolute inset-0 bg-primary/0 group-hover:bg-primary/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white text-xs font-medium"
@@ -334,7 +396,41 @@ function AssetCard({ asset, icon, onAdd }: { asset: AssetRefSchema; icon: string
           + 추가
         </button>
       )}
-      {hoverRect && isModel && (
+
+      {/* 삭제 버튼 (우상단) */}
+      {onDelete && !confirmDelete && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+          className="absolute top-1 right-1 w-5 h-5 rounded-sm bg-background/80 text-muted hover:bg-danger hover:text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center text-[10px] leading-none"
+          title="삭제"
+        >
+          ✕
+        </button>
+      )}
+
+      {/* 삭제 확인 */}
+      {confirmDelete && (
+        <div className="absolute inset-0 bg-background/95 flex flex-col items-center justify-center gap-1.5 p-1">
+          <p className="text-[9px] text-foreground text-center leading-tight">삭제할까요?</p>
+          <div className="flex gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              disabled={deleting}
+              className="px-2 py-0.5 text-[9px] bg-danger text-white rounded-xs disabled:opacity-50"
+            >
+              {deleting ? '...' : '삭제'}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
+              className="px-2 py-0.5 text-[9px] bg-surface text-muted rounded-xs border border-border"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {hoverRect && isModel && !confirmDelete && (
         <AssetPreviewPopup url={asset.dracoUrl} name={asset.name} anchorRect={hoverRect} />
       )}
     </div>

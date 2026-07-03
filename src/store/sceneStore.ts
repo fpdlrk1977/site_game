@@ -93,6 +93,7 @@ interface SceneActions {
   pasteObjectProperties: () => void;
   batchUpdateObjects: (ids: string[], patch: (obj: ObjectNodeSchema) => Partial<ObjectNodeSchema>) => void;
   addLightObject: (type: LightType) => void;
+  removeAsset: (id: string) => void;
 }
 
 const SHAPE_NAMES: Record<PrimitiveShape, string> = {
@@ -306,6 +307,11 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const { assets } = get();
     if (assets.find((a) => a.id === asset.id)) return;
     set({ assets: [...assets, asset] });
+  },
+
+  removeAsset: (id) => {
+    const { assets } = get();
+    set({ assets: assets.filter((a) => a.id !== id), isModified: true });
   },
 
   addAssetObject: (asset) => {
