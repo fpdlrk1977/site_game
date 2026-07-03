@@ -326,6 +326,14 @@ export function EditorCanvas() {
             maxPolarAngle={Math.PI / 2 - 0.02}
             minDistance={1}
             maxDistance={200}
+            onChange={() => {
+              const ctrl = orbitRef.current;
+              if (!ctrl) return;
+              // 패닝으로 타겟이 바닥 아래로 내려가면 바닥이 화면 위로 올라가는 현상 방지
+              if (ctrl.target.y < 0) ctrl.target.y = 0;
+              // 카메라 자체도 바닥 아래로 내려가지 않도록
+              if (ctrl.object.position.y < 0.3) ctrl.object.position.y = 0.3;
+            }}
           />
         </Canvas>
 
