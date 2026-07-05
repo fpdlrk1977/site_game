@@ -63,7 +63,10 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
     const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
     for (const ev of matchingEvents) {
       if (ev.action === 'open_url' && ev.value) {
-        window.open(ev.value, '_blank', 'noopener noreferrer');
+        // area_enter는 사용자 제스처가 아닌 물리 콜백이라 브라우저가 window.open을
+        // 차단할 수 있다 — 차단되면 링크가 담긴 팝업으로 폴백
+        const opened = window.open(ev.value, '_blank', 'noopener noreferrer');
+        if (!opened) setPopup({ title: obj.name, content: ev.value });
       } else if (ev.action === 'show_popup') {
         setPopup({ title: obj.name, content: ev.value });
       }
@@ -143,9 +146,20 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           />
           <div className="relative bg-surface border border-border rounded-2xl p-6 w-full max-w-md shadow-modal">
             <h3 className="text-lg font-bold text-foreground mb-3">{popup.title}</h3>
-            <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
-              {popup.content}
-            </p>
+            {/^https?:\/\//.test(popup.content.trim()) ? (
+              <a
+                href={popup.content.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary text-sm leading-relaxed underline break-all hover:opacity-80 transition-opacity"
+              >
+                {popup.content.trim()}
+              </a>
+            ) : (
+              <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
+                {popup.content}
+              </p>
+            )}
             <button
               onClick={() => setPopup(null)}
               className="mt-5 w-full py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold text-sm hover:from-violet-500 hover:to-cyan-500 transition-all"

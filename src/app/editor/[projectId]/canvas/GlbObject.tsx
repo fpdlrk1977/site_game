@@ -12,13 +12,22 @@ interface Props {
   onClick: (shiftKey: boolean) => void;
   onHoverChange?: (hovered: boolean) => void;
   wireframe?: boolean;
+  /** physics 활성 시 콜라이더 가이드 표시 — 모델의 실제 바운딩박스에 맞춰 그린다 */
+  colliderGuide?: 'solid' | 'sensor';
 }
 
-export function GlbObject({ url, selected, hovered = false, onClick, onHoverChange, wireframe = false }: Props) {
+export function GlbObject({ url, selected, hovered = false, onClick, onHoverChange, wireframe = false, colliderGuide }: Props) {
   const { scene } = useGLTF(url);
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
   // Outlines는 단일 mesh에서만 동작하므로, 여러 mesh로 구성된 GLB는 bounding box로 표시
   const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
+  const guideBox = useMemo(() => {
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    bbox.getSize(size);
+    bbox.getCenter(center);
+    return { size, center };
+  }, [bbox]);
 
   useEffect(() => {
     clone.traverse((child) => {
@@ -58,6 +67,25 @@ export function GlbObject({ url, selected, hovered = false, onClick, onHoverChan
       />
       {(selected || hovered) && (
         <box3Helper args={[bbox, new THREE.Color(selected ? '#7c3aed' : '#a78bfa')]} />
+      )}
+      {/* 콜라이더 가이드 — 실제 모델 바운딩박스 크기·중심에 맞춤 (녹색=솔리드, 파랑=센서) */}
+      {colliderGuide && (
+        <>
+          <mesh position={guideBox.center}>
+            <boxGeometry args={[guideBox.size.x * 1.02, guideBox.size.y * 1.02, guideBox.size.z * 1.02]} />
+            <meshBasicMaterial
+              color={colliderGuide === 'sensor' ? '#3b82f6' : '#22c55e'}
+              wireframe transparent
+              opacity={colliderGuide === 'sensor' ? 0.8 : 0.5}
+            />
+          </mesh>
+          {colliderGuide === 'sensor' && (
+            <mesh position={guideBox.center}>
+              <boxGeometry args={[guideBox.size.x, guideBox.size.y, guideBox.size.z]} />
+              <meshBasicMaterial color="#3b82f6" transparent opacity={0.1} depthWrite={false} />
+            </mesh>
+          )}
+        </>
       )}
     </>
   );

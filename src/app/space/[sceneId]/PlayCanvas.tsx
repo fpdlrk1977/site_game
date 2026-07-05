@@ -23,6 +23,7 @@ function getColliderType(object: ObjectNodeSchema) {
 }
 
 // physics.enabled가 꺼진 오브젝트도 플레이 모드에서 고정 콜라이더를 부여
+// userData.objectId: 캐릭터 컨트롤러 접촉 감지(area_enter)용 식별자
 function AutoCollider({ object, assets, onEvent, allObjects }: {
   object: ObjectNodeSchema;
   assets: ColliderAssets;
@@ -35,6 +36,7 @@ function AutoCollider({ object, assets, onEvent, allObjects }: {
       colliders={getColliderType(object)}
       position={[object.position.x, object.position.y, object.position.z]}
       rotation={[object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD]}
+      userData={{ objectId: object.id }}
     >
       <ViewerObject object={object} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform />
     </RigidBody>
@@ -89,6 +91,7 @@ function GroupWithCollision({ object, assets, onEvent, allObjects }: {
             colliders={getColliderType(child)}
             position={[child.position.x, child.position.y, child.position.z]}
             rotation={[child.rotation.x * DEG2RAD, child.rotation.y * DEG2RAD, child.rotation.z * DEG2RAD]}
+            userData={{ objectId: child.id }}
           >
             <ViewerObject object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform />
           </RigidBody>
@@ -182,6 +185,13 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
       <PlayModeController
         azimuthRef={azimuthRef}
         playerRef={playerRef}
+        onObstacleEnter={(objectId) => {
+          // 캐릭터가 솔리드 오브젝트에 접촉 — area_enter 이벤트가 있으면 발동
+          const obj = allObjects.find((o) => o.id === objectId);
+          if (obj && obj.events.some((e) => e.trigger === 'area_enter')) {
+            onObjectClick(obj, 'area_enter');
+          }
+        }}
         spawnPosition={scene.environment.playerStartPosition
           ? [scene.environment.playerStartPosition.x, scene.environment.playerStartPosition.y, scene.environment.playerStartPosition.z]
           : undefined}

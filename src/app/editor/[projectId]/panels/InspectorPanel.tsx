@@ -957,7 +957,9 @@ function InspectorInner() {
     pushHistory();
   };
 
-  const areaEnterNeedsPhysics = newTrigger === 'area_enter' && (!obj.physics.enabled || !obj.physics.isSensor);
+  // area_enter는 physics/센서 설정 없이도 접촉 시 발동한다 (PlayCanvas가 자동 처리).
+  // Is Sensor를 켜면 오브젝트가 통과 가능한 트리거 영역이 된다는 안내만 표시.
+  const showAreaEnterHint = newTrigger === 'area_enter';
 
   // 그룹 오브젝트 전용 인스펙터
   if (obj.isGroup) {
@@ -1537,9 +1539,10 @@ function InspectorInner() {
                   </div>
                 </div>
 
-                {areaEnterNeedsPhysics && (
-                  <p className="text-danger text-[10px] bg-danger/2 border border-amber-500/20 rounded-xs px-2 py-1.5">
-                    ⚠ Area Enter는 Physics 활성화 + Is Sensor 필요
+                {showAreaEnterHint && (
+                  <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
+                    캐릭터가 오브젝트에 닿으면 발동합니다. 통과 가능한 투명 트리거 영역으로
+                    쓰려면 Physics → Is Sensor를 켜세요.
                   </p>
                 )}
 

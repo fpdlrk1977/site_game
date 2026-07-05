@@ -4,6 +4,7 @@ import { useRef, useEffect, MutableRefObject, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import { RigidBody, CapsuleCollider, CoefficientCombineRule, useRapier, type RapierRigidBody } from '@react-three/rapier';
+import { QueryFilterFlags } from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 
@@ -114,6 +115,8 @@ interface Props {
   playerJumpForce?: number;
   mobileInputRef?: MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
   onPositionChange?: (x: number, z: number) => void;
+  /** 캐릭터가 솔리드 오브젝트에 새로 접촉했을 때 (RigidBody userData.objectId 기준, 접촉 지속 중 1회) */
+  onObstacleEnter?: (objectId: string) => void;
 }
 
 export function PlayModeController({
@@ -126,6 +129,7 @@ export function PlayModeController({
   playerJumpForce = 12,
   mobileInputRef,
   onPositionChange,
+  onObstacleEnter,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   const { camera } = useThree();
@@ -148,6 +152,9 @@ export function PlayModeController({
   // KinematicCharacterController.computedGrounded()의 직전 프레임 결과
   const groundedRef = useRef(false);
   const controllerRef = useRef<ReturnType<typeof world.createCharacterController> | null>(null);
+  // 오브젝트별 마지막 접촉 시각(ms) — 벽에 밀착하면 접촉 판정이 프레임 간 깜빡이므로
+  // 짧은 끊김은 같은 접촉으로 간주하고, 일정 시간 이상 떨어졌다 다시 닿으면 재발동
+  const touchingTimesRef = useRef<Map<string, number>>(new Map());
 
   // 캐릭터 컨트롤러 생성 — 경사각 제한/지면 스냅을 엔진이 직접 처리
   useEffect(() => {
@@ -269,8 +276,10 @@ export function PlayModeController({
 
     // 지형과 충돌·슬라이딩되는 실제 이동량을 캐릭터 컨트롤러가 계산
     // (오토스텝·지면 스냅을 엔진이 처리 — 수동 위치 보정 불필요)
+    // EXCLUDE_SENSORS: 센서(Is Sensor) 오브젝트는 벽이 아니라 통과 가능한 트리거 영역 —
+    // 제외하지 않으면 캡슐이 센서 표면에서 막혀 겹침이 생기지 않아 area_enter가 절대 발동 못 한다
     const desired = { x: vx * delta, y: verticalVelRef.current * delta, z: vz * delta };
-    controller.computeColliderMovement(rb.collider(0), desired);
+    controller.computeColliderMovement(rb.collider(0), desired, QueryFilterFlags.EXCLUDE_SENSORS);
     const corrected = controller.computedMovement();
 
     // computedGrounded()는 maxSlopeClimbAngle과 무관하게 "발밑에 뭔가 닿아있으면"
@@ -281,6 +290,7 @@ export function PlayModeController({
     const rawGrounded = controller.computedGrounded();
     let touchingAnything = false;
     let hasWalkableContact = false;
+    const currentTouchingIds = new Set<string>();
     const numCollisions = controller.numComputedCollisions();
     for (let i = 0; i < numCollisions; i++) {
       const collision = controller.computedCollision(i);
@@ -288,8 +298,29 @@ export function PlayModeController({
       touchingAnything = true;
       const angleDeg = Math.acos(Math.min(1, Math.max(-1, collision.normal1.y))) / DEG2RAD;
       if (angleDeg <= MAX_SLOPE_CLIMB_DEG) hasWalkableContact = true;
+      // 접촉한 콜라이더의 RigidBody userData에서 씬 오브젝트 ID 수집 (area_enter 발동용)
+      const userData = collision.collider?.parent()?.userData as { objectId?: string } | undefined;
+      if (userData?.objectId) currentTouchingIds.add(userData.objectId);
     }
     groundedRef.current = rawGrounded && (touchingAnything ? hasWalkableContact : true);
+
+    // 새로 접촉한 솔리드 오브젝트 → onObstacleEnter
+    // 0.5초 이내의 접촉 끊김은 같은 접촉으로 간주 (밀착 시 판정 깜빡임으로 인한 중복 발동 방지)
+    const TOUCH_GRACE_MS = 500;
+    const now = performance.now();
+    for (const id of currentTouchingIds) {
+      const last = touchingTimesRef.current.get(id);
+      if ((last === undefined || now - last > TOUCH_GRACE_MS) && onObstacleEnter) {
+        onObstacleEnter(id);
+      }
+      touchingTimesRef.current.set(id, now);
+    }
+    // 오래 전에 접촉이 끊긴 항목 정리
+    for (const [id, t] of touchingTimesRef.current) {
+      if (!currentTouchingIds.has(id) && now - t > TOUCH_GRACE_MS) {
+        touchingTimesRef.current.delete(id);
+      }
+    }
 
     // 위쪽 이동이 경사각 제한/천장 충돌로 막혔다면 수직 속도를 소모
     if (verticalVelRef.current > 0 && corrected.y < desired.y - 1e-4) {

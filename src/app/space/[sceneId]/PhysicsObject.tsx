@@ -2,8 +2,14 @@
 
 import { useState } from 'react';
 import { RigidBody } from '@react-three/rapier';
+import { ActiveCollisionTypes } from '@dimforge/rapier3d-compat';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 import { ViewerObject, type ClipRequest } from './ViewerObject';
+
+// Rapier 기본값(DEFAULT)은 dynamic 바디가 포함된 쌍만 충돌/교차를 계산한다.
+// 플레이어는 kinematic, 센서는 대부분 fixed(mass 0)라 기본값으로는
+// 교차 이벤트가 아예 발생하지 않으므로 KINEMATIC_FIXED를 명시적으로 켠다.
+const SENSOR_COLLISION_TYPES = ActiveCollisionTypes.DEFAULT | ActiveCollisionTypes.KINEMATIC_FIXED;
 
 interface Props {
   object: ObjectNodeSchema;
@@ -44,6 +50,7 @@ export function PhysicsObject({ object, assets, onEvent }: Props) {
     if (clip) setActiveClip({ name: clip.value, t: Date.now() });
   };
 
+
   return (
     <RigidBody
       type={object.physics.mass > 0 ? 'dynamic' : 'fixed'}
@@ -53,7 +60,9 @@ export function PhysicsObject({ object, assets, onEvent }: Props) {
       friction={object.physics.friction}
       restitution={object.physics.restitution}
       sensor={object.physics.isSensor}
+      activeCollisionTypes={object.physics.isSensor ? SENSOR_COLLISION_TYPES : undefined}
       onIntersectionEnter={object.physics.isSensor ? handleAreaEnter : undefined}
+      userData={{ objectId: object.id }}
     >
       <ViewerObject object={object} assets={assets} onEvent={onEvent} noTransform activeClip={activeClip} />
     </RigidBody>

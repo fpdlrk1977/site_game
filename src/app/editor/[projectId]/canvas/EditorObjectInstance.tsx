@@ -358,6 +358,7 @@ export function EditorObjectInstance({ object }: Props) {
             onClick={(shiftKey) => handleClick(shiftKey)}
             onHoverChange={setHovered}
             wireframe={wireframeMode}
+            colliderGuide={object.physics.enabled ? (object.physics.isSensor ? 'sensor' : 'solid') : undefined}
           />
         </Suspense>
       ) : (
@@ -388,8 +389,8 @@ export function EditorObjectInstance({ object }: Props) {
           <meshBasicMaterial color={isSelected ? '#7c3aed' : '#a78bfa'} wireframe />
         </mesh>
       )}
-      {/* 콜라이더 시각화 — 에디터 전용 */}
-      <ColliderOverlay object={object} />
+      {/* 콜라이더 시각화 — 에디터 전용 (GLB는 GlbObject가 실제 바운딩박스 기준으로 그림) */}
+      {!assetRef && <ColliderOverlay object={object} />}
     </group>
   );
 }
