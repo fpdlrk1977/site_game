@@ -77,10 +77,11 @@ export function AssetBrowser() {
       if (!user) return;
 
       // Storage 파일 삭제 (실패해도 DB·스토어는 계속 진행)
-      // signed URL은 .../object/sign/{bucket}/{path}?token=... 형태 —
+      // URL은 .../object/public/{bucket}/{path} (신규) 또는
+      // .../object/sign/{bucket}/{path}?token=... (구 데이터) 형태 —
       // remove()에는 버킷 이후의 경로만 전달해야 한다
       const storagePath = (() => {
-        const m = asset.dracoUrl.match(/\/object\/sign\/assets\/([^?]+)/);
+        const m = asset.dracoUrl.match(/\/object\/(?:public|sign)\/assets\/([^?]+)/);
         try { return m ? decodeURIComponent(m[1]) : null; } catch { return m ? m[1] : null; }
       })();
       if (storagePath) {
@@ -147,12 +148,12 @@ export function AssetBrowser() {
         .from('assets')
         .upload(path, uploadBody, { contentType: 'model/gltf-binary', upsert: false });
       if (storageErr) throw storageErr;
-      const { data: signedData } = await supabase.storage.from('assets').createSignedUrl(path, 60 * 60 * 24 * 365);
-      if (!signedData?.signedUrl) throw new Error('signed URL 생성 실패');
+      // 공개 버킷의 만료 없는 public URL 사용 (0006 마이그레이션에서 버킷 공개 전환)
+      const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(path);
       const { error: dbErr } = await supabase.from('assets').insert({
         id: assetId, project_id: projectId, owner_id: user.id,
         name: file.name.replace(/\.glb$/i, ''),
-        file_url: signedData.signedUrl, draco_url: signedData.signedUrl,
+        file_url: publicUrl, draco_url: publicUrl,
         mime_type: 'model/gltf-binary', size_bytes: uploadBody.size,
       });
       if (dbErr) { await supabase.storage.from('assets').remove([path]); throw dbErr; }
@@ -167,10 +168,7 @@ export function AssetBrowser() {
             .from('assets')
             .upload(thumbPath, thumbBlob, { contentType: 'image/png', upsert: false });
           if (!thumbErr) {
-            const { data: thumbData } = await supabase.storage
-              .from('assets')
-              .createSignedUrl(thumbPath, 60 * 60 * 24 * 365);
-            if (thumbData?.signedUrl) thumbnailUrl = thumbData.signedUrl;
+            thumbnailUrl = supabase.storage.from('assets').getPublicUrl(thumbPath).data.publicUrl;
           }
         }
       } catch { /* non-critical */ }
@@ -178,7 +176,7 @@ export function AssetBrowser() {
       const asset: AssetRefSchema = {
         id: assetId,
         name: file.name.replace(/\.glb$/i, ''),
-        dracoUrl: signedData.signedUrl,
+        dracoUrl: publicUrl,
         type: assetType,
         thumbnailUrl,
       };

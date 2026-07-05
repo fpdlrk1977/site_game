@@ -360,9 +360,9 @@ function EnvironmentPanel() {
         .from('assets')
         .upload(path, file, { contentType: file.type, upsert: true });
       if (storageErr) throw storageErr;
-      const { data } = await supabase.storage.from('assets').createSignedUrl(path, 60 * 60 * 24 * 365);
-      if (!data?.signedUrl) throw new Error('URL 생성 실패');
-      updateEnvironment({ ground: { ...env.ground!, textureUrl: data.signedUrl } });
+      // 공개 버킷의 만료 없는 public URL 사용 (0006 마이그레이션에서 버킷 공개 전환)
+      const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(path);
+      updateEnvironment({ ground: { ...env.ground!, textureUrl: publicUrl } });
       pushHistory();
     } catch (err) {
       addToast('텍스처 업로드 실패', 'error');
