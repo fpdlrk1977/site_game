@@ -5,6 +5,7 @@ import { useGLTF, useAnimations, Text3D, Center, Html, Outlines } from '@react-t
 import { SkeletonUtils } from 'three-stdlib';
 import * as THREE from 'three';
 import { useLoader } from '@react-three/fiber';
+import { normalizeGlbMaterials } from '@/lib/glbMaterials';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
@@ -160,7 +161,11 @@ function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOu
   const groupRef = useRef<THREE.Group>(null);
   const { scene: rawScene, animations } = useGLTF(url);
   // 스킨드 메시(bone 애니메이션) 포함 GLB는 SkeletonUtils.clone 필수 — scene.clone(true)는 bone 참조를 공유해 버린다
-  const clone = useMemo(() => SkeletonUtils.clone(rawScene), [rawScene]);
+  const clone = useMemo(() => {
+    const c = SkeletonUtils.clone(rawScene);
+    normalizeGlbMaterials(c);
+    return c;
+  }, [rawScene]);
   const { actions } = useAnimations(animations, groupRef);
   const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
 

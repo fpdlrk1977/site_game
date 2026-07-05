@@ -159,7 +159,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
         ]}
         intensity={environment.lights.directionalIntensity}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
       />
 
       {/* ── 에디터 전용: 그리드 ── */}

@@ -4,6 +4,7 @@ import { useRef, useEffect, useMemo, Suspense } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 import * as THREE from 'three';
+import { normalizeGlbMaterials } from '@/lib/glbMaterials';
 import { useSceneStore, CHARACTER_PREVIEW_ID } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { pointerDownOnObjectRef } from './boxSelectState';
@@ -17,7 +18,11 @@ function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
   const { selectedId, selectedIds, selectObject, environment } = useSceneStore();
 
   const { scene } = useGLTF(url);
-  const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
+  const clone = useMemo(() => {
+    const c = SkeletonUtils.clone(scene);
+    normalizeGlbMaterials(c);
+    return c;
+  }, [scene]);
 
   const spawnPos = environment.playerStartPosition ?? { x: 0, y: 0, z: 0 };
   // selectObject는 selectedIds를 [id]로 세팅하므로 length는 1이 정상값

@@ -4,6 +4,7 @@ import { useGLTF } from '@react-three/drei';
 import { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
+import { normalizeGlbMaterials } from '@/lib/glbMaterials';
 
 interface Props {
   url: string;
@@ -18,7 +19,11 @@ interface Props {
 
 export function GlbObject({ url, selected, hovered = false, onClick, onHoverChange, wireframe = false, colliderGuide }: Props) {
   const { scene } = useGLTF(url);
-  const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
+  const clone = useMemo(() => {
+    const c = SkeletonUtils.clone(scene);
+    normalizeGlbMaterials(c);
+    return c;
+  }, [scene]);
   // Outlines는 단일 mesh에서만 동작하므로, 여러 mesh로 구성된 GLB는 bounding box로 표시
   const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
   const guideBox = useMemo(() => {

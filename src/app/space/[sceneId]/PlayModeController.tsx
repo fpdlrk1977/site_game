@@ -7,6 +7,7 @@ import { RigidBody, CapsuleCollider, CoefficientCombineRule, useRapier, type Rap
 import { QueryFilterFlags } from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
+import { normalizeGlbMaterials } from '@/lib/glbMaterials';
 
 const DEG2RAD = Math.PI / 180;
 // PlayCanvas의 <Physics gravity={[0, -20, 0]}>와 동일한 크기로 유지할 것
@@ -61,7 +62,11 @@ function GlbCharacter({ url, scale, movingRef, jumpingRef }: GlbCharacterProps) 
   const { scene: rawScene, animations } = useGLTF(url);
 
   // 스킨드 메시는 인스턴스 공유 불가 → 클론
-  const scene = useMemo(() => SkeletonUtils.clone(rawScene), [rawScene]);
+  const scene = useMemo(() => {
+    const c = SkeletonUtils.clone(rawScene);
+    normalizeGlbMaterials(c);
+    return c;
+  }, [rawScene]);
 
   const { actions, names } = useAnimations(animations, groupRef);
   const currentAnim = useRef<string | null>(null);
