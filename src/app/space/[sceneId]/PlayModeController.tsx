@@ -298,10 +298,11 @@ export function PlayModeController({
 
     const newPos = { x: pos.x + corrected.x, y: pos.y + corrected.y, z: pos.z + corrected.z };
 
-    // 낙사 리스폰
+    // 낙사 리스폰 — 스폰 y가 바닥(y=0) 아래로 저장된 구버전 씬 데이터라도
+    // 리스폰은 바닥 위에서 시작해 무한 낙사 루프에 빠지지 않게 한다
     if (newPos.y < -10) {
       newPos.x = spawnPosition[0];
-      newPos.y = spawnPosition[1];
+      newPos.y = Math.max(spawnPosition[1], 1);
       newPos.z = spawnPosition[2];
       verticalVelRef.current = 0;
     }

@@ -4,11 +4,12 @@ import { useRef, useEffect, useMemo, Suspense } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 import * as THREE from 'three';
-import { useSceneStore } from '@/store/sceneStore';
+import { useSceneStore, CHARACTER_PREVIEW_ID } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { pointerDownOnObjectRef } from './boxSelectState';
 
-export const CHARACTER_PREVIEW_ID = '__character_preview__';
+// 기존 import 경로 호환을 위한 re-export (원본은 sceneStore가 소유)
+export { CHARACTER_PREVIEW_ID } from '@/store/sceneStore';
 
 function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -19,7 +20,9 @@ function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
 
   const spawnPos = environment.playerStartPosition ?? { x: 0, y: 0, z: 0 };
-  const isSelected = selectedId === CHARACTER_PREVIEW_ID && selectedIds.length === 0;
+  // selectObject는 selectedIds를 [id]로 세팅하므로 length는 1이 정상값
+  // (다중 선택 중에는 selectedId가 프리뷰일 수 없음 — toggleSelectObject가 제외)
+  const isSelected = selectedId === CHARACTER_PREVIEW_ID && selectedIds.length <= 1;
 
   // objectRefsRef에 등록 — GizmoController가 이 그룹을 찾을 수 있게
   useEffect(() => {

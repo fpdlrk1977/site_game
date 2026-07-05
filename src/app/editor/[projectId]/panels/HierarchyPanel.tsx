@@ -42,7 +42,7 @@ interface ItemProps {
 }
 
 function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickItem }: ItemProps) {
-  const { selectedId, selectedIds, updateObject, deleteSelected, duplicateSelected, selectObject, ungroupSelected } = useSceneStore();
+  const { selectedId, selectedIds, updateObject, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected } = useSceneStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
@@ -61,7 +61,7 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
   const commitRename = () => {
     setEditing(false);
     const t = nameValue.trim();
-    if (t && t !== obj.name) updateObject(obj.id, { name: t });
+    if (t && t !== obj.name) { updateObject(obj.id, { name: t }); pushHistory(); }
     else setNameValue(obj.name);
   };
 
@@ -134,14 +134,14 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
         {/* 호버 시 액션 아이콘 (락은 잠긴 경우 항상 표시) */}
         <div className="flex items-center gap-0.5 shrink-0">
           <button
-            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); }}
+            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); pushHistory(); }}
             className="w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded opacity-0 group-hover:opacity-100"
             title={obj.visible ? '숨기기' : '표시'}
           >
             <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); }}
+            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); pushHistory(); }}
             className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${obj.locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             title={obj.locked ? '잠금 해제' : '잠금'}
           >

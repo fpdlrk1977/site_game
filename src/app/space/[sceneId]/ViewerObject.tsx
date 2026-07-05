@@ -143,10 +143,16 @@ function ImagePlane({ position, rotation, scale, url, hovered, onClick, onPointe
   );
 }
 
+/** 애니메이션 재생 요청 — t(타임스탬프)로 같은 클립의 재트리거를 구분한다 */
+export interface ClipRequest {
+  name: string;
+  t: number;
+}
+
 function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOut }: {
   url: string;
   hovered: boolean;
-  playClip: string | null;
+  playClip: ClipRequest | null;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
@@ -159,9 +165,10 @@ function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOu
   const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
 
   // 요청된 클립 재생 — 기존 클립 페이드아웃 후 새 클립 페이드인
+  // playClip.t가 바뀌면 같은 클립이라도 다시 재생된다 (영역 재진입/재클릭)
   useEffect(() => {
     if (!playClip) return;
-    const action = actions[playClip];
+    const action = actions[playClip.name];
     if (!action) return;
     Object.values(actions).forEach((a) => a?.fadeOut(0.2));
     action.reset().fadeIn(0.2).play();
@@ -214,15 +221,17 @@ interface Props {
   allObjects?: ObjectNodeSchema[];
   /** RigidBody 내부에서 사용할 때 — position/rotation은 부모 RigidBody가 담당, scale만 적용 */
   noTransform?: boolean;
-  /** PhysicsObject가 area_enter 시 직접 전달하는 클립 이름 */
-  activeClip?: string | null;
+  /** PhysicsObject가 area_enter 시 직접 전달하는 클립 재생 요청 */
+  activeClip?: ClipRequest | null;
 }
 
 export function ViewerObject({ object, assets, onEvent, allObjects = [], noTransform = false, activeClip: activeClipProp = null }: Props) {
   const [hovered, setHovered] = useState(false);
-  const [internalClip, setInternalClip] = useState<string | null>(null);
-  // PhysicsObject(area_enter)와 내부(click/hover) 중 최근 것을 사용
-  const effectiveClip = activeClipProp ?? internalClip;
+  const [internalClip, setInternalClip] = useState<ClipRequest | null>(null);
+  // PhysicsObject(area_enter)와 내부(click/hover) 요청 중 더 최근 것을 사용
+  const effectiveClip = !activeClipProp ? internalClip
+    : !internalClip ? activeClipProp
+    : activeClipProp.t >= internalClip.t ? activeClipProp : internalClip;
 
   const hasClick = object.events.some((e) => e.trigger === 'click');
   const hasHover = object.events.some((e) => e.trigger === 'hover_enter');
@@ -263,7 +272,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
     document.body.style.cursor = 'pointer';
     if (hasHover) {
       const clip = object.events.find((e) => e.trigger === 'hover_enter' && e.action === 'play_animation' && e.value);
-      if (clip) setInternalClip(clip.value);
+      if (clip) setInternalClip({ name: clip.value, t: Date.now() });
       onEvent(object, 'hover_enter');
     }
   };
@@ -275,7 +284,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   const handleClick = () => {
     if (!hasClick) return;
     const clip = object.events.find((e) => e.trigger === 'click' && e.action === 'play_animation' && e.value);
-    if (clip) setInternalClip(clip.value);
+    if (clip) setInternalClip({ name: clip.value, t: Date.now() });
     onEvent(object, 'click');
   };
 

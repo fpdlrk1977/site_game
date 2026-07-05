@@ -44,6 +44,8 @@ function AutoCollider({ object, assets, onEvent, allObjects }: {
 // 그룹 오브젝트를 재귀적으로 렌더링하면서 자식 오브젝트 각각에 콜라이더를 부여.
 // THREE.js group으로 부모 transform을 적용하고, 그 안의 RigidBody position은 로컬 좌표로
 // 해석되어 Rapier가 최종 world position을 올바르게 계산한다.
+// 제약: Rapier는 강체에 비균일 스케일을 지원하지 않으므로, 회전된 중첩 그룹에
+// 비균일 스케일이 걸리면 콜라이더와 비주얼이 어긋날 수 있다 (균일 스케일은 안전).
 function GroupWithCollision({ object, assets, onEvent, allObjects }: {
   object: ObjectNodeSchema;
   assets: ColliderAssets;
@@ -111,9 +113,10 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);
   // 그룹은 GroupWithCollision으로 처리: 자식 오브젝트 각각에 콜라이더 적용
+  // (그룹에 physics가 켜져 있어도 그룹 자체는 PhysicsObject로 렌더하지 않음 — 이중 렌더 방지)
   const groupObjects = rootObjects.filter((o) => o.isGroup && o.visible);
   const autoObjects = rootObjects.filter((o) => !o.physics.enabled && !o.light && !o.isGroup);
-  const physicsObjects = rootObjects.filter((o) => o.physics.enabled && !o.light);
+  const physicsObjects = rootObjects.filter((o) => o.physics.enabled && !o.light && !o.isGroup);
 
   const characterAsset = scene.environment.playerCharacterId
     ? assets.find((a) => a.id === scene.environment.playerCharacterId)

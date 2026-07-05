@@ -56,6 +56,20 @@ export function AssetBrowser() {
 
   const deleteAsset = async (asset: AssetRefSchema) => {
     if (deletingId) return;
+
+    // 현재 씬에서 사용 중이면 삭제 차단 — 유령 참조(assetId만 남은 오브젝트) 방지
+    // (다른 씬의 사용 여부까지는 확인하지 못하는 한계 있음)
+    const cur = useSceneStore.getState();
+    const usedCount = cur.objects.filter((o) => o.assetId === asset.id).length;
+    if (usedCount > 0) {
+      addToast(`씬에서 ${usedCount}개 오브젝트가 사용 중인 에셋입니다. 먼저 씬에서 제거해주세요.`, 'error');
+      return;
+    }
+    if (cur.environment.playerCharacterId === asset.id) {
+      addToast('플레이어 캐릭터로 사용 중인 에셋입니다. Player 설정을 먼저 변경해주세요.', 'error');
+      return;
+    }
+
     setDeletingId(asset.id);
     try {
       const supabase = createBrowserSupabase();
@@ -63,9 +77,16 @@ export function AssetBrowser() {
       if (!user) return;
 
       // Storage 파일 삭제 (실패해도 DB·스토어는 계속 진행)
-      const storagePath = asset.dracoUrl.match(/assets\/[^?]+/)?.[0];
+      // signed URL은 .../object/sign/{bucket}/{path}?token=... 형태 —
+      // remove()에는 버킷 이후의 경로만 전달해야 한다
+      const storagePath = (() => {
+        const m = asset.dracoUrl.match(/\/object\/sign\/assets\/([^?]+)/);
+        try { return m ? decodeURIComponent(m[1]) : null; } catch { return m ? m[1] : null; }
+      })();
       if (storagePath) {
-        await supabase.storage.from('assets').remove([storagePath]).catch(() => {});
+        const thumbPath = storagePath.replace(/\.glb$/i, '_thumb.png');
+        const paths = thumbPath !== storagePath ? [storagePath, thumbPath] : [storagePath];
+        await supabase.storage.from('assets').remove(paths).catch(() => {});
       }
 
       // DB 삭제
@@ -429,7 +450,7 @@ function AssetCard({ asset, icon, onAdd, onDelete, deleting }: {
           <p className="text-[9px] text-foreground text-center leading-tight">삭제할까요?</p>
           <div className="flex gap-1">
             <button
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
               disabled={deleting}
               className="px-2 py-0.5 text-[9px] bg-danger text-white rounded-xs disabled:opacity-50"
             >

@@ -163,14 +163,29 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate,
     objects, updateObject, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
+  const [, bump] = useState(0);
 
   const isCharPreview = selectedId === CHARACTER_PREVIEW_ID;
   const selectedObject = isCharPreview ? null : objects.find((o) => o.id === selectedId);
 
+  const target = selectedId ? refsMap.current.get(selectedId) : undefined;
+  const targetReady = !!(target && target.parent);
+
+  // 오브젝트 추가 직후에는 ref 등록(자식 useEffect)이 아직 안 끝나 target이 없다.
+  // 등록이 끝난 시점에 1회만 리렌더해 TransformControls를 붙인다.
+  // (ref가 끝내 등록되지 않으면 bump하지 않으므로 루프 없음)
+  useEffect(() => {
+    if (!selectedId || targetReady) return;
+    if (refsMap.current.get(selectedId)?.parent) {
+      // 외부 시스템(imperative refs map)과의 동기화 목적의 의도된 1회성 리렌더
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      bump((n) => n + 1);
+    }
+  }, [selectedId, targetReady, refsMap]);
+
   if (!selectedId) return null;
   if (!isCharPreview && (!selectedObject || selectedObject.locked || !selectedObject.visible)) return null;
 
-  const target = refsMap.current.get(selectedId);
   // target이 없거나 씬 그래프에서 분리된 상태면 TransformControls 연결 금지
   // (그룹 중첩 시 언마운트→리마운트 전환 구간에서 에러 루프 발생 방지)
   if (!target || !target.parent) return null;

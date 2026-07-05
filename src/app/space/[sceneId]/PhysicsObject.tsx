@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { RigidBody } from '@react-three/rapier';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
-import { ViewerObject } from './ViewerObject';
+import { ViewerObject, type ClipRequest } from './ViewerObject';
 
 interface Props {
   object: ObjectNodeSchema;
@@ -22,7 +22,7 @@ const COLLIDER_MAP: Record<string, 'hull' | 'trimesh' | 'cuboid' | 'ball'> = {
 };
 
 export function PhysicsObject({ object, assets, onEvent }: Props) {
-  const [activeClip, setActiveClip] = useState<string | null>(null);
+  const [activeClip, setActiveClip] = useState<ClipRequest | null>(null);
 
   const colliders = COLLIDER_MAP[
     object.primitiveShape === 'box' ? 'box'
@@ -40,7 +40,8 @@ export function PhysicsObject({ object, assets, onEvent }: Props) {
   const handleAreaEnter = () => {
     onEvent(object, 'area_enter');
     const clip = object.events.find((e) => e.trigger === 'area_enter' && e.action === 'play_animation' && e.value);
-    if (clip) setActiveClip(clip.value);
+    // 타임스탬프를 포함해 같은 클립이라도 재진입 시 다시 재생되게 한다
+    if (clip) setActiveClip({ name: clip.value, t: Date.now() });
   };
 
   return (

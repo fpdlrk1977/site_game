@@ -112,7 +112,9 @@ function NumInput({
         onChange={(e) => {
           setLocal(e.target.value);
           const n = parseFloat(e.target.value);
-          if (!isNaN(n)) onChange(n);
+          // 타이핑 중에도 min/max를 넘는 값이 스토어로 흘러가지 않도록 클램프
+          // (표시값은 그대로 두고 blur 시점에 정리)
+          if (!isNaN(n)) onChange(clamp(n));
         }}
         onBlur={() => {
           isFocused.current = false;
@@ -216,16 +218,16 @@ function SectionHeader({
   const collapsible = onToggle !== undefined;
   return (
     <div
-      // onClick={onToggle}
+      onClick={onToggle}
       className={`flex items-center gap-2 px-3 py-3 text-[12px] font-semibold text-muted tracking-wide bg-surface/40 select-none ${
-        collapsible ? 'hover:text-foreground hover:bg-surface/70 transition-colors' : ''
+        collapsible ? 'cursor-pointer hover:text-foreground hover:bg-surface/70 transition-colors' : ''
       }`}
     >
       {icon && <span className="text-[12px] opacity-60 font-normal not-italic">{icon}</span>}
       <span className="flex-1 text-foreground">{title}</span>
-      {/* {collapsible && (
+      {collapsible && (
         <span className="text-muted/40 text-[10px]">{isOpen ? '▾' : '▸'}</span>
-      )} */}
+      )}
     </div>
   );
 }
@@ -276,6 +278,19 @@ async function parseGlbAnimationNames(url: string): Promise<string[]> {
   return (gltf.animations ?? []).map((a) => a.name);
 }
 
+// URL별 클립 목록 캐시 — 같은 GLB(수십 MB)를 피커 열 때마다 다시 받지 않는다.
+// 실패한 Promise는 캐시에서 제거해 재시도 가능하게 유지.
+const clipNamesCache = new Map<string, Promise<string[]>>();
+function getGlbAnimationNames(url: string): Promise<string[]> {
+  let p = clipNamesCache.get(url);
+  if (!p) {
+    p = parseGlbAnimationNames(url);
+    p.catch(() => clipNamesCache.delete(url));
+    clipNamesCache.set(url, p);
+  }
+  return p;
+}
+
 function GlbClipPicker({ url, value, onChange }: { url: string; value: string; onChange: (v: string) => void }) {
   const [clips, setClips] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -284,7 +299,7 @@ function GlbClipPicker({ url, value, onChange }: { url: string; value: string; o
     let cancelled = false;
     setClips(null);
     setLoadError(null);
-    parseGlbAnimationNames(url)
+    getGlbAnimationNames(url)
       .then((names) => { if (!cancelled) setClips(names); })
       .catch((err) => { if (!cancelled) { setLoadError(String(err)); setClips([]); } });
     return () => { cancelled = true; };
@@ -434,7 +449,7 @@ function EnvironmentPanel() {
           <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
             <Toggle
               value={env.ground?.enabled ?? false}
-              onChange={(v) => { updateEnvironment({ ground: { color: env.ground?.color ?? '#4a7c59', enabled: v } }); pushHistory(); }}
+              onChange={(v) => { updateEnvironment({ ground: { ...env.ground, color: env.ground?.color ?? '#4a7c59', enabled: v } }); pushHistory(); }}
             />
           </label>
         </div>
@@ -560,7 +575,7 @@ function EnvironmentPanel() {
                   <LabeledNum
                     label="Near"
                     value={env.fog.near}
-                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, near: v } })}
+                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, near: Math.min(v, env.fog.far) } })}
                     onCommit={pushHistory}
                     min={1} max={200} precision={0} dragStep={1}
                   />
@@ -569,7 +584,7 @@ function EnvironmentPanel() {
                   <LabeledNum
                     label="Far"
                     value={env.fog.far}
-                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, far: v } })}
+                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, far: Math.max(v, env.fog.near) } })}
                     onCommit={pushHistory}
                     min={10} max={500} precision={0} dragStep={2}
                   />
@@ -694,7 +709,7 @@ function EnvironmentPanel() {
             y={env.playerStartPosition?.y ?? 0}
             z={env.playerStartPosition?.z ?? 0}
             onChangeX={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, x: v } })}
-            onChangeY={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, y: v } })}
+            onChangeY={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, y: Math.max(0, v) } })}
             onChangeZ={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, z: v } })}
             onCommit={pushHistory} dragStep={0.5}
           />
@@ -914,8 +929,10 @@ function InspectorInner() {
     );
   }
 
+  // 그룹 자식의 position은 부모 기준 로컬 좌표라 음수 y가 정상 — 최상위 오브젝트만 바닥(y=0) 클램프
+  // (GizmoController의 skipYClamp와 동일한 규칙)
   const setPos = (axis: 'x' | 'y' | 'z', v: number) =>
-    updateObject(obj.id, { position: { ...obj.position, [axis]: axis === 'y' ? Math.max(0, v) : v } });
+    updateObject(obj.id, { position: { ...obj.position, [axis]: axis === 'y' && !obj.parentId ? Math.max(0, v) : v } });
   const setRot = (axis: 'x' | 'y' | 'z', v: number) =>
     updateObject(obj.id, { rotation: { ...obj.rotation, [axis]: v } });
   const setScl = (axis: 'x' | 'y' | 'z', v: number) =>
@@ -1391,7 +1408,7 @@ function InspectorInner() {
             />
           </label>
           }
-          {obj.physics.enabled && (
+          {isOpen('physics') && obj.physics.enabled && (
             <div className='px-3 pb-3 space-y-1'>
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Collider Type</span>

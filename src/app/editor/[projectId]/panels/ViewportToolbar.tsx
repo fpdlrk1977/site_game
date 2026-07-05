@@ -27,9 +27,15 @@ export function ViewportToolbar({ projectName }: Props) {
   const [showHistory, setShowHistory] = useState(false);
   const [autoSaveAt, setAutoSaveAt] = useState<number | null>(null);
   const [autoSaveAgo, setAutoSaveAgo] = useState('');
+  const [saving, setSaving] = useState(false);
+  // 연타/중복 호출 방지 — state는 렌더용, ref는 즉시 차단용
+  const savingRef = useRef(false);
 
   const handleSave = useCallback(async () => {
-    if (!sceneId) return;
+    if (!sceneId || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
     const supabase = createBrowserSupabase();
     const sceneData: ProjectSceneSchema = {
       projectId: projectId ?? '',
@@ -88,6 +94,10 @@ export function ViewportToolbar({ projectName }: Props) {
 
     markSaved();
     addToast('저장되었습니다.', 'success');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }, [sceneId, projectId, objects, assets, environment, markSaved, addToast]);
 
   // 오토세이브: 60초마다 변경사항 있으면 자동 저장 (임시 비활성화)
@@ -173,15 +183,15 @@ export function ViewportToolbar({ projectName }: Props) {
           <button
             id="save-btn"
             onClick={handleSave}
-            disabled={!isModified}
+            disabled={!isModified || saving}
             className={`flex items-center gap-1.5 px-3 h-7 rounded-xs text-xs font-semibold transition-all shrink-0 ${
-              isModified
+              isModified && !saving
                 ? 'bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-md shadow-primary/25 hover:from-violet-500 hover:to-cyan-500'
                 : 'bg-background/40 text-muted cursor-not-allowed'
             }`}
           >
             <Save size={12} />
-            <span className="hidden sm:block">저장</span>
+            <span className="hidden sm:block">{saving ? '저장 중...' : '저장'}</span>
           </button>
         </Tooltip>
 

@@ -96,6 +96,11 @@ interface SceneActions {
   removeAsset: (id: string) => void;
 }
 
+// 에디터 뷰포트의 플레이어 캐릭터 프리뷰가 쓰는 가상 오브젝트 ID.
+// objects 배열에는 존재하지 않으므로 다중 선택 등에 섞이면 안 된다.
+// (CharacterPreview.tsx에서 re-export — 스토어가 원본을 소유해 순환 import 방지)
+export const CHARACTER_PREVIEW_ID = '__character_preview__';
+
 const SHAPE_NAMES: Record<PrimitiveShape, string> = {
   box: '박스',
   sphere: '구체',
@@ -173,10 +178,12 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   selectObjects: (ids) => set({ selectedIds: ids, selectedId: ids[ids.length - 1] ?? null }),
 
   toggleSelectObject: (id) => set((s) => {
-    const already = s.selectedIds.includes(id);
+    // 캐릭터 프리뷰(가상 오브젝트)는 실제 오브젝트 다중 선택에 섞이지 않도록 제외
+    const base = s.selectedIds.filter((x) => x !== CHARACTER_PREVIEW_ID);
+    const already = base.includes(id);
     const selectedIds = already
-      ? s.selectedIds.filter((x) => x !== id)
-      : [...s.selectedIds, id];
+      ? base.filter((x) => x !== id)
+      : [...base, id];
     return { selectedIds, selectedId: selectedIds[selectedIds.length - 1] ?? null };
   }),
 
@@ -189,6 +196,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
+      selectedIds: [obj.id],
       isModified: true,
       past: [...past.slice(-49), { objects, environment }],
       future: [],
@@ -360,6 +368,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
+      selectedIds: [obj.id],
       isModified: true,
       past: [...past.slice(-49), { objects, environment }],
       future: [],
@@ -634,7 +643,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({
       objects: next.objects,
       environment: next.environment,
-      past: [...past, { objects, environment }],
+      past: [...past.slice(-49), { objects, environment }],
       future: future.slice(1),
       isModified: true,
       _prevSnapshot: null,
