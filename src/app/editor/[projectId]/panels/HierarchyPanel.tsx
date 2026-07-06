@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useSceneStore } from '@/store/sceneStore';
+import { useSceneStore, isDescendant } from '@/store/sceneStore';
 import type { ObjectNodeSchema } from '@/types/scene';
+
+type DropPos = 'before' | 'after' | 'inside';
 
 const SHAPE_ICONS: Record<string, string> = {
   box: '⬛', sphere: '⬤', cylinder: '⬭', plane: '▬',
@@ -41,9 +43,9 @@ interface ItemProps {
   onClickItem: (id: string, index: number, shiftKey: boolean) => void;
   dragEnabled: boolean;
   isDragging: boolean;
-  dropPos: 'before' | 'after' | null;
+  dropPos: DropPos | null;
   onDragStartItem: (id: string) => void;
-  onDragOverItem: (id: string, pos: 'before' | 'after') => void;
+  onDragOverItem: (id: string, pos: DropPos) => void;
   onDropItem: (id: string) => void;
   onDragEndItem: () => void;
 }
@@ -77,12 +79,15 @@ function HierarchyItem({
 
   return (
     <div className="relative">
-      {/* 드롭 위치 인디케이터 (드래그 정렬) */}
+      {/* 드롭 위치 인디케이터 — before/after는 라인, inside(그룹 안)는 링 강조 */}
       {dropPos === 'before' && (
         <span className="absolute left-1 right-1 -top-px h-0.5 bg-primary rounded-full z-10 pointer-events-none" />
       )}
       {dropPos === 'after' && (
         <span className="absolute left-1 right-1 -bottom-px h-0.5 bg-primary rounded-full z-10 pointer-events-none" />
+      )}
+      {dropPos === 'inside' && (
+        <span className="absolute inset-0 rounded-xs ring-2 ring-primary ring-inset bg-primary/10 z-10 pointer-events-none" />
       )}
       <div
         draggable={dragEnabled && !editing}
@@ -92,7 +97,12 @@ function HierarchyItem({
           if (!dragEnabled) return;
           e.preventDefault();
           const rect = e.currentTarget.getBoundingClientRect();
-          onDragOverItem(obj.id, e.clientY - rect.top < rect.height / 2 ? 'before' : 'after');
+          const r = (e.clientY - rect.top) / rect.height;
+          // 그룹은 3분할(위=앞, 가운데=안, 아래=뒤), 일반 오브젝트는 2분할(앞/뒤)
+          const pos: DropPos = obj.isGroup
+            ? (r < 0.25 ? 'before' : r > 0.75 ? 'after' : 'inside')
+            : (r < 0.5 ? 'before' : 'after');
+          onDragOverItem(obj.id, pos);
         }}
         onDrop={(e) => { if (!dragEnabled) return; e.preventDefault(); onDropItem(obj.id); }}
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
@@ -222,28 +232,38 @@ function HierarchyItem({
 }
 
 export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
-  const { objects, selectObject, selectObjects, reorderObject } = useSceneStore();
+  const { objects, selectObject, selectObjects, moveObject } = useSceneStore();
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const anchorIndexRef = useRef<number>(-1);
-  // 드래그 정렬 상태 — 검색 중에는 순서가 필터링돼 혼란스러우므로 비활성화
+  // 드래그 이동 상태 — 검색 중에는 순서가 필터링돼 혼란스러우므로 비활성화
   const dragEnabled = !search.trim();
   const [dragId, setDragId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; pos: DropPos } | null>(null);
 
   const handleDragStartItem = (id: string) => setDragId(id);
   const handleDragEndItem = () => { setDragId(null); setDropTarget(null); };
-  const handleDragOverItem = (targetId: string, pos: 'before' | 'after') => {
+  const handleDragOverItem = (targetId: string, pos: DropPos) => {
     if (!dragId || dragId === targetId) { setDropTarget(null); return; }
-    // 같은 부모 형제만 정렬 대상 (재부모화 미지원) — 부모가 다르면 인디케이터를 숨겨 드롭 불가를 표시
-    const dragged = objects.find((o) => o.id === dragId);
+    // 유효하지 않은 드롭(순환)이면 인디케이터를 숨겨 드롭 불가를 표시
     const target = objects.find((o) => o.id === targetId);
-    if (!dragged || !target || dragged.parentId !== target.parentId) { setDropTarget(null); return; }
+    if (!target) { setDropTarget(null); return; }
+    if (pos === 'inside' && !target.isGroup) { setDropTarget(null); return; }
+    const newParentId = pos === 'inside' ? targetId : target.parentId;
+    // 그룹을 자기 자신·자손 안으로 넣는 순환 방지
+    if (newParentId === dragId || (newParentId && isDescendant(objects, newParentId, dragId))) {
+      setDropTarget(null);
+      return;
+    }
     setDropTarget((prev) => (prev?.id === targetId && prev.pos === pos ? prev : { id: targetId, pos }));
   };
   const handleDropItem = (targetId: string) => {
     if (dragId && dropTarget && dropTarget.id === targetId) {
-      reorderObject(dragId, targetId, dropTarget.pos);
+      moveObject(dragId, targetId, dropTarget.pos);
+      // 그룹 안으로 넣었으면 결과가 보이도록 자동 펼침
+      if (dropTarget.pos === 'inside') {
+        setExpanded((prev) => new Set(prev).add(targetId));
+      }
     }
     handleDragEndItem();
   };

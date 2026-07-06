@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { MathUtils, Quaternion, Euler, Vector3 } from 'three';
+import { MathUtils, Quaternion, Euler, Vector3, Matrix4 } from 'three';
 import {
   ObjectNodeSchema,
   AssetRefSchema,
@@ -78,7 +78,7 @@ interface SceneActions {
   requestRecallBookmark: (slot: number) => void;
   setCameraBookmark: (slot: number, position: [number, number, number], target: [number, number, number]) => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
-  reorderObject: (draggedId: string, targetId: string, position: 'before' | 'after') => void;
+  moveObject: (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   duplicateSelected: () => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
@@ -157,6 +157,41 @@ function makeObject(shape: PrimitiveShape): ObjectNodeSchema {
     material: { color: '#a78bfa', roughness: 0.5, metalness: 0.1 },
     position: { x: 0, y: 0.5, z: 0 },
   });
+}
+
+const DEG2RAD_M = Math.PI / 180;
+const RAD2DEG_M = 180 / Math.PI;
+
+// 오브젝트의 월드 변환 행렬 — 부모 체인의 로컬 변환을 루트→자신 순서로 누적
+function computeWorldMatrix(objects: ObjectNodeSchema[], id: string): Matrix4 {
+  const chain: ObjectNodeSchema[] = [];
+  let cur: ObjectNodeSchema | undefined = objects.find((o) => o.id === id);
+  while (cur) {
+    chain.unshift(cur);
+    const parentId: string | null = cur.parentId;
+    cur = parentId ? objects.find((o) => o.id === parentId) : undefined;
+  }
+  const m = new Matrix4();
+  const p = new Vector3(), q = new Quaternion(), s = new Vector3(), e = new Euler();
+  for (const o of chain) {
+    p.set(o.position.x, o.position.y, o.position.z);
+    e.set(o.rotation.x * DEG2RAD_M, o.rotation.y * DEG2RAD_M, o.rotation.z * DEG2RAD_M);
+    q.setFromEuler(e);
+    s.set(o.scale.x, o.scale.y, o.scale.z);
+    m.multiply(new Matrix4().compose(p, q, s));
+  }
+  return m;
+}
+
+// candidateId가 rootId의 자손인지 (그룹을 자기 자손 안에 넣는 순환 방지)
+export function isDescendant(objects: ObjectNodeSchema[], candidateId: string, rootId: string): boolean {
+  let cur: ObjectNodeSchema | undefined = objects.find((o) => o.id === candidateId);
+  while (cur?.parentId) {
+    if (cur.parentId === rootId) return true;
+    const parentId: string = cur.parentId;
+    cur = objects.find((o) => o.id === parentId);
+  }
+  return false;
 }
 
 export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
@@ -376,21 +411,47 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
-  // 계층 리스트 드래그 정렬 — 배열 순서 = 같은 부모 내 형제 순서.
-  // 좌표 변환이 필요한 재부모화는 지원하지 않으므로 부모가 다르면 무시(안전).
-  // (그룹을 옮겨도 자식은 parentId로 트리에 붙으므로 배열에서 함께 옮길 필요 없음)
-  reorderObject: (draggedId, targetId, position) => {
+  // 계층 리스트 드래그 이동 — 순서 변경 + 그룹 안팎 재부모화(reparent).
+  // 배열 순서 = 같은 부모 내 형제 순서. before/after는 target의 형제로, inside는 target(그룹) 자식으로.
+  // 부모가 바뀌면 월드 위치를 유지하도록 월드 변환을 새 부모 기준 로컬 변환으로 재계산한다
+  // (그룹 자체를 옮겨도 자식은 로컬 좌표라 서브트리 전체가 제자리를 유지).
+  moveObject: (draggedId, targetId, position) => {
     if (draggedId === targetId) return;
     const { objects, environment, past } = get();
     const dragged = objects.find((o) => o.id === draggedId);
     const target = objects.find((o) => o.id === targetId);
     if (!dragged || !target) return;
-    if (dragged.parentId !== target.parentId) return;
-    const without = objects.filter((o) => o.id !== draggedId);
-    const targetIdx = without.findIndex((o) => o.id === targetId);
+    if (position === 'inside' && !target.isGroup) return;
+
+    const newParentId = position === 'inside' ? targetId : target.parentId;
+    // 순환 방지 — 새 부모가 자기 자신이거나 자기 자손이면 거부
+    if (newParentId === draggedId) return;
+    if (newParentId && isDescendant(objects, newParentId, draggedId)) return;
+
+    let moved = dragged;
+    if (newParentId !== dragged.parentId) {
+      // 월드 변환 유지 → 새 부모 기준 로컬 변환으로 변환
+      const world = computeWorldMatrix(objects, draggedId);
+      const parentWorld = newParentId ? computeWorldMatrix(objects, newParentId) : new Matrix4();
+      const local = parentWorld.invert().multiply(world);
+      const p = new Vector3(), q = new Quaternion(), s = new Vector3();
+      local.decompose(p, q, s);
+      const e = new Euler().setFromQuaternion(q);
+      moved = {
+        ...dragged,
+        parentId: newParentId,
+        position: { x: p.x, y: p.y, z: p.z },
+        rotation: { x: e.x * RAD2DEG_M, y: e.y * RAD2DEG_M, z: e.z * RAD2DEG_M },
+        scale: { x: s.x, y: s.y, z: s.z },
+      };
+    }
+
+    const rest = objects.filter((o) => o.id !== draggedId);
+    const targetIdx = rest.findIndex((o) => o.id === targetId);
     if (targetIdx < 0) return;
+    // inside: 그룹 헤더 바로 뒤(첫 자식), before/after: target 앞/뒤
     const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
-    const next = [...without.slice(0, insertIdx), dragged, ...without.slice(insertIdx)];
+    const next = [...rest.slice(0, insertIdx), moved, ...rest.slice(insertIdx)];
     set({ objects: next, isModified: true, ...withHistory({ objects, environment }, past) });
   },
 
