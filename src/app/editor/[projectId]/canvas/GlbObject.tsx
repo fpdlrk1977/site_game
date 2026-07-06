@@ -5,6 +5,7 @@ import { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 import { normalizeGlbMaterials } from '@/lib/glbMaterials';
+import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 
 interface Props {
   url: string;
@@ -39,6 +40,8 @@ export function GlbObject({ url, selected, hovered = false, onClick, onHoverChan
   }, [scene]);
   // Outlines는 단일 mesh에서만 동작하므로, 여러 mesh로 구성된 GLB는 bounding box로 표시
   const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
+  // 인스펙터 "바닥에 놓기"가 재로드 없이 밑면을 계산하도록 로컬 bbox를 캐시에 저장
+  useEffect(() => { glbLocalBboxCache.set(url, bbox); }, [url, bbox]);
   const guideBox = useMemo(() => {
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();

@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, Suspense, lazy, useMemo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, Grid, Sky, Environment } from '@react-three/drei';
+import { OrbitControls, Grid, Sky, Environment, ContactShadows } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset } from '@/types/scene';
@@ -14,6 +14,7 @@ import { GroundPlane } from '@/components/three/GroundPlane';
 import { DefaultEnvironment } from '@/components/three/DefaultEnvironment';
 import { PlayModeContext } from './PlayModeContext';
 import { ClipRequestContext, type ClipReq } from './ClipRequestContext';
+import { SceneToneMapping } from '@/components/three/SceneToneMapping';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
 
@@ -248,10 +249,13 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
     <Canvas
       shadows="percentage"
       camera={{ position: [5, 4, 8], fov: 60 }}
+      gl={{ toneMapping: THREE.LinearToneMapping }}
       style={{ width: '100%', height: '100%' }}
     >
       <PlayModeContext.Provider value={playMode}>
       <ClipRequestContext.Provider value={clipRequests ?? EMPTY_CLIPS}>
+      {/* 톤매핑 Neutral 고정 + 씬별 노출 — 저장 색을 최대한 그대로 렌더 */}
+      <SceneToneMapping exposure={environment.toneMappingExposure ?? 1} />
       {/* 탐색/플레이 전환 시 카메라 수평 방향 캡처 */}
       <CameraAzimuthCapture playMode={playMode} azimuthRef={azimuthRef} />
 
@@ -284,10 +288,10 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       )}
 
       {/* ── 조명 ── */}
-      {/* fill 광을 낮춰 방향광 그림자 대비를 살린다 (환경광이 fill 역할 분담).
-          ambient는 그림자를 가장 많이 씻어내므로 저장값의 절반만 적용. */}
-      <hemisphereLight args={['#b9d5ff', '#4a5568', 0.08]} />
-      <ambientLight intensity={environment.lights.ambientIntensity * 0.5} />
+      {/* fill 광을 낮춰 방향광 그림자를 더 진하게. ambient/hemisphere/IBL이 그림자를 씻어내므로
+          fill 기여를 줄인다(ambient 저장값의 0.2배, hemisphere 0.02, IBL 0.25). */}
+      <hemisphereLight args={['#b9d5ff', '#4a5568', 0.02]} />
+      <ambientLight intensity={environment.lights.ambientIntensity * 0.2} />
       <directionalLight
         position={[
           environment.lights.directionalPosition.x,
@@ -335,6 +339,13 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           textureUrl={environment.ground?.textureUrl}
           positionY={playMode ? 0 : -0.002}
         />
+      )}
+
+      {/* ── 접지 그림자(ContactShadows) — 오브젝트가 바닥에 붙은 느낌 강화. 기본 꺼짐(opt-in) ── */}
+      {/* 플레이 모드에선 제외: 캐릭터가 움직이면 접지 그림자가 이동 경로를 따라 검게 칠해지는
+          트레일 아티팩트가 생긴다(움직이는 대상에 부적합). 탐색 모드 정적 씬에서만 렌더. */}
+      {environment.contactShadows === true && !playMode && (
+        <ContactShadows position={[0, 0.005, 0]} scale={60} far={12} blur={2.4} opacity={0.55} resolution={1024} color="#000000" />
       )}
 
       {/* ── 씬 오브젝트 (에디터 뷰) ── */}

@@ -32,6 +32,12 @@ export interface EnvSchema {
   showInteractionHints?: boolean;
   notes?: string;
   postProcessing?: { preset: PostProcessPreset };
+  // 렌더러 노출(밝기) — LinearToneMapping의 toneMappingExposure. 미설정 = 1(기본).
+  // 톤매핑은 코드에서 Linear로 고정 — 저장 색을 최대한 그대로 렌더(측정상 none과 동일 정확도).
+  toneMappingExposure?: number;
+  // 오브젝트 아래 부드러운 접지 그림자(drei ContactShadows). 미설정/false = 꺼짐(opt-in).
+  // 바닥에 '붙은 느낌'을 강화하지만 매 프레임 렌더라 비용이 있어 기본은 꺼둔다.
+  contactShadows?: boolean;
 }
 
 export interface EventSchema {

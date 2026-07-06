@@ -16,7 +16,7 @@ import { RoomEnvironment } from 'three-stdlib';
  * HDR 프리셋이 켜진 경우(drei <Environment>가 scene.environment를 설정)에는
  * 렌더하지 않는다 — 호출부에서 조건부로 마운트할 것.
  */
-export function DefaultEnvironment({ intensity = 0.35 }: { intensity?: number }) {
+export function DefaultEnvironment({ intensity = 0.25 }: { intensity?: number }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
 

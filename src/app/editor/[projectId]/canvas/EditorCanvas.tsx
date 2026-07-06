@@ -1,38 +1,103 @@
-'use client';
+"use client";
 
-import { useRef, useEffect, useState, useCallback, useMemo, Suspense } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid, Sky, Environment } from '@react-three/drei';
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import * as THREE from 'three';
-import { useSceneStore } from '@/store/sceneStore';
-import { EditorObjectInstance } from './EditorObjectInstance';
-import { GizmoController } from './GizmoController';
-import { ObjectRefsContext } from './ObjectRefsContext';
-import { pointerDownOnObjectRef } from './boxSelectState';
-import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
-import { GroundPlane } from '@/components/three/GroundPlane';
-import { DefaultEnvironment } from '@/components/three/DefaultEnvironment';
-import { CharacterPreview } from './CharacterPreview';
-import type { Vector3 as Vec3, HdrPreset } from '@/types/scene';
+import { useRef, useEffect, useState, useCallback, useMemo, Suspense } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls, Grid, Sky, Environment, ContactShadows } from "@react-three/drei";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import * as THREE from "three";
+import { useSceneStore } from "@/store/sceneStore";
+import { EditorObjectInstance } from "./EditorObjectInstance";
+import { GizmoController } from "./GizmoController";
+import { ObjectRefsContext } from "./ObjectRefsContext";
+import { pointerDownOnObjectRef } from "./boxSelectState";
+import { PostProcessingEffects } from "@/components/three/PostProcessingEffects";
+import { GroundPlane } from "@/components/three/GroundPlane";
+import { DefaultEnvironment } from "@/components/three/DefaultEnvironment";
+import { SceneToneMapping } from "@/components/three/SceneToneMapping";
+import { CharacterPreview } from "./CharacterPreview";
+import type { Vector3 as Vec3, HdrPreset } from "@/types/scene";
 
 function BoundaryGizmo({ size }: { size: number }) {
   const b = size;
   const H = 8;
-  const positions = useMemo(() => new Float32Array([
-    -b, 0.02, -b,   b, 0.02, -b,
-     b, 0.02, -b,   b, 0.02,  b,
-     b, 0.02,  b,  -b, 0.02,  b,
-    -b, 0.02,  b,  -b, 0.02, -b,
-    -b, 0, -b,  -b, H, -b,
-     b, 0, -b,   b, H, -b,
-     b, 0,  b,   b, H,  b,
-    -b, 0,  b,  -b, H,  b,
-    -b, H, -b,   b, H, -b,
-     b, H, -b,   b, H,  b,
-     b, H,  b,  -b, H,  b,
-    -b, H,  b,  -b, H, -b,
-  ]), [b]);
+  const positions = useMemo(
+    () =>
+      new Float32Array([
+        -b,
+        0.02,
+        -b,
+        b,
+        0.02,
+        -b,
+        b,
+        0.02,
+        -b,
+        b,
+        0.02,
+        b,
+        b,
+        0.02,
+        b,
+        -b,
+        0.02,
+        b,
+        -b,
+        0.02,
+        b,
+        -b,
+        0.02,
+        -b,
+        -b,
+        0,
+        -b,
+        -b,
+        H,
+        -b,
+        b,
+        0,
+        -b,
+        b,
+        H,
+        -b,
+        b,
+        0,
+        b,
+        b,
+        H,
+        b,
+        -b,
+        0,
+        b,
+        -b,
+        H,
+        b,
+        -b,
+        H,
+        -b,
+        b,
+        H,
+        -b,
+        b,
+        H,
+        -b,
+        b,
+        H,
+        b,
+        b,
+        H,
+        b,
+        -b,
+        H,
+        b,
+        -b,
+        H,
+        b,
+        -b,
+        H,
+        -b,
+      ]),
+    [b],
+  );
   return (
     <lineSegments>
       <bufferGeometry>
@@ -83,7 +148,17 @@ export function EditorCanvas() {
   const dragRectRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [selBox, setSelBox] = useState<SelBox | null>(null);
 
-  const { environment, assets, focusTarget, focusAllRequest, cameraViewRequest, objects, bookmarkSaveRequest, bookmarkRecallRequest, setCameraBookmark } = useSceneStore();
+  const {
+    environment,
+    assets,
+    focusTarget,
+    focusAllRequest,
+    cameraViewRequest,
+    objects,
+    bookmarkSaveRequest,
+    bookmarkRecallRequest,
+    setCameraBookmark,
+  } = useSceneStore();
 
   useEffect(() => {
     if (!focusTarget || !orbitRef.current) return;
@@ -96,13 +171,23 @@ export function EditorCanvas() {
     if (!focusAllRequest || !orbitRef.current) return;
     const visible = objects.filter((o) => o.visible && !o.parentId);
     if (visible.length === 0) return;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
     for (const o of visible) {
-      minX = Math.min(minX, o.position.x); maxX = Math.max(maxX, o.position.x);
-      minY = Math.min(minY, o.position.y); maxY = Math.max(maxY, o.position.y);
-      minZ = Math.min(minZ, o.position.z); maxZ = Math.max(maxZ, o.position.z);
+      minX = Math.min(minX, o.position.x);
+      maxX = Math.max(maxX, o.position.x);
+      minY = Math.min(minY, o.position.y);
+      maxY = Math.max(maxY, o.position.y);
+      minZ = Math.min(minZ, o.position.z);
+      maxZ = Math.max(maxZ, o.position.z);
     }
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+    const cx = (minX + maxX) / 2,
+      cy = (minY + maxY) / 2,
+      cz = (minZ + maxZ) / 2;
     const spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
     orbitRef.current.target.set(cx, cy, cz);
     orbitRef.current.object.position.set(cx + spread * 0.8, cy + spread * 0.6, cz + spread * 0.8);
@@ -114,8 +199,8 @@ export function EditorCanvas() {
     if (!cameraViewRequest || !orbitRef.current) return;
     const { view } = cameraViewRequest;
     orbitRef.current.target.set(0, 0, 0);
-    if (view === 'top') orbitRef.current.object.position.set(0, 20, 0.001);
-    else if (view === 'front') orbitRef.current.object.position.set(0, 3, 20);
+    if (view === "top") orbitRef.current.object.position.set(0, 20, 0.001);
+    else if (view === "front") orbitRef.current.object.position.set(0, 3, 20);
     else orbitRef.current.object.position.set(20, 3, 0);
     orbitRef.current.update();
   }, [cameraViewRequest]);
@@ -124,11 +209,7 @@ export function EditorCanvas() {
     if (!bookmarkSaveRequest || !orbitRef.current) return;
     const cam = orbitRef.current.object;
     const tgt = orbitRef.current.target;
-    setCameraBookmark(
-      bookmarkSaveRequest.slot,
-      [cam.position.x, cam.position.y, cam.position.z],
-      [tgt.x, tgt.y, tgt.z],
-    );
+    setCameraBookmark(bookmarkSaveRequest.slot, [cam.position.x, cam.position.y, cam.position.z], [tgt.x, tgt.y, tgt.z]);
   }, [bookmarkSaveRequest, setCameraBookmark]);
 
   useEffect(() => {
@@ -221,15 +302,15 @@ export function EditorCanvas() {
     resetDrag();
   }, [resetDrag]);
 
-  const useHdr = (environment.hdrPreset ?? 'none') !== 'none';
-  const isSkyMode = !useHdr && environment.sky.type === 'sky';
-  const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#1a1a2e';
+  const useHdr = (environment.hdrPreset ?? "none") !== "none";
+  const isSkyMode = !useHdr && environment.sky.type === "sky";
+  const skyColor = environment.sky.type === "color" ? environment.sky.value : "#1a1a2e";
 
   return (
     <ObjectRefsContext.Provider value={objectRefsRef}>
       <div
         ref={wrapperRef}
-        style={{ position: 'relative', width: '100%', height: '100%' }}
+        style={{ position: "relative", width: "100%", height: "100%" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -239,13 +320,16 @@ export function EditorCanvas() {
           id="editor-canvas"
           shadows="percentage"
           camera={{ position: [5, 4, 8], fov: 60 }}
-          gl={{ preserveDrawingBuffer: true }}
+          gl={{ preserveDrawingBuffer: true, toneMapping: THREE.LinearToneMapping }}
           onPointerMissed={() => {
             if (!isDraggingRef.current) useSceneStore.getState().selectObject(null);
           }}
-          style={{ width: '100%', height: '100%' }}
+          style={{ width: "100%", height: "100%" }}
         >
           <CameraCapture cameraRef={cameraRef} />
+
+          {/* 톤매핑 Neutral 고정 + 씬별 노출 — 저장 색을 최대한 그대로 렌더(뷰어와 동일) */}
+          <SceneToneMapping exposure={environment.toneMappingExposure ?? 1} />
 
           {/* ── 배경 (HDR / Sky / 단색 — 상호 배타) ── */}
           {!useHdr && !isSkyMode && <color attach="background" args={[skyColor]} />}
@@ -264,22 +348,18 @@ export function EditorCanvas() {
           )}
           {useHdr && (
             <Suspense fallback={null}>
-              <Environment preset={environment.hdrPreset as Exclude<HdrPreset, 'none'>} background />
+              <Environment preset={environment.hdrPreset as Exclude<HdrPreset, "none">} background />
             </Suspense>
           )}
           {/* HDR 미설정 시에도 은은한 IBL 제공 → PBR 재질 생기 */}
           {!useHdr && <DefaultEnvironment />}
 
-          {/* fill 광을 낮춰 방향광 그림자 대비를 살린다 (환경광이 fill 역할 분담).
-              ambient는 그림자를 가장 많이 씻어내므로 저장값의 절반만 적용. */}
-          <hemisphereLight args={['#b9d5ff', '#4a5568', 0.08]} />
-          <ambientLight intensity={environment.lights.ambientIntensity * 0.5} />
+          {/* fill 광을 낮춰 방향광 그림자를 더 진하게. ambient/hemisphere가 그림자를 씻어내므로
+              fill 기여를 줄인다(ambient는 저장값의 0.35배, hemisphere 0.04). */}
+          <hemisphereLight args={["#b9d5ff", "#4a5568", 0.02]} />
+          <ambientLight intensity={environment.lights.ambientIntensity * 0.2} />
           <directionalLight
-            position={[
-              environment.lights.directionalPosition.x,
-              environment.lights.directionalPosition.y,
-              environment.lights.directionalPosition.z,
-            ]}
+            position={[environment.lights.directionalPosition.x, environment.lights.directionalPosition.y, environment.lights.directionalPosition.z]}
             intensity={environment.lights.directionalIntensity}
             castShadow
             shadow-mapSize={[2048, 2048]}
@@ -307,39 +387,42 @@ export function EditorCanvas() {
             infiniteGrid
           />
 
-          {objects.filter((o) => o.parentId === null).map((obj) => (
-            <EditorObjectInstance key={obj.id} object={obj} />
-          ))}
+          {objects
+            .filter((o) => o.parentId === null)
+            .map((obj) => (
+              <EditorObjectInstance key={obj.id} object={obj} />
+            ))}
 
-          {(environment.boundary ?? 0) > 0 && (
-            <BoundaryGizmo size={environment.boundary!} />
-          )}
+          {(environment.boundary ?? 0) > 0 && <BoundaryGizmo size={environment.boundary!} />}
 
           {environment.ground?.enabled && (
             <GroundPlane
-              preset={environment.ground.preset ?? 'custom'}
+              preset={environment.ground.preset ?? "custom"}
               color={environment.ground.color}
               textureUrl={environment.ground.textureUrl}
               positionY={-0.002}
             />
           )}
 
-          {/* 둘러보기 전용 씬은 캐릭터 프리뷰·스폰 마커 숨김 */}
-          {!environment.disableWalk && (environment.playerCharacterId
-            ? (() => {
-                const charAsset = assets.find((a) => a.id === environment.playerCharacterId);
-                return charAsset
-                  ? <CharacterPreview url={charAsset.dracoUrl} scale={environment.playerCharacterScale ?? 1} />
-                  : null;
-              })()
-            : environment.playerStartPosition
-              ? <SpawnMarker position={environment.playerStartPosition} />
-              : null
+          {/* 접지 그림자 — 뷰어와 동일 (오브젝트가 바닥에 붙은 느낌). 기본 꺼짐(opt-in) */}
+          {environment.contactShadows === true && (
+            <ContactShadows position={[0, 0.005, 0]} scale={60} far={12} blur={2.4} opacity={0.55} resolution={1024} color="#000000" />
           )}
+
+          {/* 둘러보기 전용 씬은 캐릭터 프리뷰·스폰 마커 숨김 */}
+          {!environment.disableWalk &&
+            (environment.playerCharacterId ? (
+              (() => {
+                const charAsset = assets.find((a) => a.id === environment.playerCharacterId);
+                return charAsset ? <CharacterPreview url={charAsset.dracoUrl} scale={environment.playerCharacterScale ?? 1} /> : null;
+              })()
+            ) : environment.playerStartPosition ? (
+              <SpawnMarker position={environment.playerStartPosition} />
+            ) : null)}
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 
-          <PostProcessingEffects preset={environment.postProcessing?.preset ?? 'none'} />
+          <PostProcessingEffects preset={environment.postProcessing?.preset ?? "none"} />
 
           <OrbitControls
             ref={orbitRef}
@@ -362,15 +445,15 @@ export function EditorCanvas() {
         {selBox && (
           <div
             style={{
-              position: 'absolute',
+              position: "absolute",
               left: selBox.left,
               top: selBox.top,
               width: selBox.width,
               height: selBox.height,
-              border: '1.5px solid #7c3aed',
-              background: 'rgba(124, 58, 237, 0.08)',
-              pointerEvents: 'none',
-              boxSizing: 'border-box',
+              border: "1.5px solid #7c3aed",
+              background: "rgba(124, 58, 237, 0.08)",
+              pointerEvents: "none",
+              boxSizing: "border-box",
             }}
           />
         )}

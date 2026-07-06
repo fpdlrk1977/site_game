@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeftRight, User } from 'lucide-react';
 import { MathUtils } from 'three';
+import * as THREE from 'three';
+import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { RichContent } from '@/components/ui/RichContent';
-import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema } from '@/types/scene';
 import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
 function evalMath(expr: string): number | null {
@@ -354,6 +356,22 @@ function GlbClipPicker({ url, value, onChange }: { url: string; value: string; o
   );
 }
 
+// ── 분위기(Mood) 프리셋 ────────────────────────────────────────
+// 기존 씬 설정(HDR 프리셋 + 라이트 강도/태양 위치 + 노출)을 한 번에 세팅.
+// 클릭 시 updateEnvironment로 묶음 적용 — 개별 값은 이후 각 컨트롤에서 미세조정 가능.
+const MOOD_PRESETS: { id: string; label: string; emoji: string; env: Partial<EnvSchema> }[] = [
+  { id: 'morning', label: '아침', emoji: '🌅', env: { hdrPreset: 'dawn', toneMappingExposure: 1.05,
+    lights: { ambientIntensity: 0.55, directionalIntensity: 1.0, directionalPosition: { x: 8, y: 5, z: 6 } } } },
+  { id: 'noon', label: '한낮', emoji: '☀️', env: { hdrPreset: 'park', toneMappingExposure: 1.0,
+    lights: { ambientIntensity: 0.6, directionalIntensity: 1.5, directionalPosition: { x: 4, y: 12, z: 4 } } } },
+  { id: 'sunset', label: '노을', emoji: '🌇', env: { hdrPreset: 'sunset', toneMappingExposure: 0.95,
+    lights: { ambientIntensity: 0.5, directionalIntensity: 1.0, directionalPosition: { x: 10, y: 3, z: 2 } } } },
+  { id: 'night', label: '밤', emoji: '🌙', env: { hdrPreset: 'night', toneMappingExposure: 0.85,
+    lights: { ambientIntensity: 0.3, directionalIntensity: 0.4, directionalPosition: { x: 3, y: 8, z: 5 } } } },
+  { id: 'studio', label: '스튜디오', emoji: '💡', env: { hdrPreset: 'studio', toneMappingExposure: 1.0,
+    lights: { ambientIntensity: 0.7, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 } } } },
+];
+
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 function EnvironmentPanel() {
   const { environment, updateEnvironment, pushHistory, assets, projectId } = useSceneStore();
@@ -614,6 +632,27 @@ function EnvironmentPanel() {
       </GroupBox>
       
 
+      {/* Mood — 분위기 프리셋 (HDR+라이트+노출 한 번에) */}
+      <GroupBox>
+        <SectionHeader title="Mood" />
+        <div className="px-3 pb-3">
+          <p className="text-[10px] text-muted/60 mb-2">한 번에 조명·배경·노출을 세팅합니다. 이후 아래에서 미세조정하세요.</p>
+          <div className="grid grid-cols-5 gap-1">
+            {MOOD_PRESETS.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => { updateEnvironment(m.env); pushHistory(); }}
+                title={m.label}
+                className="flex flex-col items-center gap-0.5 py-1.5 rounded-xs bg-background hover:bg-primary/10 border border-transparent hover:border-primary/40 text-muted hover:text-foreground transition-all"
+              >
+                <span className="text-sm leading-none">{m.emoji}</span>
+                <span className="text-[9px]">{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </GroupBox>
+
       {/* Lights */}
       <GroupBox>
         <SectionHeader title="Lights" />
@@ -648,6 +687,28 @@ function EnvironmentPanel() {
             onChangeZ={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, z: v } } })}
             onCommit={pushHistory} dragStep={0.5}
           />
+          {/* 노출(Exposure) — NeutralToneMapping의 밝기. 1=기본. 씬 전체 톤 조절 */}
+          <div className="pt-1">
+            <LabeledNum
+              label="Exposure (노출)"
+              value={env.toneMappingExposure ?? 1}
+              onChange={(v) => updateEnvironment({ toneMappingExposure: v })}
+              onCommit={pushHistory}
+              min={0.3} max={2} precision={2} dragStep={0.02}
+            />
+            <p className="text-[10px] text-muted/60 mt-1">
+              씬 전체 밝기. 색은 지정값 그대로 나오도록 Linear 톤매핑을 씁니다. 너무 밝아
+              하얗게 뜨는 부분이 있으면 노출을 낮추세요.
+            </p>
+          </div>
+          {/* 접지 그림자 — 오브젝트가 바닥에 붙은 느낌. 기본 꺼짐, 켜서 확인 */}
+          <label className="flex items-center justify-between cursor-pointer pt-2">
+            <span className="text-[10px] font-semibold text-muted/70">접지 그림자 (Contact Shadows)</span>
+            <Toggle
+              value={env.contactShadows === true}
+              onChange={(v) => { updateEnvironment({ contactShadows: v }); pushHistory(); }}
+            />
+          </label>
         </div>
       </GroupBox>
 
@@ -1026,6 +1087,27 @@ function InspectorInner() {
   const setScl = (axis: 'x' | 'y' | 'z', v: number) =>
     updateObject(obj.id, { scale: { ...obj.scale, [axis]: v } });
 
+  // GLB 밑면을 바닥(y=0)에 정렬 — 모델 로컬 bbox에 현재 회전·스케일을 적용해
+  // 실제 최하단(min.y)을 구하고, position.y를 그만큼 올려 바닥에 앉힌다.
+  const glbUrlForSnap = obj?.assetId ? assets.find((a) => a.id === obj.assetId)?.dracoUrl : null;
+  const canSnapToGround = !!glbUrlForSnap && !obj.parentId && glbLocalBboxCache.has(glbUrlForSnap);
+  const snapToGround = () => {
+    if (!glbUrlForSnap) return;
+    const local = glbLocalBboxCache.get(glbUrlForSnap);
+    if (!local) return;
+    const DEG2RAD = Math.PI / 180;
+    // translation 없이 회전(euler)+스케일만 적용한 행렬로 로컬 bbox를 변환 → 오브젝트 좌표계 min.y
+    const m = new THREE.Matrix4().compose(
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(obj.rotation.x * DEG2RAD, obj.rotation.y * DEG2RAD, obj.rotation.z * DEG2RAD)),
+      new THREE.Vector3(obj.scale.x, obj.scale.y, obj.scale.z),
+    );
+    const minY = local.clone().applyMatrix4(m).min.y;
+    // 밑면이 바닥(0)에 오도록: position.y + minY = 0  →  position.y = -minY
+    updateObject(obj.id, { position: { ...obj.position, y: -minY } });
+    pushHistory();
+  };
+
   const addEvent = () => {
     // show_popup(빈 내용 허용)·reset_camera(값 불필요)를 제외하면 값이 있어야 추가 가능
     if (!newValue.trim() && newAction !== 'show_popup' && newAction !== 'reset_camera') return;
@@ -1391,6 +1473,17 @@ function InspectorInner() {
                 onChangeZ={(v) => setScl('z', v)}
                 onCommit={pushHistory} dragStep={0.05}
               />
+              {/* GLB 밑면을 바닥에 정렬 — 모델 원점이 발밑이 아니어서 바닥에 파묻히는 경우 교정 */}
+              {glbUrlForSnap && !obj.parentId && (
+                <button
+                  onClick={snapToGround}
+                  disabled={!canSnapToGround}
+                  title={canSnapToGround ? '모델 밑면을 바닥(y=0)에 맞춤' : '모델 로딩 후 사용할 수 있습니다'}
+                  className="w-full mt-1 py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted disabled:hover:bg-transparent"
+                >
+                  ⤓ 바닥에 놓기
+                </button>
+              )}
             </div>
           )}
         </GroupBox>
