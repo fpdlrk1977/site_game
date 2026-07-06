@@ -192,6 +192,13 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
             onObjectClick(obj, 'area_enter');
           }
         }}
+        onObstacleExit={(objectId) => {
+          // 접촉이 끝남 — area_exit 이벤트가 있으면 발동
+          const obj = allObjects.find((o) => o.id === objectId);
+          if (obj && obj.events.some((e) => e.trigger === 'area_exit')) {
+            onObjectClick(obj, 'area_exit');
+          }
+        }}
         spawnPosition={scene.environment.playerStartPosition
           ? [scene.environment.playerStartPosition.x, scene.environment.playerStartPosition.y, scene.environment.playerStartPosition.z]
           : undefined}

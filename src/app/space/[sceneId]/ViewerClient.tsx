@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { MobileControls } from './MobileControls';
+import { RichContent } from '@/components/ui/RichContent';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
 
 const ViewerCanvas = dynamic(
@@ -62,6 +63,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
   const handleObjectEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => {
     if (trigger === 'click') trackEvent('click', obj.id, obj.name);
     if (trigger === 'area_enter') trackEvent('area_enter', obj.id, obj.name);
+    if (trigger === 'area_exit') trackEvent('area_exit', obj.id, obj.name);
 
     const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
     for (const ev of matchingEvents) {
@@ -155,20 +157,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           />
           <div className="relative bg-surface border border-border rounded-2xl p-6 w-full max-w-md shadow-modal">
             <h3 className="text-lg font-bold text-foreground mb-3">{popup.title}</h3>
-            {/^https?:\/\//.test(popup.content.trim()) ? (
-              <a
-                href={popup.content.trim()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary text-sm leading-relaxed underline break-all hover:opacity-80 transition-opacity"
-              >
-                {popup.content.trim()}
-              </a>
-            ) : (
-              <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
-                {popup.content}
-              </p>
-            )}
+            <RichContent value={popup.content} />
             <button
               onClick={() => setPopup(null)}
               className="mt-5 w-full py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold text-sm hover:from-violet-500 hover:to-cyan-500 transition-all"

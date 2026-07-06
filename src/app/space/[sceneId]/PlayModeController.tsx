@@ -122,6 +122,8 @@ interface Props {
   onPositionChange?: (x: number, z: number) => void;
   /** 캐릭터가 솔리드 오브젝트에 새로 접촉했을 때 (RigidBody userData.objectId 기준, 접촉 지속 중 1회) */
   onObstacleEnter?: (objectId: string) => void;
+  /** 접촉이 끝났을 때 (grace 시간 이상 떨어짐) — area_exit 트리거용 */
+  onObstacleExit?: (objectId: string) => void;
 }
 
 export function PlayModeController({
@@ -135,6 +137,7 @@ export function PlayModeController({
   mobileInputRef,
   onPositionChange,
   onObstacleEnter,
+  onObstacleExit,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   const { camera } = useThree();
@@ -320,10 +323,11 @@ export function PlayModeController({
       }
       touchingTimesRef.current.set(id, now);
     }
-    // 오래 전에 접촉이 끊긴 항목 정리
+    // 오래 전에 접촉이 끊긴 항목 정리 — 이 시점이 area_exit 발동 시점
     for (const [id, t] of touchingTimesRef.current) {
       if (!currentTouchingIds.has(id) && now - t > TOUCH_GRACE_MS) {
         touchingTimesRef.current.delete(id);
+        onObstacleExit?.(id);
       }
     }
 

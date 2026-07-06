@@ -33,7 +33,7 @@ export interface EnvSchema {
 
 export interface EventSchema {
   id: string;
-  trigger: 'click' | 'hover_enter' | 'area_enter';
+  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit';
   action: 'open_url' | 'show_popup' | 'emit_event' | 'play_animation' | 'go_to_scene';
   // go_to_scene: 이동할 대상 sceneId. 그 외 액션은 기존 의미(URL/텍스트/이벤트명/클립명).
   value: string;

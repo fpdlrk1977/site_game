@@ -245,7 +245,8 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
 
   const hasClick = object.events.some((e) => e.trigger === 'click');
   const hasHover = object.events.some((e) => e.trigger === 'hover_enter');
-  const isInteractive = hasClick || hasHover;
+  const hasHoverExit = object.events.some((e) => e.trigger === 'hover_exit');
+  const isInteractive = hasClick || hasHover || hasHoverExit;
 
   if (!object.visible) return null;
 
@@ -290,6 +291,11 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
     if (!isInteractive) return;
     setHovered(false);
     document.body.style.cursor = 'auto';
+    if (hasHoverExit) {
+      const clip = object.events.find((e) => e.trigger === 'hover_exit' && e.action === 'play_animation' && e.value);
+      if (clip) setInternalClip({ name: clip.value, t: Date.now() });
+      onEvent(object, 'hover_exit');
+    }
   };
   const handleClick = () => {
     if (!hasClick) return;

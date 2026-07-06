@@ -7,6 +7,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { RichContent } from '@/components/ui/RichContent';
 import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset } from '@/types/scene';
 import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
@@ -253,8 +254,10 @@ function GroupBox({ children, className}: { children: React.ReactNode, className
 // ── 트리거/액션 라벨 ───────────────────────────────────────────
 const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
   click: 'Click',
-  hover_enter: 'Hover',
+  hover_enter: 'Hover In',
+  hover_exit: 'Hover Out',
   area_enter: 'Area Enter',
+  area_exit: 'Area Exit',
 };
 const ACTION_LABELS: Record<string, string> = {
   open_url: 'URL 열기',
@@ -839,6 +842,8 @@ function InspectorInner() {
   const [newTrigger, setNewTrigger] = useState<EventSchema['trigger']>('click');
   const [newAction, setNewAction] = useState<EventSchema['action']>('show_popup');
   const [newValue, setNewValue] = useState('');
+  // null이면 신규 추가, 값이 있으면 그 이벤트를 수정 중
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // 이벤트 프리뷰 팝업
   const [previewPopup, setPreviewPopup] = useState<string | null>(null);
@@ -987,26 +992,152 @@ function InspectorInner() {
 
   const addEvent = () => {
     if (!newValue.trim() && newAction !== 'show_popup') return;
-    const ev: EventSchema = {
-      id: MathUtils.generateUUID(),
-      trigger: newTrigger,
-      action: newAction,
-      value: newValue.trim(),
-    };
-    updateObject(obj.id, { events: [...obj.events, ev] });
+    if (editingId) {
+      // 기존 이벤트 수정
+      updateObject(obj.id, {
+        events: obj.events.map((e) =>
+          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim() } : e,
+        ),
+      });
+    } else {
+      const ev: EventSchema = {
+        id: MathUtils.generateUUID(),
+        trigger: newTrigger,
+        action: newAction,
+        value: newValue.trim(),
+      };
+      updateObject(obj.id, { events: [...obj.events, ev] });
+    }
     pushHistory();
     setNewValue('');
+    setEditingId(null);
     setShowAddEvent(false);
+  };
+
+  const startEdit = (ev: EventSchema) => {
+    setEditingId(ev.id);
+    setNewTrigger(ev.trigger);
+    setNewAction(ev.action);
+    setNewValue(ev.value);
+    setShowAddEvent(true);
+  };
+
+  const cancelEventForm = () => {
+    setShowAddEvent(false);
+    setNewValue('');
+    setEditingId(null);
   };
 
   const removeEvent = (id: string) => {
     updateObject(obj.id, { events: obj.events.filter((e) => e.id !== id) });
     pushHistory();
+    if (editingId === id) cancelEventForm();
   };
 
   // area_enter는 physics/센서 설정 없이도 접촉 시 발동한다 (PlayCanvas가 자동 처리).
   // Is Sensor를 켜면 오브젝트가 통과 가능한 트리거 영역이 된다는 안내만 표시.
-  const showAreaEnterHint = newTrigger === 'area_enter';
+  const showAreaEnterHint = newTrigger === 'area_enter' || newTrigger === 'area_exit';
+
+  // 이벤트 추가/수정 폼 — 신규는 목록 하단, 수정은 해당 항목 자리에 인라인으로 렌더한다
+  const renderEventForm = () => (
+    <div className="bg-surface border border-primary/40 rounded-xs p-2.5 space-y-2">
+      <div className="grid grid-cols-2 gap-1.5">
+        <div>
+          <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Trigger</span>
+          <SelectBox
+            value={newTrigger}
+            onChange={(v) => setNewTrigger(v as EventSchema['trigger'])}
+            options={[
+              { value: 'click', label: 'Click' },
+              { value: 'hover_enter', label: 'Hover In' },
+              { value: 'hover_exit', label: 'Hover Out' },
+              { value: 'area_enter', label: 'Area Enter' },
+              { value: 'area_exit', label: 'Area Exit' },
+            ]}
+          />
+        </div>
+        <div>
+          <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Action</span>
+          <SelectBox
+            value={newAction}
+            onChange={(v) => setNewAction(v as EventSchema['action'])}
+            options={[
+              { value: 'show_popup', label: '팝업' },
+              { value: 'open_url', label: 'URL 열기' },
+              { value: 'go_to_scene', label: '씬 이동' },
+              { value: 'emit_event', label: '이벤트 발송' },
+              { value: 'play_animation', label: '애니메이션 재생' },
+            ]}
+          />
+        </div>
+      </div>
+
+      {showAreaEnterHint && (
+        <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
+          캐릭터가 오브젝트에 닿으면 발동합니다. 통과 가능한 투명 트리거 영역으로
+          쓰려면 Physics → Is Sensor를 켜세요.
+        </p>
+      )}
+
+      <div>
+        <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">
+          {newAction === 'open_url' ? 'URL'
+            : newAction === 'emit_event' ? '이벤트 이름'
+            : newAction === 'play_animation' ? '클립 이름'
+            : newAction === 'go_to_scene' ? '이동할 씬'
+            : '팝업 내용'}
+        </span>
+        {(() => {
+          if (newAction === 'go_to_scene') {
+            const opts = sceneList.filter((s) => s.id !== sceneId).map((s) => ({ value: s.id, label: s.name }));
+            return opts.length > 0 ? (
+              <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="이동할 씬 선택..." />
+            ) : (
+              <p className="text-muted/60 text-[10px] py-1">이동할 다른 씬이 없습니다. 먼저 씬을 추가하세요.</p>
+            );
+          }
+          const glbUrl = newAction === 'play_animation' && obj?.assetId
+            ? assets.find((a) => a.id === obj.assetId)?.dracoUrl
+            : null;
+          return glbUrl ? (
+            <GlbClipPicker url={glbUrl} value={newValue} onChange={setNewValue} />
+          ) : (
+            <>
+              <input
+                type="text"
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                placeholder={newAction === 'open_url' ? 'https://...'
+                  : newAction === 'emit_event' ? 'my_event_name'
+                  : newAction === 'play_animation' ? 'Armature|Walk'
+                  : '텍스트 또는 이미지/영상/YouTube URL'}
+                className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                onKeyDown={(e) => e.key === 'Enter' && addEvent()}
+              />
+              {newAction === 'play_animation' && (
+                <p className="text-muted/50 text-[10px] mt-1">GLB 오브젝트를 선택하면 클립 목록이 자동으로 표시됩니다.</p>
+              )}
+            </>
+          );
+        })()}
+      </div>
+
+      <div className="flex gap-1.5">
+        <button
+          onClick={addEvent}
+          className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-xs font-semibold transition-colors"
+        >
+          {editingId ? '저장' : '추가'}
+        </button>
+        <button
+          onClick={cancelEventForm}
+          className="flex-1 py-1.5 rounded-xs bg-background hover:bg-surface text-foreground text-xs transition-colors"
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  );
 
   // 그룹 오브젝트 전용 인스펙터
   if (obj.isGroup) {
@@ -1072,7 +1203,7 @@ function InspectorInner() {
         <div className="absolute inset-0 z-10 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewPopup(null)}>
           <div className="bg-sidebar border border-border rounded-2xl p-5 w-full max-w-xs shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <p className="text-[10px] text-muted/60 mb-2 font-semibold tracking-wide">팝업 미리보기</p>
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{previewPopup}</p>
+            <RichContent value={previewPopup} />
             <button
               onClick={() => setPreviewPopup(null)}
               className="mt-4 w-full py-1.5 rounded-xs bg-primary text-white text-xs font-semibold hover:bg-primary/80 transition-colors"
@@ -1520,6 +1651,10 @@ function InspectorInner() {
             )}
 
             {obj.events.map((ev) => (
+              editingId === ev.id ? (
+              /* 수정 중 — 이 항목 자리에 폼을 인라인으로 표시 */
+              <div key={ev.id}>{renderEventForm()}</div>
+              ) : (
               <div key={ev.id} className="bg-surface border border-border/80 rounded-xs p-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -1544,6 +1679,13 @@ function InspectorInner() {
                       ▶
                     </button>
                     <button
+                      onClick={() => startEdit(ev)}
+                      title="수정"
+                      className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                    >
+                      ✎
+                    </button>
+                    <button
                       onClick={() => removeEvent(ev.id)}
                       className="text-muted/40 hover:text-danger text-[11px] w-4 h-4 flex items-center justify-center rounded hover:bg-danger/10 transition-colors"
                     >
@@ -1557,107 +1699,14 @@ function InspectorInner() {
                   </p>
                 )}
               </div>
+              )
             ))}
 
-            {showAddEvent ? (
-              <div className="bg-surface border border-border/60 rounded-xs p-2.5 space-y-2">
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div>
-                    <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Trigger</span>
-                    <SelectBox
-                      value={newTrigger}
-                      onChange={(v) => setNewTrigger(v as EventSchema['trigger'])}
-                      options={[
-                        { value: 'click', label: 'Click' },
-                        { value: 'hover_enter', label: 'Hover' },
-                        { value: 'area_enter', label: 'Area Enter' },
-                      ]}
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Action</span>
-                    <SelectBox
-                      value={newAction}
-                      onChange={(v) => setNewAction(v as EventSchema['action'])}
-                      options={[
-                        { value: 'show_popup', label: '팝업' },
-                        { value: 'open_url', label: 'URL 열기' },
-                        { value: 'go_to_scene', label: '씬 이동' },
-                        { value: 'emit_event', label: '이벤트 발송' },
-                        { value: 'play_animation', label: '애니메이션 재생' },
-                      ]}
-                    />
-                  </div>
-                </div>
-
-                {showAreaEnterHint && (
-                  <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
-                    캐릭터가 오브젝트에 닿으면 발동합니다. 통과 가능한 투명 트리거 영역으로
-                    쓰려면 Physics → Is Sensor를 켜세요.
-                  </p>
-                )}
-
-                <div>
-                  <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">
-                    {newAction === 'open_url' ? 'URL'
-                      : newAction === 'emit_event' ? '이벤트 이름'
-                      : newAction === 'play_animation' ? '클립 이름'
-                      : newAction === 'go_to_scene' ? '이동할 씬'
-                      : '팝업 내용'}
-                  </span>
-                  {(() => {
-                    if (newAction === 'go_to_scene') {
-                      const opts = sceneList.filter((s) => s.id !== sceneId).map((s) => ({ value: s.id, label: s.name }));
-                      return opts.length > 0 ? (
-                        <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="이동할 씬 선택..." />
-                      ) : (
-                        <p className="text-muted/60 text-[10px] py-1">이동할 다른 씬이 없습니다. 먼저 씬을 추가하세요.</p>
-                      );
-                    }
-                    const glbUrl = newAction === 'play_animation' && obj?.assetId
-                      ? assets.find((a) => a.id === obj.assetId)?.dracoUrl
-                      : null;
-                    return glbUrl ? (
-                      <GlbClipPicker url={glbUrl} value={newValue} onChange={setNewValue} />
-                    ) : (
-                      <>
-                        <input
-                          type="text"
-                          value={newValue}
-                          onChange={(e) => setNewValue(e.target.value)}
-                          placeholder={newAction === 'open_url' ? 'https://...'
-                            : newAction === 'emit_event' ? 'my_event_name'
-                            : newAction === 'play_animation' ? 'Armature|Walk'
-                            : '표시할 텍스트'}
-                          className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                          onKeyDown={(e) => e.key === 'Enter' && addEvent()}
-                        />
-                        {newAction === 'play_animation' && (
-                          <p className="text-muted/50 text-[10px] mt-1">GLB 오브젝트를 선택하면 클립 목록이 자동으로 표시됩니다.</p>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={addEvent}
-                    className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-xs font-semibold transition-colors"
-                  >
-                    추가
-                  </button>
-                  <button
-                    onClick={() => { setShowAddEvent(false); setNewValue(''); }}
-                    className="flex-1 py-1.5 rounded-xs bg-background hover:bg-surface text-foreground text-xs transition-colors"
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            ) : (
+            {/* 수정 중이면 해당 항목 자리에 폼이 인라인으로 뜨므로 하단엔 아무것도 안 띄운다.
+                신규 추가(showAddEvent)면 하단에 폼, 아니면 '이벤트 추가' 버튼. */}
+            {editingId ? null : showAddEvent ? renderEventForm() : (
               <button
-                onClick={() => setShowAddEvent(true)}
+                onClick={() => { setEditingId(null); setNewValue(''); setShowAddEvent(true); }}
                 className="w-full py-1.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-xs transition-all cursor-pointer"
               >
                 이벤트 추가
