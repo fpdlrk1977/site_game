@@ -21,6 +21,16 @@ export function GlbObject({ url, selected, hovered = false, onClick, onHoverChan
   const { scene } = useGLTF(url);
   const clone = useMemo(() => {
     const c = SkeletonUtils.clone(scene);
+    // SkeletonUtils.clone은 재질을 "참조 복사"하므로 같은 GLB를 쓰는 인스턴스들이
+    // useGLTF 캐시 원본의 재질 하나를 공유한다. 그 상태에서 호버/선택 emissive를
+    // 넣으면 다른 인스턴스까지 함께 밝아진다 → 인스턴스별로 재질을 복제해 독립시킨다.
+    c.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map((m) => (m as THREE.Material).clone())
+        : (mesh.material as THREE.Material).clone();
+    });
     normalizeGlbMaterials(c);
     return c;
   }, [scene]);
@@ -55,7 +65,9 @@ export function GlbObject({ url, selected, hovered = false, onClick, onHoverChan
       clone.traverse((child) => {
         const mesh = child as THREE.Mesh;
         if (!mesh.isMesh) return;
-        mesh.geometry.dispose();
+        // 지오메트리는 useGLTF 캐시 원본과 공유(SkeletonUtils.clone은 지오메트리도 참조 복사)
+        // — 여기서 dispose하면 같은 GLB를 쓰는 다른 인스턴스·재마운트의 버퍼가 깨진다.
+        // drei가 캐시 해제 시 정리하므로 건드리지 않는다. 재질만 인스턴스 소유라 dispose한다.
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         mats.forEach((m) => (m as THREE.Material).dispose());
       });

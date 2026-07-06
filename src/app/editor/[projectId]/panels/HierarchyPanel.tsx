@@ -39,9 +39,19 @@ interface ItemProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   onClickItem: (id: string, index: number, shiftKey: boolean) => void;
+  dragEnabled: boolean;
+  isDragging: boolean;
+  dropPos: 'before' | 'after' | null;
+  onDragStartItem: (id: string) => void;
+  onDragOverItem: (id: string, pos: 'before' | 'after') => void;
+  onDropItem: (id: string) => void;
+  onDragEndItem: () => void;
 }
 
-function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickItem }: ItemProps) {
+function HierarchyItem({
+  obj, depth, index, isExpanded, onToggleExpand, onClickItem,
+  dragEnabled, isDragging, dropPos, onDragStartItem, onDragOverItem, onDropItem, onDragEndItem,
+}: ItemProps) {
   const { selectedId, selectedIds, updateObject, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected } = useSceneStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -67,7 +77,24 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
 
   return (
     <div className="relative">
+      {/* 드롭 위치 인디케이터 (드래그 정렬) */}
+      {dropPos === 'before' && (
+        <span className="absolute left-1 right-1 -top-px h-0.5 bg-primary rounded-full z-10 pointer-events-none" />
+      )}
+      {dropPos === 'after' && (
+        <span className="absolute left-1 right-1 -bottom-px h-0.5 bg-primary rounded-full z-10 pointer-events-none" />
+      )}
       <div
+        draggable={dragEnabled && !editing}
+        onDragStart={(e) => { e.stopPropagation(); onDragStartItem(obj.id); }}
+        onDragEnd={onDragEndItem}
+        onDragOver={(e) => {
+          if (!dragEnabled) return;
+          e.preventDefault();
+          const rect = e.currentTarget.getBoundingClientRect();
+          onDragOverItem(obj.id, e.clientY - rect.top < rect.height / 2 ? 'before' : 'after');
+        }}
+        onDrop={(e) => { if (!dragEnabled) return; e.preventDefault(); onDropItem(obj.id); }}
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
         onContextMenu={(e) => { e.preventDefault(); selectObject(obj.id); setMenuOpen(true); }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
@@ -75,7 +102,7 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
           isSelected
             ? 'bg-primary/20 text-foreground'
             : 'text-foreground/70 hover:bg-surface'
-        } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-muted' : ''}`}
+        } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-muted' : ''} ${isDragging ? 'opacity-30' : ''}`}
       >
         {/* 깊이 인덴트 + 트리 라인 */}
         {Array.from({ length: depth }).map((_, i) => (
@@ -195,10 +222,31 @@ function HierarchyItem({ obj, depth, index, isExpanded, onToggleExpand, onClickI
 }
 
 export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
-  const { objects, selectObject, selectObjects } = useSceneStore();
+  const { objects, selectObject, selectObjects, reorderObject } = useSceneStore();
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const anchorIndexRef = useRef<number>(-1);
+  // 드래그 정렬 상태 — 검색 중에는 순서가 필터링돼 혼란스러우므로 비활성화
+  const dragEnabled = !search.trim();
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
+
+  const handleDragStartItem = (id: string) => setDragId(id);
+  const handleDragEndItem = () => { setDragId(null); setDropTarget(null); };
+  const handleDragOverItem = (targetId: string, pos: 'before' | 'after') => {
+    if (!dragId || dragId === targetId) { setDropTarget(null); return; }
+    // 같은 부모 형제만 정렬 대상 (재부모화 미지원) — 부모가 다르면 인디케이터를 숨겨 드롭 불가를 표시
+    const dragged = objects.find((o) => o.id === dragId);
+    const target = objects.find((o) => o.id === targetId);
+    if (!dragged || !target || dragged.parentId !== target.parentId) { setDropTarget(null); return; }
+    setDropTarget((prev) => (prev?.id === targetId && prev.pos === pos ? prev : { id: targetId, pos }));
+  };
+  const handleDropItem = (targetId: string) => {
+    if (dragId && dropTarget && dropTarget.id === targetId) {
+      reorderObject(dragId, targetId, dropTarget.pos);
+    }
+    handleDragEndItem();
+  };
 
   const toggleExpand = (id: string) =>
     setExpanded((prev) => {
@@ -249,6 +297,13 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
           isExpanded={expanded.has(obj.id)}
           onToggleExpand={() => toggleExpand(obj.id)}
           onClickItem={handleClickItem}
+          dragEnabled={dragEnabled}
+          isDragging={dragId === obj.id}
+          dropPos={dropTarget?.id === obj.id ? dropTarget.pos : null}
+          onDragStartItem={handleDragStartItem}
+          onDragOverItem={handleDragOverItem}
+          onDropItem={handleDropItem}
+          onDragEndItem={handleDragEndItem}
         />,
       ];
       if (obj.isGroup && (expanded.has(obj.id) || search.trim())) {

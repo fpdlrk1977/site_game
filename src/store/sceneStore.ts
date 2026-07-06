@@ -78,6 +78,7 @@ interface SceneActions {
   requestRecallBookmark: (slot: number) => void;
   setCameraBookmark: (slot: number, position: [number, number, number], target: [number, number, number]) => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
+  reorderObject: (draggedId: string, targetId: string, position: 'before' | 'after') => void;
   duplicateSelected: () => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
@@ -373,6 +374,24 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       objects: objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
       isModified: true,
     });
+  },
+
+  // 계층 리스트 드래그 정렬 — 배열 순서 = 같은 부모 내 형제 순서.
+  // 좌표 변환이 필요한 재부모화는 지원하지 않으므로 부모가 다르면 무시(안전).
+  // (그룹을 옮겨도 자식은 parentId로 트리에 붙으므로 배열에서 함께 옮길 필요 없음)
+  reorderObject: (draggedId, targetId, position) => {
+    if (draggedId === targetId) return;
+    const { objects, environment, past } = get();
+    const dragged = objects.find((o) => o.id === draggedId);
+    const target = objects.find((o) => o.id === targetId);
+    if (!dragged || !target) return;
+    if (dragged.parentId !== target.parentId) return;
+    const without = objects.filter((o) => o.id !== draggedId);
+    const targetIdx = without.findIndex((o) => o.id === targetId);
+    if (targetIdx < 0) return;
+    const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
+    const next = [...without.slice(0, insertIdx), dragged, ...without.slice(insertIdx)];
+    set({ objects: next, isModified: true, ...withHistory({ objects, environment }, past) });
   },
 
   deleteSelected: () => {
