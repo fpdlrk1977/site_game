@@ -125,7 +125,7 @@ function NumInput({
           else setLocal(fmt(value, precision));
           onCommit();
         }}
-        className={`w-full bg-surface border border-border rounded-xs pr-5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums ${prefix ? 'pl-6' : 'pl-2'}`}
+        className={`w-full bg-surface border border-border rounded-xs pr-5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums ${prefix ? 'pl-6' : 'pl-2'}`}
       />
       <span
         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-ew-resize select-none transition-colors"
@@ -219,16 +219,21 @@ function SectionHeader({
   const collapsible = onToggle !== undefined;
   return (
     <div
+      // onClick={onToggle}
+      className={`flex items-center gap-2 px-3 py-3 text-[11px] font-semibold text-muted tracking-wide bg-surface/40 select-none`}
+    >
+
+      {/* <div
       onClick={onToggle}
-      className={`flex items-center gap-2 px-3 py-3 text-[12px] font-semibold text-muted tracking-wide bg-surface/40 select-none ${
+      className={`flex items-center gap-2 px-3 py-3 text-[11px] font-semibold text-muted tracking-wide bg-surface/40 select-none ${
         collapsible ? 'cursor-pointer hover:text-foreground hover:bg-surface/70 transition-colors' : ''
       }`}
-    >
+    > */}
       {icon && <span className="text-[12px] opacity-60 font-normal not-italic">{icon}</span>}
       <span className="flex-1 text-foreground">{title}</span>
-      {collapsible && (
+      {/* {collapsible && (
         <span className="text-muted/40 text-[10px]">{isOpen ? '▾' : '▸'}</span>
-      )}
+      )} */}
     </div>
   );
 }
@@ -320,7 +325,7 @@ function GlbClipPicker({ url, value, onChange }: { url: string; value: string; o
 
   if (clips === null) {
     return (
-      <div className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-muted/50">
+      <div className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-muted/50">
         클립 목록 로딩 중…
       </div>
     );
@@ -330,7 +335,7 @@ function GlbClipPicker({ url, value, onChange }: { url: string; value: string; o
       <>
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
           placeholder="clip name"
-          className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary" />
+          className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary" />
         {loadError
           ? <p className="text-danger text-[10px] mt-1">로드 실패: {loadError.slice(0, 80)}</p>
           : <p className="text-muted/50 text-[10px] mt-1">이 GLB에 애니메이션 클립이 없습니다.</p>}
@@ -436,7 +441,7 @@ function EnvironmentPanel() {
                     <input type="text" value={env.sky.value}
                       onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
                       onBlur={pushHistory}
-                      className="flex-1 px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+                      className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
                   </div>
                 )}
 
@@ -538,7 +543,7 @@ function EnvironmentPanel() {
                     <input type="text" value={env.ground.color}
                       onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
                       onBlur={pushHistory}
-                      className="flex-1 px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+                      className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
                   </div>
                 )}
               </div>
@@ -554,7 +559,7 @@ function EnvironmentPanel() {
         <div className='relative'>
         <SectionHeader title="Fog" />
         <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
-            {/* <span className="text-xs text-muted">Enable Fog</span> */}
+            {/* <span className=" text-[11px] text-muted">Enable Fog</span> */}
             <Toggle
               value={env.fog.enabled}
               onChange={(v) => { updateEnvironment({ fog: { ...env.fog, enabled: v } }); pushHistory(); }}
@@ -579,7 +584,7 @@ function EnvironmentPanel() {
                     value={env.fog.color}
                     onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
                     onBlur={pushHistory}
-                    className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -718,7 +723,7 @@ function EnvironmentPanel() {
                   )}
                   <div>
                     <LabeledNum
-                      label="이동 속도"
+                      label="Speed"
                       value={env.playerSpeed ?? 5}
                       onChange={(v) => updateEnvironment({ playerSpeed: v })}
                       onCommit={pushHistory}
@@ -727,7 +732,7 @@ function EnvironmentPanel() {
                   </div>
                   <div>
                     <LabeledNum
-                      label="점프력"
+                      label="Jump"
                       value={env.playerJumpForce ?? 12}
                       onChange={(v) => updateEnvironment({ playerJumpForce: v })}
                       onCommit={pushHistory}
@@ -749,7 +754,7 @@ function EnvironmentPanel() {
         <SectionHeader title="Spawn Point" />
         <div className="px-3 pb-4 space-y-1">
           <XYZRow
-            label="시작 위치"
+            label="Position"
             x={env.playerStartPosition?.x ?? 0}
             y={env.playerStartPosition?.y ?? 0}
             z={env.playerStartPosition?.z ?? 0}
@@ -778,7 +783,7 @@ function EnvironmentPanel() {
         <SectionHeader title="Boundary" />
         <div className="px-3 pb-4">
           <LabeledNum
-            label="크기"
+            label=""
             value={env.boundary ?? 0}
             onChange={(v) => updateEnvironment({ boundary: v === 0 ? undefined : v })}
             onCommit={pushHistory}
@@ -814,7 +819,7 @@ function EnvironmentPanel() {
               onBlur={pushHistory}
               placeholder="씬에 대한 메모를 입력하세요..."
               rows={4}
-              className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+              className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             />
           </div>
         )}
@@ -898,7 +903,7 @@ function InspectorInner() {
     return (
       <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden h-full">
         <div className="px-3 py-2 border-b border-border shrink-0">
-          <span className="text-xs font-semibold text-muted tracking-wide">{selectedIds.length}개 선택됨</span>
+          <span className=" text-[11px] font-semibold text-muted tracking-wide">{selectedIds.length}개 선택됨</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-3 space-y-3">
@@ -932,14 +937,14 @@ function InspectorInner() {
               </div>
             )}
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-xs text-muted">Visible (전체)</span>
+              <span className=" text-[11px] text-muted">Visible (전체)</span>
               <Toggle
                 value={allVisible}
                 onChange={(v) => { batchUpdateObjects(selectedIds, () => ({ visible: v })); pushHistory(); }}
               />
             </label>
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-xs text-muted">Physics Enabled (전체)</span>
+              <span className=" text-[11px] text-muted">Physics Enabled (전체)</span>
               <Toggle
                 value={selectedIds.every((id) => objects.find((x) => x.id === id)?.physics.enabled === true)}
                 onChange={(v) => { batchUpdateObjects(selectedIds, (o) => ({ physics: { ...o.physics, enabled: v } })); pushHistory(); }}
@@ -977,7 +982,7 @@ function InspectorInner() {
     return (
       <aside className="flex flex-col bg-surface border-l border-border overflow-hidden h-full">
         <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
-          <span className="text-xs font-semibold text-foreground tracking-wide flex-1">
+          <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">
             {isCharSelected ? 'Player Character' : 'Environment'}
           </span>
         </div>
@@ -1161,7 +1166,7 @@ function InspectorInner() {
                   : newAction === 'emit_event' ? 'my_event_name'
                   : newAction === 'play_animation' ? 'Armature|Walk'
                   : '텍스트 또는 이미지/영상/YouTube URL'}
-                className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                 onKeyDown={(e) => e.key === 'Enter' && addEvent()}
               />
               {newAction === 'play_animation' && (
@@ -1175,13 +1180,13 @@ function InspectorInner() {
       <div className="flex gap-1.5">
         <button
           onClick={addEvent}
-          className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-xs font-semibold transition-colors"
+          className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white  text-[11px] font-semibold transition-colors"
         >
           {editingId ? '저장' : '추가'}
         </button>
         <button
           onClick={cancelEventForm}
-          className="flex-1 py-1.5 rounded-xs bg-background hover:bg-surface text-foreground text-xs transition-colors"
+          className="flex-1 py-1.5 rounded-xs bg-background hover:bg-surface text-foreground  text-[11px] transition-colors"
         >
           취소
         </button>
@@ -1194,7 +1199,7 @@ function InspectorInner() {
     return (
       <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden h-full">
         <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
-          <span className="text-xs font-semibold text-muted tracking-wide flex-1">Inspector — 그룹</span>
+          <span className=" text-[11px] font-semibold text-muted tracking-wide flex-1">Inspector — 그룹</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-2 border-b border-border">
@@ -1231,7 +1236,7 @@ function InspectorInner() {
           <div className="px-3 py-3 space-y-2">
             {(['visible', 'locked'] as const).map((key) => (
               <label key={key} className="flex items-center justify-between cursor-pointer">
-                <span className="text-xs text-muted capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
+                <span className=" text-[11px] text-muted capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
                 <Toggle value={obj[key]} onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }} />
               </label>
             ))}
@@ -1256,7 +1261,7 @@ function InspectorInner() {
             <RichContent value={previewPopup} />
             <button
               onClick={() => setPreviewPopup(null)}
-              className="mt-4 w-full py-1.5 rounded-xs bg-primary text-white text-xs font-semibold hover:bg-primary/80 transition-colors"
+              className="mt-4 w-full py-1.5 rounded-xs bg-primary text-white  text-[11px] font-semibold hover:bg-primary/80 transition-colors"
             >
               닫기
             </button>
@@ -1264,7 +1269,7 @@ function InspectorInner() {
         </div>
       )}
       <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
-        <span className="text-xs font-semibold text-foreground tracking-wide flex-1">Inspector</span>
+        <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">Inspector</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -1274,7 +1279,7 @@ function InspectorInner() {
             value={obj.name}
             onChange={(e) => updateObject(obj.id, { name: e.target.value })}
             onBlur={pushHistory}
-            className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+            className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
           />
         </div>
 
@@ -1319,35 +1324,116 @@ function InspectorInner() {
               {obj.content.type === 'text' && (
                 <>
                   <div>
-                    <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">텍스트</span>
+                    {/* <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">텍스트</span> */}
                     <textarea
                       value={obj.content.text ?? ''}
                       onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, text: e.target.value } })}
                       onBlur={pushHistory}
-                      rows={3}
-                      className="w-full bg-background border border-border rounded-xs px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                      rows={2}
+                      className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                    />
+                  </div>
+                  <div className='flex gap-2'>
+                    <div>
+                      <LabeledNum
+                        label="Size"
+                        value={obj.content.fontSize ?? 0.5}
+                        onChange={(v) => updateObject(obj.id, { content: { ...obj.content!, fontSize: v } })}
+                        onCommit={pushHistory}
+                        min={0.1} max={3} precision={1} dragStep={0.05}
+                      />
+                    </div>
+                    <div>
+                      <LabeledNum
+                        label="Thickness"
+                        value={obj.content.depth ?? 0.1}
+                        onChange={(v) => updateObject(obj.id, { content: { ...obj.content!, depth: v } })}
+                        onCommit={pushHistory}
+                        min={0} max={1} precision={2} dragStep={0.01}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+
+              {/* Material (primitive + text content 오브젝트) */}
+        {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && (
+          // <GroupBox>
+          //   <SectionHeader title="Material" isOpen={isOpen('material')} onToggle={() => toggleSection('material')} />
+          <>
+            {isOpen('material') && (
+              <div className="space-y-2 mt-2">
+                <div className='flex gap-2'>
+                  <div className='flex-1'>
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Color</span>
+                    <div className="px-2 flex items-center border border-border rounded-xs">
+                      <input
+                        type="color"
+                        value={obj.material?.color ?? '#a78bfa'}
+                        onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
+                        onBlur={pushHistory}
+                        className="w-5 h-5 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={obj.material?.color ?? '#a78bfa'}
+                        onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
+                        onBlur={pushHistory}
+                      className="w-full px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <div className='flex-1'>
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Emissive</span>
+                    <div className="px-2 flex items-center border border-border rounded-xs">
+                      <input
+                        type="color"
+                        value={obj.material?.emissive ?? '#000000'}
+                        onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
+                        onBlur={pushHistory}
+                        className="w-5 h-5 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={obj.material?.emissive ?? '#000000'}
+                        onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
+                        onBlur={pushHistory}
+                      className="w-full px-2.5 py-1.5 text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className='flex gap-2'>
+                  <div>
+                    <LabeledNum
+                      label="Roughness"
+                      value={obj.material?.roughness ?? 0.5}
+                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, roughness: v } })}
+                      onCommit={pushHistory}
+                      min={0} max={1} precision={2} dragStep={0.005}
                     />
                   </div>
                   <div>
                     <LabeledNum
-                      label="글자 크기"
-                      value={obj.content.fontSize ?? 0.5}
-                      onChange={(v) => updateObject(obj.id, { content: { ...obj.content!, fontSize: v } })}
+                      label="Metalness"
+                      value={obj.material?.metalness ?? 0.1}
+                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, metalness: v } })}
                       onCommit={pushHistory}
-                      min={0.1} max={3} precision={1} dragStep={0.05}
+                      min={0} max={1} precision={2} dragStep={0.005}
                     />
                   </div>
-                  <div className='mt-2'>
-                    <LabeledNum
-                      label="두께"
-                      value={obj.content.depth ?? 0.1}
-                      onChange={(v) => updateObject(obj.id, { content: { ...obj.content!, depth: v } })}
-                      onCommit={pushHistory}
-                      min={0} max={1} precision={2} dragStep={0.01}
-                    />
-                  </div>
-                </>
-              )}
+                  
+                </div>
+              </div>
+            )}
+            </>
+          // </GroupBox>
+        )}
+
+
               {(obj.content.type === 'image' || obj.content.type === 'video') && (
                 <div>
                   <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">
@@ -1359,7 +1445,7 @@ function InspectorInner() {
                     onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, url: e.target.value } })}
                     onBlur={pushHistory}
                     placeholder={obj.content.type === 'image' ? 'https://example.com/img.jpg' : 'https://www.youtube.com/...'}
-                    className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-xs text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               )}
@@ -1399,7 +1485,7 @@ function InspectorInner() {
                     onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
                     onBlur={pushHistory}
                     placeholder="프리셋 기본값"
-                    className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -1421,72 +1507,7 @@ function InspectorInner() {
           </GroupBox>
         )}
 
-        {/* Material (primitive + text content 오브젝트) */}
-        {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && (
-          <GroupBox>
-            <SectionHeader title="Material" isOpen={isOpen('material')} onToggle={() => toggleSection('material')} />
-            {isOpen('material') && (
-              <div className="px-3 pb-4 space-y-2">
-                <div>
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Color</span>
-                  <div className="px-2 flex items-center border border-border rounded-xs">
-                    <input
-                      type="color"
-                      value={obj.material?.color ?? '#a78bfa'}
-                      onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="w-5 h-5 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={obj.material?.color ?? '#a78bfa'}
-                      onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
-                      onBlur={pushHistory}
-                    className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <LabeledNum
-                    label="Roughness"
-                    value={obj.material?.roughness ?? 0.5}
-                    onChange={(v) => updateObject(obj.id, { material: { ...obj.material, roughness: v } })}
-                    onCommit={pushHistory}
-                    min={0} max={1} precision={2} dragStep={0.005}
-                  />
-                </div>
-                <div>
-                  <LabeledNum
-                    label="Metalness"
-                    value={obj.material?.metalness ?? 0.1}
-                    onChange={(v) => updateObject(obj.id, { material: { ...obj.material, metalness: v } })}
-                    onCommit={pushHistory}
-                    min={0} max={1} precision={2} dragStep={0.005}
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Emissive</span>
-                  <div className="px-2 flex items-center border border-border rounded-xs">
-                    <input
-                      type="color"
-                      value={obj.material?.emissive ?? '#000000'}
-                      onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="w-5 h-5 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={obj.material?.emissive ?? '#000000'}
-                      onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
-                      onBlur={pushHistory}
-                    className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </GroupBox>
-        )}
+        
 
         {/* Visibility */}
         <GroupBox>
@@ -1550,7 +1571,7 @@ function InspectorInner() {
                       value={obj.light.color}
                       onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
                       onBlur={pushHistory}
-                      className="flex-1 px-2.5 py-1.5 text-xs text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
 
@@ -1697,7 +1718,7 @@ function InspectorInner() {
         {isOpen('events') && (
           <div className="px-3 pb-4 space-y-2">
             {obj.events.length === 0 && !showAddEvent && (
-              <p className="text-muted/60 text-xs py-1">이벤트 없음</p>
+              <p className="text-muted/60  text-[11px] py-1">이벤트 없음</p>
             )}
 
             {obj.events.map((ev) => (
@@ -1763,7 +1784,7 @@ function InspectorInner() {
             {editingId ? null : showAddEvent ? renderEventForm() : (
               <button
                 onClick={() => { setEditingId(null); setNewValue(''); setShowAddEvent(true); }}
-                className="w-full py-1.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-xs transition-all cursor-pointer"
+                className="w-full py-1.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5  text-[11px] transition-all cursor-pointer"
               >
                 이벤트 추가
               </button>

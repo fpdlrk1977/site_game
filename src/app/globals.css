@@ -67,7 +67,7 @@
   --shadow-modal:    0 24px 60px rgba(15,23,42,.18);
 
   /* Fonts */
-  --font-sans: var(--font-geist-sans), "Inter", sans-serif;
+  --font-sans: "Inter", sans-serif;
   --font-mono: var(--font-geist-mono), monospace;
 }
 

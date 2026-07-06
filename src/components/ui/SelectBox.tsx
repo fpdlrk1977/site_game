@@ -91,7 +91,7 @@ export function SelectBox({ value, options, onChange, placeholder = '선택', cl
         {selected?.icon && (
           <span className={ICON_WRAPPER_CLASS} style={{ width: iconSize, height: iconSize }}>{selected.icon}</span>
         )}
-        <span className={`flex-1 text-left truncate ${selected ? '' : 'text-muted/60'}`}>
+        <span className={`flex-1 text-left truncate text-[11px] ${selected ? '' : 'text-muted/60'}`}>
           {selected?.label ?? placeholder}
         </span>
         <ChevronDown size={12} className={`shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -117,7 +117,7 @@ export function SelectBox({ value, options, onChange, placeholder = '선택', cl
               {opt.icon && (
                 <span className={ICON_WRAPPER_CLASS} style={{ width: iconSize, height: iconSize }}>{opt.icon}</span>
               )}
-              <span className="flex-1 truncate">{opt.label}</span>
+              <span className="flex-1 truncate text-[11px]">{opt.label}</span>
             </div>
           ))}
         </div>,
