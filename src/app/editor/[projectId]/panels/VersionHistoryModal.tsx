@@ -47,11 +47,17 @@ export function VersionHistoryModal({ onClose }: Props) {
         .eq('id', versionId)
         .single();
       if (!data) return;
-      loadScene(normalizeSceneData(
-        data.scene_data as Record<string, unknown>,
-        projectId,
-        sceneId,
-      ));
+      // 복원은 scenes 행에 곧바로 쓰지 않고 에디터에만 불러온다 (사용자가 Ctrl+S로 확정).
+      // 따라서 행 리비전(savedVersion)은 현재 값을 유지해야 이후 저장에서 거짓 충돌이 나지 않는다.
+      const currentVersion = useSceneStore.getState().savedVersion;
+      loadScene(
+        normalizeSceneData(
+          data.scene_data as Record<string, unknown>,
+          projectId,
+          sceneId,
+        ),
+        currentVersion,
+      );
       markModified();
       onClose();
     } finally {

@@ -42,6 +42,9 @@ interface SceneState {
   focusAllRequest: number | null;
   cameraViewRequest: { view: 'top' | 'front' | 'right'; _tick: number } | null;
   isModified: boolean;
+  // 마지막으로 로드/저장한 시점의 DB scenes.version 값 — 저장 시 낙관적 잠금에 사용.
+  // (scene_data 내부의 SCENE_VERSION[JSON 스키마 버전]과는 별개의 행 리비전 카운터)
+  savedVersion: number;
   wireframeMode: boolean;
   past: HistoryEntry[];
   future: HistoryEntry[];
@@ -53,7 +56,7 @@ interface SceneState {
 }
 
 interface SceneActions {
-  loadScene: (data: ProjectSceneSchema) => void;
+  loadScene: (data: ProjectSceneSchema, savedVersion?: number) => void;
   selectObject: (id: string | null) => void;
   toggleSelectObject: (id: string) => void;
   selectObjects: (ids: string[]) => void;
@@ -82,7 +85,7 @@ interface SceneActions {
   pushHistory: () => void;
   undo: () => void;
   redo: () => void;
-  markSaved: () => void;
+  markSaved: (savedVersion?: number) => void;
   markModified: () => void;
   toggleWireframe: () => void;
   addLayer: (name: string) => void;
@@ -108,26 +111,51 @@ const SHAPE_NAMES: Record<PrimitiveShape, string> = {
   plane: '평면',
 };
 
+// 히스토리 스택 최대 길이 (past/future 공통)
+const HISTORY_LIMIT = 49;
+
+// 이전 스냅샷을 past에 push (한계 초과 시 오래된 항목 삭제)
+function pushPast(past: HistoryEntry[], snapshot: HistoryEntry): HistoryEntry[] {
+  return [...past.slice(-HISTORY_LIMIT), snapshot];
+}
+
+// 변경 직전 스냅샷을 past에 쌓고 future를 비우는 히스토리 필드 묶음.
+// 즉시 히스토리를 커밋하는 액션(addObject/delete/group 등)에서 set()에 스프레드해 쓴다.
+function withHistory(snapshot: HistoryEntry, past: HistoryEntry[]): { past: HistoryEntry[]; future: HistoryEntry[] } {
+  return { past: pushPast(past, snapshot), future: [] };
+}
+
 let objectCounter = 0;
 
-function makeObject(shape: PrimitiveShape): ObjectNodeSchema {
-  objectCounter += 1;
+// 모든 오브젝트가 공유하는 기본값 팩토리. overrides로 타입별 필드(assetId/content/particle/light 등)를 덮어쓴다.
+// objectCounter는 건드리지 않으므로 name은 이미 번호가 매겨진 값을 전달할 것.
+function makeBaseObject(overrides: Partial<ObjectNodeSchema> & { name: string }): ObjectNodeSchema {
   return {
     id: MathUtils.generateUUID(),
-    name: `${SHAPE_NAMES[shape]} ${objectCounter}`,
     assetId: null,
-    primitiveShape: shape,
-    material: { color: '#a78bfa', roughness: 0.5, metalness: 0.1 },
+    primitiveShape: undefined,
+    material: {},
     parentId: null,
     layer: 'default',
-    position: { x: 0, y: 0.5, z: 0 },
+    position: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
     visible: true,
     locked: false,
     physics: { ...DEFAULT_PHYSICS },
     events: [],
+    ...overrides,
   };
+}
+
+function makeObject(shape: PrimitiveShape): ObjectNodeSchema {
+  objectCounter += 1;
+  return makeBaseObject({
+    name: `${SHAPE_NAMES[shape]} ${objectCounter}`,
+    primitiveShape: shape,
+    material: { color: '#a78bfa', roughness: 0.5, metalness: 0.1 },
+    position: { x: 0, y: 0.5, z: 0 },
+  });
 }
 
 export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
@@ -148,6 +176,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   focusAllRequest: null,
   cameraViewRequest: null,
   isModified: false,
+  savedVersion: 1,
   wireframeMode: false,
   past: [],
   future: [],
@@ -157,7 +186,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   copiedProperties: null,
   _prevSnapshot: null,
 
-  loadScene: (data) => {
+  loadScene: (data, savedVersion = 1) => {
     objectCounter = 0;
     set({
       projectId: data.projectId,
@@ -168,6 +197,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedId: null,
       selectedIds: [],
       isModified: false,
+      savedVersion,
       past: [],
       future: [],
       _prevSnapshot: null,
@@ -198,8 +228,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedId: obj.id,
       selectedIds: [obj.id],
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -256,11 +285,11 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         ...o,
         parentId: idMap.get(o.parentId!) ?? o.parentId,
       }));
-      set({ objects: [...objects, newGroup, ...fixedDescendants], selectedId: newGroupId, selectedIds: [newGroupId], isModified: true, past: [...past.slice(-49), { objects, environment }], future: [] });
+      set({ objects: [...objects, newGroup, ...fixedDescendants], selectedId: newGroupId, selectedIds: [newGroupId], isModified: true, ...withHistory({ objects, environment }, past) });
     } else {
       // 그룹 내부 오브젝트는 같은 부모 아래에 제자리 복제
       const copy: ObjectNodeSchema = { ...src, id: MathUtils.generateUUID(), name: `${src.name} 복사`, parentId: src.parentId };
-      set({ objects: [...objects, copy], selectedId: copy.id, selectedIds: [copy.id], isModified: true, past: [...past.slice(-49), { objects, environment }], future: [] });
+      set({ objects: [...objects, copy], selectedId: copy.id, selectedIds: [copy.id], isModified: true, ...withHistory({ objects, environment }, past) });
     }
   },
 
@@ -276,62 +305,37 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       image: { url: '' },
       video: { url: '' },
     };
-    const obj: ObjectNodeSchema = {
-      id: MathUtils.generateUUID(),
+    const obj = makeBaseObject({
       name: type === 'text' ? `텍스트 ${objectCounter}` : type === 'image' ? `이미지 ${objectCounter}` : `동영상 ${objectCounter}`,
-      assetId: null,
       primitiveShape: 'plane',
-      material: {},
-      parentId: null,
-      layer: 'default',
       position: { x: 0, y: 0.5, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
       scale: type === 'video' ? { x: 16 / 9, y: 1, z: 1 } : { x: 2, y: 1, z: 1 },
-      visible: true,
-      locked: false,
-      physics: { ...DEFAULT_PHYSICS },
-      events: [],
       content: { type, ...defaults[type] },
-    };
+    });
     const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
       selectedIds: [obj.id],
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
   addParticleObject: (preset) => {
     objectCounter += 1;
     const PRESET_NAMES: Record<string, string> = { fire: '불꽃', dust: '먼지', light: '빛 파티클', snow: '눈' };
-    const obj: ObjectNodeSchema = {
-      id: MathUtils.generateUUID(),
+    const obj = makeBaseObject({
       name: `${PRESET_NAMES[preset] ?? '파티클'} ${objectCounter}`,
-      assetId: null,
-      primitiveShape: undefined,
-      material: {},
-      parentId: null,
-      layer: 'default',
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 1, y: 1, z: 1 },
-      visible: true,
-      locked: false,
-      physics: { ...DEFAULT_PHYSICS },
-      events: [],
       particle: { preset },
-    };
+    });
     const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
       selectedIds: [obj.id],
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -348,30 +352,17 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   addAssetObject: (asset) => {
     objectCounter += 1;
-    const obj: ObjectNodeSchema = {
-      id: MathUtils.generateUUID(),
+    const obj = makeBaseObject({
       name: asset.name,
       assetId: asset.id,
-      primitiveShape: undefined,
-      material: {},
-      parentId: null,
-      layer: 'default',
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 1, y: 1, z: 1 },
-      visible: true,
-      locked: false,
-      physics: { ...DEFAULT_PHYSICS },
-      events: [],
-    };
+    });
     const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
       selectedIds: [obj.id],
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -399,8 +390,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedId: null,
       selectedIds: [],
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -416,8 +406,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         : o
       ),
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -463,8 +452,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         selectedId: newGroupId,
         selectedIds: [newGroupId],
         isModified: true,
-        past: [...past.slice(-49), { objects, environment }],
-        future: [],
+        ...withHistory({ objects, environment }, past),
       });
     } else {
       // 그룹 내부 오브젝트는 같은 부모 아래에 복제 (parentId 유지)
@@ -480,8 +468,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         selectedId: copy.id,
         selectedIds: [copy.id],
         isModified: true,
-        past: [...past.slice(-49), { objects, environment }],
-        future: [],
+        ...withHistory({ objects, environment }, past),
       });
     }
   },
@@ -508,24 +495,12 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     cx /= toGroup.length; cy /= toGroup.length; cz /= toGroup.length;
 
     objectCounter += 1;
-    const groupId = MathUtils.generateUUID();
-    const groupObj: ObjectNodeSchema = {
-      id: groupId,
+    const groupObj = makeBaseObject({
       name: `그룹 ${objectCounter}`,
-      assetId: null,
-      primitiveShape: undefined,
-      material: {},
-      parentId: null,
-      layer: 'default',
       position: { x: cx, y: cy, z: cz },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 1, y: 1, z: 1 },
-      visible: true,
-      locked: false,
-      physics: { ...DEFAULT_PHYSICS },
-      events: [],
       isGroup: true,
-    };
+    });
+    const groupId = groupObj.id;
 
     const updatedObjects = objects.map((o) =>
       normalizedIds.includes(o.id)
@@ -538,8 +513,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedId: groupId,
       selectedIds: [groupId],
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -602,8 +576,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedId: null,
       selectedIds: restoredChildren.map((c) => c.id),
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -619,7 +592,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   pushHistory: () => {
     const { _prevSnapshot, objects, environment, past } = get();
     const snapshot = _prevSnapshot ?? { objects, environment };
-    set({ past: [...past.slice(-49), snapshot], future: [], _prevSnapshot: null });
+    set({ ...withHistory(snapshot, past), _prevSnapshot: null });
   },
 
   undo: () => {
@@ -643,14 +616,14 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({
       objects: next.objects,
       environment: next.environment,
-      past: [...past.slice(-49), { objects, environment }],
+      past: pushPast(past, { objects, environment }),
       future: future.slice(1),
       isModified: true,
       _prevSnapshot: null,
     });
   },
 
-  markSaved: () => set({ isModified: false }),
+  markSaved: (savedVersion) => set(savedVersion !== undefined ? { isModified: false, savedVersion } : { isModified: false }),
   markModified: () => set({ isModified: true }),
   toggleWireframe: () => set((s) => ({ wireframeMode: !s.wireframeMode })),
 
@@ -703,8 +676,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
           : o
       ),
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -713,39 +685,25 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({
       objects: objects.map((o) => ids.includes(o.id) ? { ...o, ...patch(o) } : o),
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 
   addLightObject: (type) => {
     objectCounter += 1;
     const LIGHT_NAMES: Record<LightType, string> = { point: '포인트 라이트', spot: '스팟 라이트', directional: '방향 라이트' };
-    const obj: ObjectNodeSchema = {
-      id: MathUtils.generateUUID(),
+    const obj = makeBaseObject({
       name: `${LIGHT_NAMES[type]} ${objectCounter}`,
-      assetId: null,
-      primitiveShape: undefined,
-      material: {},
-      parentId: null,
-      layer: 'default',
       position: { x: 0, y: 3, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 },
-      scale: { x: 1, y: 1, z: 1 },
-      visible: true,
-      locked: false,
-      physics: { ...DEFAULT_PHYSICS },
-      events: [],
       light: { type, color: '#ffffff', intensity: 1, distance: 20, decay: 2, castShadow: false },
-    };
+    });
     const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
       selectedId: obj.id,
       selectedIds: [obj.id],
       isModified: true,
-      past: [...past.slice(-49), { objects, environment }],
-      future: [],
+      ...withHistory({ objects, environment }, past),
     });
   },
 }));

@@ -35,7 +35,7 @@ export default async function EditorPage({ params }: Props) {
 
   const { data: scene } = await supabase
     .from('scenes')
-    .select('id, scene_data')
+    .select('id, scene_data, version')
     .eq('id', project.default_scene_id)
     .single();
 
@@ -53,6 +53,7 @@ export default async function EditorPage({ params }: Props) {
       <EditorClient
         projectName={project.name}
         initialScene={initialScene}
+        initialVersion={typeof scene.version === 'number' ? scene.version : 1}
       />
     </>
   );

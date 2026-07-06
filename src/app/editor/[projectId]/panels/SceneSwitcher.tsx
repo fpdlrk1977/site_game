@@ -129,15 +129,18 @@ export function SceneSwitcher() {
       const supabase = createBrowserSupabase();
       const { data } = await supabase
         .from('scenes')
-        .select('id, scene_data, project_id')
+        .select('id, scene_data, project_id, version')
         .eq('id', targetId)
         .single();
       if (data && projectId) {
-        loadScene(normalizeSceneData(
-          (data.scene_data as Record<string, unknown>) ?? {},
-          projectId,
-          data.id,
-        ));
+        loadScene(
+          normalizeSceneData(
+            (data.scene_data as Record<string, unknown>) ?? {},
+            projectId,
+            data.id,
+          ),
+          typeof data.version === 'number' ? data.version : 1,
+        );
       }
       close();
     } finally {

@@ -8,10 +8,9 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
+import { persistCurrentScene } from '@/lib/saveScene';
 import { SceneSwitcher } from './SceneSwitcher';
 import { VersionHistoryModal } from './VersionHistoryModal';
-import type { ProjectSceneSchema } from '@/types/scene';
-import { SCENE_VERSION } from '@/types/scene';
 
 interface Props {
   projectName: string;
@@ -19,10 +18,7 @@ interface Props {
 
 
 export function ViewportToolbar({ projectName }: Props) {
-  const {
-    isModified,
-    projectId, sceneId, objects, assets, environment, markSaved,
-  } = useSceneStore();
+  const { isModified, projectId, sceneId } = useSceneStore();
   const { addToast } = useToast();
   const [showHistory, setShowHistory] = useState(false);
   const [autoSaveAt, setAutoSaveAt] = useState<number | null>(null);
@@ -36,26 +32,19 @@ export function ViewportToolbar({ projectName }: Props) {
     savingRef.current = true;
     setSaving(true);
     try {
-    const supabase = createBrowserSupabase();
-    const sceneData: ProjectSceneSchema = {
-      projectId: projectId ?? '',
-      sceneId,
-      version: SCENE_VERSION,
-      environment,
-      assets,
-      objects,
-    };
-
-    const { error: saveErr } = await supabase
-      .from('scenes')
-      .update({ scene_data: sceneData })
-      .eq('id', sceneId);
-
-    if (saveErr) {
+    // 낙관적 잠금 저장 — 다른 탭/기기가 먼저 저장했으면 conflict로 덮어쓰기 차단
+    const result = await persistCurrentScene();
+    if (result.status === 'conflict') {
+      addToast('다른 탭이나 기기에서 이 씬이 먼저 저장되었습니다. 변경사항을 잃지 않으려면 새로고침 후 다시 시도해 주세요.', 'error');
+      return;
+    }
+    if (result.status !== 'ok') {
       addToast('씬 저장에 실패했습니다. 다시 시도해 주세요.', 'error');
       return;
     }
+    const sceneData = result.sceneData;
 
+    const supabase = createBrowserSupabase();
     await supabase.from('scene_versions').insert({ scene_id: sceneId, scene_data: sceneData });
     const { data: oldVersions } = await supabase
       .from('scene_versions')
@@ -92,13 +81,13 @@ export function ViewportToolbar({ projectName }: Props) {
       }
     }
 
-    markSaved();
+    // markSaved는 persistCurrentScene 성공 시 내부에서 이미 호출됨 (savedVersion 갱신 포함)
     addToast('저장되었습니다.', 'success');
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [sceneId, projectId, objects, assets, environment, markSaved, addToast]);
+  }, [sceneId, projectId, addToast]);
 
   // 오토세이브: 60초마다 변경사항 있으면 자동 저장 (임시 비활성화)
   const handleSaveRef = useRef(handleSave);

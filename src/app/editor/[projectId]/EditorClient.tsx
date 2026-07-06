@@ -24,9 +24,10 @@ const EditorCanvas = dynamic(
 interface Props {
   projectName: string;
   initialScene: ProjectSceneSchema;
+  initialVersion: number;
 }
 
-export function EditorClient({ projectName, initialScene }: Props) {
+export function EditorClient({ projectName, initialScene, initialVersion }: Props) {
   const {
     loadScene, undo, redo, deleteSelected, duplicateSelected, duplicateInPlace,
     setTransformMode, requestFocus, requestFocusAll, requestCameraView,
@@ -51,7 +52,7 @@ export function EditorClient({ projectName, initialScene }: Props) {
   // 씬 로드 — sceneId가 같으면 재로드하지 않음 (initialScene prop 재생성 시 재로드 방지)
   // sceneId가 바뀌면(App Router가 param만 바꿔 컴포넌트를 재사용하는 씬 전환) 새 씬을 로드
   useEffect(() => {
-    loadScene(initialScene);
+    loadScene(initialScene, initialVersion);
     // initialScene 객체 자체는 의존성에서 제외 — 같은 씬의 prop 재생성으로 재로드되지 않도록
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadScene, initialScene.sceneId]);

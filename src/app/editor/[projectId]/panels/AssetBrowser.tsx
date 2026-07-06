@@ -4,12 +4,12 @@ import { useRef, useState } from 'react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
+import { persistCurrentScene } from '@/lib/saveScene';
 import { tryEmbedTextures } from '@/lib/glbEmbed';
 import { generateGlbThumbnail } from '@/lib/glbThumbnail';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
-import type { AssetRefSchema, ContentType, ParticlePreset, LightType, ProjectSceneSchema } from '@/types/scene';
-import { SCENE_VERSION } from '@/types/scene';
+import type { AssetRefSchema, ContentType, ParticlePreset, LightType } from '@/types/scene';
 
 type Tab = 'models' | 'character' | 'content' | 'particle' | 'lights' | 'materials' | 'textures' | 'hdr' | 'audio';
 
@@ -45,7 +45,7 @@ const LIGHT_ITEMS: { type: LightType; label: string; emoji: string }[] = [
 ];
 
 export function AssetBrowser() {
-  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset, markSaved } = useSceneStore();
+  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset } = useSceneStore();
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -96,19 +96,12 @@ export function AssetBrowser() {
 
       removeAsset(asset.id);
 
-      // scenes.scene_data도 즉시 업데이트 (새로고침 시 삭제된 에셋이 복원되는 버그 방지)
-      const state = useSceneStore.getState();
-      if (state.sceneId) {
-        const sceneData: ProjectSceneSchema = {
-          projectId: state.projectId ?? '',
-          sceneId: state.sceneId,
-          version: SCENE_VERSION,
-          environment: state.environment,
-          assets: state.assets,
-          objects: state.objects,
-        };
-        await supabase.from('scenes').update({ scene_data: sceneData }).eq('id', state.sceneId);
-        markSaved();
+      // scenes.scene_data도 즉시 반영 (새로고침 시 삭제된 에셋이 복원되는 버그 방지).
+      // 낙관적 잠금 — 다른 탭/기기가 먼저 저장했으면 conflict로 덮어쓰기 차단.
+      const result = await persistCurrentScene();
+      if (result.status === 'conflict') {
+        addToast('에셋은 삭제됐지만, 다른 탭·기기에서 씬이 먼저 저장되어 반영하지 못했습니다. 새로고침 후 다시 시도해 주세요.', 'error');
+        return;
       }
 
       addToast(`"${asset.name}" 삭제됨`, 'success');
@@ -182,19 +175,11 @@ export function AssetBrowser() {
       };
       addAsset(asset);
 
-      // scenes.scene_data 즉시 업데이트 (새로고침 후 에셋이 사라지는 버그 방지)
-      const state = useSceneStore.getState();
-      if (state.sceneId) {
-        const sceneData: ProjectSceneSchema = {
-          projectId: state.projectId ?? '',
-          sceneId: state.sceneId,
-          version: SCENE_VERSION,
-          environment: state.environment,
-          assets: state.assets,
-          objects: state.objects,
-        };
-        await supabase.from('scenes').update({ scene_data: sceneData }).eq('id', state.sceneId);
-        markSaved();
+      // scenes.scene_data 즉시 반영 (새로고침 후 에셋이 사라지는 버그 방지).
+      // 낙관적 잠금 — 다른 탭/기기가 먼저 저장했으면 conflict (에셋 파일은 이미 업로드됨).
+      const result = await persistCurrentScene();
+      if (result.status === 'conflict') {
+        addToast('에셋은 업로드됐지만, 다른 탭·기기에서 씬이 먼저 저장되어 반영하지 못했습니다. 새로고침 후 다시 시도해 주세요.', 'error');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '알 수 없는 오류';
