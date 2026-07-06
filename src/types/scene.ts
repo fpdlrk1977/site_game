@@ -45,9 +45,13 @@ export interface EventSchema {
     | 'toggle_object'  // value = 대상 objectId (표시/숨김 토글)
     | 'focus_object'   // value = 대상 objectId (카메라를 그 오브젝트로 이동/포커스, 탐색 모드)
     | 'reset_camera'   // value 불필요 (카메라를 초기 시점으로 복귀, 탐색 모드)
-    | 'animate_object'; // value = "대상objectId|클립이름" (대상 GLB의 애니메이션 재생)
+    | 'animate_object' // value = "대상objectId|클립이름" (대상 GLB의 애니메이션 재생)
+    | 'move_object'    // value = "대상objectId|dx,dy,dz|초" (원래 저장 위치 기준 오프셋으로 부드럽게 이동)
+    | 'play_sound';    // value = 오디오 URL (mp3 등)
   // go_to_scene: 이동할 대상 sceneId. show/hide/toggle/focus_object: 대상 objectId.
   // reset_camera: value 없음. animate_object: "objectId|clipName".
+  // move_object: "objectId|dx,dy,dz|durationSec" — 오프셋은 누적이 아니라 항상 원래 위치 기준.
+  //   (0,0,0) 오프셋 이벤트를 만들면 제자리로 돌아온다. play_sound: 오디오 URL.
   // 그 외: 기존 의미(URL/텍스트/이벤트명/클립명).
   value: string;
   eventPayload?: Record<string, unknown>;

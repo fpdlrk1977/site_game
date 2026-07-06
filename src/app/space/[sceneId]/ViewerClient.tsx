@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { MobileControls } from './MobileControls';
 import { RichContent } from '@/components/ui/RichContent';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, Vector3 } from '@/types/scene';
 
 const ViewerCanvas = dynamic(
   () => import('./ViewerCanvas').then((m) => m.ViewerCanvas),
@@ -46,14 +46,78 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
   const resetCamera = () => setFocusRequest({ id: null, t: Date.now() });
   // animate_object 액션용 런타임 클립 요청 (objectId → {name, t})
   const [clipRequests, setClipRequests] = useState<Record<string, { name: string; t: number }>>({});
+
+  // ── move_object 액션 — 런타임 위치 오버라이드 (objectId → 현재 렌더 위치) ──
+  // visOverride와 같은 방식으로 씬 데이터에 주입해 렌더한다. 모든 뷰어 경로(탐색·인스턴스드·
+  // 플레이 RigidBody)가 object.position을 존중하고, rapier RigidBody는 position prop 변경 시
+  // setTranslation으로 텔레포트하므로 플레이 모드에선 콜라이더도 함께 이동한다.
+  const [posOverride, setPosOverride] = useState<Record<string, Vector3>>({});
+  // 진행 중인 이동 애니메이션 — 단일 rAF 루프가 모든 대상을 이징(easeInOutQuad) 갱신
+  const moveAnims = useRef<Map<string, { from: Vector3; to: Vector3; start: number; dur: number }>>(new Map());
+  const moveRaf = useRef<number | null>(null);
+  // 마지막으로 렌더된 위치(애니메이션 도중 재트리거 시 현재 위치에서 이어가기 위함)
+  const posCurrent = useRef<Record<string, Vector3>>({});
+
+  const startMove = (targetId: string, to: Vector3, dur: number) => {
+    const base = scene.objects.find((o) => o.id === targetId)?.position;
+    if (!base) return;
+    const from = posCurrent.current[targetId] ?? base;
+    moveAnims.current.set(targetId, { from: { ...from }, to, start: performance.now(), dur });
+    if (moveRaf.current !== null) return; // 루프가 이미 돌고 있음
+    const tick = (now: number) => {
+      const next = { ...posCurrent.current };
+      moveAnims.current.forEach((a, id) => {
+        const t = a.dur <= 0 ? 1 : Math.min(1, (now - a.start) / (a.dur * 1000));
+        const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
+        next[id] = {
+          x: a.from.x + (a.to.x - a.from.x) * e,
+          y: a.from.y + (a.to.y - a.from.y) * e,
+          z: a.from.z + (a.to.z - a.from.z) * e,
+        };
+        if (t >= 1) moveAnims.current.delete(id);
+      });
+      posCurrent.current = next;
+      setPosOverride(next);
+      moveRaf.current = moveAnims.current.size > 0 ? requestAnimationFrame(tick) : null;
+    };
+    moveRaf.current = requestAnimationFrame(tick);
+  };
+  useEffect(() => () => {
+    if (moveRaf.current !== null) cancelAnimationFrame(moveRaf.current);
+  }, []);
+
+  // ── play_sound 액션 — URL별 오디오 엘리먼트 재사용 (반복 트리거 시 무한 생성 방지) ──
+  const audioCache = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const playSound = (url: string) => {
+    let el = audioCache.current.get(url);
+    if (!el) {
+      el = new Audio(url);
+      audioCache.current.set(url, el);
+    }
+    el.currentTime = 0;
+    // area 트리거는 사용자 제스처가 아니라 자동재생 정책에 막힐 수 있다 — 조용히 무시
+    el.play().catch(() => {});
+  };
+  useEffect(() => {
+    const cache = audioCache.current;
+    return () => {
+      cache.forEach((el) => { el.pause(); el.src = ''; });
+      cache.clear();
+    };
+  }, []);
+
   // 오버라이드를 씬 데이터에 반영해 렌더 (모든 뷰어 경로가 object.visible을 존중하므로 이걸로 충분)
   const effectiveScene = useMemo(() => {
-    if (Object.keys(visOverride).length === 0) return scene;
+    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0) return scene;
     return {
       ...scene,
-      objects: scene.objects.map((o) => (o.id in visOverride ? { ...o, visible: visOverride[o.id] } : o)),
+      objects: scene.objects.map((o) => {
+        const vis = o.id in visOverride ? visOverride[o.id] : o.visible;
+        const pos = posOverride[o.id] ?? o.position;
+        return vis === o.visible && pos === o.position ? o : { ...o, visible: vis, position: pos };
+      }),
     };
-  }, [scene, visOverride]);
+  }, [scene, visOverride, posOverride]);
   const [isTouch, setIsTouch] = useState(false);
   const supabase = useState(() => createBrowserSupabase())[0];
   const mobileInputRef = useRef({ fwd: 0, strafe: 0, jump: false });
@@ -115,6 +179,21 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
         const targetId = sep >= 0 ? ev.value.slice(0, sep) : ev.value;
         const clip = sep >= 0 ? ev.value.slice(sep + 1) : '';
         if (targetId && clip) setClipRequests((m) => ({ ...m, [targetId]: { name: clip, t: Date.now() } }));
+      } else if (ev.action === 'move_object' && ev.value) {
+        // value = "대상objectId|dx,dy,dz|초" — 원래 저장 위치 기준 오프셋으로 부드럽게 이동
+        const [targetId, offsetStr, durStr] = ev.value.split('|');
+        const base = scene.objects.find((o) => o.id === targetId)?.position;
+        if (base) {
+          const [dx, dy, dz] = (offsetStr ?? '').split(',').map((s) => parseFloat(s));
+          const dur = parseFloat(durStr ?? '');
+          startMove(targetId, {
+            x: base.x + (Number.isFinite(dx) ? dx : 0),
+            y: base.y + (Number.isFinite(dy) ? dy : 0),
+            z: base.z + (Number.isFinite(dz) ? dz : 0),
+          }, Number.isFinite(dur) ? Math.max(0, dur) : 1);
+        }
+      } else if (ev.action === 'play_sound' && ev.value) {
+        playSound(ev.value);
       }
       // emit_event: EmbedClient 참고
     }

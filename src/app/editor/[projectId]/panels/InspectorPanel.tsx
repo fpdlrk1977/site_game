@@ -276,6 +276,8 @@ const ACTION_LABELS: Record<string, string> = {
   focus_object: '카메라 포커스',
   reset_camera: '카메라 초기화',
   animate_object: '오브젝트 애니메이션',
+  move_object: '오브젝트 이동',
+  play_sound: '사운드 재생',
 };
 
 // value가 대상 objectId인 액션들 (에디터에서 오브젝트 선택 드롭다운 표시)
@@ -1084,10 +1086,12 @@ function InspectorInner() {
               { value: 'show_object', label: '오브젝트 표시' },
               { value: 'hide_object', label: '오브젝트 숨김' },
               { value: 'toggle_object', label: '오브젝트 토글' },
+              { value: 'move_object', label: '오브젝트 이동' },
               { value: 'focus_object', label: '카메라 포커스' },
               { value: 'reset_camera', label: '카메라 초기화' },
               { value: 'play_animation', label: '애니메이션 재생' },
               { value: 'animate_object', label: '오브젝트 애니메이션' },
+              { value: 'play_sound', label: '사운드 재생' },
               { value: 'emit_event', label: '이벤트 발송' },
             ]}
           />
@@ -1109,6 +1113,8 @@ function InspectorInner() {
             : newAction === 'go_to_scene' ? '이동할 씬'
             : newAction === 'reset_camera' ? '설정'
             : newAction === 'animate_object' ? '대상 오브젝트 + 클립'
+            : newAction === 'move_object' ? '대상 오브젝트 + 이동량'
+            : newAction === 'play_sound' ? '오디오 URL'
             : OBJECT_TARGET_ACTIONS.has(newAction) ? '대상 오브젝트'
             : '팝업 내용'}
         </span>
@@ -1132,6 +1138,60 @@ function InspectorInner() {
                   : <p className="text-muted/60 text-[10px] py-1">이 오브젝트엔 애니메이션(GLB)이 없습니다.</p>
                 )}
               </div>
+            );
+          }
+          if (newAction === 'move_object') {
+            // value = "대상objectId|dx,dy,dz|초" — 원래 저장 위치 기준 오프셋 + 이동 시간
+            const [tid = '', offsetStr = '', durStr = ''] = newValue.split('|');
+            const nums = offsetStr.split(',').map((s) => parseFloat(s));
+            const off = {
+              x: Number.isFinite(nums[0]) ? nums[0] : 0,
+              y: Number.isFinite(nums[1]) ? nums[1] : 0,
+              z: Number.isFinite(nums[2]) ? nums[2] : 0,
+            };
+            const durParsed = parseFloat(durStr);
+            const dur = Number.isFinite(durParsed) ? durParsed : 1;
+            const compose = (id: string, o: { x: number; y: number; z: number }, d: number) =>
+              `${id}|${o.x},${o.y},${o.z}|${d}`;
+            // 자기 자신도 대상 가능 (클릭하면 스스로 움직이는 문/플랫폼 등)
+            const targetOpts = objects.map((o) => ({ value: o.id, label: o.id === obj?.id ? `${o.name} (자신)` : o.name }));
+            return (
+              <div className="space-y-1.5">
+                <SelectBox value={tid} onChange={(id) => setNewValue(compose(id, off, dur))} options={targetOpts} placeholder="대상 오브젝트 선택..." />
+                {tid && (
+                  <>
+                    <XYZRow label="이동량" x={off.x} y={off.y} z={off.z}
+                      onChangeX={(v) => setNewValue(compose(tid, { ...off, x: v }, dur))}
+                      onChangeY={(v) => setNewValue(compose(tid, { ...off, y: v }, dur))}
+                      onChangeZ={(v) => setNewValue(compose(tid, { ...off, z: v }, dur))}
+                      onCommit={() => {}} dragStep={0.1}
+                    />
+                    <LabeledNum label="이동 시간(초)" value={dur}
+                      onChange={(v) => setNewValue(compose(tid, off, Math.max(0, v)))}
+                      onCommit={() => {}}
+                      min={0} max={30} precision={1} dragStep={0.05}
+                    />
+                    <p className="text-muted/50 text-[10px]">
+                      누적이 아니라 항상 원래 위치 기준으로 이동합니다. (0,0,0) 이벤트를 하나 더 만들면 제자리로 돌아옵니다.
+                    </p>
+                  </>
+                )}
+              </div>
+            );
+          }
+          if (newAction === 'play_sound') {
+            return (
+              <>
+                <input
+                  type="text"
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  placeholder="https://... (mp3/wav/ogg)"
+                  className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                  onKeyDown={(e) => e.key === 'Enter' && addEvent()}
+                />
+                <p className="text-muted/50 text-[10px] mt-1">트리거 발동 시 오디오를 재생합니다. ▶ 버튼으로 미리 들을 수 있습니다.</p>
+              </>
             );
           }
           if (newAction === 'go_to_scene') {
@@ -1746,6 +1806,8 @@ function InspectorInner() {
                         else if (OBJECT_TARGET_ACTIONS.has(ev.action)) addToast(`${ACTION_LABELS[ev.action]}: "${objectName(ev.value)}" (뷰어에서 동작)`, 'info');
                         else if (ev.action === 'reset_camera') addToast('카메라 초기화 (탐색 모드 뷰어에서 동작)', 'info');
                         else if (ev.action === 'animate_object') { const [tid, clip] = ev.value.split('|'); addToast(`애니메이션: "${objectName(tid)}" → "${clip ?? ''}" (뷰어에서 동작)`, 'info'); }
+                        else if (ev.action === 'move_object') { const [tid, off, dur] = ev.value.split('|'); addToast(`이동: "${objectName(tid)}" Δ(${off || '0,0,0'}) ${dur || '1'}초 (뷰어에서 동작)`, 'info'); }
+                        else if (ev.action === 'play_sound' && ev.value) { new Audio(ev.value).play().catch(() => addToast('오디오 재생 실패 — URL을 확인하세요', 'error')); }
                       }}
                       title="미리보기"
                       className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
@@ -1771,6 +1833,7 @@ function InspectorInner() {
                   <p className="text-muted/60 text-[10px] mt-1.5 truncate  bg-background/50 rounded px-1.5 py-0.5">
                     {ev.action === 'go_to_scene' ? `→ ${sceneName(ev.value)}`
                       : ev.action === 'animate_object' ? `→ ${objectName(ev.value.split('|')[0])} : ${ev.value.split('|')[1] ?? ''}`
+                      : ev.action === 'move_object' ? `→ ${objectName(ev.value.split('|')[0])} Δ(${ev.value.split('|')[1] ?? '0,0,0'}) ${ev.value.split('|')[2] ?? '1'}초`
                       : OBJECT_TARGET_ACTIONS.has(ev.action) ? `→ ${objectName(ev.value)}`
                       : ev.value}
                   </p>
