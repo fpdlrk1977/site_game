@@ -163,25 +163,29 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate,
     objects, updateObject, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
-  const [, bump] = useState(0);
+  // 현재 기즈모가 안정적으로 붙은 대상의 식별키. 렌더 중 ref를 읽지 않도록 state로 관리한다.
+  const [attachedKey, setAttachedKey] = useState('');
 
   const isCharPreview = selectedId === CHARACTER_PREVIEW_ID;
   const selectedObject = isCharPreview ? null : objects.find((o) => o.id === selectedId);
 
   const target = selectedId ? refsMap.current.get(selectedId) : undefined;
-  const targetReady = !!(target && target.parent);
+  // 선택 오브젝트 + 부모 식별키 — 선택 변경/재부모화(부모 변경)를 감지한다
+  const gizmoKey = selectedId ? `${selectedId}:${selectedObject?.parentId ?? 'root'}` : '';
 
-  // 오브젝트 추가 직후에는 ref 등록(자식 useEffect)이 아직 안 끝나 target이 없다.
-  // 등록이 끝난 시점에 1회만 리렌더해 TransformControls를 붙인다.
-  // (ref가 끝내 등록되지 않으면 bump하지 않으므로 루프 없음)
+  // 커밋 후 최신 ref가 씬에 붙어있고 키가 바뀌었으면 attachedKey를 현재 키로 맞춘다.
+  // 그 전(부모/선택이 막 바뀐 전환 프레임)에는 attachedKey!==gizmoKey라 기즈모를 렌더하지 않아
+  // TransformControls가 분리 직전의 옛 객체를 물지 않는다. 키가 같아지면 멈추므로 루프 없음.
+  // 의존성 배열 없음: 매 렌더 후 커밋된 ref 상태를 확인해야 하므로 의도적.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!selectedId || targetReady) return;
-    if (refsMap.current.get(selectedId)?.parent) {
-      // 외부 시스템(imperative refs map)과의 동기화 목적의 의도된 1회성 리렌더
+    const cur = selectedId ? refsMap.current.get(selectedId) : undefined;
+    if (cur && cur.parent && attachedKey !== gizmoKey) {
+      // 외부 시스템(imperative refs map)과 동기화하는 의도된 1회성 상태 갱신 (키 안정화 시 멈춤)
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      bump((n) => n + 1);
+      setAttachedKey(gizmoKey);
     }
-  }, [selectedId, targetReady, refsMap]);
+  });
 
   if (!selectedId) return null;
   if (!isCharPreview && (!selectedObject || selectedObject.locked || !selectedObject.visible)) return null;
@@ -189,6 +193,8 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   // target이 없거나 씬 그래프에서 분리된 상태면 TransformControls 연결 금지
   // (그룹 중첩 시 언마운트→리마운트 전환 구간에서 에러 루프 발생 방지)
   if (!target || !target.parent) return null;
+  // 최신 ref로 아직 안정화되지 않은 전환 프레임(재부모화/선택 변경 직후) — 다음 렌더에서 붙는다
+  if (attachedKey !== gizmoKey) return null;
 
   // 캐릭터 프리뷰는 위치만 조정 가능 (스케일은 Inspector Player 섹션에서)
   const effectiveMode = isCharPreview ? 'translate' : transformMode;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useLayoutEffect, useState, Suspense } from 'react';
+import { useRef, useLayoutEffect, useState, Suspense } from 'react';
 import * as THREE from 'three';
 import { Text3D, Center } from '@react-three/drei';
 import { useShallow } from 'zustand/react/shallow';
@@ -68,7 +68,9 @@ function LightObjectInstance({ object }: Props) {
   const lc = object.light!;
   const iconColor = LIGHT_ICON_COLOR[lc.type];
 
-  useEffect(() => {
+  // useLayoutEffect: 커밋 중 동기 등록 → 재부모화(언마운트→리마운트) 시 기즈모가
+  // 옛(분리된) ref를 붙들지 않도록 새 ref를 페인트 전에 refsMap에 반영한다
+  useLayoutEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
     return () => { refsMap.current.delete(object.id); };
   }, [object.id, refsMap]);
@@ -167,7 +169,9 @@ function GroupObjectInstance({ object }: Props) {
   const children = useSceneStore(useShallow((s) => s.objects.filter((o) => o.parentId === object.id)));
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
 
-  useEffect(() => {
+  // useLayoutEffect: 커밋 중 동기 등록 → 재부모화(언마운트→리마운트) 시 기즈모가
+  // 옛(분리된) ref를 붙들지 않도록 새 ref를 페인트 전에 refsMap에 반영한다
+  useLayoutEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
     return () => { refsMap.current.delete(object.id); };
   }, [object.id, refsMap]);
@@ -228,7 +232,9 @@ export function EditorObjectInstance({ object }: Props) {
   const handlePointerOver = (e: { stopPropagation: () => void }) => { e.stopPropagation(); setHovered(true); };
   const handlePointerOut = (e: { stopPropagation: () => void }) => { e.stopPropagation(); setHovered(false); };
 
-  useEffect(() => {
+  // useLayoutEffect: 커밋 중 동기 등록 → 재부모화(언마운트→리마운트) 시 기즈모가
+  // 옛(분리된) ref를 붙들지 않도록 새 ref를 페인트 전에 refsMap에 반영한다
+  useLayoutEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
     return () => { refsMap.current.delete(object.id); };
   }, [object.id, refsMap]);

@@ -194,6 +194,45 @@ export function isDescendant(objects: ObjectNodeSchema[], candidateId: string, r
   return false;
 }
 
+// 그룹 원점(피벗)을 직속 자식들의 중심(centroid=위치 평균)으로 재배치한다.
+// 자식 월드 위치는 그대로 유지하고 로컬 좌표만 보정 → 기즈모/회전·크기 피벗이 항상 자식 중심에 온다.
+// 그룹 회전·크기는 유지하고 위치만 이동하므로 자식은 위치만 바뀐다(회전·크기 불변).
+// (groupSelected·MultiGizmo와 동일하게 '위치 평균'을 중심으로 사용)
+function recenterGroup(objects: ObjectNodeSchema[], groupId: string): ObjectNodeSchema[] {
+  const group = objects.find((o) => o.id === groupId);
+  if (!group?.isGroup) return objects;
+  const children = objects.filter((o) => o.parentId === groupId);
+  if (children.length === 0) return objects;
+
+  // 각 자식의 월드 위치 + centroid(월드)
+  const childWorldPos = new Map<string, Vector3>();
+  const centroid = new Vector3();
+  for (const c of children) {
+    const wp = new Vector3().setFromMatrixPosition(computeWorldMatrix(objects, c.id));
+    childWorldPos.set(c.id, wp);
+    centroid.add(wp);
+  }
+  centroid.divideScalar(children.length);
+
+  // 그룹의 현재 회전·크기는 유지하고 원점만 centroid로 이동한 새 월드행렬의 역행렬
+  const gWorld = computeWorldMatrix(objects, groupId);
+  const gPos = new Vector3(), gQuat = new Quaternion(), gScale = new Vector3();
+  gWorld.decompose(gPos, gQuat, gScale);
+  const gWorldNewInv = new Matrix4().compose(centroid, gQuat, gScale).invert();
+
+  // 그룹의 새 로컬 위치(부모 기준) — centroid를 부모 공간으로 변환
+  const parentInv = group.parentId ? computeWorldMatrix(objects, group.parentId).invert() : new Matrix4();
+  const gLocalPos = centroid.clone().applyMatrix4(parentInv);
+
+  const patches = new Map<string, ObjectNodeSchema>();
+  patches.set(groupId, { ...group, position: { x: gLocalPos.x, y: gLocalPos.y, z: gLocalPos.z } });
+  for (const c of children) {
+    const lp = childWorldPos.get(c.id)!.clone().applyMatrix4(gWorldNewInv);
+    patches.set(c.id, { ...c, position: { x: lp.x, y: lp.y, z: lp.z } });
+  }
+  return objects.map((o) => patches.get(o.id) ?? o);
+}
+
 export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   projectId: null,
   sceneId: null,
@@ -451,7 +490,20 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     if (targetIdx < 0) return;
     // inside: 그룹 헤더 바로 뒤(첫 자식), before/after: target 앞/뒤
     const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
-    const next = [...rest.slice(0, insertIdx), moved, ...rest.slice(insertIdx)];
+    let next = [...rest.slice(0, insertIdx), moved, ...rest.slice(insertIdx)];
+
+    // 멤버십이 바뀐 경우에만 관련 그룹 피벗을 자식 중심으로 재배치
+    // (같은 부모 내 순서 변경은 중심이 그대로이므로 제외)
+    const oldParentId = dragged.parentId;
+    if (newParentId !== oldParentId) {
+      if (newParentId && next.find((o) => o.id === newParentId)?.isGroup) {
+        next = recenterGroup(next, newParentId);
+      }
+      if (oldParentId && next.find((o) => o.id === oldParentId)?.isGroup) {
+        next = recenterGroup(next, oldParentId);
+      }
+    }
+
     set({ objects: next, isModified: true, ...withHistory({ objects, environment }, past) });
   },
 
