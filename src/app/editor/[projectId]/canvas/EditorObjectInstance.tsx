@@ -81,10 +81,10 @@ function LightObjectInstance({ object }: Props) {
     g.position.set(object.position.x, object.position.y, object.position.z);
     g.rotation.set(object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD);
     g.scale.set(1, 1, 1);
+    g.visible = object.visible; // 언마운트 대신 플래그 토글 (좌표 리셋 버그 방지)
   }, [object.position.x, object.position.y, object.position.z,
-    object.rotation.x, object.rotation.y, object.rotation.z]);
+    object.rotation.x, object.rotation.y, object.rotation.z, object.visible]);
 
-  if (!object.visible) return null;
 
   const handleClick = (shiftKey: boolean) => {
     if (object.locked) return;
@@ -184,11 +184,10 @@ function GroupObjectInstance({ object }: Props) {
     g.position.set(object.position.x, object.position.y, object.position.z);
     g.rotation.set(object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD);
     g.scale.set(object.scale.x, object.scale.y, object.scale.z);
+    g.visible = object.visible; // 언마운트 대신 플래그 토글 (좌표 리셋 버그 방지)
   }, [object.position.x, object.position.y, object.position.z,
       object.rotation.x, object.rotation.y, object.rotation.z,
-      object.scale.x, object.scale.y, object.scale.z]);
-
-  if (!object.visible) return null;
+      object.scale.x, object.scale.y, object.scale.z, object.visible]);
 
   const handleClick = (shiftKey: boolean) => {
     if (object.locked) return;
@@ -249,17 +248,19 @@ export function EditorObjectInstance({ object }: Props) {
       object.rotation.z * DEG2RAD,
     );
     g.scale.set(object.scale.x, object.scale.y, object.scale.z);
+    // visible은 언마운트가 아니라 플래그로 토글 — 언마운트 시 새 그룹이 기본 좌표로
+    // 생성되고 이 effect가 (deps 불변으로) 재실행 안 돼 좌표/크기가 리셋되는 버그 방지
+    g.visible = object.visible;
   }, [
     object.position.x, object.position.y, object.position.z,
     object.rotation.x, object.rotation.y, object.rotation.z,
     object.scale.x, object.scale.y, object.scale.z,
+    object.visible,
   ]);
 
   // 그룹 오브젝트는 별도 컴포넌트로 렌더 (hooks 이후에 early return)
   if (object.isGroup) return <GroupObjectInstance object={object} />;
   if (object.light) return <LightObjectInstance object={object} />;
-
-  if (!object.visible) return null;
 
   const assetRef = object.assetId ? assets.find((a) => a.id === object.assetId) : null;
   const color = object.material?.color ?? '#a78bfa';

@@ -50,6 +50,12 @@ export function PhysicsObject({ object, assets, onEvent }: Props) {
     if (clip) setActiveClip({ name: clip.value, t: Date.now() });
   };
 
+  const handleAreaExit = () => {
+    onEvent(object, 'area_exit');
+    const clip = object.events.find((e) => e.trigger === 'area_exit' && e.action === 'play_animation' && e.value);
+    if (clip) setActiveClip({ name: clip.value, t: Date.now() });
+  };
+
 
   return (
     <RigidBody
@@ -62,6 +68,7 @@ export function PhysicsObject({ object, assets, onEvent }: Props) {
       sensor={object.physics.isSensor}
       activeCollisionTypes={object.physics.isSensor ? SENSOR_COLLISION_TYPES : undefined}
       onIntersectionEnter={object.physics.isSensor ? handleAreaEnter : undefined}
+      onIntersectionExit={object.physics.isSensor ? handleAreaExit : undefined}
       userData={{ objectId: object.id }}
     >
       <ViewerObject object={object} assets={assets} onEvent={onEvent} noTransform activeClip={activeClip} />
