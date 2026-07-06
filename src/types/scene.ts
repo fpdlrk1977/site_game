@@ -25,6 +25,8 @@ export interface EnvSchema {
   playerStartPosition?: Vector3;
   // 뷰어 진입 시 기본 모드. 미설정 = 'explore'(기존 동작). 'play'면 접속하자마자 플레이 모드로 시작.
   defaultMode?: 'explore' | 'play';
+  // true면 이 씬은 '둘러보기 전용' — 걷기(플레이) 모드·캐릭터 없음, 뷰어에서 플레이 토글 숨김. (포트폴리오/제품 뷰어)
+  disableWalk?: boolean;
   notes?: string;
   postProcessing?: { preset: PostProcessPreset };
 }

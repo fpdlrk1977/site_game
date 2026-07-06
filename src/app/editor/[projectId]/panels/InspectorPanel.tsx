@@ -636,6 +636,20 @@ function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader title="Player" />
         <div className="px-3 pb-4 space-y-1">
+          {/* 걷기(플레이) 모드 사용 — 끄면 이 씬은 둘러보기 전용(캐릭터·플레이 없음) */}
+          <label className="flex items-center justify-between cursor-pointer pb-1">
+            <span className="text-[10px] font-semibold text-muted/70">걷기(플레이) 모드 사용</span>
+            <Toggle
+              value={!env.disableWalk}
+              onChange={(v) => { updateEnvironment({ disableWalk: !v }); pushHistory(); }}
+            />
+          </label>
+          {env.disableWalk ? (
+            <p className="text-[10px] text-muted/60 leading-relaxed">
+              둘러보기 전용 씬입니다. 뷰어에서 캐릭터·플레이 없이 orbit으로만 감상합니다.
+            </p>
+          ) : (
+          <>
           {/* 뷰어 기본 진입 모드 — 접속 시 탐색/플레이 중 무엇으로 시작할지 */}
           <div className="pb-1">
             <span className="text-[10px] text-muted/50 block mb-1.5 font-semibold tracking-wide">기본 진입 모드</span>
@@ -712,10 +726,13 @@ function EnvironmentPanel() {
               </>
             );
           })()}
+          </>
+          )}
         </div>
       </GroupBox>
 
-      {/* 스폰 포인트 */}
+      {/* 스폰 포인트 — 걷기 모드일 때만 (둘러보기 전용 씬은 캐릭터·스폰 없음) */}
+      {!env.disableWalk && (
       <GroupBox>
         <SectionHeader title="Spawn Point" />
         <div className="px-3 pb-4 space-y-1">
@@ -742,6 +759,7 @@ function EnvironmentPanel() {
           )} */}
         </div>
       </GroupBox>
+      )}
 
       {/* Boundary */}
       <GroupBox>

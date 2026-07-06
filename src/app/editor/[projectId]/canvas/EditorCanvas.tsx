@@ -324,7 +324,8 @@ export function EditorCanvas() {
             />
           )}
 
-          {environment.playerCharacterId
+          {/* 둘러보기 전용 씬은 캐릭터 프리뷰·스폰 마커 숨김 */}
+          {!environment.disableWalk && (environment.playerCharacterId
             ? (() => {
                 const charAsset = assets.find((a) => a.id === environment.playerCharacterId);
                 return charAsset
@@ -334,7 +335,7 @@ export function EditorCanvas() {
             : environment.playerStartPosition
               ? <SpawnMarker position={environment.playerStartPosition} />
               : null
-          }
+          )}
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 

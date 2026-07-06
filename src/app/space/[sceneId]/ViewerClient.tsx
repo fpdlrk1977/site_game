@@ -33,8 +33,10 @@ interface Props {
 
 export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge = false }: Props) {
   const [popup, setPopup] = useState<{ title: string; content: string } | null>(null);
-  // 씬별 기본 진입 모드 — 'play'면 접속하자마자 플레이 모드로 시작 (미설정 = 탐색)
-  const [playMode, setPlayMode] = useState(scene.environment.defaultMode === 'play');
+  // 둘러보기 전용 씬은 걷기(플레이) 불가 — 항상 탐색으로만 동작
+  const walkDisabled = scene.environment.disableWalk === true;
+  // 씬별 기본 진입 모드 — 'play'면 접속하자마자 플레이 모드로 시작 (미설정/둘러보기전용 = 탐색)
+  const [playMode, setPlayMode] = useState(scene.environment.defaultMode === 'play' && !walkDisabled);
   const [isTouch, setIsTouch] = useState(false);
   const supabase = useState(() => createBrowserSupabase())[0];
   const mobileInputRef = useRef({ fwd: 0, strafe: 0, jump: false });
@@ -101,16 +103,19 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           <span className="text-white/60 text-xs font-medium bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-xs">
             {projectName}
           </span>
-          <button
-            onClick={() => setPlayMode((v) => !v)}
-            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xs border backdrop-blur-sm transition-all ${
-              playMode
-                ? 'bg-primary/80 border-primary/50 text-white'
-                : 'bg-black/40 border-white/10 text-white/70 hover:bg-black/60'
-            }`}
-          >
-            {playMode ? '⏹ 탐색 모드' : '▶ 플레이'}
-          </button>
+          {/* 둘러보기 전용 씬은 플레이 토글 자체를 숨김 (캐릭터 소환 불가) */}
+          {!walkDisabled && (
+            <button
+              onClick={() => setPlayMode((v) => !v)}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xs border backdrop-blur-sm transition-all ${
+                playMode
+                  ? 'bg-primary/80 border-primary/50 text-white'
+                  : 'bg-black/40 border-white/10 text-white/70 hover:bg-black/60'
+              }`}
+            >
+              {playMode ? '⏹ 탐색 모드' : '▶ 플레이'}
+            </button>
+          )}
         </div>
       </div>
 
