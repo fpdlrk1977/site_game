@@ -163,6 +163,11 @@ function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOu
   // 스킨드 메시(bone 애니메이션) 포함 GLB는 SkeletonUtils.clone 필수 — scene.clone(true)는 bone 참조를 공유해 버린다
   const clone = useMemo(() => {
     const c = SkeletonUtils.clone(rawScene);
+    // GLB 메시가 그림자를 만들고 받도록 (기본값 false라 미설정 시 모델에 그림자가 아예 없음)
+    c.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; }
+    });
     normalizeGlbMaterials(c);
     return c;
   }, [rawScene]);

@@ -261,6 +261,7 @@ const ACTION_LABELS: Record<string, string> = {
   show_popup: '팝업',
   emit_event: '이벤트 발송',
   play_animation: '애니메이션 재생',
+  go_to_scene: '씬 이동',
 };
 
 // ── GLB 애니메이션 클립 선택기 ─────────────────────────────────
@@ -635,6 +636,21 @@ function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader title="Player" />
         <div className="px-3 pb-4 space-y-1">
+          {/* 뷰어 기본 진입 모드 — 접속 시 탐색/플레이 중 무엇으로 시작할지 */}
+          <div className="pb-1">
+            <span className="text-[10px] text-muted/50 block mb-1.5 font-semibold tracking-wide">기본 진입 모드</span>
+            <SelectBox
+              value={env.defaultMode ?? 'explore'}
+              onChange={(v) => { updateEnvironment({ defaultMode: v as 'explore' | 'play' }); pushHistory(); }}
+              options={[
+                { value: 'explore', label: '탐색 (둘러보기)' },
+                { value: 'play', label: '플레이 (걸어다니기)' },
+              ]}
+            />
+            <p className="text-[10px] text-muted/60 mt-1.5">
+              뷰어 접속·씬 이동 시 시작할 모드. 플레이면 바로 캐릭터로 시작합니다.
+            </p>
+          </div>
           {(() => {
             const characterAssets = assets.filter((a) => a.type === 'character');
             return (
@@ -785,7 +801,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, updateObject, pushHistory, alignSelected, batchUpdateObjects } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, updateObject, pushHistory, alignSelected, batchUpdateObjects } = useSceneStore();
   const { addToast } = useToast();
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
@@ -809,6 +825,19 @@ function InspectorInner() {
   // 이벤트 프리뷰 팝업
   const [previewPopup, setPreviewPopup] = useState<string | null>(null);
 
+  // go_to_scene 액션용 씬 목록 — 폼을 열거나 이미 씬 이동 이벤트가 있을 때만 로드
+  const [sceneList, setSceneList] = useState<{ id: string; name: string }[]>([]);
+  const needScenes = showAddEvent || (obj?.events?.some((e) => e.action === 'go_to_scene') ?? false);
+  useEffect(() => {
+    if (!needScenes || !projectId || sceneList.length > 0) return;
+    createBrowserSupabase()
+      .from('scenes')
+      .select('id, name')
+      .eq('project_id', projectId)
+      .order('created_at')
+      .then(({ data }) => setSceneList(data ?? []));
+  }, [needScenes, projectId, sceneList.length]);
+  const sceneName = (id: string) => sceneList.find((s) => s.id === id)?.name ?? id;
 
   if (isMultiSelect) {
     // 2개 선택 시 거리 계산
@@ -1489,6 +1518,7 @@ function InspectorInner() {
                         else if (ev.action === 'show_popup') setPreviewPopup(ev.value || '(내용 없음)');
                         else if (ev.action === 'emit_event') addToast(`이벤트 발송 테스트: "${ev.value}"`, 'success');
                         else if (ev.action === 'play_animation') addToast(`애니메이션 클립: "${ev.value}"`, 'info');
+                        else if (ev.action === 'go_to_scene') addToast(`씬 이동: "${sceneName(ev.value)}" (플레이/뷰어에서 동작)`, 'info');
                       }}
                       title="미리보기"
                       className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
@@ -1504,7 +1534,9 @@ function InspectorInner() {
                   </div>
                 </div>
                 {ev.value && (
-                  <p className="text-muted/60 text-[10px] mt-1.5 truncate  bg-background/50 rounded px-1.5 py-0.5">{ev.value}</p>
+                  <p className="text-muted/60 text-[10px] mt-1.5 truncate  bg-background/50 rounded px-1.5 py-0.5">
+                    {ev.action === 'go_to_scene' ? `→ ${sceneName(ev.value)}` : ev.value}
+                  </p>
                 )}
               </div>
             ))}
@@ -1532,6 +1564,7 @@ function InspectorInner() {
                       options={[
                         { value: 'show_popup', label: '팝업' },
                         { value: 'open_url', label: 'URL 열기' },
+                        { value: 'go_to_scene', label: '씬 이동' },
                         { value: 'emit_event', label: '이벤트 발송' },
                         { value: 'play_animation', label: '애니메이션 재생' },
                       ]}
@@ -1551,9 +1584,18 @@ function InspectorInner() {
                     {newAction === 'open_url' ? 'URL'
                       : newAction === 'emit_event' ? '이벤트 이름'
                       : newAction === 'play_animation' ? '클립 이름'
+                      : newAction === 'go_to_scene' ? '이동할 씬'
                       : '팝업 내용'}
                   </span>
                   {(() => {
+                    if (newAction === 'go_to_scene') {
+                      const opts = sceneList.filter((s) => s.id !== sceneId).map((s) => ({ value: s.id, label: s.name }));
+                      return opts.length > 0 ? (
+                        <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="이동할 씬 선택..." />
+                      ) : (
+                        <p className="text-muted/60 text-[10px] py-1">이동할 다른 씬이 없습니다. 먼저 씬을 추가하세요.</p>
+                      );
+                    }
                     const glbUrl = newAction === 'play_animation' && obj?.assetId
                       ? assets.find((a) => a.id === obj.assetId)?.dracoUrl
                       : null;

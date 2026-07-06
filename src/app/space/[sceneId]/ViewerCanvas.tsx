@@ -9,6 +9,7 @@ import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
 import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
 import { GroundPlane } from '@/components/three/GroundPlane';
+import { DefaultEnvironment } from '@/components/three/DefaultEnvironment';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
 
@@ -142,6 +143,8 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
           <Environment preset={environment.hdrPreset as Exclude<HdrPreset, 'none'>} background />
         </Suspense>
       )}
+      {/* HDR 미설정 시에도 은은한 IBL 제공 → PBR 재질 생기 (에디터와 동일) */}
+      {!useHdr && <DefaultEnvironment />}
 
       {/* ── Fog ── */}
       {environment.fog.enabled && (
@@ -149,8 +152,10 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
       )}
 
       {/* ── 조명 ── */}
-      <hemisphereLight args={['#b9d5ff', '#4a5568', 0.2]} />
-      <ambientLight intensity={environment.lights.ambientIntensity} />
+      {/* fill 광을 낮춰 방향광 그림자 대비를 살린다 (환경광이 fill 역할 분담).
+          ambient는 그림자를 가장 많이 씻어내므로 저장값의 절반만 적용. */}
+      <hemisphereLight args={['#b9d5ff', '#4a5568', 0.08]} />
+      <ambientLight intensity={environment.lights.ambientIntensity * 0.5} />
       <directionalLight
         position={[
           environment.lights.directionalPosition.x,
@@ -159,7 +164,15 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef }:
         ]}
         intensity={environment.lights.directionalIntensity}
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.03}
+        shadow-camera-near={0.5}
+        shadow-camera-far={120}
+        shadow-camera-left={-50}
+        shadow-camera-right={50}
+        shadow-camera-top={50}
+        shadow-camera-bottom={-50}
       />
 
       {/* ── 에디터 전용: 그리드 ── */}

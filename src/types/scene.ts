@@ -23,6 +23,8 @@ export interface EnvSchema {
   playerSpeed?: number;
   playerJumpForce?: number;
   playerStartPosition?: Vector3;
+  // 뷰어 진입 시 기본 모드. 미설정 = 'explore'(기존 동작). 'play'면 접속하자마자 플레이 모드로 시작.
+  defaultMode?: 'explore' | 'play';
   notes?: string;
   postProcessing?: { preset: PostProcessPreset };
 }
@@ -30,7 +32,8 @@ export interface EnvSchema {
 export interface EventSchema {
   id: string;
   trigger: 'click' | 'hover_enter' | 'area_enter';
-  action: 'open_url' | 'show_popup' | 'emit_event' | 'play_animation';
+  action: 'open_url' | 'show_popup' | 'emit_event' | 'play_animation' | 'go_to_scene';
+  // go_to_scene: 이동할 대상 sceneId. 그 외 액션은 기존 의미(URL/텍스트/이벤트명/클립명).
   value: string;
   eventPayload?: Record<string, unknown>;
 }

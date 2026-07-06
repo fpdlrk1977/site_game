@@ -27,6 +27,9 @@ export function GlbObject({ url, selected, hovered = false, onClick, onHoverChan
     c.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
+      // GLB 메시가 그림자를 만들고 받도록 (기본값 false라 미설정 시 모델에 그림자가 아예 없음)
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       mesh.material = Array.isArray(mesh.material)
         ? mesh.material.map((m) => (m as THREE.Material).clone())
         : (mesh.material as THREE.Material).clone();

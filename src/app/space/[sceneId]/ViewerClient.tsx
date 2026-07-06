@@ -33,7 +33,8 @@ interface Props {
 
 export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge = false }: Props) {
   const [popup, setPopup] = useState<{ title: string; content: string } | null>(null);
-  const [playMode, setPlayMode] = useState(false);
+  // 씬별 기본 진입 모드 — 'play'면 접속하자마자 플레이 모드로 시작 (미설정 = 탐색)
+  const [playMode, setPlayMode] = useState(scene.environment.defaultMode === 'play');
   const [isTouch, setIsTouch] = useState(false);
   const supabase = useState(() => createBrowserSupabase())[0];
   const mobileInputRef = useRef({ fwd: 0, strafe: 0, jump: false });
@@ -69,6 +70,9 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
         if (!opened) setPopup({ title: obj.name, content: ev.value });
       } else if (ev.action === 'show_popup') {
         setPopup({ title: obj.name, content: ev.value });
+      } else if (ev.action === 'go_to_scene' && ev.value) {
+        // 같은 뷰어 경로에서 대상 씬으로 이동 (독립 URL 기준)
+        window.location.href = `/space/${ev.value}`;
       }
       // emit_event: EmbedClient 참고
     }
