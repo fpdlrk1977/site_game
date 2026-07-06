@@ -651,6 +651,25 @@ function EnvironmentPanel() {
         </div>
       </GroupBox>
 
+      {/* Interaction — 뷰어 상호작용 어포던스 */}
+      <GroupBox>
+        <SectionHeader title="Interaction" />
+        <div className="px-3 pb-4 space-y-1">
+          {/* 클릭/호버 이벤트가 있는 오브젝트 위에 힌트 링 표시 (탐색 모드 뷰어/임베드에서만) */}
+          <label className="flex items-center justify-between cursor-pointer pb-1">
+            <span className="text-[10px] font-semibold text-muted/70">상호작용 힌트 표시</span>
+            <Toggle
+              value={env.showInteractionHints !== false}
+              onChange={(v) => { updateEnvironment({ showInteractionHints: v }); pushHistory(); }}
+            />
+          </label>
+          <p className="text-[10px] text-muted/60 leading-relaxed">
+            클릭·호버 이벤트가 있는 오브젝트 위에 떠다니는 링을 띄워 방문자에게 상호작용
+            가능함을 알립니다. 뷰어의 탐색 모드에서만 보이며, 에디터엔 표시되지 않습니다.
+          </p>
+        </div>
+      </GroupBox>
+
       {/* Player */}
       <GroupBox>
         <SectionHeader title="Player" />

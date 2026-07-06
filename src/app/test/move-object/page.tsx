@@ -62,8 +62,10 @@ const scene: ProjectSceneSchema = {
         { id: 'ev-sound', trigger: 'click', action: 'play_sound', value: '/test-beep.mp3' },
       ],
     }),
-    // 탐색 모드 이동 대상 (physics 없음)
-    makeBox('target-a', 'TARGET-A', { x: 3.5, y: 0.75, z: 0 }, '#22c55e'),
+    // 탐색 모드 이동 대상 (physics 없음) — 호버 이벤트도 붙여 힌트 링(호버 트리거 경로) 검증
+    makeBox('target-a', 'TARGET-A', { x: 3.5, y: 0.75, z: 0 }, '#22c55e', {
+      events: [{ id: 'ev-hover-a', trigger: 'hover_enter', action: 'show_popup', value: 'A' }],
+    }),
     // 플레이 모드 area_enter 트리거 — 카메라 방위각 때문에 전진 방향이 대각선이라
     // 넓은 게이트(x 20)로 만들어 어느 각도로 걸어도 통과하게 한다
     // 게이트는 낮게(y 0~1) — 탐색 카메라의 중앙 클릭 광선(이 지점에서 y≈1.25)을 가리지 않으면서

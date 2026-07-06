@@ -27,6 +27,9 @@ export interface EnvSchema {
   defaultMode?: 'explore' | 'play';
   // true면 이 씬은 '둘러보기 전용' — 걷기(플레이) 모드·캐릭터 없음, 뷰어에서 플레이 토글 숨김. (포트폴리오/제품 뷰어)
   disableWalk?: boolean;
+  // 상호작용(클릭/호버 이벤트) 오브젝트 위에 떠다니는 힌트 링 표시. 미설정 = 켜짐(true).
+  // 탐색 모드 뷰어/임베드에서만 렌더(플레이 모드·에디터는 미표시). 포트폴리오 등 깔끔한 씬은 끌 수 있음.
+  showInteractionHints?: boolean;
   notes?: string;
   postProcessing?: { preset: PostProcessPreset };
 }

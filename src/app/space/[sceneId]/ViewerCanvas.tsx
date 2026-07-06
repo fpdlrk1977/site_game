@@ -157,6 +157,63 @@ function CameraFocus({ request, objects, orbitRef }: {
   return null;
 }
 
+// 상호작용(클릭/호버) 오브젝트 위에 떠다니는 힌트 링 — "여기 클릭하세요" 어포던스.
+// 오브젝트 렌더 경로(재질/GLB)를 전혀 건드리지 않는 별도 레이어. 탐색 모드에서만 렌더한다.
+// depthTest=false + 높은 renderOrder로 오브젝트에 가려지지 않고 항상 보인다.
+function isInteractive(o: ObjectNodeSchema): boolean {
+  return o.events.some(
+    (e) => e.trigger === 'click' || e.trigger === 'hover_enter' || e.trigger === 'hover_exit',
+  );
+}
+
+function InteractionHints({ objects }: { objects: ObjectNodeSchema[] }) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  const hints = useMemo(() => {
+    const out: { id: string; pos: [number, number, number] }[] = [];
+    for (const o of objects) {
+      if (!o.visible || o.isGroup || !isInteractive(o)) continue;
+      const wp = objWorldPos(objects, o.id);
+      if (!wp) continue;
+      // 오브젝트 상단 근처에 띄운다(정확한 bbox 없이 스케일 기반 근사).
+      const h = Math.max(o.scale.y * 0.5, 0.3) + 0.5;
+      out.push({ id: o.id, pos: [wp.x, wp.y + h, wp.z] });
+    }
+    return out;
+  }, [objects]);
+
+  // 카메라를 향하도록 빌보드 + 은은한 펄스(스케일). 개별 위상으로 동시에 뛰지 않게 한다.
+  useFrame((state) => {
+    const g = groupRef.current;
+    if (!g) return;
+    const t = state.clock.elapsedTime;
+    g.children.forEach((child, i) => {
+      child.quaternion.copy(state.camera.quaternion);
+      const s = 1 + Math.sin(t * 2.6 + i * 0.7) * 0.16;
+      child.scale.setScalar(s);
+    });
+  });
+
+  if (hints.length === 0) return null;
+
+  return (
+    <group ref={groupRef}>
+      {hints.map((h) => (
+        <group key={h.id} position={h.pos} renderOrder={999}>
+          <mesh renderOrder={999}>
+            <ringGeometry args={[0.11, 0.17, 28]} />
+            <meshBasicMaterial color="#22d3ee" transparent opacity={0.9} depthTest={false} depthWrite={false} toneMapped={false} />
+          </mesh>
+          <mesh renderOrder={999}>
+            <circleGeometry args={[0.05, 20]} />
+            <meshBasicMaterial color="#22d3ee" transparent opacity={0.7} depthTest={false} depthWrite={false} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 interface Props {
   scene: ProjectSceneSchema;
   playMode: boolean;
@@ -346,6 +403,9 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
 
       {/* focus_object 액션 — 탐색 모드에서만 (플레이 모드는 orbitRef 없음 → no-op) */}
       {!playMode && <CameraFocus request={focusRequest ?? null} objects={objects} orbitRef={orbitRef} />}
+
+      {/* 인터랙션 어포던스 — 탐색 모드 + 씬 설정 on(미설정=on)일 때만 상호작용 오브젝트 위에 힌트 링 */}
+      {!playMode && environment.showInteractionHints !== false && <InteractionHints objects={objects} />}
       </ClipRequestContext.Provider>
       </PlayModeContext.Provider>
     </Canvas>
