@@ -41,6 +41,11 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
 
   // 런타임 오브젝트 표시/숨김 오버라이드 (show/hide/toggle_object 액션) — objectId → visible
   const [visOverride, setVisOverride] = useState<Record<string, boolean>>({});
+  // 카메라 요청 — id가 objectId면 그 오브젝트로 포커스, null이면 초기(홈) 시점으로 복귀
+  const [focusRequest, setFocusRequest] = useState<{ id: string | null; t: number } | null>(null);
+  const resetCamera = () => setFocusRequest({ id: null, t: Date.now() });
+  // animate_object 액션용 런타임 클립 요청 (objectId → {name, t})
+  const [clipRequests, setClipRequests] = useState<Record<string, { name: string; t: number }>>({});
   // 오버라이드를 씬 데이터에 반영해 렌더 (모든 뷰어 경로가 object.visible을 존중하므로 이걸로 충분)
   const effectiveScene = useMemo(() => {
     if (Object.keys(visOverride).length === 0) return scene;
@@ -98,6 +103,18 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           const cur = ev.value in v ? v[ev.value] : (scene.objects.find((o) => o.id === ev.value)?.visible ?? true);
           return { ...v, [ev.value]: !cur };
         });
+      } else if (ev.action === 'focus_object' && ev.value) {
+        // 탐색 모드에서 카메라를 대상 오브젝트로 이동 (플레이 모드는 캐릭터 카메라라 무시됨)
+        setFocusRequest({ id: ev.value, t: Date.now() });
+      } else if (ev.action === 'reset_camera') {
+        // 카메라를 초기 시점으로 복귀 (탐색 모드)
+        resetCamera();
+      } else if (ev.action === 'animate_object' && ev.value) {
+        // value = "대상objectId|클립이름" → 대상 오브젝트에 클립 재생 요청
+        const sep = ev.value.indexOf('|');
+        const targetId = sep >= 0 ? ev.value.slice(0, sep) : ev.value;
+        const clip = sep >= 0 ? ev.value.slice(sep + 1) : '';
+        if (targetId && clip) setClipRequests((m) => ({ ...m, [targetId]: { name: clip, t: Date.now() } }));
       }
       // emit_event: EmbedClient 참고
     }
@@ -105,7 +122,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} />
+      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} />
 
       {/* 상단 오버레이 */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 pointer-events-none">
@@ -126,6 +143,16 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           <span className="text-white/60 text-xs font-medium bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-xs">
             {projectName}
           </span>
+          {/* 시점 초기화 — 탐색 모드에서 카메라를 초기 위치로 복귀 (포커스 후 되돌리기) */}
+          {!playMode && (
+            <button
+              onClick={resetCamera}
+              title="카메라를 처음 시점으로"
+              className="flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 text-xs px-3 py-1.5 rounded-xs hover:bg-black/60 transition-colors"
+            >
+              ⌂ 시점 초기화
+            </button>
+          )}
           {/* 둘러보기 전용 씬은 플레이 토글 자체를 숨김 (캐릭터 소환 불가) */}
           {!walkDisabled && (
             <button

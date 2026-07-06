@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useRef, Suspense, useEffect, useMemo } from 'react';
+import { useState, useRef, Suspense, useEffect, useMemo, useContext } from 'react';
 import { useGLTF, useAnimations, Text3D, Center, Html, Outlines } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 import * as THREE from 'three';
 import { useLoader } from '@react-three/fiber';
 import { normalizeGlbMaterials } from '@/lib/glbMaterials';
+import { PlayModeContext } from './PlayModeContext';
+import { ClipRequestContext } from './ClipRequestContext';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
@@ -158,15 +160,23 @@ function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOu
   onPointerOver: () => void;
   onPointerOut: () => void;
 }) {
+  const playMode = useContext(PlayModeContext);
   const groupRef = useRef<THREE.Group>(null);
   const { scene: rawScene, animations } = useGLTF(url);
   // 스킨드 메시(bone 애니메이션) 포함 GLB는 SkeletonUtils.clone 필수 — scene.clone(true)는 bone 참조를 공유해 버린다
   const clone = useMemo(() => {
     const c = SkeletonUtils.clone(rawScene);
-    // GLB 메시가 그림자를 만들고 받도록 (기본값 false라 미설정 시 모델에 그림자가 아예 없음)
     c.traverse((child) => {
       const mesh = child as THREE.Mesh;
-      if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; }
+      if (!mesh.isMesh) return;
+      // GLB 메시가 그림자를 만들고 받도록 (기본값 false라 미설정 시 모델에 그림자가 아예 없음)
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      // 인스턴스별 재질 복제 — 안 하면 같은 GLB 인스턴스들이 useGLTF 캐시 재질을 공유해
+      // 하나에 호버 emissive를 넣으면 나머지도 같이 밝아진다
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map((m) => (m as THREE.Material).clone())
+        : (mesh.material as THREE.Material).clone();
     });
     normalizeGlbMaterials(c);
     return c;
@@ -204,7 +214,8 @@ function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOu
       clone.traverse((child) => {
         const mesh = child as THREE.Mesh;
         if (!mesh.isMesh) return;
-        mesh.geometry.dispose();
+        // 지오메트리는 useGLTF 캐시와 공유되므로 dispose 금지(다른 인스턴스 깨짐).
+        // 재질만 인스턴스별로 복제해 소유하므로 dispose한다.
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         mats.forEach((m) => (m as THREE.Material).dispose());
       });
@@ -219,7 +230,7 @@ function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOu
         onPointerOver={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onPointerOver(); }}
         onPointerOut={() => onPointerOut()}
       />
-      {hovered && <box3Helper args={[bbox, new THREE.Color('#22d3ee')]} />}
+      {hovered && !playMode && <box3Helper args={[bbox, new THREE.Color('#22d3ee')]} />}
     </group>
   );
 }
@@ -236,12 +247,15 @@ interface Props {
 }
 
 export function ViewerObject({ object, assets, onEvent, allObjects = [], noTransform = false, activeClip: activeClipProp = null }: Props) {
+  const playMode = useContext(PlayModeContext);
+  // animate_object 액션이 이 오브젝트(object.id)에 보낸 클립 재생 요청
+  const externalClip = useContext(ClipRequestContext)[object.id] ?? null;
   const [hovered, setHovered] = useState(false);
   const [internalClip, setInternalClip] = useState<ClipRequest | null>(null);
-  // PhysicsObject(area_enter)와 내부(click/hover) 요청 중 더 최근 것을 사용
-  const effectiveClip = !activeClipProp ? internalClip
-    : !internalClip ? activeClipProp
-    : activeClipProp.t >= internalClip.t ? activeClipProp : internalClip;
+  // 내부(click/hover)·PhysicsObject(area)·animate_object 요청 중 가장 최근(t) 것을 사용
+  const effectiveClip = [internalClip, activeClipProp, externalClip]
+    .filter((c): c is ClipRequest => !!c)
+    .reduce<ClipRequest | null>((a, c) => (a && a.t >= c.t ? a : c), null);
 
   const hasClick = object.events.some((e) => e.trigger === 'click');
   const hasHover = object.events.some((e) => e.trigger === 'hover_enter');
@@ -355,7 +369,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
                   emissive={hovered ? tColor : tEmissive}
                   emissiveIntensity={hovered ? 0.3 : (tEmissive !== '#000000' ? 1 : 0)}
                 />
-                {hovered && <Outlines thickness={2} color="#22d3ee" />}
+                {hovered && !playMode && <Outlines thickness={2} color="#22d3ee" />}
               </Text3D>
             </Center>
           </Suspense>
@@ -368,7 +382,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           <ImagePlane
             position={pos} rotation={rot} scale={scl}
             url={object.content.url}
-            hovered={hovered}
+            hovered={hovered && !playMode}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}
@@ -387,7 +401,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           <VideoMesh
             position={pos} rotation={rot} scale={scl}
             url={url}
-            hovered={hovered}
+            hovered={hovered && !playMode}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}
@@ -433,7 +447,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
         emissive={hovered ? color : emissive}
         emissiveIntensity={hovered ? 0.3 : (emissive !== '#000000' ? 1 : 0)}
       />
-      {hovered && <Outlines thickness={2} color="#22d3ee" />}
+      {hovered && !playMode && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );
 }

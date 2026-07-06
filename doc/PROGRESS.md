@@ -49,19 +49,23 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - 계층 리스트 **드래그 정렬 + 그룹 안팎 재부모화**(월드 좌표 보존) + 그룹 피벗 recenter + 기즈모 안정화
 - GLB 호버 하이라이트 전파 버그(재질 공유) 수정
 - **조명 L1**: 기본 환경광(IBL)·그림자 bias/frustum·GLB castShadow·fill 재조정
-- **Events**: `go_to_scene`(씬 이동), 리치 팝업(이미지/영상/YouTube — `RichContent`), hover_exit/area_exit 트리거, 이벤트 **인라인 수정** 기능
-- **뷰어 모드**: 씬별 기본 진입 모드 + "걷기 모드 사용" 토글(둘러보기 전용)
-- **🔴 visible 토글 좌표 리셋 버그** 수정(데이터 유실 치명 버그)
+- **Events E1**: `go_to_scene`(씬 이동), 리치 팝업(이미지/영상/YouTube — `RichContent`), hover_exit/area_exit 트리거, 이벤트 **인라인 수정** 기능
+- **Events E2(진행 중)**: 오브젝트 표시/숨김/토글(`show/hide/toggle_object` — 뷰어 `visOverride` 런타임 오버라이드), **카메라 포커스**(`focus_object` — 대상으로 부드러운 팬) + **카메라 초기화**(`reset_camera` 액션 + 우측 상단 ⌂ 시점초기화 UI 버튼). 카메라 로직은 `ViewerCanvas`의 `CameraFocus`.
+- **뷰어 모드**: 씬별 기본 진입 모드(`defaultMode`) + "걷기 모드 사용" 토글(`disableWalk`, 둘러보기 전용)
+- **🔴 visible 토글 좌표 리셋 버그** 수정(데이터 유실 치명 버그, 명령형 좌표+조건부 언마운트 → `g.visible` 플래그 토글)
+- **뷰어 GLB 호버 전파 버그** 수정(재질 인스턴스 복제 — 에디터 GlbObject와 동일). **플레이 모드 호버 가이드라인 제거**(`PlayModeContext` — Outlines/box3Helper만 숨김, 커서·emissive 하이라이트는 유지).
+- 계층 리스트 visible 아이콘도 lock처럼 숨김 시 상시 표시.
 - 에셋 URL 만료 해결(0006 마이그레이션, public 버킷)
 
 ## 남은 작업 / 로드맵
-- **조명 L2**: ContactShadows(접지감) → 톤매핑/노출 · 씬별 조명 컨트롤 (사용자 L1 피드백 취합 후)
-- **Events E2**: 오브젝트 간 액션(A 클릭→B 숨김/이동/애니메이션), 사운드, 카메라 액션, 인터랙션 어포던스. 솔리드 area 애니메이션.
+- **Events E2 나머지**: 대상 오브젝트 **이동(move)/애니메이션 재생(animate B)**, **사운드** 액션, 인터랙션 어포던스.
+- **조명 L2**: ContactShadows(접지감) → 톤매핑/노출 · 씬별 조명 컨트롤 (사용자 L1 피드백 취합 후).
 - **Prefab**: 미착수. 착수 전 **override/동기화 규칙 설계** 필요(원본 수정 시 인스턴스 반영, 개별 오버라이드 허용 여부 등).
-- 결제/플랜 업그레이드(Stripe), AssetBrowser materials/textures/hdr/audio 탭(WIP).
+- **오토세이브** 되살리기/제거 결정. 결제/플랜 업그레이드(Stripe), AssetBrowser materials/textures/hdr/audio 탭(WIP).
 
 ## 알려진 제약/한계
 - `go_to_scene`: 독립 URL(`/space/{id}`) 기준 이동 — 커스텀도메인/임베드 컨텍스트 미대응.
+- `focus_object`/`reset_camera`: 탐색(orbit) 모드 전용 — 플레이 모드는 캐릭터 팔로우 카메라라 무시됨.
 - 솔리드(비센서) 오브젝트는 area 트리거로 팝업/URL/씬이동은 되나 **애니메이션 재생 안 됨**(activeClip 센서 전용).
 - 오토세이브: `ViewportToolbar`에 60초 자동저장 로직이 주석 처리된 채 방치(수동 Ctrl+S만 동작). `setAutoSaveAt` lint 경고 원인.
 - 코드베이스 전반에 React Compiler eslint 규칙(immutability/set-state-in-effect/modify-local) 에러가 다수 존재 — 기존 코드, dev/build엔 영향 없음.

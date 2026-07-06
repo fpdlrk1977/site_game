@@ -268,10 +268,13 @@ const ACTION_LABELS: Record<string, string> = {
   show_object: '오브젝트 표시',
   hide_object: '오브젝트 숨김',
   toggle_object: '오브젝트 토글',
+  focus_object: '카메라 포커스',
+  reset_camera: '카메라 초기화',
+  animate_object: '오브젝트 애니메이션',
 };
 
 // value가 대상 objectId인 액션들 (에디터에서 오브젝트 선택 드롭다운 표시)
-const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object']);
+const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object', 'focus_object']);
 
 // ── GLB 애니메이션 클립 선택기 ─────────────────────────────────
 // three-stdlib GLTFLoader가 이 GLB의 animations를 파싱 못하는 문제 우회:
@@ -998,7 +1001,8 @@ function InspectorInner() {
     updateObject(obj.id, { scale: { ...obj.scale, [axis]: v } });
 
   const addEvent = () => {
-    if (!newValue.trim() && newAction !== 'show_popup') return;
+    // show_popup(빈 내용 허용)·reset_camera(값 불필요)를 제외하면 값이 있어야 추가 가능
+    if (!newValue.trim() && newAction !== 'show_popup' && newAction !== 'reset_camera') return;
     if (editingId) {
       // 기존 이벤트 수정
       updateObject(obj.id, {
@@ -1075,6 +1079,9 @@ function InspectorInner() {
               { value: 'show_object', label: '오브젝트 표시' },
               { value: 'hide_object', label: '오브젝트 숨김' },
               { value: 'toggle_object', label: '오브젝트 토글' },
+              { value: 'focus_object', label: '카메라 포커스' },
+              { value: 'reset_camera', label: '카메라 초기화' },
+              { value: 'animate_object', label: '오브젝트 애니메이션' },
               { value: 'emit_event', label: '이벤트 발송' },
               { value: 'play_animation', label: '애니메이션 재생' },
             ]}
@@ -1095,10 +1102,33 @@ function InspectorInner() {
             : newAction === 'emit_event' ? '이벤트 이름'
             : newAction === 'play_animation' ? '클립 이름'
             : newAction === 'go_to_scene' ? '이동할 씬'
+            : newAction === 'reset_camera' ? '설정'
+            : newAction === 'animate_object' ? '대상 오브젝트 + 클립'
             : OBJECT_TARGET_ACTIONS.has(newAction) ? '대상 오브젝트'
             : '팝업 내용'}
         </span>
         {(() => {
+          if (newAction === 'reset_camera') {
+            return <p className="text-muted/60 text-[10px] py-1">값이 필요 없습니다 — 클릭 시 카메라가 초기 시점으로 복귀합니다.</p>;
+          }
+          if (newAction === 'animate_object') {
+            // value = "대상objectId|클립이름" — 대상 오브젝트 + 그 GLB의 클립 2단 선택
+            const sep = newValue.indexOf('|');
+            const targetId = sep >= 0 ? newValue.slice(0, sep) : newValue;
+            const clip = sep >= 0 ? newValue.slice(sep + 1) : '';
+            const targetOpts = objects.filter((o) => o.id !== obj?.id).map((o) => ({ value: o.id, label: o.name }));
+            const targetObj = objects.find((o) => o.id === targetId);
+            const targetGlbUrl = targetObj?.assetId ? assets.find((a) => a.id === targetObj.assetId)?.dracoUrl : null;
+            return (
+              <div className="space-y-1.5">
+                <SelectBox value={targetId} onChange={(id) => setNewValue(`${id}|${clip}`)} options={targetOpts} placeholder="대상 오브젝트 선택..." />
+                {targetId && (targetGlbUrl
+                  ? <GlbClipPicker url={targetGlbUrl} value={clip} onChange={(c) => setNewValue(`${targetId}|${c}`)} />
+                  : <p className="text-muted/60 text-[10px] py-1">이 오브젝트엔 애니메이션(GLB)이 없습니다.</p>
+                )}
+              </div>
+            );
+          }
           if (newAction === 'go_to_scene') {
             const opts = sceneList.filter((s) => s.id !== sceneId).map((s) => ({ value: s.id, label: s.name }));
             return opts.length > 0 ? (
@@ -1693,6 +1723,8 @@ function InspectorInner() {
                         else if (ev.action === 'play_animation') addToast(`애니메이션 클립: "${ev.value}"`, 'info');
                         else if (ev.action === 'go_to_scene') addToast(`씬 이동: "${sceneName(ev.value)}" (플레이/뷰어에서 동작)`, 'info');
                         else if (OBJECT_TARGET_ACTIONS.has(ev.action)) addToast(`${ACTION_LABELS[ev.action]}: "${objectName(ev.value)}" (뷰어에서 동작)`, 'info');
+                        else if (ev.action === 'reset_camera') addToast('카메라 초기화 (탐색 모드 뷰어에서 동작)', 'info');
+                        else if (ev.action === 'animate_object') { const [tid, clip] = ev.value.split('|'); addToast(`애니메이션: "${objectName(tid)}" → "${clip ?? ''}" (뷰어에서 동작)`, 'info'); }
                       }}
                       title="미리보기"
                       className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
@@ -1717,6 +1749,7 @@ function InspectorInner() {
                 {ev.value && (
                   <p className="text-muted/60 text-[10px] mt-1.5 truncate  bg-background/50 rounded px-1.5 py-0.5">
                     {ev.action === 'go_to_scene' ? `→ ${sceneName(ev.value)}`
+                      : ev.action === 'animate_object' ? `→ ${objectName(ev.value.split('|')[0])} : ${ev.value.split('|')[1] ?? ''}`
                       : OBJECT_TARGET_ACTIONS.has(ev.action) ? `→ ${objectName(ev.value)}`
                       : ev.value}
                   </p>

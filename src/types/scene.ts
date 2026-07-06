@@ -42,8 +42,12 @@ export interface EventSchema {
     | 'go_to_scene'
     | 'show_object'    // value = 대상 objectId (표시)
     | 'hide_object'    // value = 대상 objectId (숨김)
-    | 'toggle_object'; // value = 대상 objectId (표시/숨김 토글)
-  // go_to_scene: 이동할 대상 sceneId. show/hide/toggle_object: 대상 objectId.
+    | 'toggle_object'  // value = 대상 objectId (표시/숨김 토글)
+    | 'focus_object'   // value = 대상 objectId (카메라를 그 오브젝트로 이동/포커스, 탐색 모드)
+    | 'reset_camera'   // value 불필요 (카메라를 초기 시점으로 복귀, 탐색 모드)
+    | 'animate_object'; // value = "대상objectId|클립이름" (대상 GLB의 애니메이션 재생)
+  // go_to_scene: 이동할 대상 sceneId. show/hide/toggle/focus_object: 대상 objectId.
+  // reset_camera: value 없음. animate_object: "objectId|clipName".
   // 그 외: 기존 의미(URL/텍스트/이벤트명/클립명).
   value: string;
   eventPayload?: Record<string, unknown>;
