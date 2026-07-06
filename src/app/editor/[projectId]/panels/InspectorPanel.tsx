@@ -265,7 +265,13 @@ const ACTION_LABELS: Record<string, string> = {
   emit_event: '이벤트 발송',
   play_animation: '애니메이션 재생',
   go_to_scene: '씬 이동',
+  show_object: '오브젝트 표시',
+  hide_object: '오브젝트 숨김',
+  toggle_object: '오브젝트 토글',
 };
+
+// value가 대상 objectId인 액션들 (에디터에서 오브젝트 선택 드롭다운 표시)
+const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object']);
 
 // ── GLB 애니메이션 클립 선택기 ─────────────────────────────────
 // three-stdlib GLTFLoader가 이 GLB의 animations를 파싱 못하는 문제 우회:
@@ -861,6 +867,7 @@ function InspectorInner() {
       .then(({ data }) => setSceneList(data ?? []));
   }, [needScenes, projectId, sceneList.length]);
   const sceneName = (id: string) => sceneList.find((s) => s.id === id)?.name ?? id;
+  const objectName = (id: string) => objects.find((o) => o.id === id)?.name ?? id;
 
   if (isMultiSelect) {
     // 2개 선택 시 거리 계산
@@ -1065,6 +1072,9 @@ function InspectorInner() {
               { value: 'show_popup', label: '팝업' },
               { value: 'open_url', label: 'URL 열기' },
               { value: 'go_to_scene', label: '씬 이동' },
+              { value: 'show_object', label: '오브젝트 표시' },
+              { value: 'hide_object', label: '오브젝트 숨김' },
+              { value: 'toggle_object', label: '오브젝트 토글' },
               { value: 'emit_event', label: '이벤트 발송' },
               { value: 'play_animation', label: '애니메이션 재생' },
             ]}
@@ -1085,6 +1095,7 @@ function InspectorInner() {
             : newAction === 'emit_event' ? '이벤트 이름'
             : newAction === 'play_animation' ? '클립 이름'
             : newAction === 'go_to_scene' ? '이동할 씬'
+            : OBJECT_TARGET_ACTIONS.has(newAction) ? '대상 오브젝트'
             : '팝업 내용'}
         </span>
         {(() => {
@@ -1094,6 +1105,15 @@ function InspectorInner() {
               <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="이동할 씬 선택..." />
             ) : (
               <p className="text-muted/60 text-[10px] py-1">이동할 다른 씬이 없습니다. 먼저 씬을 추가하세요.</p>
+            );
+          }
+          if (OBJECT_TARGET_ACTIONS.has(newAction)) {
+            // 자기 자신 제외한 씬의 모든 오브젝트를 대상으로 선택
+            const opts = objects.filter((o) => o.id !== obj?.id).map((o) => ({ value: o.id, label: o.name }));
+            return opts.length > 0 ? (
+              <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="대상 오브젝트 선택..." />
+            ) : (
+              <p className="text-muted/60 text-[10px] py-1">대상으로 지정할 다른 오브젝트가 없습니다.</p>
             );
           }
           const glbUrl = newAction === 'play_animation' && obj?.assetId
@@ -1672,6 +1692,7 @@ function InspectorInner() {
                         else if (ev.action === 'emit_event') addToast(`이벤트 발송 테스트: "${ev.value}"`, 'success');
                         else if (ev.action === 'play_animation') addToast(`애니메이션 클립: "${ev.value}"`, 'info');
                         else if (ev.action === 'go_to_scene') addToast(`씬 이동: "${sceneName(ev.value)}" (플레이/뷰어에서 동작)`, 'info');
+                        else if (OBJECT_TARGET_ACTIONS.has(ev.action)) addToast(`${ACTION_LABELS[ev.action]}: "${objectName(ev.value)}" (뷰어에서 동작)`, 'info');
                       }}
                       title="미리보기"
                       className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
@@ -1695,7 +1716,9 @@ function InspectorInner() {
                 </div>
                 {ev.value && (
                   <p className="text-muted/60 text-[10px] mt-1.5 truncate  bg-background/50 rounded px-1.5 py-0.5">
-                    {ev.action === 'go_to_scene' ? `→ ${sceneName(ev.value)}` : ev.value}
+                    {ev.action === 'go_to_scene' ? `→ ${sceneName(ev.value)}`
+                      : OBJECT_TARGET_ACTIONS.has(ev.action) ? `→ ${objectName(ev.value)}`
+                      : ev.value}
                   </p>
                 )}
               </div>

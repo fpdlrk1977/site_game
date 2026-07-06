@@ -172,7 +172,7 @@ function HierarchyItem({
         <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); pushHistory(); }}
-            className="w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded opacity-0 group-hover:opacity-100"
+            className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${!obj.visible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             title={obj.visible ? '숨기기' : '표시'}
           >
             <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>

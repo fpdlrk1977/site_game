@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { MobileControls } from './MobileControls';
@@ -38,6 +38,17 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
   const walkDisabled = scene.environment.disableWalk === true;
   // 씬별 기본 진입 모드 — 'play'면 접속하자마자 플레이 모드로 시작 (미설정/둘러보기전용 = 탐색)
   const [playMode, setPlayMode] = useState(scene.environment.defaultMode === 'play' && !walkDisabled);
+
+  // 런타임 오브젝트 표시/숨김 오버라이드 (show/hide/toggle_object 액션) — objectId → visible
+  const [visOverride, setVisOverride] = useState<Record<string, boolean>>({});
+  // 오버라이드를 씬 데이터에 반영해 렌더 (모든 뷰어 경로가 object.visible을 존중하므로 이걸로 충분)
+  const effectiveScene = useMemo(() => {
+    if (Object.keys(visOverride).length === 0) return scene;
+    return {
+      ...scene,
+      objects: scene.objects.map((o) => (o.id in visOverride ? { ...o, visible: visOverride[o.id] } : o)),
+    };
+  }, [scene, visOverride]);
   const [isTouch, setIsTouch] = useState(false);
   const supabase = useState(() => createBrowserSupabase())[0];
   const mobileInputRef = useRef({ fwd: 0, strafe: 0, jump: false });
@@ -77,6 +88,16 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
       } else if (ev.action === 'go_to_scene' && ev.value) {
         // 같은 뷰어 경로에서 대상 씬으로 이동 (독립 URL 기준)
         window.location.href = `/space/${ev.value}`;
+      } else if (ev.action === 'show_object' && ev.value) {
+        setVisOverride((v) => ({ ...v, [ev.value]: true }));
+      } else if (ev.action === 'hide_object' && ev.value) {
+        setVisOverride((v) => ({ ...v, [ev.value]: false }));
+      } else if (ev.action === 'toggle_object' && ev.value) {
+        setVisOverride((v) => {
+          // 현재 표시 상태 = 오버라이드가 있으면 그 값, 없으면 원본 씬의 visible
+          const cur = ev.value in v ? v[ev.value] : (scene.objects.find((o) => o.id === ev.value)?.visible ?? true);
+          return { ...v, [ev.value]: !cur };
+        });
       }
       // emit_event: EmbedClient 참고
     }
@@ -84,7 +105,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={scene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} />
+      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} />
 
       {/* 상단 오버레이 */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 pointer-events-none">
