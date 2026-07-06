@@ -1081,9 +1081,9 @@ function InspectorInner() {
               { value: 'toggle_object', label: '오브젝트 토글' },
               { value: 'focus_object', label: '카메라 포커스' },
               { value: 'reset_camera', label: '카메라 초기화' },
+              { value: 'play_animation', label: '애니메이션 재생' },
               { value: 'animate_object', label: '오브젝트 애니메이션' },
               { value: 'emit_event', label: '이벤트 발송' },
-              { value: 'play_animation', label: '애니메이션 재생' },
             ]}
           />
         </div>
