@@ -115,10 +115,11 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   const assets = scene.assets ?? [];
 
   const allObjects = scene.objects;
-  // interact 이벤트가 있는 루트 오브젝트 — 근접 프롬프트/E키 대상.
+  // 근접 감지 대상(루트 오브젝트) — interact 이벤트가 있거나(=E키/프롬프트) 근접 말풍선이 설정된 것.
   // (중첩 그룹 자식은 위치가 로컬 좌표라 월드 근접 판정이 어긋나므로 v1은 루트만 지원)
   const interactables = allObjects
-    .filter((o) => !o.parentId && o.visible && o.events?.some((e) => e.trigger === 'interact'))
+    .filter((o) => !o.parentId && o.visible
+      && (o.events?.some((e) => e.trigger === 'interact') || (o.interactLabel?.trim().length ?? 0) > 0))
     .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z }));
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);

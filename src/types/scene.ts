@@ -143,6 +143,9 @@ export interface ObjectNodeSchema {
   particle?: ParticleConfig;
   light?: LightConfig;
   isGroup?: boolean;
+  // 근접 말풍선 — 플레이 모드에서 캐릭터가 이 오브젝트에 근접(기본 3m)하면 오브젝트 바로 위에
+  // 뜨는 텍스트. interact 이벤트가 없어도 말풍선만으로 근접 감지 대상이 된다(간판/인사말 등).
+  interactLabel?: string;
 }
 
 export interface AssetRefSchema {

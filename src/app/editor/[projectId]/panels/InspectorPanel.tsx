@@ -1900,6 +1900,23 @@ function InspectorInner() {
         <SectionHeader title="Events" isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
         {isOpen('events') && (
           <div className="px-3 pb-4 space-y-2">
+            {/* 근접 말풍선 — 플레이 모드에서 캐릭터가 다가가면 오브젝트 위에 뜨는 텍스트 */}
+            <div>
+              <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">근접 말풍선</span>
+              <input
+                value={obj.interactLabel ?? ''}
+                onChange={(e) => updateObject(obj.id, { interactLabel: e.target.value })}
+                onBlur={pushHistory}
+                placeholder="예: 말 걸기 · 안녕하세요!"
+                className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-[11px] text-foreground placeholder:text-muted/40 focus:border-primary/50 outline-none"
+              />
+              <p className="text-muted/50 text-[10px] mt-1">
+                플레이 모드에서 캐릭터가 근접(약 3m)하면 오브젝트 바로 위에 표시됩니다. 비워두면 안 뜸.
+              </p>
+            </div>
+
+            <div className="h-px bg-border/60 my-1" />
+
             {obj.events.length === 0 && !showAddEvent && (
               <p className="text-muted/60  text-[11px] py-1">이벤트 없음</p>
             )}

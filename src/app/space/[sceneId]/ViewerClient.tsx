@@ -207,6 +207,10 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
     }
   };
 
+  // 근접 대상이 interact 이벤트를 가졌는지 — E 프롬프트/버튼은 이때만(말풍선만 있는 오브젝트는 E 미표시)
+  const interactTargetObj = interactTarget ? effectiveScene.objects.find((o) => o.id === interactTarget.id) : null;
+  const interactTargetHasE = !!interactTargetObj?.events.some((e) => e.trigger === 'interact');
+
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
       <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} />
@@ -271,14 +275,14 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
       )}
 
       {/* 근접 상호작용 프롬프트 (데스크톱) — 범위 내 대상이 있을 때만. E 키캡만 표시(대상은 3D 하이라이트로 구분) */}
-      {playMode && !isTouch && interactTarget && (
+      {playMode && !isTouch && interactTarget && interactTargetHasE && (
         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-none">
           <kbd className="inline-flex items-center justify-center min-w-[40px] h-10 px-3 bg-black/65 backdrop-blur-sm border border-white/25 rounded-xs text-white text-base font-bold shadow-lg">E</kbd>
         </div>
       )}
 
       {/* 근접 상호작용 버튼 (모바일) */}
-      {playMode && isTouch && interactTarget && (
+      {playMode && isTouch && interactTarget && interactTargetHasE && (
         <button
           onClick={() => {
             const obj = effectiveScene.objects.find((o) => o.id === interactTarget.id);

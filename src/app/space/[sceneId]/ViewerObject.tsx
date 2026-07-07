@@ -31,6 +31,38 @@ function getYouTubeId(url: string): string | null {
   return m ? m[1] : null;
 }
 
+// 근접 말풍선 — 오브젝트 바로 위에 뜨는 텍스트(꼬리는 아래=오브젝트를 가리킴).
+// distanceFactor로 월드 크기에 앵커되고, center로 y 앵커 지점 위에 뜬다(translateY로 바닥=꼬리를 앵커에 맞춤).
+function SpeechBubble({ text, y }: { text: string; y: number }) {
+  return (
+    <Html position={[0, y, 0]} center distanceFactor={8} zIndexRange={[100, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <div style={{
+        transform: 'translateY(-50%)',
+        position: 'relative',
+        background: 'rgba(255,255,255,0.97)',
+        color: '#1f2937',
+        fontSize: '14px',
+        fontWeight: 600,
+        lineHeight: 1.3,
+        padding: '8px 12px',
+        borderRadius: '10px',
+        whiteSpace: 'pre-wrap',
+        maxWidth: '200px',
+        textAlign: 'center',
+        boxShadow: '0 6px 18px rgba(0,0,0,0.28)',
+      }}>
+        {text}
+        <span style={{
+          position: 'absolute', bottom: '-7px', left: '50%', transform: 'translateX(-50%)',
+          width: 0, height: 0,
+          borderLeft: '7px solid transparent', borderRight: '7px solid transparent',
+          borderTop: '7px solid rgba(255,255,255,0.97)',
+        }} />
+      </div>
+    </Html>
+  );
+}
+
 function YouTubeEmbed({ ytId, position, rotation, scale, onClick }: {
   ytId: string;
   position: [number, number, number];
@@ -153,10 +185,12 @@ export interface ClipRequest {
   t: number;
 }
 
-function GlbViewer({ url, emissive, showBox, playClip, onClick, onPointerOver, onPointerOut }: {
+function GlbViewer({ url, emissive, showBox, bubble, showBubble, playClip, onClick, onPointerOver, onPointerOut }: {
   url: string;
   emissive: boolean;
   showBox: boolean;
+  bubble?: string;
+  showBubble: boolean;
   playClip: ClipRequest | null;
   onClick: () => void;
   onPointerOver: () => void;
@@ -232,6 +266,7 @@ function GlbViewer({ url, emissive, showBox, playClip, onClick, onPointerOver, o
         onPointerOut={() => onPointerOut()}
       />
       {showBox && <box3Helper args={[bbox, new THREE.Color('#22d3ee')]} />}
+      {showBubble && bubble && <SpeechBubble text={bubble} y={bbox.max.y + 0.25} />}
     </group>
   );
 }
@@ -300,6 +335,14 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   const emissiveOn = hovered || interactActive;
   const outlineOn = hovered && !playMode;
 
+  // 근접 말풍선 — 플레이 모드에서 이 오브젝트가 근접 대상(interactActive)이고 라벨이 설정됐을 때.
+  // GLB는 bbox 기준으로 GlbViewer가 렌더, 그 외 타입은 스케일 기준 오프셋으로 여기서 렌더.
+  const bubbleText = object.interactLabel?.trim() ?? '';
+  const showBubble = interactActive && playMode && bubbleText.length > 0;
+  const bubbleEl = showBubble
+    ? <SpeechBubble text={bubbleText} y={0.5 * object.scale.y + 0.25} />
+    : null;
+
   const handlePointerOver = () => {
     if (!isInteractive) return;
     setHovered(true);
@@ -335,6 +378,8 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
             url={assetRef.dracoUrl}
             emissive={emissiveOn}
             showBox={outlineOn}
+            bubble={bubbleText}
+            showBubble={showBubble}
             playClip={effectiveClip}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
@@ -354,6 +399,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
       const tMetalness = object.material?.metalness ?? 0.1;
       const tEmissive = object.material?.emissive ?? '#000000';
       return (
+        <>
         <group position={pos} rotation={rot} scale={scl}
           onClick={(e) => { e.stopPropagation(); handleClick(); }}
           onPointerOver={(e) => { e.stopPropagation(); handlePointerOver(); }}
@@ -384,10 +430,13 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
             </Center>
           </Suspense>
         </group>
+        {bubbleEl}
+        </>
       );
     }
     if (type === 'image' && object.content.url) {
       return (
+        <>
         <Suspense fallback={null}>
           <ImagePlane
             position={pos} rotation={rot} scale={scl}
@@ -398,6 +447,8 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
             onPointerOut={handlePointerOut}
           />
         </Suspense>
+        {bubbleEl}
+        </>
       );
     }
     if (type === 'video') {
@@ -436,6 +487,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   const emissive = object.material?.emissive ?? '#000000';
 
   return (
+    <>
     <mesh
       position={pos}
       rotation={rot}
@@ -459,5 +511,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
       />
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
+    {bubbleEl}
+    </>
   );
 }
