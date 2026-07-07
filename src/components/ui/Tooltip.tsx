@@ -7,9 +7,11 @@ interface Props {
   content: string;
   children: ReactNode;
   className?: string;
+  /** 긴 안내문용 — 한 줄 고정 대신 줄바꿈 + 최대폭 */
+  wide?: boolean;
 }
 
-export function Tooltip({ content, children, className }: Props) {
+export function Tooltip({ content, children, className, wide = false }: Props) {
   const [visible, setVisible] = useState(false);
   const [style, setStyle] = useState<React.CSSProperties>({
     position: 'fixed', top: -9999, left: -9999, opacity: 0,
@@ -50,7 +52,9 @@ export function Tooltip({ content, children, className }: Props) {
         <div
           ref={tipRef}
           style={style}
-          className="px-2.5 py-1 bg-foreground text-background text-[11px] font-medium rounded-xs whitespace-nowrap pointer-events-none shadow-xl shadow-black/20 transition-opacity duration-100"
+          className={`px-2.5 py-1.5 bg-foreground text-background text-[11px] font-medium rounded-xs pointer-events-none shadow-xl shadow-black/20 transition-opacity duration-100 ${
+            wide ? 'max-w-[240px] whitespace-normal leading-snug text-left' : 'whitespace-nowrap'
+          }`}
         >
           {content}
         </div>,

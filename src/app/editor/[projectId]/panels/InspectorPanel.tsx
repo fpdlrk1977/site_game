@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { RichContent } from '@/components/ui/RichContent';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig } from '@/types/scene';
 import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
@@ -210,11 +211,13 @@ function XYZRow({
 function SectionHeader({
   title,
   icon,
+  hint,
   isOpen,
   onToggle,
 }: {
   title: string;
   icon?: string;
+  hint?: string;
   isOpen?: boolean;
   onToggle?: () => void;
 }) {
@@ -232,7 +235,10 @@ function SectionHeader({
       }`}
     > */}
       {icon && <span className="text-[12px] opacity-60 font-normal not-italic">{icon}</span>}
-      <span className="flex-1 text-foreground">{title}</span>
+      <span className="flex-1 text-foreground flex items-center gap-1.5">
+        {title}
+        {hint && <InfoHint text={hint} />}
+      </span>
       {/* {collapsible && (
         <span className="text-muted/40 text-[10px]">{isOpen ? '▾' : '▸'}</span>
       )} */}
@@ -514,7 +520,7 @@ function EnvironmentPanel() {
       {/* Ground */}
       <GroupBox>
         <div className="relative">
-          <SectionHeader title="Ground" />
+          <SectionHeader title="Ground" hint="바닥 평면. 프리셋 또는 단색/이미지 텍스처. 바닥은 불투명이라, 오브젝트 밑면이 바닥 아래로 내려가면 가려져 잘려 보여요(자동 바닥 스냅으로 방지)." />
           <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
             <Toggle
               value={env.ground?.enabled ?? false}
@@ -686,7 +692,7 @@ function EnvironmentPanel() {
 
       {/* Lights */}
       <GroupBox>
-        <SectionHeader title="Lights" />
+        <SectionHeader title="Lights" hint="씬 전역 조명 — 환경광(ambient)·방향광(태양)의 강도·방향. 그림자 진하기에 영향을 줘요." />
         <div className="px-3 space-y-1 pb-4">
           <div className='flex gap-2'>
             <div>
@@ -745,7 +751,7 @@ function EnvironmentPanel() {
 
       {/* Interaction — 뷰어 상호작용 어포던스 */}
       <GroupBox>
-        <SectionHeader title="Interaction" />
+        <SectionHeader title="Interaction" hint="클릭/호버 이벤트가 있는 오브젝트 위에 떠다니는 힌트 링을 띄워 '상호작용 가능'을 알려줘요. 탐색 모드 전용, 깔끔한 씬은 끌 수 있습니다." />
         <div className="px-3 pb-4 space-y-1">
           {/* 클릭/호버 이벤트가 있는 오브젝트 위에 힌트 링 표시 (탐색 모드 뷰어/임베드에서만) */}
           <label className="flex items-center justify-between cursor-pointer pb-1">
@@ -764,7 +770,7 @@ function EnvironmentPanel() {
 
       {/* Player */}
       <GroupBox>
-        <SectionHeader title="Player" />
+        <SectionHeader title="Player" hint="플레이(걷기) 모드의 캐릭터·속도·점프. 캐릭터 GLB를 지정하지 않으면 기본 캡슐로 걸어다녀요." />
         <div className="px-3 pb-4 space-y-1">
           {/* 걷기(플레이) 모드 사용 — 끄면 이 씬은 둘러보기 전용(캐릭터·플레이 없음) */}
           <label className="flex items-center justify-between cursor-pointer pb-1">
@@ -893,7 +899,7 @@ function EnvironmentPanel() {
 
       {/* Boundary */}
       <GroupBox>
-        <SectionHeader title="Boundary" />
+        <SectionHeader title="Boundary" hint="플레이 이동 제한 영역. 가로(X)·세로(Z)=중심에서 벽까지 거리(반경). 벽 스타일(단색·텍스처)로 방/전시장처럼 감쌀 수 있어요." />
         <div className="px-3 pb-4">
           <div className="grid grid-cols-2 gap-2">
             <LabeledNum
@@ -1590,7 +1596,7 @@ function InspectorInner() {
 
         {/* Transform */}
         <GroupBox>
-          <SectionHeader title="Transform" isOpen={isOpen('transform')} onToggle={() => toggleSection('transform')} />
+          <SectionHeader title="Transform" hint="위치·회전·크기. 기즈모 회전 중 Shift를 누르면 15°씩 스냅돼요. GLB는 추가 시 밑면이 바닥에 자동 정렬되고, '바닥에 놓기'로 다시 맞출 수 있어요." isOpen={isOpen('transform')} onToggle={() => toggleSection('transform')} />
           {isOpen('transform') && (
             <div className="px-3 pb-4 space-y-1">
               <XYZRow
@@ -1635,7 +1641,7 @@ function InspectorInner() {
         {/* Content (content 오브젝트만) */}
         {obj.content && (
           <GroupBox>
-            <SectionHeader title="Content" isOpen={isOpen('content')} onToggle={() => toggleSection('content')} />
+            <SectionHeader title="Content" hint="텍스트·이미지·영상 콘텐츠. URL을 넣으면 이미지/유튜브 등 리치 콘텐츠로 표시돼요." isOpen={isOpen('content')} onToggle={() => toggleSection('content')} />
             {isOpen('content') && <div className="px-3 pb-4 space-y-1">
               {obj.content.type === 'text' && (
                 <>
@@ -1772,7 +1778,7 @@ function InspectorInner() {
         {/* Particle (파티클 이미터만) */}
         {obj.particle && (
           <GroupBox>
-            <SectionHeader title="Particle" isOpen={isOpen('particle')} onToggle={() => toggleSection('particle')} />
+            <SectionHeader title="Particle" hint="눈·불꽃 같은 파티클 프리셋. 분위기 연출용이에요." isOpen={isOpen('particle')} onToggle={() => toggleSection('particle')} />
             {isOpen('particle') && <div className="px-3 pb-4 space-y-2">
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Preset</span>
@@ -1827,7 +1833,7 @@ function InspectorInner() {
 
         {/* Visibility */}
         <GroupBox>
-        <SectionHeader title="Visibility" isOpen={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
+        <SectionHeader title="Visibility" hint="표시/숨김·잠금. 숨김은 뷰어에도 반영되고, 잠금은 뷰포트에서 선택·이동을 막아요(계층 리스트에선 선택 가능)." isOpen={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
         {isOpen('visibility') && (
           <div className="px-3 pb-4 space-y-2">
             {(['visible', 'locked'] as const).map((key) => (
@@ -1847,7 +1853,7 @@ function InspectorInner() {
         {/* Light */}
         {obj.light && (
           <GroupBox>
-            <SectionHeader title="Light" isOpen={isOpen('light')} onToggle={() => toggleSection('light')} />
+            <SectionHeader title="Light" hint="포인트/스팟/방향 광원. 색·강도·거리·감쇠 등을 조절해요." isOpen={isOpen('light')} onToggle={() => toggleSection('light')} />
             {isOpen('light') && (
               <div className="px-3 pb-4 space-y-2">
                 {/* Type */}
@@ -1966,7 +1972,7 @@ function InspectorInner() {
         {!obj.light && (
         <GroupBox>
           <div className="relative">
-          <SectionHeader title="Physics" isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
+          <SectionHeader title="Physics" hint="플레이 모드 충돌. 켜면 캐릭터가 부딪혀요. Is Sensor를 켜면 통과 가능한 투명 트리거 영역이 되어 area 이벤트에 씁니다." isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
           {isOpen('physics') &&<label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
             {/* <span className="text-[10px] font-semibold text-muted/50">Enable Physics</span> */}
             <Toggle
@@ -2030,7 +2036,7 @@ function InspectorInner() {
 
         {/* Events */}
         <GroupBox>
-        <SectionHeader title="Events" isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
+        <SectionHeader title="Events" hint="트리거(클릭·호버·근접 E·영역 진입)에 따라 동작(팝업·URL·씬 이동·애니메이션·이동·사운드 등)을 실행해요. 다가가면 뜨는 '대화 말풍선'도 여기서 설정합니다." isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
         {isOpen('events') && (
           <div className="px-3 pb-4 space-y-2">
             {/* 대화(말풍선) — 플레이 모드에서 오브젝트 위에 뜨는 순차 문장 */}
