@@ -5,7 +5,8 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, Sky, Environment, ContactShadows } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset, AssetRefSchema } from '@/types/scene';
+import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { ViewerObject } from './ViewerObject';
 import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
@@ -110,15 +111,31 @@ function objWorldPos(objects: ObjectNodeSchema[], id: string): THREE.Vector3 | n
   return v;
 }
 
+// 포커스 프레이밍용 대상 반경(월드) — GLB는 캐시된 로컬 bbox×스케일, 그 외는 스케일 근사
+function objFocusRadius(objects: ObjectNodeSchema[], assets: AssetRefSchema[], id: string): number {
+  const o = objects.find((x) => x.id === id);
+  if (!o) return 1;
+  const s = Math.max(o.scale.x, o.scale.y, o.scale.z, 0.001);
+  const url = o.assetId ? assets.find((a) => a.id === o.assetId)?.dracoUrl : null;
+  const bbox = url ? glbLocalBboxCache.get(url) : undefined;
+  if (bbox) {
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+    return Math.max(0.5 * Math.max(size.x, size.y, size.z) * s, 0.2);
+  }
+  return Math.max(0.5 * s, 0.2); // 프리미티브 등 단위 지오메트리 가정
+}
+
 // Canvas 초기 카메라와 동일한 "홈" 시점 (시점 초기화 시 복귀 지점)
 const HOME_CAM = new THREE.Vector3(5, 4, 8);
 const HOME_TARGET = new THREE.Vector3(0, 0, 0);
 
 // 카메라 요청 처리 — 0.6초 이징으로 부드럽게 이동.
 // request.id가 objectId면 그 오브젝트로 포커스(앵글·거리 유지 팬), null이면 홈 시점으로 복귀.
-function CameraFocus({ request, objects, orbitRef }: {
+function CameraFocus({ request, objects, assets, orbitRef }: {
   request: { id: string | null; t: number } | null;
   objects: ObjectNodeSchema[];
+  assets: AssetRefSchema[];
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
 }) {
   const { camera } = useThree();
@@ -141,8 +158,16 @@ function CameraFocus({ request, objects, orbitRef }: {
     } else {
       const wp = objWorldPos(objects, request.id);
       if (!wp) return;
-      tgtTo = wp;
-      camTo = camFrom.clone().add(wp.clone().sub(tgtFrom)); // 타겟 이동량만큼 카메라 팬
+      // 대상 크기에 맞춰 줌인(프레이밍) — 현재 보던 각도는 유지한 채 적당한 거리로 다가간다
+      const radius = objFocusRadius(objects, assets, request.id);
+      const persp = camera as THREE.PerspectiveCamera;
+      const fov = persp.isPerspectiveCamera ? persp.fov : 60;
+      const dist = (radius / Math.sin((fov / 2) * (Math.PI / 180))) * 1.5; // 마진
+      const dir = camFrom.clone().sub(tgtFrom);
+      if (dir.lengthSq() < 1e-6) dir.set(0.6, 0.5, 0.8); // 카메라·타겟이 겹칠 때 기본 각도
+      dir.normalize();
+      tgtTo = wp.clone();
+      camTo = wp.clone().add(dir.multiplyScalar(dist));
     }
     anim.current = { tgtFrom, tgtTo, camFrom, camTo, t: 0 };
   }, [request, objects, orbitRef, camera]);
@@ -169,31 +194,38 @@ function isInteractive(o: ObjectNodeSchema): boolean {
   );
 }
 
-function InteractionHints({ objects }: { objects: ObjectNodeSchema[] }) {
+// 링 높이(오브젝트 원점 기준 상단 + 여백) — GLB는 캐시된 로컬 bbox.max.y×스케일, 그 외/미로딩은 스케일 근사
+function hintTopOffset(url: string | null, scaleY: number): number {
+  const cached = url ? glbLocalBboxCache.get(url) : undefined;
+  const top = cached ? cached.max.y * scaleY : Math.max(scaleY * 0.5, 0.3);
+  return top + 0.35;
+}
+
+function InteractionHints({ objects, assets }: { objects: ObjectNodeSchema[]; assets: AssetRefSchema[] }) {
   const groupRef = useRef<THREE.Group>(null);
 
   const hints = useMemo(() => {
-    const out: { id: string; pos: [number, number, number] }[] = [];
+    const out: { id: string; x: number; z: number; baseY: number; url: string | null; scaleY: number }[] = [];
     for (const o of objects) {
       if (!o.visible || o.isGroup || !isInteractive(o)) continue;
       const wp = objWorldPos(objects, o.id);
       if (!wp) continue;
-      // 오브젝트 상단 근처에 띄운다(정확한 bbox 없이 스케일 기반 근사).
-      const h = Math.max(o.scale.y * 0.5, 0.3) + 0.5;
-      out.push({ id: o.id, pos: [wp.x, wp.y + h, wp.z] });
+      const url = o.assetId ? (assets.find((a) => a.id === o.assetId)?.dracoUrl ?? null) : null;
+      out.push({ id: o.id, x: wp.x, z: wp.z, baseY: wp.y, url, scaleY: o.scale.y });
     }
     return out;
-  }, [objects]);
+  }, [objects, assets]);
 
-  // 카메라를 향하도록 빌보드 + 은은한 펄스(스케일). 개별 위상으로 동시에 뛰지 않게 한다.
+  // 매 프레임: 실제 상단 높이 반영(GLB bbox가 늦게 로드돼도 반영됨) + 카메라 빌보드 + 펄스
   useFrame((state) => {
     const g = groupRef.current;
     if (!g) return;
     const t = state.clock.elapsedTime;
     g.children.forEach((child, i) => {
+      const h = hints[i];
+      if (h) child.position.set(h.x, h.baseY + hintTopOffset(h.url, h.scaleY), h.z);
       child.quaternion.copy(state.camera.quaternion);
-      const s = 1 + Math.sin(t * 2.6 + i * 0.7) * 0.16;
-      child.scale.setScalar(s);
+      child.scale.setScalar(1 + Math.sin(t * 2.6 + i * 0.7) * 0.16);
     });
   });
 
@@ -202,14 +234,16 @@ function InteractionHints({ objects }: { objects: ObjectNodeSchema[] }) {
   return (
     <group ref={groupRef}>
       {hints.map((h) => (
-        <group key={h.id} position={h.pos} renderOrder={999}>
-          <mesh renderOrder={999}>
+        // 초기 위치(근사) — useFrame이 매 프레임 정확한 높이로 갱신. depthTest 기본값(true)이라
+        // 앞 오브젝트에 정상적으로 가려진다(뒤쪽/가려진 오브젝트 링은 안 보임 → 겹침 감소).
+        <group key={h.id} position={[h.x, h.baseY + hintTopOffset(h.url, h.scaleY), h.z]}>
+          <mesh>
             <ringGeometry args={[0.11, 0.17, 28]} />
-            <meshBasicMaterial color="#22d3ee" transparent opacity={0.9} depthTest={false} depthWrite={false} toneMapped={false} />
+            <meshBasicMaterial color="#22d3ee" transparent opacity={0.9} depthWrite={false} toneMapped={false} />
           </mesh>
-          <mesh renderOrder={999}>
+          <mesh>
             <circleGeometry args={[0.05, 20]} />
-            <meshBasicMaterial color="#22d3ee" transparent opacity={0.7} depthTest={false} depthWrite={false} toneMapped={false} />
+            <meshBasicMaterial color="#22d3ee" transparent opacity={0.7} depthWrite={false} toneMapped={false} />
           </mesh>
         </group>
       ))}
@@ -335,8 +369,9 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           infiniteGrid
         />
       )}
-      {/* 경계 기즈모 — 플레이 중에도 표시해 충돌 영역 확인 가능 */}
-      {(environment.boundary ?? 0) > 0 && (
+      {/* 경계 기즈모 — 탐색 모드에서만 표시(씬 범위 확인용). 플레이 모드에선 숨김
+          (충돌은 PlayCanvas의 경계 콜라이더가 담당하므로 이동 제한은 유지, 시각 가이드만 제거). */}
+      {!playMode && (environment.boundary ?? 0) > 0 && (
         <BoundaryGizmo size={environment.boundary!} playMode={playMode} />
       )}
 
@@ -422,10 +457,10 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       )}
 
       {/* focus_object 액션 — 탐색 모드에서만 (플레이 모드는 orbitRef 없음 → no-op) */}
-      {!playMode && <CameraFocus request={focusRequest ?? null} objects={objects} orbitRef={orbitRef} />}
+      {!playMode && <CameraFocus request={focusRequest ?? null} objects={objects} assets={scene.assets ?? []} orbitRef={orbitRef} />}
 
       {/* 인터랙션 어포던스 — 탐색 모드 + 씬 설정 on(미설정=on)일 때만 상호작용 오브젝트 위에 힌트 링 */}
-      {!playMode && environment.showInteractionHints !== false && <InteractionHints objects={objects} />}
+      {!playMode && environment.showInteractionHints !== false && <InteractionHints objects={objects} assets={scene.assets ?? []} />}
       </DialogueAdvanceContext.Provider>
       </InteractHighlightContext.Provider>
       </ClipRequestContext.Provider>

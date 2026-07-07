@@ -168,11 +168,11 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         const opened = window.open(ev.value, '_blank', 'noopener noreferrer');
         if (!opened) setPopup({ title: obj.name, content: ev.value });
       } else if (ev.action === 'show_popup') {
-        // 임베드(iframe) 안에서는 부모로 postMessage, 그 외(독립/커스텀도메인)엔 실제 팝업 렌더
+        // 팝업은 뷰어(임베드 포함) 안에 직접 렌더 — 플레이어가 바로 본다.
+        setPopup({ title: obj.name, content: ev.value });
+        // iframe이면 부모에도 통지(호스트가 자체 UI로 처리하고 싶을 때 선택적으로 구독).
         if (onBridge && window.parent !== window) {
           onBridge({ type: 'park3d:popup', sceneId: scene.sceneId, objectId: obj.id, objectName: obj.name, value: ev.value });
-        } else {
-          setPopup({ title: obj.name, content: ev.value });
         }
       } else if (ev.action === 'go_to_scene' && ev.value) {
         // 현재 경로의 씬 id를 대상 id로 치환해 이동 → /space·/embed·커스텀도메인 모두 대응.
@@ -284,17 +284,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       </div>
       )}
 
-      {/* 임베드 — 최소 UI: 우하단 미니 플레이 토글 */}
-      {variant === 'embed' && !walkDisabled && (
-        <button
-          onClick={() => setPlayMode((v) => !v)}
-          className={`absolute top-3 right-3 z-20 flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-xs border backdrop-blur-sm transition-all ${
-            playMode ? 'bg-primary/80 border-primary/50 text-white' : 'bg-black/40 border-white/10 text-white/70 hover:bg-black/60'
-          }`}
-        >
-          {playMode ? '⏹' : '▶'}
-        </button>
-      )}
+      {/* 임베드는 모드 전환 버튼 없음 — 씬의 "기본 진입 모드"로 고정(몰입형). */}
 
       {playMode && !isTouch && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 pointer-events-none">
@@ -362,9 +352,9 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setPopup(null)}
           />
-          <div className="relative bg-surface border border-border rounded-2xl p-6 w-full max-w-md shadow-modal">
-            <h3 className="text-lg font-bold text-foreground mb-3">{popup.title}</h3>
-            <RichContent value={popup.content} />
+          <div className="relative bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-modal">
+            <h3 className="text-lg font-bold text-slate-900 mb-3">{popup.title}</h3>
+            <RichContent value={popup.content} onLight />
             <button
               onClick={() => setPopup(null)}
               className="mt-5 w-full py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold text-sm hover:from-violet-500 hover:to-cyan-500 transition-all"

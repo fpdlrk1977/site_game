@@ -11,6 +11,7 @@ import { ClipRequestContext } from './ClipRequestContext';
 import { InteractHighlightContext } from './InteractHighlightContext';
 import { DialogueAdvanceContext } from './DialogueAdvanceContext';
 import { useObjectDialogue, effectiveDialogue } from './useObjectDialogue';
+import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
@@ -233,6 +234,9 @@ function GlbViewer({ url, emissive, showBox, bubbleText, bubbleSpeaker, bubbleHi
   }, [rawScene]);
   const { actions } = useAnimations(animations, groupRef);
   const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
+  // 뷰어에서도 로컬 bbox를 캐시에 저장 → InteractionHints가 링을 실제 모델 상단에 정확히 띄운다
+  // (에디터 GlbObject와 동일 목적. 뷰어/임베드엔 에디터가 없어 여기서 채워야 함)
+  useEffect(() => { glbLocalBboxCache.set(url, bbox); }, [url, bbox]);
 
   // 요청된 클립 재생 — 기존 클립 페이드아웃 후 새 클립 페이드인
   // playClip.t가 바뀌면 같은 클립이라도 다시 재생된다 (영역 재진입/재클릭)
@@ -350,10 +354,10 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   const assetRef = object.assetId ? assets.find((a) => a.id === object.assetId) : null;
 
   // 시각 하이라이트: 호버 또는 interact 근접 → emissive 글로우.
-  // 아웃라인/박스는 탐색 모드 호버에서만 — 플레이 모드는 외곽선 없음(호버·interact 모두).
-  // interact 대상 강조는 글로우로만(플레이 모드 무-외곽선 규칙 유지).
+  // 방문자 뷰어(탐색·플레이 공통)는 외곽선/박스 없이 글로우 + 커서 + 힌트 링으로만 안내.
+  // (시안 아웃라인은 "에디터 선택 박스" 느낌이라 포트폴리오/전시 룩과 안 맞고, 다른 신호와 중복)
   const emissiveOn = hovered || interactActive;
-  const outlineOn = hovered && !playMode;
+  const outlineOn = false;
 
   // 말풍선 렌더 요소 (GLB 외 타입용) — dv는 위 훅에서 계산됨.
   const bubbleEl = dv.visible

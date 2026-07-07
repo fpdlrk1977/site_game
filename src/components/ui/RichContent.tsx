@@ -5,9 +5,12 @@
  * 값 문자열이 이미지·영상·YouTube/Vimeo·일반 URL·텍스트 중 무엇인지 자동 판별해 알맞게 표시한다.
  * (show_popup 액션의 value 하나로 리치 콘텐츠를 지원 — 별도 스키마 필드 불필요)
  */
-export function RichContent({ value }: { value: string }) {
+export function RichContent({ value, onLight = false }: { value: string; onLight?: boolean }) {
   const v = (value ?? '').trim();
-  if (!v) return <p className="text-sm text-muted">(내용 없음)</p>;
+  // onLight: 항상 흰 배경(뷰어/임베드 팝업) 위에 렌더될 때 — 테마와 무관하게 어두운 글씨로 고정
+  const bodyText = onLight ? 'text-slate-800' : 'text-foreground';
+  const mutedText = onLight ? 'text-slate-500' : 'text-muted';
+  if (!v) return <p className={`text-sm ${mutedText}`}>(내용 없음)</p>;
 
   const yt = v.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
   if (yt) {

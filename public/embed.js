@@ -50,7 +50,7 @@
       iframe.style.display = 'block';
       iframe.style.width = scriptEl.getAttribute('data-width') || '100%';
       iframe.style.height = scriptEl.getAttribute('data-height') || '600px';
-      iframe.style.borderRadius = scriptEl.getAttribute('data-radius') || '12px';
+      // iframe.style.borderRadius = scriptEl.getAttribute('data-radius') || '12px';
 
       var targetId = scriptEl.getAttribute('data-target');
       var container = targetId ? document.getElementById(targetId) : null;

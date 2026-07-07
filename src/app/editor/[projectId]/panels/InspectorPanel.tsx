@@ -1322,12 +1322,15 @@ function InspectorInner() {
             );
           }
           if (OBJECT_TARGET_ACTIONS.has(newAction)) {
-            // 자기 자신 제외한 씬의 모든 오브젝트를 대상으로 선택
-            const opts = objects.filter((o) => o.id !== obj?.id).map((o) => ({ value: o.id, label: o.name }));
+            // 씬의 모든 오브젝트를 대상으로 — 자기 자신 포함(클릭→자기 포커스/숨김 등이 흔한 케이스)
+            const opts = objects.map((o) => ({
+              value: o.id,
+              label: o.id === obj?.id ? `${o.name} (이 오브젝트)` : o.name,
+            }));
             return opts.length > 0 ? (
               <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="대상 오브젝트 선택..." />
             ) : (
-              <p className="text-muted/60 text-[10px] py-1">대상으로 지정할 다른 오브젝트가 없습니다.</p>
+              <p className="text-muted/60 text-[10px] py-1">대상으로 지정할 오브젝트가 없습니다.</p>
             );
           }
           const glbUrl = newAction === 'play_animation' && obj?.assetId

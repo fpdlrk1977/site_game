@@ -17,9 +17,11 @@ export default async function DashboardPage() {
   const [{ data: projects }, { data: planData }] = await Promise.all([
     supabase
       .from('projects')
-      .select('id, name, is_published, updated_at, thumbnail_url, default_scene_id, custom_domain')
+      .select('id, name, is_published, created_at, updated_at, thumbnail_url, default_scene_id, custom_domain')
       .eq('owner_id', user.id)
-      .order('updated_at', { ascending: false }),
+      // created_at 기준 안정 정렬 — 공개 토글/이름변경 등 UPDATE가 updated_at을 갱신(트리거)해도
+      // 카드 순서가 튀지 않게 한다(생성 순 고정, 최신 프로젝트가 위).
+      .order('created_at', { ascending: false }),
     supabase
       .from('users_plan')
       .select('plan_tier')

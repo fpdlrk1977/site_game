@@ -7,10 +7,29 @@ import { deleteProject, renameProject, togglePublish } from './actions';
 import { ShareModal } from './ShareModal';
 import { CustomDomainModal } from './CustomDomainModal';
 
+// 상대 시간 표기 — 방금 / N분 전 / N시간 전 / N일 전 / N개월 전 / N년 전
+function timeAgo(iso: string): string {
+  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return '방금';
+  const rtf = new Intl.RelativeTimeFormat('ko', { numeric: 'always' });
+  const table: [Intl.RelativeTimeFormatUnit, number][] = [
+    ['year', 31536000],
+    ['month', 2592000],
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+  ];
+  for (const [unit, s] of table) {
+    if (sec >= s) return rtf.format(-Math.floor(sec / s), unit);
+  }
+  return '방금';
+}
+
 interface Project {
   id: string;
   name: string;
   is_published: boolean;
+  created_at: string;
   updated_at: string;
   thumbnail_url: string | null;
   default_scene_id: string | null;
@@ -60,6 +79,7 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
   const updatedDate = new Date(project.updated_at).toLocaleDateString('ko-KR', {
     month: 'short', day: 'numeric',
   });
+  const createdAgo = timeAgo(project.created_at);
 
   return (
     <div className={`group relative bg-surface border border-border rounded-2xl transition-all duration-200 hover:border-border/60 hover:shadow-xl hover:shadow-black/10 hover:-translate-y-0.5 ${deleting ? 'opacity-40 pointer-events-none' : ''}`}>
@@ -115,7 +135,7 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
             <p className="text-sm font-medium text-foreground truncate">{project.name}</p>
           )}
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-xs text-muted">{updatedDate} 수정</p>
+            <p className="text-xs text-muted" suppressHydrationWarning>{createdAgo} 등록 · {updatedDate} 수정</p>
             {showAnalytics && (
               <span className="text-[10px] text-muted">
                 · 방문 {viewCount.toLocaleString()}회
