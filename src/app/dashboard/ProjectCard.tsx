@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { deleteProject, renameProject, togglePublish } from './actions';
+import { deleteProject, duplicateProject, renameProject, togglePublish } from './actions';
 import { ShareModal } from './ShareModal';
 import { CustomDomainModal } from './CustomDomainModal';
 
@@ -41,6 +41,7 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
   const [renaming, setRenaming] = useState(false);
   const [nameValue, setNameValue] = useState(project.name);
   const [deleting, setDeleting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [domainOpen, setDomainOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -76,13 +77,30 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
     await deleteProject(project.id);
   };
 
+  const handleDuplicate = async () => {
+    setMenuOpen(false);
+    setDuplicating(true);
+    try {
+      await duplicateProject(project.id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '복제에 실패했습니다.');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   const updatedDate = new Date(project.updated_at).toLocaleDateString('ko-KR', {
     month: 'short', day: 'numeric',
   });
   const createdAgo = timeAgo(project.created_at);
 
   return (
-    <div className={`group relative bg-surface border border-border rounded-2xl transition-all duration-200 hover:border-border/60 hover:shadow-xl hover:shadow-black/10 hover:-translate-y-0.5 ${deleting ? 'opacity-40 pointer-events-none' : ''}`}>
+    <div className={`group relative bg-surface border border-border rounded-2xl transition-all duration-200 hover:border-border/60 hover:shadow-xl hover:shadow-black/10 hover:-translate-y-0.5 ${deleting || duplicating ? 'opacity-40 pointer-events-none' : ''}`}>
+      {duplicating && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-black/40 backdrop-blur-sm">
+          <span className="text-xs font-medium text-white bg-black/50 px-3 py-1.5 rounded-xs">복제 중…</span>
+        </div>
+      )}
       {/* 썸네일 */}
       <Link href={`/editor/${project.id}`} className="block relative aspect-video bg-background overflow-hidden rounded-t-2xl">
         {project.thumbnail_url ? (
@@ -165,6 +183,12 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
                 <span>✏</span> 이름 변경
+              </button>
+              <button
+                onClick={handleDuplicate}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
+              >
+                <span>📄</span> 복제
               </button>
               {project.default_scene_id && (
                 <button

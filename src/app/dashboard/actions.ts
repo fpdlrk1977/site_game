@@ -56,6 +56,137 @@ export async function createProject(formData: FormData) {
   redirect(`/editor/${project.id}`);
 }
 
+// scene_data 안의 프로젝트/씬 id·에셋 참조·go_to_scene 값을 복사본 것으로 리맵
+function remapSceneData(
+  raw: Record<string, unknown>,
+  newProjectId: string,
+  newSceneId: string,
+  assetMap: Map<string, { id: string; dracoUrl: string; thumbUrl?: string }>,
+  sceneIdMap: Map<string, string>,
+): Record<string, unknown> {
+  const data = JSON.parse(JSON.stringify(raw ?? {}));
+  data.projectId = newProjectId;
+  data.sceneId = newSceneId;
+
+  if (Array.isArray(data.assets)) {
+    data.assets = data.assets.map((a: Record<string, unknown>) => {
+      const m = typeof a?.id === 'string' ? assetMap.get(a.id) : undefined;
+      if (!m) return a;
+      return { ...a, id: m.id, dracoUrl: m.dracoUrl, ...(m.thumbUrl ? { thumbnailUrl: m.thumbUrl } : {}) };
+    });
+  }
+
+  if (Array.isArray(data.objects)) {
+    for (const o of data.objects as Record<string, unknown>[]) {
+      if (typeof o?.assetId === 'string' && assetMap.has(o.assetId)) o.assetId = assetMap.get(o.assetId)!.id;
+      if (Array.isArray(o?.events)) {
+        for (const ev of o.events as Record<string, unknown>[]) {
+          if (ev?.action === 'go_to_scene' && typeof ev.value === 'string' && sceneIdMap.has(ev.value)) {
+            ev.value = sceneIdMap.get(ev.value);
+          }
+        }
+      }
+    }
+  }
+  return data;
+}
+
+export async function duplicateProject(projectId: string) {
+  const supabase = await createSupabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  // 원본 소유권 확인
+  const { data: src } = await supabase
+    .from('projects')
+    .select('id, name, description, meta, thumbnail_url, default_scene_id')
+    .eq('id', projectId)
+    .eq('owner_id', user.id)
+    .single();
+  if (!src) return;
+
+  // 1. 새 프로젝트 생성 (비공개·도메인 없음으로 시작)
+  const { data: newProject, error: pErr } = await supabase
+    .from('projects')
+    .insert({ owner_id: user.id, name: `${src.name} (복사본)` })
+    .select('id')
+    .single();
+  if (pErr || !newProject) throw new Error(pErr?.message ?? '복제 실패');
+  const newPid = newProject.id as string;
+
+  // 플랜 한도 검증 (초과 시 롤백)
+  const { count: countAfter } = await supabase
+    .from('projects')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', user.id);
+  try {
+    await assertCountLimit(user.id, 'maxProjects', (countAfter ?? 1) - 1);
+  } catch (e) {
+    await supabase.from('projects').delete().eq('id', newPid).eq('owner_id', user.id);
+    throw e;
+  }
+
+  // 2. 에셋 복사 — 스토리지 파일(+썸네일) 새 경로로 복사 + DB 행 생성 → oldId→new 맵
+  const { data: srcAssets } = await supabase
+    .from('assets')
+    .select('id, name, mime_type, size_bytes')
+    .eq('project_id', projectId);
+
+  const assetMap = new Map<string, { id: string; dracoUrl: string; thumbUrl?: string }>();
+  for (const a of srcAssets ?? []) {
+    const newAssetId = crypto.randomUUID();
+    const toGlb = `assets/${newPid}/${newAssetId}.glb`;
+    const { error: copyErr } = await supabase.storage.from('assets')
+      .copy(`assets/${projectId}/${a.id}.glb`, toGlb);
+    if (copyErr) continue; // 원본 파일이 없으면 스킵
+    const url = supabase.storage.from('assets').getPublicUrl(toGlb).data.publicUrl;
+
+    let thumbUrl: string | undefined;
+    const toThumb = `assets/${newPid}/${newAssetId}_thumb.png`;
+    const { error: tErr } = await supabase.storage.from('assets')
+      .copy(`assets/${projectId}/${a.id}_thumb.png`, toThumb);
+    if (!tErr) thumbUrl = supabase.storage.from('assets').getPublicUrl(toThumb).data.publicUrl;
+
+    await supabase.from('assets').insert({
+      id: newAssetId, project_id: newPid, owner_id: user.id,
+      name: a.name, file_url: url, draco_url: url,
+      mime_type: a.mime_type, size_bytes: a.size_bytes,
+    });
+    assetMap.set(a.id, { id: newAssetId, dracoUrl: url, thumbUrl });
+  }
+
+  // 3. 씬 복사 — 먼저 old→new 씬 id 맵 생성(go_to_scene 리맵용), 그 다음 scene_data 리맵 후 INSERT
+  const { data: srcScenes } = await supabase
+    .from('scenes')
+    .select('id, name, scene_data')
+    .eq('project_id', projectId);
+
+  const sceneIdMap = new Map<string, string>();
+  for (const s of srcScenes ?? []) sceneIdMap.set(s.id, crypto.randomUUID());
+
+  for (const s of srcScenes ?? []) {
+    const newSceneId = sceneIdMap.get(s.id)!;
+    const remapped = remapSceneData(
+      (s.scene_data ?? {}) as Record<string, unknown>,
+      newPid, newSceneId, assetMap, sceneIdMap,
+    );
+    await supabase.from('scenes').insert({
+      id: newSceneId, project_id: newPid, name: s.name, scene_data: remapped,
+    });
+  }
+
+  // 4. default_scene_id 연결 + 메타 복사
+  const newDefault = src.default_scene_id ? (sceneIdMap.get(src.default_scene_id) ?? null) : null;
+  await supabase.from('projects').update({
+    default_scene_id: newDefault,
+    thumbnail_url: src.thumbnail_url ?? null,
+    description: src.description ?? null,
+    meta: src.meta ?? {},
+  }).eq('id', newPid).eq('owner_id', user.id);
+
+  revalidatePath('/dashboard');
+}
+
 export async function deleteProject(projectId: string) {
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();

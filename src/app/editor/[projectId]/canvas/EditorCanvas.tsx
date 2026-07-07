@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, Grid, Sky, Environment, ContactShadows } from "@react-three/drei";
+import { OrbitControls, Grid, Sky, Environment } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { useSceneStore } from "@/store/sceneStore";
@@ -195,13 +195,28 @@ export function EditorCanvas() {
   }, [focusAllRequest, objects]);
 
   // Camera view preset (Numpad7=Top, Numpad1=Front, Numpad3=Right)
+  // 씬 바운드에 맞춰 중심·거리를 잡아 전체가 자연스럽게 담기게 한다(고정 거리 X).
   useEffect(() => {
     if (!cameraViewRequest || !orbitRef.current) return;
     const { view } = cameraViewRequest;
-    orbitRef.current.target.set(0, 0, 0);
-    if (view === "top") orbitRef.current.object.position.set(0, 20, 0.001);
-    else if (view === "front") orbitRef.current.object.position.set(0, 3, 20);
-    else orbitRef.current.object.position.set(20, 3, 0);
+    // deps에 objects를 넣으면 오브젝트 이동 때마다 카메라가 튀므로 fire 시점에 getState로 읽는다
+    const objs = useSceneStore.getState().objects.filter((o) => o.visible && !o.parentId);
+    let cx = 0, cy = 0, cz = 0, spread = 8;
+    if (objs.length > 0) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const o of objs) {
+        minX = Math.min(minX, o.position.x); maxX = Math.max(maxX, o.position.x);
+        minY = Math.min(minY, o.position.y); maxY = Math.max(maxY, o.position.y);
+        minZ = Math.min(minZ, o.position.z); maxZ = Math.max(maxZ, o.position.z);
+      }
+      cx = (minX + maxX) / 2; cy = (minY + maxY) / 2; cz = (minZ + maxZ) / 2;
+      spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
+    }
+    const d = spread * 1.4; // 전체 맞춤과 비슷한 프레이밍
+    orbitRef.current.target.set(cx, cy, cz);
+    if (view === "top") orbitRef.current.object.position.set(cx, cy + d, cz + 0.001);
+    else if (view === "front") orbitRef.current.object.position.set(cx, cy, cz + d);
+    else orbitRef.current.object.position.set(cx + d, cy, cz);
     orbitRef.current.update();
   }, [cameraViewRequest]);
 
@@ -404,10 +419,9 @@ export function EditorCanvas() {
             />
           )}
 
-          {/* 접지 그림자 — 뷰어와 동일 (오브젝트가 바닥에 붙은 느낌). 기본 꺼짐(opt-in) */}
-          {environment.contactShadows === true && (
-            <ContactShadows position={[0, 0.005, 0]} scale={60} far={12} blur={2.4} opacity={0.55} resolution={1024} color="#000000" />
-          )}
+          {/* 접지 그림자 — 에디터에선 미표시. preserveDrawingBuffer(썸네일 캡처용)+오브젝트 이동이
+              바닥에 그림자 잔상(트레일)을 남기기 때문. 최종 모습은 뷰어(게시)에서 확인.
+              (설정값 environment.contactShadows는 저장되어 뷰어에 반영됨) */}
 
           {/* 둘러보기 전용 씬은 캐릭터 프리뷰·스폰 마커 숨김 */}
           {!environment.disableWalk &&
