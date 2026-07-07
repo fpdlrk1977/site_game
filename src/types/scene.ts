@@ -11,7 +11,17 @@ export interface EnvSchema {
   sky: { type: 'color' | 'hdr' | 'sky'; value: string };
   hdrPreset?: HdrPreset;
   ground?: { enabled: boolean; color: string; preset?: GroundPreset; textureUrl?: string };
-  boundary?: number;
+  boundary?: number;  // 경계 X 반경(중심→벽). >0이면 이동 제한(콜라이더) 항상 존재
+  boundaryZ?: number; // 경계 Z 반경. 미설정 시 boundary와 같음(정사각) — 직사각 지원
+  // 경계 벽 시각 — 미설정/none = 안 보임(투명, 영역만). color=단색 벽, texture=이미지 매핑 벽.
+  boundaryWall?: {
+    style?: 'none' | 'color' | 'texture';
+    color?: string;
+    textureUrl?: string;
+    height?: number;   // 벽 높이 (기본 8)
+    opacity?: number;  // 0~1 (기본 1)
+    ceiling?: boolean; // 천장 포함(완전한 방)
+  };
   fog: { enabled: boolean; color: string; near: number; far: number };
   lights: {
     ambientIntensity: number;

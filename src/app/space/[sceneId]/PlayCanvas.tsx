@@ -170,13 +170,14 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
 
       {/* 경계 벽 — friction=0 으로 벽에 눌렸을 때 공중에 걸리는 현상 방지 */}
       {(scene.environment.boundary ?? 0) > 0 && (() => {
-        const b = scene.environment.boundary!;
+        const bx = scene.environment.boundary!;
+        const bz = scene.environment.boundaryZ ?? bx;
         return (
           <>
-            <RigidBody type="fixed" friction={0}><CuboidCollider args={[b + 1, 30, 0.5]} position={[0, 15, -(b + 0.5)]} /></RigidBody>
-            <RigidBody type="fixed" friction={0}><CuboidCollider args={[b + 1, 30, 0.5]} position={[0, 15,   b + 0.5 ]} /></RigidBody>
-            <RigidBody type="fixed" friction={0}><CuboidCollider args={[0.5, 30, b + 1]} position={[  b + 0.5,  15, 0]} /></RigidBody>
-            <RigidBody type="fixed" friction={0}><CuboidCollider args={[0.5, 30, b + 1]} position={[-(b + 0.5), 15, 0]} /></RigidBody>
+            <RigidBody type="fixed" friction={0}><CuboidCollider args={[bx + 1, 30, 0.5]} position={[0, 15, -(bz + 0.5)]} /></RigidBody>
+            <RigidBody type="fixed" friction={0}><CuboidCollider args={[bx + 1, 30, 0.5]} position={[0, 15,   bz + 0.5 ]} /></RigidBody>
+            <RigidBody type="fixed" friction={0}><CuboidCollider args={[0.5, 30, bz + 1]} position={[  bx + 0.5,  15, 0]} /></RigidBody>
+            <RigidBody type="fixed" friction={0}><CuboidCollider args={[0.5, 30, bz + 1]} position={[-(bx + 0.5), 15, 0]} /></RigidBody>
           </>
         );
       })()}

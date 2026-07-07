@@ -14,90 +14,31 @@ import { PostProcessingEffects } from "@/components/three/PostProcessingEffects"
 import { GroundPlane } from "@/components/three/GroundPlane";
 import { DefaultEnvironment } from "@/components/three/DefaultEnvironment";
 import { SceneToneMapping } from "@/components/three/SceneToneMapping";
+import { BoundaryWalls } from "@/components/three/BoundaryWalls";
 import { CharacterPreview } from "./CharacterPreview";
 import type { Vector3 as Vec3, HdrPreset } from "@/types/scene";
 
-function BoundaryGizmo({ size }: { size: number }) {
-  const b = size;
+function BoundaryGizmo({ sizeX, sizeZ }: { sizeX: number; sizeZ: number }) {
+  const bx = sizeX;
+  const bz = sizeZ;
   const H = 8;
-  const positions = useMemo(
-    () =>
-      new Float32Array([
-        -b,
-        0.02,
-        -b,
-        b,
-        0.02,
-        -b,
-        b,
-        0.02,
-        -b,
-        b,
-        0.02,
-        b,
-        b,
-        0.02,
-        b,
-        -b,
-        0.02,
-        b,
-        -b,
-        0.02,
-        b,
-        -b,
-        0.02,
-        -b,
-        -b,
-        0,
-        -b,
-        -b,
-        H,
-        -b,
-        b,
-        0,
-        -b,
-        b,
-        H,
-        -b,
-        b,
-        0,
-        b,
-        b,
-        H,
-        b,
-        -b,
-        0,
-        b,
-        -b,
-        H,
-        b,
-        -b,
-        H,
-        -b,
-        b,
-        H,
-        -b,
-        b,
-        H,
-        -b,
-        b,
-        H,
-        b,
-        b,
-        H,
-        b,
-        -b,
-        H,
-        b,
-        -b,
-        H,
-        b,
-        -b,
-        H,
-        -b,
-      ]),
-    [b],
-  );
+  const positions = useMemo(() => new Float32Array([
+    // 바닥 사각형
+    -bx, 0.02, -bz,   bx, 0.02, -bz,
+     bx, 0.02, -bz,   bx, 0.02,  bz,
+     bx, 0.02,  bz,  -bx, 0.02,  bz,
+    -bx, 0.02,  bz,  -bx, 0.02, -bz,
+    // 모서리 기둥
+    -bx, 0, -bz,  -bx, H, -bz,
+     bx, 0, -bz,   bx, H, -bz,
+     bx, 0,  bz,   bx, H,  bz,
+    -bx, 0,  bz,  -bx, H,  bz,
+    // 상단 사각형
+    -bx, H, -bz,   bx, H, -bz,
+     bx, H, -bz,   bx, H,  bz,
+     bx, H,  bz,  -bx, H,  bz,
+    -bx, H,  bz,  -bx, H, -bz,
+  ]), [bx, bz]);
   return (
     <lineSegments>
       <bufferGeometry>
@@ -408,7 +349,13 @@ export function EditorCanvas() {
               <EditorObjectInstance key={obj.id} object={obj} />
             ))}
 
-          {(environment.boundary ?? 0) > 0 && <BoundaryGizmo size={environment.boundary!} />}
+          {(environment.boundary ?? 0) > 0 && (
+            <BoundaryGizmo sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} />
+          )}
+          {/* 경계 벽 미리보기 — editor=true라 반투명으로 편집을 덜 가림. 실제 룩은 뷰어에서 확인 */}
+          {(environment.boundary ?? 0) > 0 && environment.boundaryWall && (
+            <BoundaryWalls sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} config={environment.boundaryWall} editor />
+          )}
 
           {environment.ground?.enabled && (
             <GroundPlane

@@ -380,6 +380,8 @@ function EnvironmentPanel() {
   const [notesOpen, setNotesOpen] = useState(true);
   const [groundTexUploading, setGroundTexUploading] = useState(false);
   const groundTexInputRef = useRef<HTMLInputElement>(null);
+  const [boundaryTexUploading, setBoundaryTexUploading] = useState(false);
+  const boundaryTexInputRef = useRef<HTMLInputElement>(null);
   const env = environment;
 
   const handleGroundTexUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -408,6 +410,34 @@ function EnvironmentPanel() {
       console.error(err);
     } finally {
       setGroundTexUploading(false);
+    }
+  };
+
+  const handleBoundaryTexUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !projectId) return;
+    if (file.size > 8 * 1024 * 1024) {
+      addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error');
+      return;
+    }
+    setBoundaryTexUploading(true);
+    try {
+      const supabase = createBrowserSupabase();
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const path = `boundary/${projectId}/tex_${Date.now()}.${ext}`;
+      const { error: storageErr } = await supabase.storage
+        .from('assets')
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (storageErr) throw storageErr;
+      const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(path);
+      updateEnvironment({ boundaryWall: { ...(env.boundaryWall ?? {}), style: 'texture', textureUrl: publicUrl } });
+      pushHistory();
+    } catch (err) {
+      addToast('텍스처 업로드 실패', 'error');
+      console.error(err);
+    } finally {
+      setBoundaryTexUploading(false);
     }
   };
 
@@ -865,14 +895,107 @@ function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader title="Boundary" />
         <div className="px-3 pb-4">
-          <LabeledNum
-            label=""
-            value={env.boundary ?? 0}
-            onChange={(v) => updateEnvironment({ boundary: v === 0 ? undefined : v })}
-            onCommit={pushHistory}
-            min={0} max={200} precision={0} dragStep={1}
-          />
-          <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음</p>
+          <div className="grid grid-cols-2 gap-2">
+            <LabeledNum
+              label="가로(X)"
+              value={env.boundary ?? 0}
+              onChange={(v) => updateEnvironment(v === 0 ? { boundary: undefined, boundaryZ: undefined } : { boundary: v })}
+              onCommit={pushHistory}
+              min={0} max={200} precision={0} dragStep={1}
+            />
+            <LabeledNum
+              label="세로(Z)"
+              value={env.boundaryZ ?? env.boundary ?? 0}
+              onChange={(v) => updateEnvironment({ boundaryZ: v === 0 ? undefined : v })}
+              onCommit={pushHistory}
+              min={0} max={200} precision={0} dragStep={1}
+            />
+          </div>
+          <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음 · 중심에서 벽까지 거리(반경). 세로=가로면 정사각.</p>
+
+          {(env.boundary ?? 0) > 0 && (() => {
+            const bw = env.boundaryWall ?? {};
+            const style = bw.style ?? 'none';
+            const setBw = (patch: Partial<NonNullable<EnvSchema['boundaryWall']>>) =>
+              updateEnvironment({ boundaryWall: { ...bw, ...patch } });
+            return (
+              <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
+                <div>
+                  <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">벽 스타일</span>
+                  <SelectBox
+                    value={style}
+                    onChange={(v) => { setBw({ style: v as 'none' | 'color' | 'texture' }); pushHistory(); }}
+                    options={[
+                      { value: 'none', label: '투명 (영역만)' },
+                      { value: 'color', label: '단색 벽' },
+                      { value: 'texture', label: '텍스처 벽' },
+                    ]}
+                  />
+                </div>
+                {style === 'color' && (
+                  <label className="flex items-center gap-2 text-[10px] text-muted/70">
+                    <span className="shrink-0">색</span>
+                    <input type="color" value={bw.color ?? '#8899aa'}
+                      onChange={(e) => setBw({ color: e.target.value })} onBlur={pushHistory}
+                      className="w-8 h-6 rounded-xs bg-transparent border border-border cursor-pointer" />
+                    <span className="text-muted/50 font-mono">{bw.color ?? '#8899aa'}</span>
+                  </label>
+                )}
+                {style === 'texture' && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">텍스처</span>
+                    {bw.textureUrl ? (
+                      <div className="relative rounded-xs overflow-hidden border border-border group">
+                        <img src={bw.textureUrl} alt="boundary texture" className="w-full h-16 object-cover" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                          <button
+                            onClick={() => boundaryTexInputRef.current?.click()}
+                            className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-primary/80 transition-colors"
+                          >교체</button>
+                          <button
+                            onClick={() => { setBw({ textureUrl: undefined }); pushHistory(); }}
+                            className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-danger/80 transition-colors"
+                          >제거</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => boundaryTexInputRef.current?.click()}
+                        disabled={boundaryTexUploading}
+                        className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-pre-line"
+                      >
+                        {boundaryTexUploading ? '업로드 중...' : '텍스처 이미지 업로드\nJPG · PNG · WEBP'}
+                      </button>
+                    )}
+                    <input
+                      ref={boundaryTexInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleBoundaryTexUpload}
+                    />
+                  </div>
+                )}
+                {style !== 'none' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <LabeledNum label="높이" value={bw.height ?? 8}
+                        onChange={(v) => setBw({ height: v })} onCommit={pushHistory}
+                        min={0.5} max={50} precision={1} dragStep={0.5} />
+                      <LabeledNum label="불투명도" value={bw.opacity ?? 1}
+                        onChange={(v) => setBw({ opacity: v })} onCommit={pushHistory}
+                        min={0} max={1} precision={2} dragStep={0.05} />
+                    </div>
+                    <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
+                      <Toggle value={bw.ceiling === true} onChange={(v) => { setBw({ ceiling: v }); pushHistory(); }} />
+                      <span>천장 포함 (완전한 방)</span>
+                    </label>
+                    <p className="text-[10px] text-muted/50">에디터엔 반투명 미리보기 · 실제 룩은 뷰어에서 확인</p>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </GroupBox>
 

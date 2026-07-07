@@ -7,6 +7,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset, AssetRefSchema } from '@/types/scene';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
+import { BoundaryWalls } from '@/components/three/BoundaryWalls';
 import { ViewerObject } from './ViewerObject';
 import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
@@ -20,60 +21,6 @@ import { DialogueAdvanceContext } from './DialogueAdvanceContext';
 import { SceneToneMapping } from '@/components/three/SceneToneMapping';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
-
-function BoundaryGizmo({ size, playMode }: { size: number; playMode: boolean }) {
-  const b = size;
-  const H = 8; // 기즈모 높이
-  const positions = useMemo(() => new Float32Array([
-    // 바닥 사각형
-    -b, 0.02, -b,   b, 0.02, -b,
-     b, 0.02, -b,   b, 0.02,  b,
-     b, 0.02,  b,  -b, 0.02,  b,
-    -b, 0.02,  b,  -b, 0.02, -b,
-    // 모서리 기둥
-    -b, 0, -b,  -b, H, -b,
-     b, 0, -b,   b, H, -b,
-     b, 0,  b,   b, H,  b,
-    -b, 0,  b,  -b, H,  b,
-    // 상단 사각형
-    -b, H, -b,   b, H, -b,
-     b, H, -b,   b, H,  b,
-     b, H,  b,  -b, H,  b,
-    -b, H,  b,  -b, H, -b,
-  ]), [b]);
-
-  return (
-    <>
-      <lineSegments>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        </bufferGeometry>
-        <lineBasicMaterial color="#f59e0b" />
-      </lineSegments>
-      {/* 플레이 모드에서 반투명 벽면 표시 — 실제 충돌 위치와 일치 */}
-      {playMode && (
-        <>
-          <mesh position={[0, H / 2, -b]} rotation={[0, 0, 0]}>
-            <planeGeometry args={[b * 2, H]} />
-            <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={2} />
-          </mesh>
-          <mesh position={[0, H / 2, b]} rotation={[0, Math.PI, 0]}>
-            <planeGeometry args={[b * 2, H]} />
-            <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={2} />
-          </mesh>
-          <mesh position={[b, H / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
-            <planeGeometry args={[b * 2, H]} />
-            <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={2} />
-          </mesh>
-          <mesh position={[-b, H / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <planeGeometry args={[b * 2, H]} />
-            <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={2} />
-          </mesh>
-        </>
-      )}
-    </>
-  );
-}
 
 // 탐색 모드 → 플레이 모드 전환 시 현재 카메라 방향을 azimuthRef에 캡처
 // 플레이 카메라가 같은 수평 방향에서 시작되어 씬이 동일하게 보임
@@ -369,10 +316,10 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           infiniteGrid
         />
       )}
-      {/* 경계 기즈모 — 탐색 모드에서만 표시(씬 범위 확인용). 플레이 모드에선 숨김
-          (충돌은 PlayCanvas의 경계 콜라이더가 담당하므로 이동 제한은 유지, 시각 가이드만 제거). */}
-      {!playMode && (environment.boundary ?? 0) > 0 && (
-        <BoundaryGizmo size={environment.boundary!} playMode={playMode} />
+      {/* 경계 벽 — 스타일(단색/텍스처)일 때 실제 벽 렌더. 탐색·플레이 공통. none이면 안 보임.
+          (충돌은 PlayCanvas의 경계 콜라이더가 담당) */}
+      {(environment.boundary ?? 0) > 0 && environment.boundaryWall && (
+        <BoundaryWalls sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} config={environment.boundaryWall} />
       )}
 
       {/* ── 바닥 ── */}
