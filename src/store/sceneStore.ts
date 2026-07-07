@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { MathUtils, Quaternion, Euler, Vector3, Matrix4 } from 'three';
 import { worldBBox } from '@/lib/objectBBox';
+import { glbLocalBboxCache } from '@/lib/glbBboxCache';
+
+// 추가 직후 아직 bbox(GLB 로드)가 없어 바닥 스냅을 못한 오브젝트 id들 — 로드되면 GlbObject가 재시도
+const pendingFloorSnap = new Set<string>();
 import {
   ObjectNodeSchema,
   AssetRefSchema,
@@ -101,6 +105,8 @@ interface SceneActions {
   removeAsset: (id: string) => void;
   /** 특정 에셋을 참조하는 오브젝트(+자손) 전부 삭제. 삭제된 개수 반환(연쇄 삭제용) */
   removeObjectsByAsset: (assetId: string) => number;
+  /** 오브젝트 밑면을 바닥(y=0)에 자동 정렬. bbox 미준비면 pending으로 남겨 나중에 재시도 */
+  floorSnapObject: (id: string) => void;
 }
 
 // 에디터 뷰포트의 플레이어 캐릭터 프리뷰가 쓰는 가상 오브젝트 ID.
@@ -460,6 +466,30 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedIds: [obj.id],
       isModified: true,
       ...withHistory({ objects, environment }, past),
+    });
+    // 밑면을 바닥에 자동 정렬 — bbox가 이미 캐시돼 있으면 즉시, 아니면 pending으로 두고 GlbObject 로드 시 재시도
+    pendingFloorSnap.add(obj.id);
+    get().floorSnapObject(obj.id);
+  },
+
+  floorSnapObject: (id) => {
+    if (!pendingFloorSnap.has(id)) return;
+    const { objects, assets } = get();
+    const o = objects.find((x) => x.id === id);
+    if (!o || o.parentId) { pendingFloorSnap.delete(id); return; } // 루트만
+    if (o.assetId) {
+      const url = assets.find((a) => a.id === o.assetId)?.dracoUrl;
+      if (!url || !glbLocalBboxCache.has(url)) return; // GLB bbox 아직 → pending 유지
+    }
+    const b = worldBBox(objects, assets, id);
+    if (!b) return;
+    pendingFloorSnap.delete(id);
+    const newY = o.position.y - b.min.y; // 밑면이 y=0에 오도록
+    if (Math.abs(newY - o.position.y) < 1e-4) return; // 이미 맞음
+    // 히스토리 없이 위치만 보정(추가 액션에 묻어가는 자동 보정)
+    set({
+      objects: get().objects.map((x) => (x.id === id ? { ...x, position: { ...x.position, y: newY } } : x)),
+      isModified: true,
     });
   },
 

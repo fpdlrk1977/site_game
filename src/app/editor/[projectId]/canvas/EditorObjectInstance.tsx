@@ -360,6 +360,7 @@ export function EditorObjectInstance({ object }: Props) {
         }>
           <GlbObject
             url={assetRef.dracoUrl}
+            objectId={object.id}
             selected={isSelected}
             hovered={hovered}
             onClick={(shiftKey) => handleClick(shiftKey)}

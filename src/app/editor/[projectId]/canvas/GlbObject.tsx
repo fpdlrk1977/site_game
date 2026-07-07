@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 import { normalizeGlbMaterials } from '@/lib/glbMaterials';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
+import { useSceneStore } from '@/store/sceneStore';
 
 interface Props {
   url: string;
@@ -16,9 +17,11 @@ interface Props {
   wireframe?: boolean;
   /** physics 활성 시 콜라이더 가이드 표시 — 모델의 실제 바운딩박스에 맞춰 그린다 */
   colliderGuide?: 'solid' | 'sensor';
+  /** 이 GLB를 렌더하는 씬 오브젝트 id — bbox 준비 시 자동 바닥 스냅 재시도용 */
+  objectId?: string;
 }
 
-export function GlbObject({ url, selected, hovered = false, onClick, onHoverChange, wireframe = false, colliderGuide }: Props) {
+export function GlbObject({ url, selected, hovered = false, onClick, onHoverChange, wireframe = false, colliderGuide, objectId }: Props) {
   const { scene } = useGLTF(url);
   const clone = useMemo(() => {
     const c = SkeletonUtils.clone(scene);
@@ -40,8 +43,12 @@ export function GlbObject({ url, selected, hovered = false, onClick, onHoverChan
   }, [scene]);
   // Outlines는 단일 mesh에서만 동작하므로, 여러 mesh로 구성된 GLB는 bounding box로 표시
   const bbox = useMemo(() => new THREE.Box3().setFromObject(clone), [clone]);
-  // 인스펙터 "바닥에 놓기"가 재로드 없이 밑면을 계산하도록 로컬 bbox를 캐시에 저장
-  useEffect(() => { glbLocalBboxCache.set(url, bbox); }, [url, bbox]);
+  // 인스펙터 "바닥에 놓기"가 재로드 없이 밑면을 계산하도록 로컬 bbox를 캐시에 저장.
+  // 캐시가 채워지면(=GLB 로드 완료) 추가 직후 스냅 못한 오브젝트를 바닥에 자동 정렬 재시도.
+  useEffect(() => {
+    glbLocalBboxCache.set(url, bbox);
+    if (objectId) useSceneStore.getState().floorSnapObject(objectId);
+  }, [url, bbox, objectId]);
   const guideBox = useMemo(() => {
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
