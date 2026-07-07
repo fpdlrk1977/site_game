@@ -86,6 +86,9 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **임베드 E2E** — 게시된 씬 + `/test/event-bridge` 또는 `<script>` 삽입, emit_event/팝업
 
 ### 기능 로드맵 (미착수/후속)
+- **오브젝트 앰비언트 애니메이션(`motion`)** ⭐: GLB 자체 클립이 아닌 **트랜스폼 애니**(항상 실행). type=float(둥실)/spin/pulse(스케일)/orbit/**wander(영역 내 유동, 열기구식)**. 스키마 `ObjectNodeSchema.motion` + 뷰어 useFrame 런타임(move_object rAF 구조 재활용). "살아있는 씬" — 게임형 임팩트 큼. 중간 규모·리스크 낮음.
+- **맵 제작 도구**: (a) **추가 시 자동 바닥 스냅**(GLB 놓으면 밑면 자동 정렬 → 파묻힘/짤림 근본 해결. 현재 수동 '바닥에 놓기' 버튼만) (b) **배열/반복 툴**(복제 N개 일정 간격 — 울타리·기둥). ※현재도 Ctrl+D 복제는 크기 정확 복사됨.
+- **Inspector 툴팁**: `InfoHint` 공통 컴포넌트(ⓘ+호버 툴팁, 기존 `Tooltip.tsx` 재활용) → `SectionHeader`에 `hint` prop 추가. 반나절·리스크 낮음.
 - **Events E3-B(문/콜라이더 토글)**: `set_passable`/`toggle_collision` + hide_object 시 루트 콜라이더 제거. 필요 시.
 - **대화 시스템 고도화**: 선택지(분기), 대사 종료 시 액션 연결, 하단 대화창 모드, 거리 LOD, 1회성 플래그.
 - **경계 벽 2차**: 그라데이션 페이드/one-sided/면별 텍스처/스카이박스 대안/원형·커스텀 모양.

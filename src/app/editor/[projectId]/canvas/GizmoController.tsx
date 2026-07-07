@@ -195,6 +195,15 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
     cLocalRef.current.copy(c ?? _p.set(0, 0, 0));
   }, [selectedId, isCharPreview, objects, assets]);
 
+  // Shift 누르는 동안 회전 15° 스냅 (Figma식)
+  const [shiftSnap, setShiftSnap] = useState(false);
+  useEffect(() => {
+    const sync = (e: KeyboardEvent) => setShiftSnap(e.shiftKey);
+    window.addEventListener('keydown', sync);
+    window.addEventListener('keyup', sync);
+    return () => { window.removeEventListener('keydown', sync); window.removeEventListener('keyup', sync); };
+  }, []);
+
   // 드래그 중이 아니면 프록시를 오브젝트(형상 중심/회전/스케일)에 매 프레임 동기화
   useFrame(() => {
     const proxy = proxyRef.current!;
@@ -237,7 +246,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
         mode={effectiveMode}
         space={transformSpace}
         translationSnap={snapEnabled ? snapTranslate : null}
-        rotationSnap={snapEnabled ? snapRotate * DEG2RAD : null}
+        rotationSnap={shiftSnap ? 15 * DEG2RAD : (snapEnabled ? snapRotate * DEG2RAD : null)}
         scaleSnap={snapEnabled ? 0.1 : null}
         onMouseDown={() => {
           gizmoDraggingRef.current = true;
