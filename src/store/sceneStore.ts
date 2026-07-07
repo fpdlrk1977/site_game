@@ -99,6 +99,8 @@ interface SceneActions {
   batchUpdateObjects: (ids: string[], patch: (obj: ObjectNodeSchema) => Partial<ObjectNodeSchema>) => void;
   addLightObject: (type: LightType) => void;
   removeAsset: (id: string) => void;
+  /** 특정 에셋을 참조하는 오브젝트(+자손) 전부 삭제. 삭제된 개수 반환(연쇄 삭제용) */
+  removeObjectsByAsset: (assetId: string) => number;
 }
 
 // 에디터 뷰포트의 플레이어 캐릭터 프리뷰가 쓰는 가상 오브젝트 ID.
@@ -424,6 +426,25 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   removeAsset: (id) => {
     const { assets } = get();
     set({ assets: assets.filter((a) => a.id !== id), isModified: true });
+  },
+
+  removeObjectsByAsset: (assetId) => {
+    const { objects, environment, past, selectedId, selectedIds } = get();
+    const directIds = objects.filter((o) => o.assetId === assetId).map((o) => o.id);
+    if (directIds.length === 0) return 0;
+    const collectDescendants = (oid: string): string[] => {
+      const children = objects.filter((o) => o.parentId === oid);
+      return [oid, ...children.flatMap((c) => collectDescendants(c.id))];
+    };
+    const allToDelete = new Set(directIds.flatMap((id) => collectDescendants(id)));
+    set({
+      objects: objects.filter((o) => !allToDelete.has(o.id)),
+      selectedId: selectedId && allToDelete.has(selectedId) ? null : selectedId,
+      selectedIds: selectedIds.filter((id) => !allToDelete.has(id)),
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+    return allToDelete.size;
   },
 
   addAssetObject: (asset) => {

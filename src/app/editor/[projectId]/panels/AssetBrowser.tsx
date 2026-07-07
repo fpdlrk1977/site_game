@@ -45,7 +45,7 @@ const LIGHT_ITEMS: { type: LightType; label: string; emoji: string }[] = [
 ];
 
 export function AssetBrowser() {
-  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset } = useSceneStore();
+  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset, removeObjectsByAsset, updateEnvironment } = useSceneStore();
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -57,17 +57,17 @@ export function AssetBrowser() {
   const deleteAsset = async (asset: AssetRefSchema) => {
     if (deletingId) return;
 
-    // 현재 씬에서 사용 중이면 삭제 차단 — 유령 참조(assetId만 남은 오브젝트) 방지
+    // 사용 중이면 연쇄 삭제 확인 — 에셋과 함께 참조 오브젝트도 정리해 유령 참조를 막는다
     // (다른 씬의 사용 여부까지는 확인하지 못하는 한계 있음)
     const cur = useSceneStore.getState();
     const usedCount = cur.objects.filter((o) => o.assetId === asset.id).length;
-    if (usedCount > 0) {
-      addToast(`씬에서 ${usedCount}개 오브젝트가 사용 중인 에셋입니다. 먼저 씬에서 제거해주세요.`, 'error');
-      return;
-    }
-    if (cur.environment.playerCharacterId === asset.id) {
-      addToast('플레이어 캐릭터로 사용 중인 에셋입니다. Player 설정을 먼저 변경해주세요.', 'error');
-      return;
+    const isPlayerChar = cur.environment.playerCharacterId === asset.id;
+    if (usedCount > 0 || isPlayerChar) {
+      const lines = [`"${asset.name}" 에셋을 삭제하면:`];
+      if (usedCount > 0) lines.push(`• 씬에서 이 에셋을 쓰는 오브젝트 ${usedCount}개도 함께 삭제됩니다`);
+      if (isPlayerChar) lines.push('• 플레이어 캐릭터 지정이 해제됩니다');
+      lines.push('\n계속할까요? (복구할 수 없습니다)');
+      if (!confirm(lines.join('\n'))) return;
     }
 
     setDeletingId(asset.id);
@@ -94,6 +94,9 @@ export function AssetBrowser() {
       const { error } = await supabase.from('assets').delete().eq('id', asset.id);
       if (error) throw error;
 
+      // DB 삭제 성공 후에만 씬 반영(연쇄) — 중간 실패 시 부분 반영 방지
+      if (usedCount > 0) removeObjectsByAsset(asset.id);
+      if (isPlayerChar) updateEnvironment({ playerCharacterId: undefined });
       removeAsset(asset.id);
 
       // scenes.scene_data도 즉시 반영 (새로고침 시 삭제된 에셋이 복원되는 버그 방지).
