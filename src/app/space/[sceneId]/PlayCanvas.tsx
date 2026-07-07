@@ -7,6 +7,7 @@ import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/
 import { ViewerObject } from './ViewerObject';
 import { PhysicsObject } from './PhysicsObject';
 import { PlayModeController } from './PlayModeController';
+import { effectiveDialogue } from './useObjectDialogue';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -115,11 +116,16 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   const assets = scene.assets ?? [];
 
   const allObjects = scene.objects;
-  // 근접 감지 대상(루트 오브젝트) — interact 이벤트가 있거나(=E키/프롬프트) 근접 말풍선이 설정된 것.
+  // 근접 감지 대상(루트 오브젝트) — E키/프롬프트가 필요한 것들.
+  // interact 이벤트가 있거나, 근접이 필요한 대화(항상+자동 앰비언트는 근접 불필요라 제외).
   // (중첩 그룹 자식은 위치가 로컬 좌표라 월드 근접 판정이 어긋나므로 v1은 루트만 지원)
+  const needsProximity = (o: ObjectNodeSchema) => {
+    if (o.events?.some((e) => e.trigger === 'interact')) return true;
+    const dlg = effectiveDialogue(o);
+    return !!dlg && (dlg.show === 'approach' || dlg.show === 'interact' || dlg.advance === 'manual');
+  };
   const interactables = allObjects
-    .filter((o) => !o.parentId && o.visible
-      && (o.events?.some((e) => e.trigger === 'interact') || (o.interactLabel?.trim().length ?? 0) > 0))
+    .filter((o) => !o.parentId && o.visible && needsProximity(o))
     .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z }));
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);

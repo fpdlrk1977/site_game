@@ -9,6 +9,8 @@ import { normalizeGlbMaterials } from '@/lib/glbMaterials';
 import { PlayModeContext } from './PlayModeContext';
 import { ClipRequestContext } from './ClipRequestContext';
 import { InteractHighlightContext } from './InteractHighlightContext';
+import { DialogueAdvanceContext } from './DialogueAdvanceContext';
+import { useObjectDialogue, effectiveDialogue } from './useObjectDialogue';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
@@ -31,9 +33,9 @@ function getYouTubeId(url: string): string | null {
   return m ? m[1] : null;
 }
 
-// 근접 말풍선 — 오브젝트 바로 위에 뜨는 텍스트(꼬리는 아래=오브젝트를 가리킴).
+// 대화 말풍선 — 오브젝트 바로 위에 뜨는 텍스트(꼬리는 아래=오브젝트를 가리킴).
 // distanceFactor로 월드 크기에 앵커되고, center로 y 앵커 지점 위에 뜬다(translateY로 바닥=꼬리를 앵커에 맞춤).
-function SpeechBubble({ text, y }: { text: string; y: number }) {
+function SpeechBubble({ text, y, speaker, hint }: { text: string; y: number; speaker?: string; hint?: boolean }) {
   return (
     <Html position={[0, y, 0]} center distanceFactor={8} zIndexRange={[100, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
       <div style={{
@@ -43,15 +45,26 @@ function SpeechBubble({ text, y }: { text: string; y: number }) {
         color: '#1f2937',
         fontSize: '14px',
         fontWeight: 600,
-        lineHeight: 1.3,
+        lineHeight: 1.35,
         padding: '8px 12px',
         borderRadius: '10px',
         whiteSpace: 'pre-wrap',
-        maxWidth: '200px',
-        textAlign: 'center',
+        width: 'max-content',
+        maxWidth: '220px',
+        wordBreak: 'keep-all',
+        textAlign: speaker ? 'left' : 'center',
         boxShadow: '0 6px 18px rgba(0,0,0,0.28)',
       }}>
+        {speaker && (
+          <div style={{ fontSize: '11px', fontWeight: 800, color: '#6366f1', marginBottom: '3px' }}>{speaker}</div>
+        )}
         {text}
+        {hint && (
+          <span style={{
+            marginLeft: '6px', fontSize: '10px', fontWeight: 700, color: '#fff',
+            background: '#6366f1', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap',
+          }}>E ▶</span>
+        )}
         <span style={{
           position: 'absolute', bottom: '-7px', left: '50%', transform: 'translateX(-50%)',
           width: 0, height: 0,
@@ -185,11 +198,13 @@ export interface ClipRequest {
   t: number;
 }
 
-function GlbViewer({ url, emissive, showBox, bubble, showBubble, playClip, onClick, onPointerOver, onPointerOut }: {
+function GlbViewer({ url, emissive, showBox, bubbleText, bubbleSpeaker, bubbleHint, showBubble, playClip, onClick, onPointerOver, onPointerOut }: {
   url: string;
   emissive: boolean;
   showBox: boolean;
-  bubble?: string;
+  bubbleText?: string;
+  bubbleSpeaker?: string;
+  bubbleHint?: boolean;
   showBubble: boolean;
   playClip: ClipRequest | null;
   onClick: () => void;
@@ -266,7 +281,7 @@ function GlbViewer({ url, emissive, showBox, bubble, showBubble, playClip, onCli
         onPointerOut={() => onPointerOut()}
       />
       {showBox && <box3Helper args={[bbox, new THREE.Color('#22d3ee')]} />}
-      {showBubble && bubble && <SpeechBubble text={bubble} y={bbox.max.y + 0.25} />}
+      {showBubble && <SpeechBubble text={bubbleText ?? ''} speaker={bubbleSpeaker} hint={bubbleHint} y={bbox.max.y + 0.25} />}
     </group>
   );
 }
@@ -288,12 +303,17 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   const externalClip = useContext(ClipRequestContext)[object.id] ?? null;
   // 플레이 모드에서 캐릭터가 이 오브젝트에 근접(interact 대상)했는지
   const interactActive = useContext(InteractHighlightContext) === object.id;
+  // E키 nonce — 근접 대상일 때만 대화 열기/넘김에 반응
+  const dialogueNonce = useContext(DialogueAdvanceContext);
   const [hovered, setHovered] = useState(false);
   const [internalClip, setInternalClip] = useState<ClipRequest | null>(null);
   // 내부(click/hover)·PhysicsObject(area)·animate_object 요청 중 가장 최근(t) 것을 사용
   const effectiveClip = [internalClip, activeClipProp, externalClip]
     .filter((c): c is ClipRequest => !!c)
     .reduce<ClipRequest | null>((a, c) => (a && a.t >= c.t ? a : c), null);
+
+  // 대화 말풍선 상태 머신 (훅 — early return 이전에 호출). 렌더는 아래 각 타입 분기에서.
+  const dv = useObjectDialogue(effectiveDialogue(object), playMode, interactActive, dialogueNonce);
 
   const hasClick = object.events.some((e) => e.trigger === 'click');
   const hasHover = object.events.some((e) => e.trigger === 'hover_enter');
@@ -335,12 +355,9 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   const emissiveOn = hovered || interactActive;
   const outlineOn = hovered && !playMode;
 
-  // 근접 말풍선 — 플레이 모드에서 이 오브젝트가 근접 대상(interactActive)이고 라벨이 설정됐을 때.
-  // GLB는 bbox 기준으로 GlbViewer가 렌더, 그 외 타입은 스케일 기준 오프셋으로 여기서 렌더.
-  const bubbleText = object.interactLabel?.trim() ?? '';
-  const showBubble = interactActive && playMode && bubbleText.length > 0;
-  const bubbleEl = showBubble
-    ? <SpeechBubble text={bubbleText} y={0.5 * object.scale.y + 0.25} />
+  // 말풍선 렌더 요소 (GLB 외 타입용) — dv는 위 훅에서 계산됨.
+  const bubbleEl = dv.visible
+    ? <SpeechBubble text={dv.text} speaker={dv.speaker} hint={dv.manual && dv.hasMore} y={0.5 * object.scale.y + 0.25} />
     : null;
 
   const handlePointerOver = () => {
@@ -378,8 +395,10 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
             url={assetRef.dracoUrl}
             emissive={emissiveOn}
             showBox={outlineOn}
-            bubble={bubbleText}
-            showBubble={showBubble}
+            bubbleText={dv.text}
+            bubbleSpeaker={dv.speaker}
+            bubbleHint={dv.manual && dv.hasMore}
+            showBubble={dv.visible}
             playClip={effectiveClip}
             onClick={handleClick}
             onPointerOver={handlePointerOver}

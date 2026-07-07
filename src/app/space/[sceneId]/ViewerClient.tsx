@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { MobileControls } from './MobileControls';
 import { RichContent } from '@/components/ui/RichContent';
+import { effectiveDialogue } from './useObjectDialogue';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, Vector3 } from '@/types/scene';
 
 const ViewerCanvas = dynamic(
@@ -40,6 +41,8 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
   const [playMode, setPlayMode] = useState(scene.environment.defaultMode === 'play' && !walkDisabled);
   // 플레이 모드에서 캐릭터가 근접한 interact 대상 (E 프롬프트 표시용). 탐색 모드에선 항상 null.
   const [interactTarget, setInteractTarget] = useState<{ id: string; name: string } | null>(null);
+  // E키를 누를 때마다 증가 — 대화 열기/다음 문장(DialogueAdvanceContext로 3D 트리에 전달)
+  const [dialogueNonce, setDialogueNonce] = useState(0);
 
   // 런타임 오브젝트 표시/숨김 오버라이드 (show/hide/toggle_object 액션) — objectId → visible
   const [visOverride, setVisOverride] = useState<Record<string, boolean>>({});
@@ -151,7 +154,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
     if (trigger === 'click') trackEvent('click', obj.id, obj.name);
     if (trigger === 'area_enter') trackEvent('area_enter', obj.id, obj.name);
     if (trigger === 'area_exit') trackEvent('area_exit', obj.id, obj.name);
-    if (trigger === 'interact') trackEvent('interact', obj.id, obj.name);
+    if (trigger === 'interact') { trackEvent('interact', obj.id, obj.name); setDialogueNonce((n) => n + 1); }
 
     const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
     for (const ev of matchingEvents) {
@@ -207,13 +210,16 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
     }
   };
 
-  // 근접 대상이 interact 이벤트를 가졌는지 — E 프롬프트/버튼은 이때만(말풍선만 있는 오브젝트는 E 미표시)
+  // E 프롬프트/버튼 표시 조건 — 근접 대상이 interact 이벤트를 갖거나, E로 여는 대화(show='interact')일 때.
+  // (항상/근접 표시 대화나 자동 넘김은 E 프롬프트 없이 말풍선만 뜨거나 내부 'E ▶' 힌트로 안내)
   const interactTargetObj = interactTarget ? effectiveScene.objects.find((o) => o.id === interactTarget.id) : null;
-  const interactTargetHasE = !!interactTargetObj?.events.some((e) => e.trigger === 'interact');
+  const interactTargetDlg = interactTargetObj ? effectiveDialogue(interactTargetObj) : null;
+  const interactTargetHasE = !!interactTargetObj?.events.some((e) => e.trigger === 'interact')
+    || interactTargetDlg?.show === 'interact';
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} />
+      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} />
 
       {/* 상단 오버레이 */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 pointer-events-none">

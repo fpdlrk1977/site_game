@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { RichContent } from '@/components/ui/RichContent';
-import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig } from '@/types/scene';
 import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
 function evalMath(expr: string): number | null {
@@ -1159,6 +1159,13 @@ function InspectorInner() {
   const showAreaEnterHint = newTrigger === 'area_enter' || newTrigger === 'area_exit';
   const showInteractHint = newTrigger === 'interact';
 
+  // 대화(말풍선) — dialogue 또는 레거시 interactLabel에서 편집값을 구성
+  const dlg: DialogueConfig = obj.dialogue ?? (obj.interactLabel?.trim()
+    ? { lines: [obj.interactLabel.trim()], show: 'approach', advance: 'auto' }
+    : { lines: [], show: 'approach', advance: 'auto' });
+  const setDlg = (patch: Partial<DialogueConfig>) =>
+    updateObject(obj.id, { dialogue: { ...dlg, ...patch }, interactLabel: undefined });
+
   // 이벤트 추가/수정 폼 — 신규는 목록 하단, 수정은 해당 항목 자리에 인라인으로 렌더한다
   const renderEventForm = () => (
     <div className="bg-surface border border-primary/40 rounded-xs p-2.5 space-y-2">
@@ -1900,18 +1907,72 @@ function InspectorInner() {
         <SectionHeader title="Events" isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
         {isOpen('events') && (
           <div className="px-3 pb-4 space-y-2">
-            {/* 근접 말풍선 — 플레이 모드에서 캐릭터가 다가가면 오브젝트 위에 뜨는 텍스트 */}
-            <div>
-              <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">근접 말풍선</span>
-              <input
-                value={obj.interactLabel ?? ''}
-                onChange={(e) => updateObject(obj.id, { interactLabel: e.target.value })}
+            {/* 대화(말풍선) — 플레이 모드에서 오브젝트 위에 뜨는 순차 문장 */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">대화 말풍선</span>
+              <textarea
+                value={dlg.lines.join('\n')}
+                onChange={(e) => setDlg({ lines: e.target.value.split('\n') })}
                 onBlur={pushHistory}
-                placeholder="예: 말 걸기 · 안녕하세요!"
-                className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-[11px] text-foreground placeholder:text-muted/40 focus:border-primary/50 outline-none"
+                rows={3}
+                placeholder={'한 줄에 문장 하나 (순서대로 표시)\n예: 안녕하세요!\n무엇을 도와드릴까요?'}
+                className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-[11px] text-foreground placeholder:text-muted/40 focus:border-primary/50 outline-none resize-y leading-relaxed"
               />
-              <p className="text-muted/50 text-[10px] mt-1">
-                플레이 모드에서 캐릭터가 근접(약 3m)하면 오브젝트 바로 위에 표시됩니다. 비워두면 안 뜸.
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">표시 시점</span>
+                  <SelectBox
+                    value={dlg.show}
+                    onChange={(v) => { setDlg({ show: v as DialogueConfig['show'] }); pushHistory(); }}
+                    options={[
+                      { value: 'always', label: '항상' },
+                      { value: 'approach', label: '다가가면' },
+                      { value: 'interact', label: 'E키로 열기' },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">넘기기</span>
+                  <SelectBox
+                    value={dlg.advance}
+                    onChange={(v) => { setDlg({ advance: v as DialogueConfig['advance'] }); pushHistory(); }}
+                    options={[
+                      { value: 'auto', label: '자동(타이머)' },
+                      { value: 'manual', label: 'E키로 넘김' },
+                    ]}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {dlg.advance === 'auto' && (
+                  <label className="flex items-center gap-1.5 text-[10px] text-muted/70">
+                    <span className="shrink-0">간격(초)</span>
+                    <input
+                      type="number" min={0.5} step={0.5}
+                      value={dlg.autoSec ?? 2.5}
+                      onChange={(e) => setDlg({ autoSec: parseFloat(e.target.value) || 2.5 })}
+                      onBlur={pushHistory}
+                      className="w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-primary/50"
+                    />
+                  </label>
+                )}
+                <label className="flex items-center gap-1.5 text-[10px] text-muted/70">
+                  <span className="shrink-0">화자</span>
+                  <input
+                    value={dlg.speaker ?? ''}
+                    onChange={(e) => setDlg({ speaker: e.target.value })}
+                    onBlur={pushHistory}
+                    placeholder="이름(선택)"
+                    className="w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground placeholder:text-muted/40 outline-none focus:border-primary/50"
+                  />
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
+                <Toggle value={dlg.typing !== false} onChange={(v) => { setDlg({ typing: v }); pushHistory(); }} />
+                <span>타이핑 효과</span>
+              </label>
+              <p className="text-muted/50 text-[10px]">
+                플레이 모드 전용 · 오브젝트 바로 위 표시. 비워두면 안 뜸. 여러 문장이면 순서대로.
               </p>
             </div>
 

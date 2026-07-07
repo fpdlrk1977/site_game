@@ -143,9 +143,19 @@ export interface ObjectNodeSchema {
   particle?: ParticleConfig;
   light?: LightConfig;
   isGroup?: boolean;
-  // 근접 말풍선 — 플레이 모드에서 캐릭터가 이 오브젝트에 근접(기본 3m)하면 오브젝트 바로 위에
-  // 뜨는 텍스트. interact 이벤트가 없어도 말풍선만으로 근접 감지 대상이 된다(간판/인사말 등).
+  // (레거시) 단문 근접 말풍선 — dialogue 미설정 시 lines:[interactLabel]·approach·auto로 해석.
   interactLabel?: string;
+  // 대화(말풍선) — 오브젝트 위에 뜨는 순차 문장. 플레이 모드 전용.
+  dialogue?: DialogueConfig;
+}
+
+export interface DialogueConfig {
+  lines: string[];                          // 순차로 표시할 문장들 (빈 줄은 무시)
+  show: 'always' | 'approach' | 'interact'; // 항상 / 근접(기본 3m) / E키로 열기
+  advance: 'auto' | 'manual';               // auto=타이머 자동 넘김, manual=E키로 넘김
+  autoSec?: number;                         // auto일 때 문장 간 간격(초). 기본 2.5
+  speaker?: string;                         // 화자 이름(말풍선 상단). 선택
+  typing?: boolean;                         // 타이핑(타자기) 효과. 기본 true
 }
 
 export interface AssetRefSchema {
