@@ -27,13 +27,17 @@ const ViewerCanvas = dynamic(
 
 interface Props {
   scene: ProjectSceneSchema;
-  projectName: string;
-  isOwner: boolean;
-  projectId: string;
+  projectName?: string;
+  isOwner?: boolean;
+  projectId?: string;
   hideBadge?: boolean;
+  /** 'standalone' = 독립 URL(/space) 풀 UI, 'embed' = 최소 UI + 부모 브릿지 */
+  variant?: 'standalone' | 'embed';
+  /** 임베드 브릿지 — show_popup/emit_event를 부모 페이지로 postMessage할 때 사용 */
+  onBridge?: (msg: Record<string, unknown>) => void;
 }
 
-export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge = false }: Props) {
+export function ViewerClient({ scene, projectName = '', isOwner = false, projectId = '', hideBadge = false, variant = 'standalone', onBridge }: Props) {
   const [popup, setPopup] = useState<{ title: string; content: string } | null>(null);
   // 둘러보기 전용 씬은 걷기(플레이) 불가 — 항상 탐색으로만 동작
   const walkDisabled = scene.environment.disableWalk === true;
@@ -164,10 +168,18 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
         const opened = window.open(ev.value, '_blank', 'noopener noreferrer');
         if (!opened) setPopup({ title: obj.name, content: ev.value });
       } else if (ev.action === 'show_popup') {
-        setPopup({ title: obj.name, content: ev.value });
+        // 임베드(iframe) 안에서는 부모로 postMessage, 그 외(독립/커스텀도메인)엔 실제 팝업 렌더
+        if (onBridge && window.parent !== window) {
+          onBridge({ type: 'park3d:popup', sceneId: scene.sceneId, objectId: obj.id, objectName: obj.name, value: ev.value });
+        } else {
+          setPopup({ title: obj.name, content: ev.value });
+        }
       } else if (ev.action === 'go_to_scene' && ev.value) {
-        // 같은 뷰어 경로에서 대상 씬으로 이동 (독립 URL 기준)
-        window.location.href = `/space/${ev.value}`;
+        // 현재 경로의 씬 id를 대상 id로 치환해 이동 → /space·/embed·커스텀도메인 모두 대응.
+        // (경로에 현재 씬 id가 없으면 독립 URL 기준으로 폴백)
+        const path = window.location.pathname;
+        const target = path.includes(scene.sceneId) ? path.replace(scene.sceneId, ev.value) : `/space/${ev.value}`;
+        window.location.href = target + window.location.search;
       } else if (ev.action === 'show_object' && ev.value) {
         setVisOverride((v) => ({ ...v, [ev.value]: true }));
       } else if (ev.action === 'hide_object' && ev.value) {
@@ -205,8 +217,12 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
         }
       } else if (ev.action === 'play_sound' && ev.value) {
         playSound(ev.value);
+      } else if (ev.action === 'emit_event') {
+        // Event Bridge — 임베드(iframe)일 때만 부모 페이지로 커스텀 이벤트 전송
+        if (onBridge && window.parent !== window) {
+          onBridge({ type: 'park3d:event', sceneId: scene.sceneId, objectId: obj.id, objectName: obj.name, trigger, value: ev.value });
+        }
       }
-      // emit_event: EmbedClient 참고
     }
   };
 
@@ -221,7 +237,8 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
       <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} />
 
-      {/* 상단 오버레이 */}
+      {/* 상단 오버레이 — 독립 URL(/space)에서만 풀 UI */}
+      {variant === 'standalone' && (
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 pointer-events-none">
         <div className="flex items-center gap-2 pointer-events-auto">
           {isOwner && (
@@ -265,6 +282,19 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           )}
         </div>
       </div>
+      )}
+
+      {/* 임베드 — 최소 UI: 우하단 미니 플레이 토글 */}
+      {variant === 'embed' && !walkDisabled && (
+        <button
+          onClick={() => setPlayMode((v) => !v)}
+          className={`absolute top-3 right-3 z-20 flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-xs border backdrop-blur-sm transition-all ${
+            playMode ? 'bg-primary/80 border-primary/50 text-white' : 'bg-black/40 border-white/10 text-white/70 hover:bg-black/60'
+          }`}
+        >
+          {playMode ? '⏹' : '▶'}
+        </button>
+      )}
 
       {playMode && !isTouch && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 pointer-events-none">
@@ -302,8 +332,8 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
 
       {playMode && isTouch && <MobileControls inputRef={mobileInputRef} />}
 
-      {/* Park3D 배지 — Free 플랜만 표시 */}
-      {!hideBadge && (
+      {/* Park3D 배지 — 독립 URL, Free 플랜만 */}
+      {variant === 'standalone' && !hideBadge && (
         <a
           href="https://park3d.io"
           target="_blank"
@@ -313,6 +343,16 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
           <span className="text-sm leading-none">⬡</span>
           Powered by Park3D
         </a>
+      )}
+
+      {/* 임베드 워터마크 */}
+      {variant === 'embed' && (
+        <div className="absolute bottom-3 left-3 pointer-events-none">
+          <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm text-white/30 text-[9px] px-2 py-1 rounded-xs">
+            <span className="text-xs leading-none">⬡</span>
+            Park3D
+          </div>
+        </div>
       )}
 
       {/* 팝업 모달 */}

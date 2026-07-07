@@ -18,6 +18,8 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+  const [scriptCopied, setScriptCopied] = useState(false);
+  const [embedMethod, setEmbedMethod] = useState<'script' | 'iframe'>('script');
   const { can } = usePlan();
   const canEmbed = can('embedMode');
 
@@ -25,6 +27,8 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
   const spaceUrl = `${origin}/space/${sceneId}`;
   const embedUrl = `${origin}/embed/${sceneId}`;
   const embedCode = `<iframe\n  src="${embedUrl}"\n  width="100%"\n  height="500"\n  style="border:none;border-radius:12px;"\n  allow="autoplay"\n  title="${projectName}"\n></iframe>`;
+  // script 한 줄 방식 — embed.js가 격리된 iframe을 꽂아줌 (권장)
+  const scriptCode = `<script src="${origin}/embed.js" data-scene="${sceneId}" data-height="500px"></script>`;
 
   useEffect(() => {
     QRCode.toDataURL(spaceUrl, {
@@ -44,6 +48,12 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
     await navigator.clipboard.writeText(embedCode);
     setEmbedCopied(true);
     setTimeout(() => setEmbedCopied(false), 2000);
+  };
+
+  const copyScript = async () => {
+    await navigator.clipboard.writeText(scriptCode);
+    setScriptCopied(true);
+    setTimeout(() => setScriptCopied(false), 2000);
   };
 
   return (
@@ -142,31 +152,66 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
                     아래 코드를 HTML에 붙여넣으면 어느 웹사이트에서나 3D 공간을 임베드할 수 있어요.
                   </p>
 
-                  {/* 임베드 코드 */}
-                  <div className="relative">
-                    <pre className="bg-background border border-border rounded-xs p-3 text-[10px] text-foreground font-mono overflow-x-auto whitespace-pre leading-relaxed">
-                      {embedCode}
-                    </pre>
-                    <button
-                      onClick={copyEmbed}
-                      className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-1 rounded-xs transition-all ${
-                        embedCopied ? 'bg-success text-white' : 'bg-surface border border-border text-foreground hover:bg-background'
-                      }`}
-                    >
-                      {embedCopied ? '복사됨!' : '복사'}
-                    </button>
+                  {/* 방식 선택 — 스크립트(권장) / iframe */}
+                  <div className="flex gap-1 bg-background border border-border rounded-xs p-0.5">
+                    {([['script', '스크립트 (권장)'], ['iframe', 'iframe']] as const).map(([m, label]) => (
+                      <button
+                        key={m}
+                        onClick={() => setEmbedMethod(m)}
+                        className={`flex-1 text-[11px] font-medium py-1.5 rounded-xs transition-all ${
+                          embedMethod === m ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
+
+                  {/* 임베드 코드 */}
+                  {embedMethod === 'script' ? (
+                    <div className="space-y-1.5">
+                      <div className="relative">
+                        <pre className="bg-background border border-border rounded-xs p-3 text-[10px] text-foreground font-mono overflow-x-auto whitespace-pre leading-relaxed">
+                          {scriptCode}
+                        </pre>
+                        <button
+                          onClick={copyScript}
+                          className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-1 rounded-xs transition-all ${
+                            scriptCopied ? 'bg-success text-white' : 'bg-surface border border-border text-foreground hover:bg-background'
+                          }`}
+                        >
+                          {scriptCopied ? '복사됨!' : '복사'}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-muted/60 leading-relaxed">
+                        스크립트 한 줄이 격리된 iframe을 삽입해요(호스트 사이트와 CSS/JS 충돌 없음). 크기는 <code className="text-muted">data-height</code>로 조절.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <pre className="bg-background border border-border rounded-xs p-3 text-[10px] text-foreground font-mono overflow-x-auto whitespace-pre leading-relaxed">
+                        {embedCode}
+                      </pre>
+                      <button
+                        onClick={copyEmbed}
+                        className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-1 rounded-xs transition-all ${
+                          embedCopied ? 'bg-success text-white' : 'bg-surface border border-border text-foreground hover:bg-background'
+                        }`}
+                      >
+                        {embedCopied ? '복사됨!' : '복사'}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Event Bridge 안내 */}
                   <div className="bg-background/50 border border-border rounded-xs p-3 space-y-2">
                     <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Event Bridge</p>
                     <p className="text-[10px] text-muted leading-relaxed">
-                      오브젝트에 <code className="text-primary">emit_event</code> 액션을 설정하면 부모 페이지로 메시지를 전송해요.
+                      오브젝트에 <code className="text-primary">emit_event</code> 액션을 설정하면 부모 페이지로 이벤트를 전송해요.
+                      스크립트 방식이면 아래 한 줄로 구독합니다.
                     </p>
-                    <pre className="text-[9px] text-muted font-mono leading-relaxed">{`window.addEventListener('message', (e) => {
-  if (e.data?.type === 'park3d:event') {
-    console.log(e.data); // objectId, value 등
-  }
+                    <pre className="text-[9px] text-muted font-mono leading-relaxed">{`window.addEventListener('park3d:event', (e) => {
+  console.log(e.detail); // objectId, value 등
 });`}</pre>
                   </div>
 

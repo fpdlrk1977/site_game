@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "build:embed": "vite build --config embed/vite.config.ts"
+    "lint": "eslint"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.19.2",
