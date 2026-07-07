@@ -124,6 +124,14 @@ interface Props {
   onObstacleEnter?: (objectId: string) => void;
   /** 접촉이 끝났을 때 (grace 시간 이상 떨어짐) — area_exit 트리거용 */
   onObstacleExit?: (objectId: string) => void;
+  /** interact 이벤트를 가진 오브젝트들의 월드 위치 (근접 프롬프트/E키 대상 산출용) */
+  interactables?: { id: string; x: number; y: number; z: number }[];
+  /** 상호작용 가능 범위(m). 기본 3 */
+  interactRange?: number;
+  /** 근접한 상호작용 대상이 바뀔 때 (없으면 null) — E 프롬프트 표시용 */
+  onInteractableChange?: (objectId: string | null) => void;
+  /** E키(또는 모바일 액션)로 상호작용 발동 시 */
+  onInteract?: (objectId: string) => void;
 }
 
 export function PlayModeController({
@@ -138,8 +146,17 @@ export function PlayModeController({
   onPositionChange,
   onObstacleEnter,
   onObstacleExit,
+  interactables,
+  interactRange = 3,
+  onInteractableChange,
+  onInteract,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
+  // 현재 근접한 상호작용 대상 id (useFrame이 갱신, keydown이 읽음)
+  const activeInteractRef = useRef<string | null>(null);
+  // keydown 핸들러(1회 등록)가 최신 콜백을 읽도록 ref로 보관
+  const onInteractRef = useRef(onInteract);
+  onInteractRef.current = onInteract;
   const { camera } = useThree();
   const { world } = useRapier();
   const elevationRef = useRef(0.45);
@@ -191,6 +208,11 @@ export function PlayModeController({
       if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.current.s = true;
       if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.current.d = true;
       if (e.code === 'Space') { e.preventDefault(); keys.current.space = true; }
+      // 상호작용: 근접 대상이 있으면 E키로 발동 (연타 무해 — 이벤트가 다시 실행될 뿐)
+      if (e.code === 'KeyE' && !e.repeat) {
+        const id = activeInteractRef.current;
+        if (id) onInteractRef.current?.(id);
+      }
     };
     const up = (e: KeyboardEvent) => {
       if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.current.w = false;
@@ -348,6 +370,27 @@ export function PlayModeController({
     }
 
     rb.setNextKinematicTranslation(newPos);
+
+    // ── 상호작용 근접 판정 — 범위 내에서 가장 가까운 interact 대상 산출 ──
+    // (대상이 바뀔 때만 콜백 → 매 프레임 setState 방지)
+    if (interactables && interactables.length > 0) {
+      let nearest: string | null = null;
+      let nearestDist = interactRange;
+      for (const it of interactables) {
+        const dx = it.x - newPos.x;
+        const dy = it.y - newPos.y;
+        const dz = it.z - newPos.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < nearestDist) { nearestDist = dist; nearest = it.id; }
+      }
+      if (nearest !== activeInteractRef.current) {
+        activeInteractRef.current = nearest;
+        onInteractableChange?.(nearest);
+      }
+    } else if (activeInteractRef.current !== null) {
+      activeInteractRef.current = null;
+      onInteractableChange?.(null);
+    }
 
     // 애니메이션 상태 업데이트
     const horizSpeed = Math.sqrt(vx * vx + vz * vz);

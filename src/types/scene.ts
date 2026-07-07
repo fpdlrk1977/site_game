@@ -42,7 +42,9 @@ export interface EnvSchema {
 
 export interface EventSchema {
   id: string;
-  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit';
+  // interact: 플레이 모드에서 캐릭터가 근접(기본 3m)했을 때 E키(모바일=액션 버튼)로 발동.
+  //   NPC 대화·문 열기·아이템 줍기 등 "다가가 상호작용" 문법. 탐색 모드에선 발동 안 함(클릭 이벤트로 대체).
+  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact';
   action:
     | 'open_url'
     | 'show_popup'

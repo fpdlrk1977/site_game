@@ -14,6 +14,7 @@ import { GroundPlane } from '@/components/three/GroundPlane';
 import { DefaultEnvironment } from '@/components/three/DefaultEnvironment';
 import { PlayModeContext } from './PlayModeContext';
 import { ClipRequestContext, type ClipReq } from './ClipRequestContext';
+import { InteractHighlightContext } from './InteractHighlightContext';
 import { SceneToneMapping } from '@/components/three/SceneToneMapping';
 
 const PlayCanvas = lazy(() => import('./PlayCanvas').then((m) => ({ default: m.PlayCanvas })));
@@ -222,11 +223,14 @@ interface Props {
   mobileInputRef?: React.MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
   focusRequest?: { id: string | null; t: number } | null;
   clipRequests?: Record<string, ClipReq>;
+  onInteractPromptChange?: (obj: ObjectNodeSchema | null) => void;
+  /** 근접한 interact 대상 id — 3D 트리에 내려 해당 오브젝트를 하이라이트 */
+  interactHighlightId?: string | null;
 }
 
 const EMPTY_CLIPS: Record<string, ClipReq> = {};
 
-export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId }: Props) {
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
   const orbitRef = useRef<OrbitControlsImpl>(null);
@@ -254,6 +258,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
     >
       <PlayModeContext.Provider value={playMode}>
       <ClipRequestContext.Provider value={clipRequests ?? EMPTY_CLIPS}>
+      <InteractHighlightContext.Provider value={interactHighlightId ?? null}>
       {/* 톤매핑 Neutral 고정 + 씬별 노출 — 저장 색을 최대한 그대로 렌더 */}
       <SceneToneMapping exposure={environment.toneMappingExposure ?? 1} />
       {/* 탐색/플레이 전환 시 카메라 수평 방향 캡처 */}
@@ -371,7 +376,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* ── 플레이 모드 ── */}
       {playMode && (
         <Suspense fallback={null}>
-          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} />
+          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} />
         </Suspense>
       )}
 
@@ -417,6 +422,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
 
       {/* 인터랙션 어포던스 — 탐색 모드 + 씬 설정 on(미설정=on)일 때만 상호작용 오브젝트 위에 힌트 링 */}
       {!playMode && environment.showInteractionHints !== false && <InteractionHints objects={objects} />}
+      </InteractHighlightContext.Provider>
       </ClipRequestContext.Provider>
       </PlayModeContext.Provider>
     </Canvas>

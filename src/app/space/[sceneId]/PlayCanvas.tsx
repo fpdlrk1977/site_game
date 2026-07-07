@@ -106,13 +106,20 @@ interface Props {
   azimuthRef: React.MutableRefObject<number>;
   onObjectClick: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
   mobileInputRef?: React.MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
+  /** 근접한 상호작용(interact) 대상이 바뀔 때 — 뷰어의 E 프롬프트 표시용 */
+  onInteractPromptChange?: (obj: ObjectNodeSchema | null) => void;
 }
 
-export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }: Props) {
+export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
   const allObjects = scene.objects;
+  // interact 이벤트가 있는 루트 오브젝트 — 근접 프롬프트/E키 대상.
+  // (중첩 그룹 자식은 위치가 로컬 좌표라 월드 근접 판정이 어긋나므로 v1은 루트만 지원)
+  const interactables = allObjects
+    .filter((o) => !o.parentId && o.visible && o.events?.some((e) => e.trigger === 'interact'))
+    .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z }));
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);
   // 그룹은 GroupWithCollision으로 처리: 자식 오브젝트 각각에 콜라이더 적용
@@ -207,6 +214,14 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef }:
         playerSpeed={scene.environment.playerSpeed}
         playerJumpForce={scene.environment.playerJumpForce}
         mobileInputRef={mobileInputRef}
+        interactables={interactables}
+        onInteractableChange={(id) =>
+          onInteractPromptChange?.(id ? (allObjects.find((o) => o.id === id) ?? null) : null)
+        }
+        onInteract={(id) => {
+          const obj = allObjects.find((o) => o.id === id);
+          if (obj) onObjectClick(obj, 'interact');
+        }}
       />
     </Physics>
   );

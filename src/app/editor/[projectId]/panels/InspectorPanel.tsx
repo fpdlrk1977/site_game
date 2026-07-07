@@ -265,6 +265,7 @@ const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
   hover_exit: 'Hover Out',
   area_enter: 'Area Enter',
   area_exit: 'Area Exit',
+  interact: 'Interact (E)',
 };
 const ACTION_LABELS: Record<string, string> = {
   open_url: 'URL 열기',
@@ -1156,6 +1157,7 @@ function InspectorInner() {
   // area_enter는 physics/센서 설정 없이도 접촉 시 발동한다 (PlayCanvas가 자동 처리).
   // Is Sensor를 켜면 오브젝트가 통과 가능한 트리거 영역이 된다는 안내만 표시.
   const showAreaEnterHint = newTrigger === 'area_enter' || newTrigger === 'area_exit';
+  const showInteractHint = newTrigger === 'interact';
 
   // 이벤트 추가/수정 폼 — 신규는 목록 하단, 수정은 해당 항목 자리에 인라인으로 렌더한다
   const renderEventForm = () => (
@@ -1172,6 +1174,7 @@ function InspectorInner() {
               { value: 'hover_exit', label: 'Hover Out' },
               { value: 'area_enter', label: 'Area Enter' },
               { value: 'area_exit', label: 'Area Exit' },
+              { value: 'interact', label: 'Interact (E)' },
             ]}
           />
         </div>
@@ -1203,6 +1206,14 @@ function InspectorInner() {
         <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
           캐릭터가 오브젝트에 닿으면 발동합니다. 통과 가능한 투명 트리거 영역으로
           쓰려면 Physics → Is Sensor를 켜세요.
+        </p>
+      )}
+
+      {showInteractHint && (
+        <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
+          플레이 모드에서 캐릭터가 가까이(약 3m) 가면 화면에 <b>E</b> 프롬프트가 뜨고,
+          E키(모바일=버튼)를 누르면 발동합니다. NPC 대화·간판·아이템 등에 쓰세요.
+          탐색 모드에선 발동하지 않습니다(대신 Click 트리거 사용).
         </p>
       )}
 

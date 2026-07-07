@@ -8,6 +8,7 @@ import { useLoader } from '@react-three/fiber';
 import { normalizeGlbMaterials } from '@/lib/glbMaterials';
 import { PlayModeContext } from './PlayModeContext';
 import { ClipRequestContext } from './ClipRequestContext';
+import { InteractHighlightContext } from './InteractHighlightContext';
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
 
 const DEG2RAD = Math.PI / 180;
@@ -78,12 +79,12 @@ function YouTubeEmbed({ ytId, position, rotation, scale, onClick }: {
   );
 }
 
-function VideoMesh({ position, rotation, scale, url, hovered, onClick, onPointerOver, onPointerOut }: {
+function VideoMesh({ position, rotation, scale, url, outline, onClick, onPointerOver, onPointerOut }: {
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
   url: string;
-  hovered: boolean;
+  outline: boolean;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
@@ -112,17 +113,17 @@ function VideoMesh({ position, rotation, scale, url, hovered, onClick, onPointer
         ? <meshBasicMaterial map={texture} side={THREE.DoubleSide} toneMapped={false} />
         : <meshBasicMaterial color="#0f172a" />
       }
-      {hovered && <Outlines thickness={2} color="#22d3ee" />}
+      {outline && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );
 }
 
-function ImagePlane({ position, rotation, scale, url, hovered, onClick, onPointerOver, onPointerOut }: {
+function ImagePlane({ position, rotation, scale, url, outline, onClick, onPointerOver, onPointerOut }: {
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
   url: string;
-  hovered: boolean;
+  outline: boolean;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
@@ -141,7 +142,7 @@ function ImagePlane({ position, rotation, scale, url, hovered, onClick, onPointe
     >
       <planeGeometry args={[1, 1]} />
       <meshBasicMaterial map={texture} transparent side={THREE.DoubleSide} />
-      {hovered && <Outlines thickness={2} color="#22d3ee" />}
+      {outline && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );
 }
@@ -152,15 +153,15 @@ export interface ClipRequest {
   t: number;
 }
 
-function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOut }: {
+function GlbViewer({ url, emissive, showBox, playClip, onClick, onPointerOver, onPointerOut }: {
   url: string;
-  hovered: boolean;
+  emissive: boolean;
+  showBox: boolean;
   playClip: ClipRequest | null;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
 }) {
-  const playMode = useContext(PlayModeContext);
   const groupRef = useRef<THREE.Group>(null);
   const { scene: rawScene, animations } = useGLTF(url);
   // 스킨드 메시(bone 애니메이션) 포함 GLB는 SkeletonUtils.clone 필수 — scene.clone(true)는 bone 참조를 공유해 버린다
@@ -202,12 +203,12 @@ function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOu
       mats.forEach((mat) => {
         const m = mat as THREE.MeshStandardMaterial;
         if (m.emissive !== undefined) {
-          m.emissive.set(hovered ? '#ffffff' : '#000000');
-          m.emissiveIntensity = hovered ? 0.2 : 0;
+          m.emissive.set(emissive ? '#ffffff' : '#000000');
+          m.emissiveIntensity = emissive ? 0.25 : 0;
         }
       });
     });
-  }, [clone, hovered]);
+  }, [clone, emissive]);
 
   useEffect(() => {
     return () => {
@@ -230,7 +231,7 @@ function GlbViewer({ url, hovered, playClip, onClick, onPointerOver, onPointerOu
         onPointerOver={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onPointerOver(); }}
         onPointerOut={() => onPointerOut()}
       />
-      {hovered && !playMode && <box3Helper args={[bbox, new THREE.Color('#22d3ee')]} />}
+      {showBox && <box3Helper args={[bbox, new THREE.Color('#22d3ee')]} />}
     </group>
   );
 }
@@ -250,6 +251,8 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   const playMode = useContext(PlayModeContext);
   // animate_object 액션이 이 오브젝트(object.id)에 보낸 클립 재생 요청
   const externalClip = useContext(ClipRequestContext)[object.id] ?? null;
+  // 플레이 모드에서 캐릭터가 이 오브젝트에 근접(interact 대상)했는지
+  const interactActive = useContext(InteractHighlightContext) === object.id;
   const [hovered, setHovered] = useState(false);
   const [internalClip, setInternalClip] = useState<ClipRequest | null>(null);
   // 내부(click/hover)·PhysicsObject(area)·animate_object 요청 중 가장 최근(t) 것을 사용
@@ -291,6 +294,12 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
 
   const assetRef = object.assetId ? assets.find((a) => a.id === object.assetId) : null;
 
+  // 시각 하이라이트: 호버 또는 interact 근접 → emissive 글로우.
+  // 아웃라인/박스는 탐색 모드 호버에서만 — 플레이 모드는 외곽선 없음(호버·interact 모두).
+  // interact 대상 강조는 글로우로만(플레이 모드 무-외곽선 규칙 유지).
+  const emissiveOn = hovered || interactActive;
+  const outlineOn = hovered && !playMode;
+
   const handlePointerOver = () => {
     if (!isInteractive) return;
     setHovered(true);
@@ -324,7 +333,8 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
         <Suspense fallback={null}>
           <GlbViewer
             url={assetRef.dracoUrl}
-            hovered={hovered}
+            emissive={emissiveOn}
+            showBox={outlineOn}
             playClip={effectiveClip}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
@@ -366,10 +376,10 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
                   color={tColor}
                   roughness={tRoughness}
                   metalness={tMetalness}
-                  emissive={hovered ? tColor : tEmissive}
-                  emissiveIntensity={hovered ? 0.3 : (tEmissive !== '#000000' ? 1 : 0)}
+                  emissive={emissiveOn ? tColor : tEmissive}
+                  emissiveIntensity={emissiveOn ? 0.3 : (tEmissive !== '#000000' ? 1 : 0)}
                 />
-                {hovered && !playMode && <Outlines thickness={2} color="#22d3ee" />}
+                {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
               </Text3D>
             </Center>
           </Suspense>
@@ -382,7 +392,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           <ImagePlane
             position={pos} rotation={rot} scale={scl}
             url={object.content.url}
-            hovered={hovered && !playMode}
+            outline={outlineOn}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}
@@ -401,7 +411,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           <VideoMesh
             position={pos} rotation={rot} scale={scl}
             url={url}
-            hovered={hovered && !playMode}
+            outline={outlineOn}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}
@@ -444,10 +454,10 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
         color={color}
         roughness={roughness}
         metalness={metalness}
-        emissive={hovered ? color : emissive}
-        emissiveIntensity={hovered ? 0.3 : (emissive !== '#000000' ? 1 : 0)}
+        emissive={emissiveOn ? color : emissive}
+        emissiveIntensity={emissiveOn ? 0.3 : (emissive !== '#000000' ? 1 : 0)}
       />
-      {hovered && !playMode && <Outlines thickness={2} color="#22d3ee" />}
+      {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );
 }

@@ -38,6 +38,8 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
   const walkDisabled = scene.environment.disableWalk === true;
   // 씬별 기본 진입 모드 — 'play'면 접속하자마자 플레이 모드로 시작 (미설정/둘러보기전용 = 탐색)
   const [playMode, setPlayMode] = useState(scene.environment.defaultMode === 'play' && !walkDisabled);
+  // 플레이 모드에서 캐릭터가 근접한 interact 대상 (E 프롬프트 표시용). 탐색 모드에선 항상 null.
+  const [interactTarget, setInteractTarget] = useState<{ id: string; name: string } | null>(null);
 
   // 런타임 오브젝트 표시/숨김 오버라이드 (show/hide/toggle_object 액션) — objectId → visible
   const [visOverride, setVisOverride] = useState<Record<string, boolean>>({});
@@ -126,6 +128,11 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
     setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
 
+  // 탐색 모드로 돌아가면 근접 프롬프트 정리 (PlayCanvas 언마운트 시 null 콜백이 안 올 수 있음)
+  useEffect(() => {
+    if (!playMode) setInteractTarget(null);
+  }, [playMode]);
+
   // 방문 이벤트 수집
   useEffect(() => {
     supabase.from('scene_events').insert({ scene_id: scene.sceneId, event_type: 'view' });
@@ -144,6 +151,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
     if (trigger === 'click') trackEvent('click', obj.id, obj.name);
     if (trigger === 'area_enter') trackEvent('area_enter', obj.id, obj.name);
     if (trigger === 'area_exit') trackEvent('area_exit', obj.id, obj.name);
+    if (trigger === 'interact') trackEvent('interact', obj.id, obj.name);
 
     const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
     for (const ev of matchingEvents) {
@@ -201,7 +209,7 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} />
+      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} />
 
       {/* 상단 오버레이 */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 pointer-events-none">
@@ -255,9 +263,31 @@ export function ViewerClient({ scene, projectName, isOwner, projectId, hideBadge
             <span className="text-white/20">|</span>
             <span>Space 점프</span>
             <span className="text-white/20">|</span>
+            <span>E 상호작용</span>
+            <span className="text-white/20">|</span>
             <span>마우스 드래그 시점</span>
           </div>
         </div>
+      )}
+
+      {/* 근접 상호작용 프롬프트 (데스크톱) — 범위 내 대상이 있을 때만. E 키캡만 표시(대상은 3D 하이라이트로 구분) */}
+      {playMode && !isTouch && interactTarget && (
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-none">
+          <kbd className="inline-flex items-center justify-center min-w-[40px] h-10 px-3 bg-black/65 backdrop-blur-sm border border-white/25 rounded-xs text-white text-base font-bold shadow-lg">E</kbd>
+        </div>
+      )}
+
+      {/* 근접 상호작용 버튼 (모바일) */}
+      {playMode && isTouch && interactTarget && (
+        <button
+          onClick={() => {
+            const obj = effectiveScene.objects.find((o) => o.id === interactTarget.id);
+            if (obj) handleObjectEvent(obj, 'interact');
+          }}
+          className="absolute bottom-32 right-6 z-20 flex items-center justify-center w-16 h-16 rounded-full bg-primary/80 border border-primary/50 text-white text-2xl font-bold backdrop-blur-sm active:scale-95 transition-transform"
+        >
+          E
+        </button>
       )}
 
       {playMode && isTouch && <MobileControls inputRef={mobileInputRef} />}

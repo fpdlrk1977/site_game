@@ -60,7 +60,12 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **Events E2 — 오브젝트 이동 + 사운드**: `move_object`(value `"objectId|dx,dy,dz|초"` — **원래 저장 위치 기준** 오프셋으로 easeInOutQuad 이동, (0,0,0) 이벤트로 원위치 복귀) + `play_sound`(value=오디오 URL, URL별 HTMLAudioElement 재사용). 구현은 visOverride와 동일 패턴 — `ViewerClient`의 `posOverride`를 effectiveScene에 주입, 단일 rAF 루프가 이징. rapier 2.2.0은 RigidBody position prop 변경 시 setTranslation 텔레포트라 **플레이 모드에서 콜라이더도 함께 이동**(E2E 검증: `/test/move-object` 페이지 + 헤드리스 Edge — 탐색 클릭 move·플레이 area_enter move·Audio 패치 사운드 로그 모두 확인). 에디터는 대상 SelectBox+XYZRow 이동량+시간 입력, 사운드는 URL 입력·▶ 미리듣기.
 - **Events E2 완료 — 인터랙션 어포던스**: 클릭/호버 이벤트가 있는 오브젝트 위에 카메라를 향한 펄스 **힌트 링**을 띄워 방문자에게 상호작용 가능함을 알림. `ViewerCanvas`의 별도 레이어 `InteractionHints`로 구현 — **오브젝트 렌더 경로(재질/GLB) 미변경**(depthTest=false + renderOrder 999, `objWorldPos` 재사용, useFrame 빌보드·펄스). **탐색 모드 뷰어/임베드에서만** 렌더(플레이 모드·에디터 미표시). 씬별 토글 `EnvSchema.showInteractionHints`(미설정=켜짐) — 에디터 Environment 패널 'Interaction' 섹션. area_enter/exit만 있는 오브젝트엔 링 없음(호버로 발견되는 트리거가 아니라서). E2E: `/test/move-object`에서 클릭·호버 오브젝트에만 링 뜨는 것 스크린샷 확인.
 
+## 최근 완료 (2026-07-07)
+- **Events E3-A — `interact` 트리거(다가가 E키)**: 플레이 모드에서 캐릭터가 interact 이벤트를 가진 오브젝트에 **근접(기본 3m)**하면 화면 하단에 **`E` 키캡만** 뜨고(이름 미표시 — 대상은 3D 하이라이트로 구분), **동시에 근접 대상 오브젝트가 하이라이트**(emissive 글로우만 — 플레이 모드는 무-외곽선 규칙 유지라 아웃라인/박스는 안 씀)돼 어디에 E를 눌러야 할지 보임. **E키(모바일=우하단 원형 E 버튼)**로 그 오브젝트의 이벤트 발동(팝업/씬이동/애니메이션 등 기존 액션 파이프라인 재사용). 하이라이트 배선: `InteractHighlightContext`(근접 대상 id)를 R3F 트리에 내려 `ViewerObject`가 자기 자신이면 emissive/아웃라인 on — 호버 하이라이트와 통합(`emissiveOn`/`outlineOn`, 아웃라인은 탐색 모드 호버 전용 — 플레이 모드는 호버·interact 모두 글로우만, 무-외곽선). NPC 대화·간판·아이템·"눌러서 열기"용. **센서 통과는 버그가 아니라 트리거 영역의 정의**임을 확인한 뒤 나온 후속 기능(플랫폼이 "게임적 상호작용"으로 한 걸음). 배선: `PlayModeController` useFrame이 플레이어↔interactable 최근접 산출(대상 변할 때만 콜백) + `KeyE` keydown 발동 → `PlayCanvas`가 interact 이벤트 있는 **루트** 오브젝트 목록 전달·id→obj 매핑 → `ViewerCanvas` 통과 → `ViewerClient`가 프롬프트 HTML·모바일 버튼·`interact` 디스패치·애널리틱스(`interact`) 담당. 에디터는 트리거 드롭다운에 `Interact (E)` + 안내문. **탐색 모드에선 발동 안 함**(캐릭터 없음 — 클릭으로 대체). 검증: tsc 클린 + 인증 세션에서 `/space`·`/editor` 200·R3F 구동 확인. **실제 근접·E키 동작은 사용자가 브라우저에서 확인 필요**(헤드리스로 캐릭터 보행 미검증).
+  - **남은 E3-B(추후)**: 문(door) = 런타임 콜라이더 on/off 토글(`set_passable`/`toggle_collision`) — "E→문 열림 애니→통과 가능". hide_object 시 루트 콜라이더가 안 빠지는 것도 함께 손볼 것(PlayCanvas AutoCollider가 visible 무시). 필요할 때 착수.
+
 ## 남은 작업 / 로드맵
+- **Events E3-B(문/콜라이더 토글)**: 위 '최근 완료' 참고 — A(interact) 완료, B(콜라이더 토글)는 필요 시.
 - **Events E2**: 완료(이동/사운드/어포던스까지). 후속 아이디어: area 트리거용 어포던스(호버 불가라 현재 링 제외됨), 상호작용 힌트 아이콘 커스터마이즈.
 - **조명 L2**: 아래 'L1 피드백 취합 결과 & L2 계획' 참고 — 피드백 수집 완료(2026-07-06), 착수 대기.
 - **Prefab**: 미착수. 착수 전 **override/동기화 규칙 설계** 필요(원본 수정 시 인스턴스 반영, 개별 오버라이드 허용 여부 등).
@@ -85,6 +90,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - `go_to_scene`: 독립 URL(`/space/{id}`) 기준 이동 — 커스텀도메인/임베드 컨텍스트 미대응.
 - `focus_object`/`reset_camera`: 탐색(orbit) 모드 전용 — 플레이 모드는 캐릭터 팔로우 카메라라 무시됨.
 - 솔리드(비센서) 오브젝트는 area 트리거로 팝업/URL/씬이동은 되나 **애니메이션 재생 안 됨**(activeClip 센서 전용).
+- `interact` 트리거: **플레이 모드 전용 + 루트 오브젝트 전용**(중첩 그룹 자식은 로컬 좌표라 근접 판정 제외). 범위 고정 3m·정면 조건 없음(최근접). 키는 E 고정. **임베드(EmbedClient)는 E키 발동은 되나 프롬프트 UI 미표시**(뷰어 전용). `Is Sensor` 통과는 버그가 아니라 트리거 영역의 정의 — 막고 싶으면 센서 끄기(기본 솔리드).
 - `move_object`: **그룹 대상은 탐색 모드 전용** — 플레이 모드에선 자식 RigidBody의 props가 안 바뀌어 rapier 동기화 effect가 미발동, 자식 콜라이더가 안 따라감. 플레이에서 움직일 건 개별 오브젝트를 대상으로. 이동한 솔리드 위에 선 캐릭터는 같이 안 실려감(텔레포트라 이동 플랫폼은 아님). 임베드(EmbedClient)는 E2 액션 전반 미지원(기존과 동일).
 - `play_sound`: 오디오 URL 직접 입력만(AssetBrowser audio 탭 WIP). area 트리거는 브라우저 자동재생 정책에 막히면 무음(조용히 무시).
 - 인터랙션 힌트 링: 위치가 오브젝트 스케일 기반 **근사**(정확한 bbox 미측정) — 매우 높은 GLB는 링이 모델 상단이 아닌 중간에 뜰 수 있음(depthTest=false라 가려지진 않음). 그룹 자체엔 링 없음(자식 오브젝트 기준). 에디터 뷰포트엔 안 뜸(뷰어 전용) — 미리보려면 published 뷰어/‑/space 에서 확인.
