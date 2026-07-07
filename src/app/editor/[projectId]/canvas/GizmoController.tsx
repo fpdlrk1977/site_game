@@ -2,14 +2,24 @@
 
 import { useRef, useEffect, useState } from 'react';
 import { TransformControls } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { CHARACTER_PREVIEW_ID } from './CharacterPreview';
+import { localCenter, worldBBox } from '@/lib/objectBBox';
 
 const RAD2DEG = 180 / Math.PI;
 const DEG2RAD = Math.PI / 180;
+
+// 재사용 스크래치 (프록시↔오브젝트 변환용)
+const _p = new THREE.Vector3();
+const _q = new THREE.Quaternion();
+const _s = new THREE.Vector3();
+const _lp = new THREE.Vector3();
+const _lq = new THREE.Quaternion();
+const _ls = new THREE.Vector3();
 
 interface Props {
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
@@ -161,100 +171,102 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
 
 function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate,
-    objects, updateObject, updateEnvironment, pushHistory } = useSceneStore();
+    objects, assets, updateObject, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
-  // 현재 기즈모가 안정적으로 붙은 대상의 식별키. 렌더 중 ref를 읽지 않도록 state로 관리한다.
-  const [attachedKey, setAttachedKey] = useState('');
+  // 기즈모는 "형상 중심에 놓인 프록시"에 붙는다 → 위젯이 원점(하단)이 아니라 중심에 뜨고,
+  // 프록시는 재부모화되지 않으므로 예전의 scene graph 에러도 없다. 조작은 오브젝트로 역매핑.
+  const proxyRef = useRef<THREE.Object3D | null>(null);
+  if (proxyRef.current === null) proxyRef.current = new THREE.Object3D();
+  const cLocalRef = useRef(new THREE.Vector3()); // 선택 오브젝트의 로컬 형상 중심
+  const floorMinYRef = useRef(0);
 
   const isCharPreview = selectedId === CHARACTER_PREVIEW_ID;
   const selectedObject = isCharPreview ? null : objects.find((o) => o.id === selectedId);
-
   const target = selectedId ? refsMap.current.get(selectedId) : undefined;
-  // 선택 오브젝트 + 부모 식별키 — 선택 변경/재부모화(부모 변경)를 감지한다
-  const gizmoKey = selectedId ? `${selectedId}:${selectedObject?.parentId ?? 'root'}` : '';
 
-  // 커밋 후 최신 ref가 씬에 붙어있고 키가 바뀌었으면 attachedKey를 현재 키로 맞춘다.
-  // 그 전(부모/선택이 막 바뀐 전환 프레임)에는 attachedKey!==gizmoKey라 기즈모를 렌더하지 않아
-  // TransformControls가 분리 직전의 옛 객체를 물지 않는다. 키가 같아지면 멈추므로 루프 없음.
-  // 의존성 배열 없음: 매 렌더 후 커밋된 ref 상태를 확인해야 하므로 의도적.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const cur = selectedId ? refsMap.current.get(selectedId) : undefined;
-    if (cur && cur.parent && attachedKey !== gizmoKey) {
-      // 외부 시스템(imperative refs map)과 동기화하는 의도된 1회성 상태 갱신 (키 안정화 시 멈춤)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAttachedKey(gizmoKey);
-    }
-  });
-
-  if (!selectedId) return null;
-  if (!isCharPreview && (!selectedObject || selectedObject.locked || !selectedObject.visible)) return null;
-
-  // target이 없거나 씬 그래프에서 분리된 상태면 TransformControls 연결 금지
-  // (그룹 중첩 시 언마운트→리마운트 전환 구간에서 에러 루프 발생 방지)
-  if (!target || !target.parent) return null;
-  // 최신 ref로 아직 안정화되지 않은 전환 프레임(재부모화/선택 변경 직후) — 다음 렌더에서 붙는다
-  if (attachedKey !== gizmoKey) return null;
-
-  // 캐릭터 프리뷰는 위치만 조정 가능 (스케일은 Inspector Player 섹션에서)
+  const valid = !!selectedId && (isCharPreview || (!!selectedObject && !selectedObject.locked && selectedObject.visible));
   const effectiveMode = isCharPreview ? 'translate' : transformMode;
-
-  // 그룹 내부 오브젝트는 로컬 y가 음수여도 월드 y는 양수일 수 있어 클램프 금지
   const skipYClamp = !isCharPreview && (selectedObject?.parentId != null);
 
-  // 그룹의 최소 허용 y: 자식들의 바닥이 world y=0 아래로 안 내려가도록 계산
-  // min_group_y = max(child.scale.y/2 - child.localY) for primitive children
-  const getGroupMinY = () => {
-    const { objects: objs } = useSceneStore.getState();
-    const kids = objs.filter(o =>
-      o.parentId === selectedId &&
-      !o.isGroup && !o.assetId && !o.content && !o.particle && !o.light,
-    );
-    return kids.reduce((m, c) => Math.max(m, (c.scale?.y ?? 1) * 0.5 - (c.position?.y ?? 0)), 0);
+  // 선택 오브젝트의 로컬 형상 중심(cLocal) 갱신 — 프리미티브/캐릭터는 원점(0)
+  useEffect(() => {
+    if (isCharPreview || !selectedId) { cLocalRef.current.set(0, 0, 0); return; }
+    const c = localCenter(objects, assets, selectedId);
+    cLocalRef.current.copy(c ?? _p.set(0, 0, 0));
+  }, [selectedId, isCharPreview, objects, assets]);
+
+  // 드래그 중이 아니면 프록시를 오브젝트(형상 중심/회전/스케일)에 매 프레임 동기화
+  useFrame(() => {
+    const proxy = proxyRef.current!;
+    if (gizmoDraggingRef.current || !valid || !target || !target.parent) return;
+    target.updateWorldMatrix(true, false);
+    target.matrixWorld.decompose(_p, _q, _s);
+    proxy.position.copy(cLocalRef.current).applyMatrix4(target.matrixWorld); // 월드 형상 중심
+    proxy.quaternion.copy(_q);
+    proxy.scale.copy(_s);
+  });
+
+  if (!valid || !target) return null;
+
+  // 프록시(월드) → 오브젝트 로컬 pos/rot/scale 역매핑
+  const applyProxyToTarget = () => {
+    const proxy = proxyRef.current!;
+    // 오브젝트 원점(월드) = 프록시위치 − Q·(S ⊙ cLocal) → 형상 중심이 프록시 위치에 오게 한다
+    const cScaled = _lp.copy(cLocalRef.current).multiply(proxy.scale).applyQuaternion(proxy.quaternion);
+    const originWorld = _ls.copy(proxy.position).sub(cScaled);
+    const mWorld = new THREE.Matrix4().compose(originWorld, proxy.quaternion, proxy.scale);
+    const parent = target.parent;
+    if (parent) {
+      parent.updateWorldMatrix(true, false);
+      mWorld.premultiply(new THREE.Matrix4().copy(parent.matrixWorld).invert());
+    }
+    mWorld.decompose(_lp, _lq, _ls);
+    if (effectiveMode === 'translate' && !skipYClamp && !isCharPreview) {
+      _lp.y = Math.max(floorMinYRef.current, _lp.y); // bbox 밑면 바닥 클램프(루트 기준)
+    }
+    target.position.copy(_lp);
+    target.quaternion.copy(_lq);
+    target.scale.copy(_ls);
   };
 
   return (
-    <TransformControls
-      object={target}
-      mode={effectiveMode}
-      space={transformSpace}
-      translationSnap={snapEnabled ? snapTranslate : null}
-      rotationSnap={snapEnabled ? snapRotate * DEG2RAD : null}
-      scaleSnap={snapEnabled ? 0.1 : null}
-      onMouseDown={() => { gizmoDraggingRef.current = true; if (orbitRef.current) orbitRef.current.enabled = false; }}
-      onChange={() => {
-        if (effectiveMode === 'translate' && !skipYClamp) {
-          if (selectedObject?.isGroup) {
-            target.position.y = Math.max(getGroupMinY(), target.position.y);
+    <>
+      <primitive object={proxyRef.current} />
+      <TransformControls
+        object={proxyRef.current}
+        mode={effectiveMode}
+        space={transformSpace}
+        translationSnap={snapEnabled ? snapTranslate : null}
+        rotationSnap={snapEnabled ? snapRotate * DEG2RAD : null}
+        scaleSnap={snapEnabled ? 0.1 : null}
+        onMouseDown={() => {
+          gizmoDraggingRef.current = true;
+          if (orbitRef.current) orbitRef.current.enabled = false;
+          if (effectiveMode === 'translate' && !skipYClamp && !isCharPreview) {
+            const st = useSceneStore.getState();
+            const o = st.objects.find((x) => x.id === selectedId);
+            const b = worldBBox(st.objects, st.assets, selectedId!);
+            floorMinYRef.current = o && b ? o.position.y - b.min.y : 0;
+          }
+        }}
+        onChange={() => { if (gizmoDraggingRef.current) applyProxyToTarget(); }}
+        onMouseUp={() => {
+          gizmoDraggingRef.current = false;
+          if (orbitRef.current) orbitRef.current.enabled = true;
+          const pos = target.position, rot = target.rotation, scl = target.scale;
+          if (isCharPreview) {
+            updateEnvironment({ playerStartPosition: { x: pos.x, y: Math.max(0, pos.y), z: pos.z } });
           } else {
-            target.position.y = Math.max(0, target.position.y);
+            updateObject(selectedId!, {
+              position: { x: pos.x, y: pos.y, z: pos.z },
+              rotation: { x: rot.x * RAD2DEG, y: rot.y * RAD2DEG, z: rot.z * RAD2DEG },
+              scale: { x: scl.x, y: scl.y, z: scl.z },
+            });
           }
-        }
-      }}
-      onMouseUp={() => {
-        gizmoDraggingRef.current = false;
-        if (orbitRef.current) orbitRef.current.enabled = true;
-        const pos = target.position;
-        const rot = target.rotation;
-        const scl = target.scale;
-        if (isCharPreview) {
-          updateEnvironment({ playerStartPosition: { x: pos.x, y: Math.max(0, pos.y), z: pos.z } });
-        } else {
-          let finalY = pos.y;
-          if (!skipYClamp) {
-            finalY = selectedObject?.isGroup
-              ? Math.max(getGroupMinY(), pos.y)
-              : Math.max(0, pos.y);
-          }
-          updateObject(selectedId, {
-            position: { x: pos.x, y: finalY, z: pos.z },
-            rotation: { x: rot.x * RAD2DEG, y: rot.y * RAD2DEG, z: rot.z * RAD2DEG },
-            scale: { x: scl.x, y: scl.y, z: scl.z },
-          });
-        }
-        pushHistory();
-      }}
-    />
+          pushHistory();
+        }}
+      />
+    </>
   );
 }
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { MathUtils, Quaternion, Euler, Vector3, Matrix4 } from 'three';
+import { worldBBox } from '@/lib/objectBBox';
 import {
   ObjectNodeSchema,
   AssetRefSchema,
@@ -527,16 +528,26 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   alignSelected: (axis, mode) => {
-    const { selectedIds, objects, environment, past } = get();
+    const { selectedIds, objects, assets, environment, past } = get();
     const targets = objects.filter((o) => selectedIds.includes(o.id));
     if (targets.length < 2) return;
-    const values = targets.map((o) => o.position[axis]);
-    const target = mode === 'min' ? Math.min(...values) : mode === 'max' ? Math.max(...values) : values.reduce((a, b) => a + b, 0) / values.length;
+    // 원점이 아니라 월드 바운딩박스 기준으로 정렬(min=좌/하/뒤 모서리, max=우/상/앞, center=중심)
+    // → 원점이 형상 중심이 아니거나 회전돼 있어도 시각 모서리가 맞는다.
+    const boxes = new Map(targets.map((o) => [o.id, worldBBox(objects, assets, o.id)]));
+    const edge = (id: string, fallback: number): number => {
+      const b = boxes.get(id);
+      if (!b) return fallback;
+      return mode === 'min' ? b.min[axis] : mode === 'max' ? b.max[axis] : (b.min[axis] + b.max[axis]) / 2;
+    };
+    const vals = targets.map((o) => edge(o.id, o.position[axis]));
+    const targetVal = mode === 'min' ? Math.min(...vals) : mode === 'max' ? Math.max(...vals) : vals.reduce((a, b) => a + b, 0) / vals.length;
     set({
-      objects: objects.map((o) => selectedIds.includes(o.id)
-        ? { ...o, position: { ...o.position, [axis]: target } }
-        : o
-      ),
+      objects: objects.map((o) => {
+        if (!selectedIds.includes(o.id)) return o;
+        // 현재 모서리/중심을 targetVal로 옮기는 만큼 position[axis] 이동(루트 기준 1:1)
+        const delta = targetVal - edge(o.id, o.position[axis]);
+        return { ...o, position: { ...o.position, [axis]: o.position[axis] + delta } };
+      }),
       isModified: true,
       ...withHistory({ objects, environment }, past),
     });
