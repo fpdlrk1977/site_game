@@ -97,8 +97,19 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **Prefab**: 미착수. 착수 전 override/동기화 규칙 설계 필요.
 - **AssetBrowser 탭**: Materials/Textures/HDR/Audio (WIP). ※ 텍스처는 지금 ground·boundary가 개별 업로드로 우회 중.
 
+### 🗺️ 대형 로드맵 (원본 `ROADMAP.md`/`FEATURE_LIST.md` — 이 핸드오프 요약에 누락됐던 것들)
+> 이 노트가 최근 작업 위주라 아래 기획들이 빠져있었음(2026-07-07 재편입). 상세 AC는 `FEATURE_LIST.md`/`ROADMAP.md` 참조.
+- **3D 에셋 마켓플레이스** (FEAT-MARKET-01 / P5-03): 에셋 브라우저 "마켓플레이스" 탭 — 카테고리·검색, 무료/유료 구분, **Business 플랜은 자기 에셋 등록·판매**. 별도 스프린트(마켓 DB/결제 구조 설계 필요).
+- **씬 템플릿 라이브러리** (FEAT-TEMPLATE-01 / P3-08): 새 씬 생성 시 빈씬/쇼룸/갤러리/전시장/카페 템플릿 선택 모달. `TemplatePickerModal`.
+- **실시간 협업** (FEAT-COLLAB-01 / P5-01): 다중 유저 동시 편집(커서·선택 공유, CRDT).
+- **AI 자동 배치** (P5-02).
+- **Material 커스텀 에디터** (P4-03) — 현재 Inspector Material 섹션 주석처리 상태.
+- **뷰포트 분할**(P4-06) · **단축키 커스터마이징**(P4-08) · **에셋 폴더/태그**(P3-11) · **Event Bridge 프리셋**(P4-10) · **댓글/피드백 모드**(P4-09).
+- **성능/최적화**: InstancedMesh 자동 전환(P4-01) · KTX2/Draco 파이프라인(P4-02, ※현재 draco 실압축 안 함) · 스토어 selector 리팩터(NumInput 스크럽 시 캔버스 전체 리렌더, WORKLOG).
+
 ### 정리/결정 필요
 - **오토세이브** 되살리기/제거 결정 (현재 수동 Ctrl+S만, `setAutoSaveAt` lint 경고 원인).
+- **Layers 데드 코드**(`ObjectNodeSchema.layer` — 그룹/트리로 대체됨, 미사용) 살릴지 제거할지.
 
 ### 인프라/비즈니스
 - **결제/플랜 업그레이드 (Stripe)** — 미착수.
