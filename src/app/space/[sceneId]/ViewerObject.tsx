@@ -39,7 +39,7 @@ function getYouTubeId(url: string): string | null {
 // distanceFactor로 월드 크기에 앵커되고, center로 y 앵커 지점 위에 뜬다(translateY로 바닥=꼬리를 앵커에 맞춤).
 function SpeechBubble({ text, y, speaker, hint }: { text: string; y: number; speaker?: string; hint?: boolean }) {
   return (
-    <Html position={[0, y, 0]} center distanceFactor={8} zIndexRange={[100, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+    <Html position={[0, y, 0]} center distanceFactor={8} occlude zIndexRange={[100, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
       <div style={{
         transform: 'translateY(-50%)',
         position: 'relative',
@@ -239,7 +239,7 @@ export interface ClipRequest {
   t: number;
 }
 
-function GlbViewer({ url, emissive, showBox, bubbleText, bubbleSpeaker, bubbleHint, showBubble, playClip, onClick, onPointerOver, onPointerOut }: {
+function GlbViewer({ url, emissive, showBox, bubbleText, bubbleSpeaker, bubbleHint, showBubble, playClip, defaultClip, onClick, onPointerOver, onPointerOut }: {
   url: string;
   emissive: boolean;
   showBox: boolean;
@@ -248,6 +248,8 @@ function GlbViewer({ url, emissive, showBox, bubbleText, bubbleSpeaker, bubbleHi
   bubbleHint?: boolean;
   showBubble: boolean;
   playClip: ClipRequest | null;
+  /** 트리거 없이 로드 시 자동 루프 재생할 기본 클립 이름 */
+  defaultClip?: string;
   onClick: () => void;
   onPointerOver: () => void;
   onPointerOut: () => void;
@@ -277,6 +279,15 @@ function GlbViewer({ url, emissive, showBox, bubbleText, bubbleSpeaker, bubbleHi
   // 뷰어에서도 로컬 bbox를 캐시에 저장 → InteractionHints가 링을 실제 모델 상단에 정확히 띄운다
   // (에디터 GlbObject와 동일 목적. 뷰어/임베드엔 에디터가 없어 여기서 채워야 함)
   useEffect(() => { glbLocalBboxCache.set(url, bbox); }, [url, bbox]);
+
+  // 기본 클립 — 트리거 없이 로드 시 자동 루프 재생(idle/앰비언트). 트리거 클립이 오면 아래 effect가 덮는다.
+  // MVP: 트리거 클립 종료 후 idle 복귀는 없음(playClip이 null로 리셋되지 않으므로 자연스럽게 유지).
+  useEffect(() => {
+    if (!defaultClip) return;
+    const action = actions[defaultClip];
+    if (!action) return;
+    action.reset().setLoop(THREE.LoopRepeat, Infinity).fadeIn(0.3).play();
+  }, [defaultClip, actions]);
 
   // 요청된 클립 재생 — 기존 클립 페이드아웃 후 새 클립 페이드인
   // playClip.t가 바뀌면 같은 클립이라도 다시 재생된다 (영역 재진입/재클릭)
@@ -447,6 +458,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
           bubbleHint={dv.manual && dv.hasMore}
           showBubble={dv.visible}
           playClip={effectiveClip}
+          defaultClip={object.defaultClip}
           onClick={handleClick}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}

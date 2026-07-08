@@ -2088,6 +2088,38 @@ function InspectorInner() {
           </GroupBox>
         )}
 
+        {/* Animation — GLB 내장 클립을 트리거 없이 자동 재생(idle/앰비언트). GLB 오브젝트 전용 */}
+        {!obj.isGroup && obj.assetId && (() => {
+          const glbUrl = assets.find((a) => a.id === obj.assetId)?.dracoUrl;
+          if (!glbUrl) return null;
+          return (
+            <GroupBox>
+              <SectionHeader title="Animation" hint="GLB에 내장된 애니메이션 클립 중 하나를 트리거 없이 씬 로드 시 자동 루프 재생해요(돌아가는 선풍기·펄럭이는 깃발·idle 캐릭터 등). 클릭/호버/영역 이벤트 애니메이션이 실행되면 그쪽으로 덮입니다(뷰어 전용)." isOpen={isOpen('animation')} onToggle={() => toggleSection('animation')} />
+              {isOpen('animation') && (
+                <div className="px-3 pb-4 space-y-1.5">
+                  <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">기본 클립</span>
+                  <GlbClipPicker
+                    url={glbUrl}
+                    value={obj.defaultClip ?? ''}
+                    onChange={(c) => { updateObject(obj.id, { defaultClip: c || undefined }); pushHistory(); }}
+                  />
+                  {obj.defaultClip && (
+                    <button
+                      onClick={() => { updateObject(obj.id, { defaultClip: undefined }); pushHistory(); }}
+                      className="text-[10px] text-muted/60 hover:text-danger transition-colors"
+                    >
+                      기본 애니메이션 해제
+                    </button>
+                  )}
+                  <p className="text-[10px] text-muted/50">
+                    에디터엔 정적, 실제 재생은 뷰어에서 확인. 한 번 재생 후 idle 복귀는 없어요.
+                  </p>
+                </div>
+              )}
+            </GroupBox>
+          );
+        })()}
+
         {/* Events — 그룹 제외(그룹 자체는 클릭/트리거 타깃이 아님. 이벤트는 개별 오브젝트에) */}
         {!obj.isGroup && (
         <GroupBox>

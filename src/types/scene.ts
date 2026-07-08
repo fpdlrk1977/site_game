@@ -158,6 +158,9 @@ export interface ObjectNodeSchema {
   isGroup?: boolean;
   // 앰비언트 애니메이션 — 뷰어에서 항상 실행되는 트랜스폼 애니(GLB 자체 클립과 별개). 현재 GLB·프리미티브만.
   motion?: MotionConfig;
+  // 기본 애니메이션 클립 — GLB 내장 클립 중 트리거 없이 씬 로드 시 자동 루프 재생할 클립 이름.
+  // 이벤트(click/hover/area/animate_object) 트리거 클립이 오면 fadeOut되며 덮인다(복귀 없음 — MVP).
+  defaultClip?: string;
   // (레거시) 단문 근접 말풍선 — dialogue 미설정 시 lines:[interactLabel]·approach·auto로 해석.
   interactLabel?: string;
   // 대화(말풍선) — 오브젝트 위에 뜨는 순차 문장. 플레이 모드 전용.
