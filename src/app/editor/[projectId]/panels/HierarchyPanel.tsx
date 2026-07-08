@@ -108,7 +108,7 @@ function HierarchyItem({
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
         onContextMenu={(e) => { e.preventDefault(); selectObject(obj.id); setMenuOpen(true); }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
-        className={`flex items-center gap-1.5 pr-2 py-[3px] rounded-xs cursor-pointer group transition-all text-xs ${
+        className={`flex items-center pr-2 py-[3px] rounded-xs cursor-pointer group transition-all text-xs ${
           isSelected
             ? 'bg-primary/20 text-foreground'
             : 'text-foreground/70 hover:bg-surface'
