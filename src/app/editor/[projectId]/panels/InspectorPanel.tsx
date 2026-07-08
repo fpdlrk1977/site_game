@@ -1505,62 +1505,6 @@ function InspectorInner() {
     </div>
   );
 
-  // 그룹 오브젝트 전용 인스펙터
-  if (obj.isGroup) {
-    return (
-      <aside className="flex flex-col bg-sidebar border-l border-border overflow-hidden h-full">
-        <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
-          <span className=" text-[11px] font-semibold text-muted tracking-wide flex-1">Inspector — 그룹</span>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-3 py-2 border-b border-border">
-            <input value={obj.name} onChange={(e) => updateObject(obj.id, { name: e.target.value })} onBlur={pushHistory}
-              className="w-full bg-background border border-border rounded-xs px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
-            />
-          </div>
-          <SectionHeader title="Transform" />
-          <div className="px-3 py-3 space-y-3">
-            <XYZRow label="Position" x={obj.position.x} y={obj.position.y} z={obj.position.z}
-              onChangeX={(v) => updateObject(obj.id, { position: { ...obj.position, x: v } })}
-              onChangeY={(v) => {
-                const kids = objects.filter(o => o.parentId === obj.id && !o.isGroup && !o.assetId && !o.content && !o.particle && !o.light);
-                const minY = kids.reduce((m, c) => Math.max(m, (c.scale?.y ?? 1) * 0.5 - (c.position?.y ?? 0)), 0);
-                updateObject(obj.id, { position: { ...obj.position, y: Math.max(minY, v) } });
-              }}
-              onChangeZ={(v) => updateObject(obj.id, { position: { ...obj.position, z: v } })}
-              onCommit={pushHistory} dragStep={0.1}
-            />
-            <XYZRow label="Rotation °" x={obj.rotation.x} y={obj.rotation.y} z={obj.rotation.z}
-              onChangeX={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, x: v } })}
-              onChangeY={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, y: v } })}
-              onChangeZ={(v) => updateObject(obj.id, { rotation: { ...obj.rotation, z: v } })}
-              onCommit={pushHistory} dragStep={1}
-            />
-            <XYZRow label="Scale" x={obj.scale.x} y={obj.scale.y} z={obj.scale.z}
-              onChangeX={(v) => updateObject(obj.id, { scale: { ...obj.scale, x: v } })}
-              onChangeY={(v) => updateObject(obj.id, { scale: { ...obj.scale, y: v } })}
-              onChangeZ={(v) => updateObject(obj.id, { scale: { ...obj.scale, z: v } })}
-              onCommit={pushHistory} dragStep={0.05}
-            />
-          </div>
-          <SectionHeader title="Visibility" />
-          <div className="px-3 py-3 space-y-2">
-            {(['visible', 'locked'] as const).map((key) => (
-              <label key={key} className="flex items-center justify-between cursor-pointer">
-                <span className=" text-[11px] text-muted capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
-                <Toggle value={obj[key]} onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }} />
-              </label>
-            ))}
-          </div>
-          <div className="px-3 py-3">
-            <p className="text-[11px] text-muted leading-relaxed">
-              그룹 해제: <kbd className="bg-background border border-border rounded px-1 text-[10px]">Ctrl+Shift+G</kbd>
-            </p>
-          </div>
-        </div>
-      </aside>
-    );
-  }
 
   return (
     <aside className="flex flex-col bg-surface border-l border-border overflow-hidden relative h-full">
@@ -1580,7 +1524,7 @@ function InspectorInner() {
         </div>
       )}
       <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
-        <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">Inspector</span>
+        <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">{obj.isGroup ? 'Inspector — 그룹' : 'Inspector'}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -1968,8 +1912,8 @@ function InspectorInner() {
           </GroupBox>
         )}
 
-        {/* Physics */}
-        {!obj.light && (
+        {/* Physics — 그룹 제외(그룹 자체 physics는 플레이에서 무시됨, 자식별로 처리) */}
+        {!obj.light && !obj.isGroup && (
         <GroupBox>
           <div className="relative">
           <SectionHeader title="Physics" hint="플레이 모드 충돌. 켜면 캐릭터가 부딪혀요. Is Sensor를 켜면 통과 가능한 투명 트리거 영역이 되어 area 이벤트에 씁니다." isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
@@ -2034,7 +1978,75 @@ function InspectorInner() {
 
           </GroupBox>)}
 
-        {/* Events */}
+        {/* Motion — 앰비언트 애니메이션 (라이트 제외: GLB·프리미티브·콘텐츠·그룹) */}
+        {!obj.light && (
+          <GroupBox>
+          <SectionHeader title="Motion" hint="뷰어에서 항상 실행되는 앰비언트 애니메이션. 둥실/회전/펄스/궤도/유동(정해진 영역 안을 열기구처럼 자유 이동). 기본은 시각 전용이고, '콜라이더 동반'을 켜면 플레이 모드에서 실제 이동 장애물이 돼요." />
+          <div className="px-3 pb-4 space-y-2">
+            {(() => {
+              const m = obj.motion;
+              const type = m?.type ?? 'none';
+              const setM = (patch: Partial<NonNullable<ObjectNodeSchema['motion']>>) =>
+                updateObject(obj.id, { motion: { ...(obj.motion ?? { type: 'float' }), ...patch } });
+              return (
+                <>
+                  <SelectBox
+                    value={type}
+                    onChange={(v) => {
+                      if (v === 'none') updateObject(obj.id, { motion: undefined });
+                      else setM({ type: v as NonNullable<ObjectNodeSchema['motion']>['type'] });
+                      pushHistory();
+                    }}
+                    options={[
+                      { value: 'none', label: '없음' },
+                      { value: 'float', label: '둥실 (위아래)' },
+                      { value: 'spin', label: '회전 (제자리)' },
+                      { value: 'pulse', label: '펄스 (커졌다 작아짐)' },
+                      { value: 'orbit', label: '궤도 (원)' },
+                      { value: 'wander', label: '유동 (영역 내 자유·열기구)' },
+                    ]}
+                  />
+                  {type !== 'none' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <LabeledNum label="속도" value={m?.speed ?? 1} onChange={(v) => setM({ speed: v })} onCommit={pushHistory} min={0.1} max={5} precision={2} dragStep={0.1} />
+                      {(type === 'float' || type === 'pulse') && (
+                        <LabeledNum label="진폭" value={m?.amplitude ?? (type === 'float' ? 0.5 : 0.2)} onChange={(v) => setM({ amplitude: v })} onCommit={pushHistory} min={0} max={5} precision={2} dragStep={0.05} />
+                      )}
+                      {(type === 'orbit' || type === 'wander') && (
+                        <LabeledNum label="반경" value={m?.radius ?? (type === 'orbit' ? 2 : 3)} onChange={(v) => setM({ radius: v })} onCommit={pushHistory} min={0.5} max={50} precision={1} dragStep={0.5} />
+                      )}
+                      {type === 'spin' && (
+                        <div>
+                          <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">회전축</span>
+                          <SelectBox
+                            value={m?.axis ?? 'y'}
+                            onChange={(v) => { setM({ axis: v as 'x' | 'y' | 'z' }); pushHistory(); }}
+                            options={[{ value: 'y', label: 'Y (세로)' }, { value: 'x', label: 'X (앞뒤)' }, { value: 'z', label: 'Z (좌우)' }]}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {type !== 'none' && type !== 'pulse' && (
+                    <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
+                      <Toggle value={m?.collider === true} onChange={(v) => { setM({ collider: v }); pushHistory(); }} />
+                      <span>{obj.isGroup ? '플레이 모드에서 그룹 전체가 이동 장애물' : '플레이 모드에서 콜라이더도 이동(진짜 장애물)'}</span>
+                    </label>
+                  )}
+                  {type !== 'none' && (
+                    <p className="text-[10px] text-muted/50">
+                      에디터엔 정적, 실제 움직임은 뷰어에서 확인. <b>콜라이더 동반 OFF = 통과 가능한 장식</b>, ON = 플레이 중 부딪히는 이동 장애물(캐릭터가 올라타 실려가진 않음).
+                    </p>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+          </GroupBox>
+        )}
+
+        {/* Events — 그룹 제외(그룹 자체는 클릭/트리거 타깃이 아님. 이벤트는 개별 오브젝트에) */}
+        {!obj.isGroup && (
         <GroupBox>
         <SectionHeader title="Events" hint="트리거(클릭·호버·근접 E·영역 진입)에 따라 동작(팝업·URL·씬 이동·애니메이션·이동·사운드 등)을 실행해요. 다가가면 뜨는 '대화 말풍선'도 여기서 설정합니다." isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
         {isOpen('events') && (
@@ -2188,6 +2200,16 @@ function InspectorInner() {
           </div>
         )}
         </GroupBox>
+        )}
+
+        {/* 그룹 해제 안내 */}
+        {obj.isGroup && (
+          <div className="px-3 py-3">
+            <p className="text-[11px] text-muted leading-relaxed">
+              그룹 해제: <kbd className="bg-background border border-border rounded px-1 text-[10px]">Ctrl+Shift+G</kbd>
+            </p>
+          </div>
+        )}
       </div>
     </aside>
   );

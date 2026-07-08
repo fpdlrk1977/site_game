@@ -4,15 +4,113 @@ import { useRef } from 'react';
 import { Physics, RigidBody, CuboidCollider } from '@react-three/rapier';
 import type { RapierRigidBody } from '@react-three/rapier';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { ViewerObject } from './ViewerObject';
 import { PhysicsObject } from './PhysicsObject';
 import { PlayModeController } from './PlayModeController';
 import { effectiveDialogue } from './useObjectDialogue';
+import { computeMotion, makeWanderState } from '@/lib/motion';
+import { worldMatrix } from '@/lib/objectBBox';
 
 const DEG2RAD = Math.PI / 180;
 
+// 오브젝트별 콜라이더 거동 판정 — 루트/그룹자식 어디서든 동일하게 쓰는 순수 함수.
+// 위치가 움직이는 모션(float/spin/orbit/wander) + 콜라이더 동반 → kinematic 이동 장애물.
+const isMovingColliderObj = (o: ObjectNodeSchema) =>
+  o.motion?.collider === true && o.motion.type !== 'pulse' && !o.isGroup && !o.light;
+// 위치가 움직이는 모션인데 콜라이더 미동반 → 시각 전용(콜라이더 없음, 통과). pulse는 제자리라 제외(정적 콜라이더 유지).
+const isVisualOnlyMotionObj = (o: ObjectNodeSchema) =>
+  !!o.motion && o.motion.type !== 'pulse' && o.motion.collider !== true &&
+  !o.isGroup && !o.light && !o.physics.enabled;
+
 type ColliderAssets = Parameters<typeof ViewerObject>[0]['assets'];
 type ColliderOnEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
+
+// motion.collider가 켜진 오브젝트 — kinematic RigidBody를 모션으로 구동해 "진짜 이동 장애물"로.
+// (시각은 ViewerObject noMotion으로 정적 처리 → RigidBody가 움직이면 자식 메시가 함께 이동. pulse 제외)
+const _mcOut = { pos: new THREE.Vector3(), rot: new THREE.Euler(), scl: new THREE.Vector3() };
+const _mcQuat = new THREE.Quaternion();
+const _mcPos = new THREE.Vector3();
+const _mcQuatBase = new THREE.Quaternion();
+const _mcScl = new THREE.Vector3();
+const _mcEuler = new THREE.Euler();
+// 단일 오브젝트(또는 정적 그룹의 자식) 이동 콜라이더. kinematic은 월드 좌표로 구동되므로
+// 부모 체인을 합성한 '월드 베이스' 기준으로 모션을 적용한다(루트면 로컬=월드).
+function MovingCollider({ object, assets, onEvent, allObjects }: {
+  object: ObjectNodeSchema;
+  assets: Parameters<typeof ViewerObject>[0]['assets'];
+  onEvent: (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
+  allObjects: ObjectNodeSchema[];
+}) {
+  const rbRef = useRef<RapierRigidBody>(null);
+  const phase = useRef(Math.random() * 100);
+  const wander = useRef(makeWanderState());
+  worldMatrix(allObjects, object.id).decompose(_mcPos, _mcQuatBase, _mcScl);
+  _mcEuler.setFromQuaternion(_mcQuatBase);
+  const basePos: [number, number, number] = [_mcPos.x, _mcPos.y, _mcPos.z];
+  const baseRot: [number, number, number] = [_mcEuler.x, _mcEuler.y, _mcEuler.z];
+  const worldScl: [number, number, number] = [_mcScl.x, _mcScl.y, _mcScl.z];
+  useFrame((state, dt) => {
+    const rb = rbRef.current;
+    if (!rb || !object.motion) return;
+    computeMotion(object.motion, basePos, baseRot, worldScl, state.clock.elapsedTime + phase.current, dt, wander.current, _mcOut);
+    rb.setNextKinematicTranslation(_mcOut.pos);
+    rb.setNextKinematicRotation(_mcQuat.setFromEuler(_mcOut.rot));
+  });
+  return (
+    <RigidBody
+      ref={rbRef}
+      type="kinematicPosition"
+      colliders={getColliderType(object)}
+      position={basePos}
+      rotation={baseRot}
+      userData={{ objectId: object.id }}
+    >
+      <group scale={worldScl}>
+        <ViewerObject object={object} assets={assets} onEvent={onEvent} noTransform noMotion />
+      </group>
+    </RigidBody>
+  );
+}
+
+// 모션+콜라이더 켠 그룹 — 그룹 전체를 하나의 kinematic 강체로 묶어 자식 콜라이더가 함께 이동.
+// 자식 메시들을 convex hull 콜라이더로 자동 생성(캐릭터와 견고하게 충돌). 그룹 스케일은 내부 group에 적용.
+// 제약: 자식이 개별 실제형상(trimesh)이 아니라 볼록 껍질로 근사됨(오목 형상은 실제보다 두꺼운 충돌).
+function MovingGroupCollider({ object, assets, onEvent, allObjects }: {
+  object: ObjectNodeSchema;
+  assets: ColliderAssets;
+  onEvent: ColliderOnEvent;
+  allObjects: ObjectNodeSchema[];
+}) {
+  const rbRef = useRef<RapierRigidBody>(null);
+  const phase = useRef(Math.random() * 100);
+  const wander = useRef(makeWanderState());
+  const basePos: [number, number, number] = [object.position.x, object.position.y, object.position.z];
+  const baseRot: [number, number, number] = [object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD];
+  const baseScl: [number, number, number] = [object.scale.x, object.scale.y, object.scale.z];
+  useFrame((state, dt) => {
+    const rb = rbRef.current;
+    if (!rb || !object.motion) return;
+    computeMotion(object.motion, basePos, baseRot, baseScl, state.clock.elapsedTime + phase.current, dt, wander.current, _mcOut);
+    rb.setNextKinematicTranslation(_mcOut.pos);
+    rb.setNextKinematicRotation(_mcQuat.setFromEuler(_mcOut.rot));
+  });
+  return (
+    <RigidBody
+      ref={rbRef}
+      type="kinematicPosition"
+      colliders="hull"
+      position={basePos}
+      rotation={baseRot}
+      userData={{ objectId: object.id }}
+    >
+      <group scale={baseScl}>
+        <ViewerObject object={object} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform noMotion />
+      </group>
+    </RigidBody>
+  );
+}
 
 function getColliderType(object: ObjectNodeSchema) {
   // GLB(산·바위 등 오목한 지형 포함)는 trimesh로 실제 메쉬 형태 그대로 충돌 처리.
@@ -65,6 +163,10 @@ function GroupWithCollision({ object, assets, onEvent, allObjects }: {
     >
       {children.map((child) => {
         if (child.isGroup) {
+          // 중첩 모션 그룹은 루트 그룹만 kinematic 지원 → 여기선 시각 전용(콜라이더 미동반)으로 애니메이션만.
+          if (child.motion) {
+            return <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />;
+          }
           return (
             <GroupWithCollision
               key={child.id}
@@ -84,7 +186,13 @@ function GroupWithCollision({ object, assets, onEvent, allObjects }: {
             <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform />
           );
         }
-        // 일반 오브젝트: RigidBody position이 부모 group 기준 로컬 좌표로 처리됨
+        // 이동 콜라이더 자식 → 상위(PlayCanvas)에서 월드 kinematic으로 렌더하므로 여기선 스킵(이중 렌더 방지).
+        if (isMovingColliderObj(child)) return null;
+        // 움직이는 모션·콜라이더 미동반 자식 → 콜라이더 없이 시각만(통과 가능). 부모 group이 로컬 좌표 담당.
+        if (isVisualOnlyMotionObj(child)) {
+          return <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />;
+        }
+        // 일반(정적/펄스) 오브젝트: RigidBody position이 부모 group 기준 로컬 좌표로 처리됨
         return (
           <RigidBody
             key={child.id}
@@ -131,9 +239,41 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);
   // 그룹은 GroupWithCollision으로 처리: 자식 오브젝트 각각에 콜라이더 적용
   // (그룹에 physics가 켜져 있어도 그룹 자체는 PhysicsObject로 렌더하지 않음 — 이중 렌더 방지)
-  const groupObjects = rootObjects.filter((o) => o.isGroup && o.visible);
-  const autoObjects = rootObjects.filter((o) => !o.physics.enabled && !o.light && !o.isGroup);
-  const physicsObjects = rootObjects.filter((o) => o.physics.enabled && !o.light && !o.isGroup);
+  const allGroups = rootObjects.filter((o) => o.isGroup && o.visible);
+  // 모션+콜라이더 켠 그룹 → 하나의 kinematic 강체로 묶어 이동(진짜 장애물). pulse 제외.
+  const isGroupMovingCollider = (o: ObjectNodeSchema) =>
+    !!o.motion && o.motion.collider === true && o.motion.type !== 'pulse';
+  const movingGroupColliders = allGroups.filter(isGroupMovingCollider);
+  // 모션은 있지만 콜라이더 미동반 그룹 → 시각 전용(장식). ViewerObject로 렌더해 애니메이션만.
+  const movingGroups = allGroups.filter((o) => !!o.motion && !isGroupMovingCollider(o));
+  // 모션 없는 그룹 → 기존 정적 GroupWithCollision(자식별 콜라이더).
+  const groupObjects = allGroups.filter((o) => !o.motion);
+  // 조상 체인 정보 — 자식이 숨은 그룹 아래인지, 움직이는 그룹(하나의 강체로 이동) 아래인지.
+  //   움직이는 그룹의 자식은 그 그룹 강체에 실려 함께 이동하므로 개별 콜라이더 라우팅에서 제외한다.
+  const ancestorInfo = (o: ObjectNodeSchema) => {
+    let pid = o.parentId; let visible = true; let underMovingGroup = false;
+    while (pid) {
+      const p = allObjects.find((x) => x.id === pid);
+      if (!p) break;
+      if (!p.visible) visible = false;
+      if (p.isGroup && p.motion) underMovingGroup = true;
+      pid = p.parentId;
+    }
+    return { visible, underMovingGroup };
+  };
+  // 이동 콜라이더 오브젝트 — 루트뿐 아니라 정적 그룹의 자식까지 포함(월드 kinematic으로 처리).
+  //   움직이는 그룹 아래(강체에 실림) 또는 숨은 조상 아래는 제외.
+  const movingColliderObjects = allObjects.filter((o) => {
+    if (!o.visible || !isMovingColliderObj(o)) return false;
+    const a = ancestorInfo(o);
+    return a.visible && !a.underMovingGroup;
+  });
+  // 위치가 움직이는 모션(float/spin/orbit/wander)인데 콜라이더 미동반 → 시각 전용(콜라이더 없음, 통과 가능).
+  //   (정적 콜라이더를 붙이면 시각은 떠다니는데 벽만 원래 자리에 남는 '유령 콜라이더' 버그가 됨)
+  //   루트만 여기서 렌더(중첩 자식은 GroupWithCollision이 처리). pulse는 제자리라 autoObjects에 남김.
+  const visualMotionObjects = rootObjects.filter((o) => o.visible && isVisualOnlyMotionObj(o));
+  const autoObjects = rootObjects.filter((o) => !o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isVisualOnlyMotionObj(o));
+  const physicsObjects = rootObjects.filter((o) => o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o));
 
   const characterAsset = scene.environment.playerCharacterId
     ? assets.find((a) => a.id === scene.environment.playerCharacterId)
@@ -185,6 +325,26 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
       {/* 그룹 오브젝트 — 자식 각각에 재귀적으로 콜라이더 부여 */}
       {groupObjects.map((obj) => (
         <GroupWithCollision key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* 모션+콜라이더 그룹 — 하나의 kinematic 강체로 묶어 이동(진짜 장애물) */}
+      {movingGroupColliders.map((obj) => (
+        <MovingGroupCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* 모션 걸린 그룹(콜라이더 미동반) — 시각 전용, MotionGroup 애니메이션 유지 */}
+      {movingGroups.map((obj) => (
+        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* motion.collider 오브젝트(루트+정적그룹 자식) — 월드 kinematic 이동 장애물 */}
+      {movingColliderObjects.map((obj) => (
+        <MovingCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* 움직이는 모션·콜라이더 미동반 — 시각 전용(콜라이더 없음, 통과 가능) */}
+      {visualMotionObjects.map((obj) => (
+        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
       {/* physics 미설정 오브젝트 — 자동 고정 콜라이더 */}

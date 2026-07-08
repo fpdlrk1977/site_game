@@ -153,10 +153,22 @@ export interface ObjectNodeSchema {
   particle?: ParticleConfig;
   light?: LightConfig;
   isGroup?: boolean;
+  // 앰비언트 애니메이션 — 뷰어에서 항상 실행되는 트랜스폼 애니(GLB 자체 클립과 별개). 현재 GLB·프리미티브만.
+  motion?: MotionConfig;
   // (레거시) 단문 근접 말풍선 — dialogue 미설정 시 lines:[interactLabel]·approach·auto로 해석.
   interactLabel?: string;
   // 대화(말풍선) — 오브젝트 위에 뜨는 순차 문장. 플레이 모드 전용.
   dialogue?: DialogueConfig;
+}
+
+export interface MotionConfig {
+  // float=둥실(위아래) / spin=제자리 회전(Y축) / pulse=커졌다작아짐 / orbit=원 궤도 / wander=영역 내 유동(열기구식)
+  type: 'float' | 'spin' | 'pulse' | 'orbit' | 'wander';
+  speed?: number;     // 속도 배수 (기본 1)
+  amplitude?: number; // float=y 진폭 / pulse=스케일 진폭 (기본 float 0.5 · pulse 0.2)
+  radius?: number;    // orbit=궤도 반경 / wander=이동 반경 (기본 orbit 2 · wander 3)
+  axis?: 'x' | 'y' | 'z'; // spin 회전축 (기본 y)
+  collider?: boolean; // 플레이 모드에서 콜라이더도 함께 이동(진짜 이동 장애물). 기본 false=시각 전용
 }
 
 export interface DialogueConfig {

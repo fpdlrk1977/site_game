@@ -4,7 +4,7 @@ import { useState, useRef, Suspense, useEffect, useMemo, useContext } from 'reac
 import { useGLTF, useAnimations, Text3D, Center, Html, Outlines } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 import * as THREE from 'three';
-import { useLoader } from '@react-three/fiber';
+import { useLoader, useFrame } from '@react-three/fiber';
 import { normalizeGlbMaterials } from '@/lib/glbMaterials';
 import { PlayModeContext } from './PlayModeContext';
 import { ClipRequestContext } from './ClipRequestContext';
@@ -12,7 +12,8 @@ import { InteractHighlightContext } from './InteractHighlightContext';
 import { DialogueAdvanceContext } from './DialogueAdvanceContext';
 import { useObjectDialogue, effectiveDialogue } from './useObjectDialogue';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
-import type { ObjectNodeSchema, AssetRefSchema, EventSchema } from '@/types/scene';
+import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig } from '@/types/scene';
+import { computeMotion, makeWanderState } from '@/lib/motion';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -193,6 +194,45 @@ function ImagePlane({ position, rotation, scale, url, outline, onClick, onPointe
   );
 }
 
+// 앰비언트 모션 — 베이스 변환(pos/rot/scl) + 타입별 델타를 useFrame로 적용. 콘텐츠는 로컬 원점.
+// spin/pulse는 이 그룹(=오브젝트 원점) 기준이라 제자리에서 돈다/커진다. 계산은 computeMotion 공유.
+const _mOut = { pos: new THREE.Vector3(), rot: new THREE.Euler(), scl: new THREE.Vector3() };
+function MotionGroup({ pos, rot, scl, motion, children }: {
+  pos: [number, number, number];
+  rot: [number, number, number];
+  scl: [number, number, number];
+  motion: MotionConfig;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const phase = useRef(Math.random() * 100); // 개별 위상(동시에 안 뛰게)
+  const wander = useRef(makeWanderState());
+
+  useFrame((state, dt) => {
+    const g = ref.current;
+    if (!g) return;
+    computeMotion(motion, pos, rot, scl, state.clock.elapsedTime + phase.current, dt, wander.current, _mOut);
+    g.position.copy(_mOut.pos);
+    g.rotation.copy(_mOut.rot);
+    g.scale.copy(_mOut.scl);
+  });
+
+  return <group ref={ref} position={pos} rotation={rot} scale={scl}>{children}</group>;
+}
+
+// 모션 있으면 MotionGroup, 없으면 정적 group — 콘텐츠 분기에서 변환 래퍼로 사용(핸들러는 내부 요소에)
+function Xform({ pos, rot, scl, motion, children }: {
+  pos: [number, number, number];
+  rot: [number, number, number];
+  scl: [number, number, number];
+  motion?: MotionConfig;
+  children: React.ReactNode;
+}) {
+  return motion
+    ? <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion}>{children}</MotionGroup>
+    : <group position={pos} rotation={rot} scale={scl}>{children}</group>;
+}
+
 /** 애니메이션 재생 요청 — t(타임스탬프)로 같은 클립의 재트리거를 구분한다 */
 export interface ClipRequest {
   name: string;
@@ -297,12 +337,16 @@ interface Props {
   allObjects?: ObjectNodeSchema[];
   /** RigidBody 내부에서 사용할 때 — position/rotation은 부모 RigidBody가 담당, scale만 적용 */
   noTransform?: boolean;
+  /** 부모(kinematic RigidBody)가 모션을 구동할 때 — 시각 모션(MotionGroup) 미적용해 이중 적용 방지 */
+  noMotion?: boolean;
   /** PhysicsObject가 area_enter 시 직접 전달하는 클립 재생 요청 */
   activeClip?: ClipRequest | null;
 }
 
-export function ViewerObject({ object, assets, onEvent, allObjects = [], noTransform = false, activeClip: activeClipProp = null }: Props) {
+export function ViewerObject({ object, assets, onEvent, allObjects = [], noTransform = false, noMotion = false, activeClip: activeClipProp = null }: Props) {
   const playMode = useContext(PlayModeContext);
+  // 시각 모션 — noMotion(콜라이더가 구동)이면 끈다
+  const motion = noMotion ? undefined : object.motion;
   // animate_object 액션이 이 오브젝트(object.id)에 보낸 클립 재생 요청
   const externalClip = useContext(ClipRequestContext)[object.id] ?? null;
   // 플레이 모드에서 캐릭터가 이 오브젝트에 근접(interact 대상)했는지
@@ -330,16 +374,16 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   // noTransform=true 일 때는 부모(RigidBody 등)가 transform을 담당하므로 identity로 설정
   if (object.isGroup) {
     const children = allObjects.filter((o) => o.parentId === object.id && o.visible);
-    return (
-      <group
-        position={noTransform ? [0, 0, 0] : [object.position.x, object.position.y, object.position.z]}
-        rotation={noTransform ? [0, 0, 0] : [object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD]}
-        scale={noTransform ? [1, 1, 1] : [object.scale.x, object.scale.y, object.scale.z]}
-      >
-        {children.map((child) => (
-          <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />
-        ))}
-      </group>
+    const gPos: [number, number, number] = noTransform ? [0, 0, 0] : [object.position.x, object.position.y, object.position.z];
+    const gRot: [number, number, number] = noTransform ? [0, 0, 0] : [object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD];
+    const gScl: [number, number, number] = noTransform ? [1, 1, 1] : [object.scale.x, object.scale.y, object.scale.z];
+    const gInner = children.map((child) => (
+      <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />
+    ));
+    return motion ? (
+      <MotionGroup pos={gPos} rot={gRot} scl={gScl} motion={motion}>{gInner}</MotionGroup>
+    ) : (
+      <group position={gPos} rotation={gRot} scale={gScl}>{gInner}</group>
     );
   }
 
@@ -392,24 +436,27 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   };
 
   if (assetRef) {
-    return (
-      <group position={pos} rotation={rot} scale={scl}>
-        <Suspense fallback={null}>
-          <GlbViewer
-            url={assetRef.dracoUrl}
-            emissive={emissiveOn}
-            showBox={outlineOn}
-            bubbleText={dv.text}
-            bubbleSpeaker={dv.speaker}
-            bubbleHint={dv.manual && dv.hasMore}
-            showBubble={dv.visible}
-            playClip={effectiveClip}
-            onClick={handleClick}
-            onPointerOver={handlePointerOver}
-            onPointerOut={handlePointerOut}
-          />
-        </Suspense>
-      </group>
+    const glb = (
+      <Suspense fallback={null}>
+        <GlbViewer
+          url={assetRef.dracoUrl}
+          emissive={emissiveOn}
+          showBox={outlineOn}
+          bubbleText={dv.text}
+          bubbleSpeaker={dv.speaker}
+          bubbleHint={dv.manual && dv.hasMore}
+          showBubble={dv.visible}
+          playClip={effectiveClip}
+          onClick={handleClick}
+          onPointerOver={handlePointerOver}
+          onPointerOut={handlePointerOut}
+        />
+      </Suspense>
+    );
+    return motion ? (
+      <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion}>{glb}</MotionGroup>
+    ) : (
+      <group position={pos} rotation={rot} scale={scl}>{glb}</group>
     );
   }
 
@@ -423,7 +470,8 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
       const tEmissive = object.material?.emissive ?? '#000000';
       return (
         <>
-        <group position={pos} rotation={rot} scale={scl}
+        <Xform pos={pos} rot={rot} scl={scl} motion={motion}>
+        <group
           onClick={(e) => { e.stopPropagation(); handleClick(); }}
           onPointerOver={(e) => { e.stopPropagation(); handlePointerOver(); }}
           onPointerOut={handlePointerOut}
@@ -453,6 +501,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
             </Center>
           </Suspense>
         </group>
+        </Xform>
         {bubbleEl}
         </>
       );
@@ -460,9 +509,10 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
     if (type === 'image' && object.content.url) {
       return (
         <>
+        <Xform pos={pos} rot={rot} scl={scl} motion={motion}>
         <Suspense fallback={null}>
           <ImagePlane
-            position={pos} rotation={rot} scale={scl}
+            position={[0, 0, 0]} rotation={[0, 0, 0]} scale={[1, 1, 1]}
             url={object.content.url}
             outline={outlineOn}
             onClick={handleClick}
@@ -470,6 +520,7 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
             onPointerOut={handlePointerOut}
           />
         </Suspense>
+        </Xform>
         {bubbleEl}
         </>
       );
@@ -482,25 +533,27 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
       }
       if (url) {
         return (
+          <Xform pos={pos} rot={rot} scl={scl} motion={motion}>
           <VideoMesh
-            position={pos} rotation={rot} scale={scl}
+            position={[0, 0, 0]} rotation={[0, 0, 0]} scale={[1, 1, 1]}
             url={url}
             outline={outlineOn}
             onClick={handleClick}
             onPointerOver={handlePointerOver}
             onPointerOut={handlePointerOut}
           />
+          </Xform>
         );
       }
     }
     // 빈 플레이스홀더 (image URL 없음, video URL 없음)
     return (
-      <mesh position={pos} rotation={rot} scale={scl}
-        onClick={(e) => { e.stopPropagation(); handleClick(); }}
-      >
-        <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial color="#1a1a2e" />
-      </mesh>
+      <Xform pos={pos} rot={rot} scl={scl} motion={motion}>
+        <mesh onClick={(e) => { e.stopPropagation(); handleClick(); }}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial color="#1a1a2e" />
+        </mesh>
+      </Xform>
     );
   }
 
@@ -509,12 +562,8 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
   const metalness = object.material?.metalness ?? 0.1;
   const emissive = object.material?.emissive ?? '#000000';
 
-  return (
-    <>
+  const primMesh = (
     <mesh
-      position={pos}
-      rotation={rot}
-      scale={scl}
       castShadow
       receiveShadow
       onPointerOver={(e) => { e.stopPropagation(); handlePointerOver(); }}
@@ -534,6 +583,14 @@ export function ViewerObject({ object, assets, onEvent, allObjects = [], noTrans
       />
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
+  );
+  return (
+    <>
+    {motion ? (
+      <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion}>{primMesh}</MotionGroup>
+    ) : (
+      <group position={pos} rotation={rot} scale={scl}>{primMesh}</group>
+    )}
     {bubbleEl}
     </>
   );
