@@ -40,6 +40,9 @@ export interface EnvSchema {
   // 상호작용(클릭/호버 이벤트) 오브젝트 위에 떠다니는 힌트 링 표시. 미설정 = 켜짐(true).
   // 탐색 모드 뷰어/임베드에서만 렌더(플레이 모드·에디터는 미표시). 포트폴리오 등 깔끔한 씬은 끌 수 있음.
   showInteractionHints?: boolean;
+  // 상호작용 근접 범위(m) 씬 기본값 — interact(E)/approach 트리거·E 프롬프트·하이라이트가 공유.
+  //   미설정 = 3. 오브젝트가 자체 interactRange를 가지면 그 값이 우선한다.
+  interactRange?: number;
   notes?: string;
   postProcessing?: { preset: PostProcessPreset };
   // 렌더러 노출(밝기) — LinearToneMapping의 toneMappingExposure. 미설정 = 1(기본).
@@ -168,6 +171,9 @@ export interface ObjectNodeSchema {
   interactLabel?: string;
   // 대화(말풍선) — 오브젝트 위에 뜨는 순차 문장. 플레이 모드 전용.
   dialogue?: DialogueConfig;
+  // 이 오브젝트의 상호작용 근접 범위(m) 오버라이드 — 미설정이면 씬 기본값(EnvSchema.interactRange ?? 3).
+  //   interact(E)/approach 트리거·E 프롬프트·하이라이트에 적용.
+  interactRange?: number;
 }
 
 export interface MotionConfig {

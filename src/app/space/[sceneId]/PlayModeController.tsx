@@ -124,16 +124,16 @@ interface Props {
   onObstacleEnter?: (objectId: string) => void;
   /** 접촉이 끝났을 때 (grace 시간 이상 떨어짐) — area_exit 트리거용 */
   onObstacleExit?: (objectId: string) => void;
-  /** interact 이벤트를 가진 오브젝트들의 월드 위치 (근접 프롬프트/E키 대상 산출용) */
-  interactables?: { id: string; x: number; y: number; z: number }[];
-  /** 상호작용 가능 범위(m). 기본 3 */
+  /** interact 이벤트를 가진 오브젝트들의 월드 위치 + 개별 근접 범위(range) */
+  interactables?: { id: string; x: number; y: number; z: number; range: number }[];
+  /** 상호작용 가능 범위(m) 폴백 — interactables/approachables 항목의 range가 우선. 기본 3 */
   interactRange?: number;
   /** 근접한 상호작용 대상이 바뀔 때 (없으면 null) — E 프롬프트 표시용 */
   onInteractableChange?: (objectId: string | null) => void;
   /** E키(또는 모바일 액션)로 상호작용 발동 시 */
   onInteract?: (objectId: string) => void;
-  /** approach_enter/exit 이벤트를 가진 오브젝트들의 월드 위치 (근접 자동 트리거용) */
-  approachables?: { id: string; x: number; y: number; z: number }[];
+  /** approach_enter/exit 이벤트를 가진 오브젝트들의 월드 위치 + 개별 근접 범위(range) */
+  approachables?: { id: string; x: number; y: number; z: number; range: number }[];
   /** 캐릭터가 approach 대상 근접 범위에 새로 들어왔을 때 */
   onApproachEnter?: (objectId: string) => void;
   /** 캐릭터가 approach 대상 근접 범위를 벗어났을 때 */
@@ -400,13 +400,14 @@ export function PlayModeController({
     // (대상이 바뀔 때만 콜백 → 매 프레임 setState 방지)
     if (interactables && interactables.length > 0) {
       let nearest: string | null = null;
-      let nearestDist = interactRange;
+      let nearestDist = Infinity;
       for (const it of interactables) {
         const dx = it.x - newPos.x;
         const dy = it.y - newPos.y;
         const dz = it.z - newPos.z;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (dist < nearestDist) { nearestDist = dist; nearest = it.id; }
+        // 각 오브젝트의 자체 범위(range) 안에 들면서 가장 가까운 것을 대상으로
+        if (dist <= it.range && dist < nearestDist) { nearestDist = dist; nearest = it.id; }
       }
       if (nearest !== activeInteractRef.current) {
         activeInteractRef.current = nearest;
@@ -425,7 +426,7 @@ export function PlayModeController({
         const dx = it.x - newPos.x;
         const dy = it.y - newPos.y;
         const dz = it.z - newPos.z;
-        const within = Math.sqrt(dx * dx + dy * dy + dz * dz) <= interactRange;
+        const within = Math.sqrt(dx * dx + dy * dy + dz * dz) <= it.range;
         const was = inside.has(it.id);
         if (within && !was) { inside.add(it.id); onApproachEnter?.(it.id); }
         else if (!within && was) { inside.delete(it.id); onApproachExit?.(it.id); }

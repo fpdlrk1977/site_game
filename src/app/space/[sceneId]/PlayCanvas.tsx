@@ -238,14 +238,17 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
     const dlg = effectiveDialogue(o);
     return !!dlg && (dlg.show === 'approach' || dlg.show === 'interact' || dlg.advance === 'manual');
   };
+  // 상호작용 근접 범위 — 오브젝트별 값 우선, 없으면 씬 기본값(EnvSchema.interactRange), 그것도 없으면 3m.
+  const sceneRange = scene.environment.interactRange ?? 3;
+  const effRange = (o: ObjectNodeSchema) => o.interactRange ?? sceneRange;
   const interactables = allObjects
     .filter((o) => !o.parentId && o.visible && needsProximity(o))
-    .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z }));
+    .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z, range: effRange(o) }));
   // approach 근접 자동 트리거 대상 — approach_enter/exit 이벤트를 가진 루트 오브젝트.
-  // (interact와 동일 반경. 오브젝트는 솔리드 유지 가능 — area와 달리 센서 불필요)
+  // (interact와 동일 범위 규칙. 오브젝트는 솔리드 유지 가능 — area와 달리 센서 불필요)
   const approachables = allObjects
     .filter((o) => !o.parentId && o.visible && o.events?.some((e) => e.trigger === 'approach_enter' || e.trigger === 'approach_exit'))
-    .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z }));
+    .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z, range: effRange(o) }));
   // 런타임 통과(콜라이더 제거) 대상 — set_passable/toggle_collision. 시각은 유지하고 콜라이더만 뺀다(문 열림).
   const isPassable = (o: ObjectNodeSchema) => !!passableIds?.has(o.id);
   const rootObjects = allObjects.filter((o) => !o.parentId);

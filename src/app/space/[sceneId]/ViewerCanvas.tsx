@@ -7,6 +7,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset, AssetRefSchema } from '@/types/scene';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
+import { worldBBox } from '@/lib/objectBBox';
 import { BoundaryWalls } from '@/components/three/BoundaryWalls';
 import { ViewerObject } from './ViewerObject';
 import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
@@ -224,9 +225,18 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
   const orbitRef = useRef<OrbitControlsImpl>(null);
-  // 플레이 모드 포커스 지점 — 대상 objectId의 월드 위치+반경을 PlayCanvas에 넘겨 카메라 줌에 사용
+  // 플레이 모드 포커스 지점 — 대상의 월드 bbox '중심'과 반경을 PlayCanvas에 넘겨 카메라 줌에 사용.
+  //   (원점 objWorldPos가 아니라 형상 중심 → GLB 원점이 발밑/한쪽이라 가까이서 프레임 밖으로 밀리는 문제 방지)
   const playFocusPoint = playFocusId
     ? (() => {
+        const wb = worldBBox(objects, scene.assets ?? [], playFocusId);
+        if (wb && !wb.isEmpty()) {
+          const c = wb.getCenter(new THREE.Vector3());
+          const size = wb.getSize(new THREE.Vector3());
+          const radius = Math.max(size.x, size.y, size.z) * 0.5;
+          return { x: c.x, y: c.y, z: c.z, radius: Math.max(radius, 0.3) };
+        }
+        // bbox 없으면(미로딩 등) 원점+근사 반경으로 폴백
         const wp = objWorldPos(objects, playFocusId);
         if (!wp) return null;
         return { x: wp.x, y: wp.y, z: wp.z, radius: objFocusRadius(objects, scene.assets ?? [], playFocusId) };

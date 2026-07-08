@@ -39,11 +39,13 @@ function getYouTubeId(url: string): string | null {
 // distanceFactor로 월드 크기에 앵커되고, center로 y 앵커 지점 위에 뜬다(translateY로 바닥=꼬리를 앵커에 맞춤).
 function SpeechBubble({ text, y, speaker, hint }: { text: string; y: number; speaker?: string; hint?: boolean }) {
   return (
-    <Html position={[0, y, 0]} center distanceFactor={8} occlude zIndexRange={[100, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+    <Html position={[0, y, 0]} center distanceFactor={8} occlude zIndexRange={[30, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
       <div style={{
         transform: 'translateY(-50%)',
         position: 'relative',
         background: 'rgba(255,255,255,0.7)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
         color: '#1f2937',
         fontSize: '14px',
         fontWeight: 600,

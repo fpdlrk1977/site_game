@@ -770,6 +770,16 @@ function EnvironmentPanel() {
             클릭·호버 이벤트가 있는 오브젝트 위에 떠다니는 링을 띄워 방문자에게 상호작용
             가능함을 알립니다. 뷰어의 탐색 모드에서만 보이며, 에디터엔 표시되지 않습니다.
           </p>
+          {/* 상호작용 근접 범위 기본값 — interact(E)/approach·E 프롬프트·하이라이트 공유 */}
+          <div className="pt-2">
+            <LabeledNum label="상호작용 범위 기본값(m)" value={env.interactRange ?? 3}
+              onChange={(v) => updateEnvironment({ interactRange: Math.max(0.5, v) })}
+              onCommit={pushHistory} min={0.5} max={10} precision={1} dragStep={0.1} />
+            <p className="text-[10px] text-muted/60 leading-relaxed mt-1">
+              플레이 모드에서 캐릭터가 이만큼 가까이 가면 E 프롬프트·하이라이트·approach가 발동해요.
+              오브젝트에 개별 범위를 지정하면 그 값이 우선합니다.
+            </p>
+          </div>
         </div>
       </GroupBox>
 
@@ -1053,7 +1063,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected } = useSceneStore();
   const { addToast } = useToast();
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
@@ -2140,6 +2150,33 @@ function InspectorInner() {
         <SectionHeader title="Events" hint="트리거(클릭·호버·근접 E·영역 진입)에 따라 동작(팝업·URL·씬 이동·애니메이션·이동·사운드 등)을 실행해요. 다가가면 뜨는 '대화 말풍선'도 여기서 설정합니다." isOpen={isOpen('events')} onToggle={() => toggleSection('events')} />
         {isOpen('events') && (
           <div className="px-3 pb-4 space-y-2">
+            {/* 상호작용 근접 범위 오버라이드 — 비우면 씬 기본값 사용 (interact(E)/approach·E 프롬프트·하이라이트) */}
+            <div className="space-y-1">
+              <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">상호작용 범위 (m)</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number" min={0.5} max={20} step={0.5}
+                  value={obj.interactRange ?? ''}
+                  placeholder={`씬 기본 (${environment.interactRange ?? 3})`}
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    updateObject(obj.id, { interactRange: v === '' ? undefined : Math.max(0.5, parseFloat(v)) });
+                  }}
+                  onBlur={pushHistory}
+                  className="flex-1 bg-surface border border-border rounded-xs px-2 py-1.5 text-[11px] text-foreground placeholder:text-muted/40 focus:border-primary/50 outline-none"
+                />
+                {obj.interactRange != null && (
+                  <button
+                    onClick={() => { updateObject(obj.id, { interactRange: undefined }); pushHistory(); }}
+                    className="text-[10px] text-muted/60 hover:text-danger transition-colors px-1.5 py-1 shrink-0"
+                  >
+                    기본값
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-muted/50">이 오브젝트의 E/approach 발동 거리. 비우면 씬 기본값을 씁니다.</p>
+            </div>
+
             {/* 대화(말풍선) — 플레이 모드에서 오브젝트 위에 뜨는 순차 문장 */}
             <div className="space-y-1.5">
               <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">대화 말풍선</span>
