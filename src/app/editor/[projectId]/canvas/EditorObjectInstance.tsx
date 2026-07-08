@@ -87,7 +87,7 @@ function LightObjectInstance({ object }: Props) {
 
 
   const handleClick = (shiftKey: boolean) => {
-    if (object.locked) return;
+    if (object.locked) { if (!shiftKey) selectObject(null); return; }
     const targetId = findRootAncestorId(object);
     if (shiftKey) toggleSelectObject(targetId);
     else selectObject(targetId);
@@ -190,7 +190,7 @@ function GroupObjectInstance({ object }: Props) {
       object.scale.x, object.scale.y, object.scale.z, object.visible]);
 
   const handleClick = (shiftKey: boolean) => {
-    if (object.locked) return;
+    if (object.locked) { if (!shiftKey) selectObject(null); return; }
     // 중첩 그룹인 경우 최상위 조상 그룹을 선택
     const targetId = findRootAncestorId(object);
     if (shiftKey) toggleSelectObject(targetId);
@@ -269,7 +269,7 @@ export function EditorObjectInstance({ object }: Props) {
   const metalness = object.material?.metalness ?? 0.1;
   const emissive = object.material?.emissive ?? '#000000';
   const handleClick = (shiftKey: boolean) => {
-    if (object.locked) return;
+    if (object.locked) { if (!shiftKey) selectObject(null); return; }
     // 그룹 내부 오브젝트면 최상위 조상 그룹을 선택
     const targetId = findRootAncestorId(object);
     if (shiftKey) toggleSelectObject(targetId);

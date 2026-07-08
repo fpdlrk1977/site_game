@@ -374,6 +374,9 @@ function GlbClipPicker({ url, value, onChange }: { url: string; value: string; o
 // 기존 씬 설정(HDR 프리셋 + 라이트 강도/태양 위치 + 노출)을 한 번에 세팅.
 // 클릭 시 updateEnvironment로 묶음 적용 — 개별 값은 이후 각 컨트롤에서 미세조정 가능.
 const MOOD_PRESETS: { id: string; label: string; emoji: string; env: Partial<EnvSchema> }[] = [
+  // 기본값 복귀 — HDR/라이트/노출을 DEFAULT_ENVIRONMENT 상태로 되돌린다(무드 해제).
+  { id: 'default', label: '기본', emoji: '↺', env: { hdrPreset: 'none', toneMappingExposure: 1,
+    lights: { ambientIntensity: 0.6, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 } } } },
   { id: 'morning', label: '아침', emoji: '🌅', env: { hdrPreset: 'dawn', toneMappingExposure: 1.05,
     lights: { ambientIntensity: 0.55, directionalIntensity: 1.0, directionalPosition: { x: 8, y: 5, z: 6 } } } },
   { id: 'noon', label: '한낮', emoji: '☀️', env: { hdrPreset: 'park', toneMappingExposure: 1.0,
@@ -391,6 +394,7 @@ function EnvironmentPanel() {
   const { environment, updateEnvironment, pushHistory, assets, projectId } = useSceneStore();
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(true);
+  const [moodSel, setMoodSel] = useState(''); // 마지막으로 적용한 Mood(표시용) — env에 저장되진 않음
   const [groundTexUploading, setGroundTexUploading] = useState(false);
   const groundTexInputRef = useRef<HTMLInputElement>(null);
   const [boundaryTexUploading, setBoundaryTexUploading] = useState(false);
@@ -681,19 +685,15 @@ function EnvironmentPanel() {
         <SectionHeader title="Mood" />
         <div className="px-3 pb-3">
           <p className="text-[10px] text-muted/60 mb-2">한 번에 조명·배경·노출을 세팅합니다. 이후 아래에서 미세조정하세요.</p>
-          <div className="grid grid-cols-5 gap-1">
-            {MOOD_PRESETS.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => { updateEnvironment(m.env); pushHistory(); }}
-                title={m.label}
-                className="flex flex-col items-center gap-0.5 py-1.5 rounded-xs bg-background hover:bg-primary/10 border border-transparent hover:border-primary/40 text-muted hover:text-foreground transition-all"
-              >
-                <span className="text-sm leading-none">{m.emoji}</span>
-                <span className="text-[9px]">{m.label}</span>
-              </button>
-            ))}
-          </div>
+          <SelectBox
+            value={moodSel}
+            onChange={(id) => {
+              const m = MOOD_PRESETS.find((p) => p.id === id);
+              if (m) { updateEnvironment(m.env); pushHistory(); setMoodSel(id); }
+            }}
+            options={MOOD_PRESETS.map((m) => ({ value: m.id, label: `${m.emoji} ${m.label}` }))}
+            placeholder="무드 선택..."
+          />
         </div>
       </GroupBox>
 

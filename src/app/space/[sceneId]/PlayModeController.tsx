@@ -452,13 +452,16 @@ export function PlayModeController({
 
     // 카메라 — 포커스 지점이 있으면 대상을 프레이밍(줌), 없으면 캐릭터 팔로우
     if (focusPoint) {
-      // 대상 크기(radius)에 맞춰 적당한 거리로 다가감. 현재 카메라가 보던 방향(side)은 유지.
+      // 대상 크기(radius)에 맞춰 적당한 거리로 다가감.
+      // 정면(수평) 프레이밍 — 현재 카메라가 있는 수평 방위(azimuth)는 유지하되 상하 틸트는 제거해
+      //   대상 중심과 같은 높이에서 수평으로 바라본다(위/아래에서 비스듬히 보던 문제 해소).
       _targetPos.current.set(focusPoint.x, focusPoint.y, focusPoint.z);
       const persp = camera as THREE.PerspectiveCamera;
       const fov = persp.isPerspectiveCamera ? persp.fov : 60;
       const dist = (focusPoint.radius / Math.sin((fov / 2) * DEG2RAD)) * 2.2;
       _camPos.current.copy(camera.position).sub(_targetPos.current);
-      if (_camPos.current.lengthSq() < 1e-6) _camPos.current.set(0.6, 0.5, 0.8);
+      _camPos.current.y = 0; // 수평화 — 카메라 높이를 대상 중심에 맞춰 정면 시선
+      if (_camPos.current.lengthSq() < 1e-6) _camPos.current.set(0, 0, 1);
       _camPos.current.normalize().multiplyScalar(dist).add(_targetPos.current);
       camera.position.lerp(_camPos.current, 0.12);
       camTarget.current.lerp(_targetPos.current, 0.15);
