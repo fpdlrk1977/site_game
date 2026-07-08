@@ -63,7 +63,9 @@ export interface EventSchema {
   // approach_enter/exit: 플레이 모드에서 캐릭터가 오브젝트 근접 범위(interact와 동일 반경, 기본 3m)에
   //   들어오거나 벗어날 때 키 없이 자동 발동. 오브젝트는 솔리드 유지 가능(area와 달리 센서 불필요).
   //   "다가가면 NPC가 손 흔들기/사운드" 같은 근접 자동 연출. area(임의 볼륨 진입)와 달리 오브젝트 중심 반경.
-  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit';
+  // dialogue_end: 이 오브젝트의 대화(말풍선)가 마지막 문장까지 재생되면 자동 발동(플레이 모드 전용).
+  //   "대사 끝나면 팝업/문 열기/씬 이동" 같은 대화→액션 연결. 세션당 1회(대화 세션 리셋 시 재발동 가능).
+  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit' | 'dialogue_end';
   action:
     | 'open_url'
     | 'show_popup'
@@ -218,6 +220,8 @@ export interface DialogueConfig {
   autoSec?: number;                         // auto일 때 문장 간 간격(초). 기본 2.5
   speaker?: string;                         // 화자 이름(말풍선 상단). 선택
   typing?: boolean;                         // 타이핑(타자기) 효과. 기본 true
+  once?: boolean;                           // 1회성 — 한 번 끝까지 본 대화는 이 세션(페이지) 동안 다시 안 뜸
+  endButtonLabel?: string;                  // dialogue_end 이벤트가 있을 때 마지막 문장에 뜨는 액션 버튼 라벨(기본 '확인')
 }
 
 export interface AssetRefSchema {

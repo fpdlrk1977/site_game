@@ -275,6 +275,7 @@ const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
   interact: 'Interact (E)',
   approach_enter: 'Approach In (근접)',
   approach_exit: 'Approach Out',
+  dialogue_end: '대사 종료 시',
 };
 const ACTION_LABELS: Record<string, string> = {
   open_url: 'URL 열기',
@@ -1413,6 +1414,7 @@ function InspectorInner() {
               { value: 'interact', label: 'Interact (E)' },
               { value: 'approach_enter', label: 'Approach In (근접)' },
               { value: 'approach_exit', label: 'Approach Out' },
+              { value: 'dialogue_end', label: '대사 종료 시' },
             ]}
           />
         </div>
@@ -1464,6 +1466,14 @@ function InspectorInner() {
           (In=들어올 때, Out=벗어날 때). 다가가면 NPC가 손 흔들기·사운드 재생 같은 연출에 쓰세요.
           오브젝트를 <b>솔리드로 유지</b>한 채 쓸 수 있습니다(Area와 달리 센서 불필요).
           영역 반경 기반이라 임의 구역 트리거는 Area를 쓰세요.
+        </p>
+      )}
+
+      {newTrigger === 'dialogue_end' && (
+        <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
+          이 오브젝트의 <b>대화(말풍선) 마지막 문장에 액션 버튼</b>이 뜨고, 방문자가 <b>버튼을 누르면</b> 발동합니다
+          (자동으로 넘어가지 않아요). &quot;대사 끝나면 팝업 열기·씬 이동·문 열기&quot; 같은 연결에 쓰세요.
+          아래 <b>대화 말풍선</b>에 대사를 먼저 채우고, 버튼 이름은 대화 설정에서 정할 수 있어요. 플레이 모드 전용.
         </p>
       )}
 
@@ -2456,6 +2466,22 @@ function InspectorInner() {
                 <Toggle value={dlg.typing !== false} onChange={(v) => { setDlg({ typing: v }); pushHistory(); }} />
                 <span>타이핑 효과</span>
               </label>
+              <label className="flex items-center gap-2 text-[10px] text-muted/70">
+                <Toggle value={dlg.once === true} onChange={(v) => { setDlg({ once: v }); pushHistory(); }} />
+                <span>1회성 (한 번 다 보면 이 세션 동안 다시 안 뜸)</span>
+              </label>
+              {obj.events.some((e) => e.trigger === 'dialogue_end') && (
+                <label className="flex items-center gap-1.5 text-[10px] text-muted/70">
+                  <span className="shrink-0">종료 버튼</span>
+                  <input
+                    value={dlg.endButtonLabel ?? ''}
+                    onChange={(e) => setDlg({ endButtonLabel: e.target.value })}
+                    onBlur={pushHistory}
+                    placeholder="확인 (기본)"
+                    className="w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground placeholder:text-muted/40 outline-none focus:border-primary/50"
+                  />
+                </label>
+              )}
               <p className="text-muted/50 text-[10px]">
                 플레이 모드 전용 · 오브젝트 바로 위 표시. 비워두면 안 뜸. 여러 문장이면 순서대로.
               </p>
