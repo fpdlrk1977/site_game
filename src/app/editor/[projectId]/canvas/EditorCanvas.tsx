@@ -275,7 +275,7 @@ export function EditorCanvas() {
         <Canvas
           id="editor-canvas"
           shadows="percentage"
-          camera={{ position: [5, 4, 8], fov: 60 }}
+          camera={{ position: [9, 7, 13], fov: 60 }}
           gl={{ preserveDrawingBuffer: true, toneMapping: THREE.LinearToneMapping }}
           onPointerMissed={() => {
             if (!isDraggingRef.current) useSceneStore.getState().selectObject(null);
@@ -388,17 +388,20 @@ export function EditorCanvas() {
           <OrbitControls
             ref={orbitRef}
             makeDefault
+            enableDamping={false}
+            zoomSpeed={2}
             minPolarAngle={0.1}
-            maxPolarAngle={Math.PI / 2 - 0.02}
+            maxPolarAngle={Math.PI / 2 - 0.08}
             minDistance={1}
             maxDistance={200}
             onChange={() => {
               const ctrl = orbitRef.current;
               if (!ctrl) return;
-              // 패닝으로 타겟이 바닥 아래로 내려가면 바닥이 화면 위로 올라가는 현상 방지
+              // 패닝으로 타겟이 바닥 아래로 내려가면 바닥이 화면 위로 올라가는 현상 방지.
+              // 카메라는 target.y≥0 + maxPolarAngle<90° 조합으로 항상 바닥 위에 있으므로
+              // position.y를 직접 클램프하지 않는다 — 직접 클램프는 휠 줌(dolly)과 싸워
+              // 낮은 각도에서 확대가 안 먹던 원인이었다.
               if (ctrl.target.y < 0) ctrl.target.y = 0;
-              // 카메라 자체도 바닥 아래로 내려가지 않도록
-              if (ctrl.object.position.y < 0.3) ctrl.object.position.y = 0.3;
             }}
           />
         </Canvas>
