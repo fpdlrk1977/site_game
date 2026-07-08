@@ -228,7 +228,8 @@ export function EditorObjectInstance({ object }: Props) {
   const wireframeMode = useSceneStore((s) => s.wireframeMode);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
   const [hovered, setHovered] = useState(false);
-  const handlePointerOver = (e: { stopPropagation: () => void }) => { e.stopPropagation(); setHovered(true); };
+  // 잠긴 오브젝트는 선택뿐 아니라 호버 하이라이트도 뜨지 않도록 hovered=true를 무시한다
+  const handlePointerOver = (e: { stopPropagation: () => void }) => { e.stopPropagation(); if (!object.locked) setHovered(true); };
   const handlePointerOut = (e: { stopPropagation: () => void }) => { e.stopPropagation(); setHovered(false); };
 
   // useLayoutEffect: 커밋 중 동기 등록 → 재부모화(언마운트→리마운트) 시 기즈모가
@@ -364,7 +365,7 @@ export function EditorObjectInstance({ object }: Props) {
             selected={isSelected}
             hovered={hovered}
             onClick={(shiftKey) => handleClick(shiftKey)}
-            onHoverChange={setHovered}
+            onHoverChange={(h) => setHovered(h && !object.locked)}
             wireframe={wireframeMode}
             colliderGuide={object.physics.enabled ? (object.physics.isSensor ? 'sensor' : 'solid') : undefined}
           />

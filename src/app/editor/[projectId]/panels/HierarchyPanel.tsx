@@ -54,7 +54,7 @@ function HierarchyItem({
   obj, depth, index, isExpanded, onToggleExpand, onClickItem,
   dragEnabled, isDragging, dropPos, onDragStartItem, onDragOverItem, onDropItem, onDragEndItem,
 }: ItemProps) {
-  const { selectedId, selectedIds, updateObject, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected } = useSceneStore();
+  const { selectedId, selectedIds, updateObject, setObjectLocked, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected } = useSceneStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
@@ -178,7 +178,7 @@ function HierarchyItem({
             <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { locked: !obj.locked }); pushHistory(); }}
+            onClick={(e) => { e.stopPropagation(); setObjectLocked(obj.id, !obj.locked); pushHistory(); }}
             className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${obj.locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             title={obj.locked ? '잠금 해제' : '잠금'}
           >

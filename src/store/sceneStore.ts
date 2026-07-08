@@ -83,6 +83,7 @@ interface SceneActions {
   requestRecallBookmark: (slot: number) => void;
   setCameraBookmark: (slot: number, position: [number, number, number], target: [number, number, number]) => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
+  setObjectLocked: (id: string, locked: boolean) => void;
   moveObject: (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   duplicateSelected: () => void;
   // 선택 오브젝트를 일정 간격으로 count개(원본 포함)까지 배열 복제 — 울타리·기둥 등. offset은 복제 간 간격.
@@ -500,6 +501,20 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({
       _prevSnapshot: _prevSnapshot ?? { objects, environment },
       objects: objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+      isModified: true,
+    });
+  },
+
+  // 잠금 토글 — 잠글 때는 현재 선택에서도 제외한다(잠긴 오브젝트는 기즈모/하이라이트 대상이 아니므로).
+  // updateObject와 동일하게 _prevSnapshot만 세팅 → 호출부의 pushHistory()가 커밋(undo 1회).
+  setObjectLocked: (id, locked) => {
+    const { objects, environment, _prevSnapshot, selectedId, selectedIds } = get();
+    const nextIds = locked ? selectedIds.filter((x) => x !== id) : selectedIds;
+    set({
+      _prevSnapshot: _prevSnapshot ?? { objects, environment },
+      objects: objects.map((o) => (o.id === id ? { ...o, locked } : o)),
+      selectedIds: nextIds,
+      selectedId: locked && selectedId === id ? (nextIds[nextIds.length - 1] ?? null) : selectedId,
       isModified: true,
     });
   },
