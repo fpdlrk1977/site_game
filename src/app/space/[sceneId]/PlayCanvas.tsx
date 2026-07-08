@@ -237,6 +237,11 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   const interactables = allObjects
     .filter((o) => !o.parentId && o.visible && needsProximity(o))
     .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z }));
+  // approach 근접 자동 트리거 대상 — approach_enter/exit 이벤트를 가진 루트 오브젝트.
+  // (interact와 동일 반경. 오브젝트는 솔리드 유지 가능 — area와 달리 센서 불필요)
+  const approachables = allObjects
+    .filter((o) => !o.parentId && o.visible && o.events?.some((e) => e.trigger === 'approach_enter' || e.trigger === 'approach_exit'))
+    .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z }));
   // 런타임 통과(콜라이더 제거) 대상 — set_passable/toggle_collision. 시각은 유지하고 콜라이더만 뺀다(문 열림).
   const isPassable = (o: ObjectNodeSchema) => !!passableIds?.has(o.id);
   const rootObjects = allObjects.filter((o) => !o.parentId);
@@ -402,6 +407,15 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
         onInteract={(id) => {
           const obj = allObjects.find((o) => o.id === id);
           if (obj) onObjectClick(obj, 'interact');
+        }}
+        approachables={approachables}
+        onApproachEnter={(id) => {
+          const obj = allObjects.find((o) => o.id === id);
+          if (obj && obj.events.some((e) => e.trigger === 'approach_enter')) onObjectClick(obj, 'approach_enter');
+        }}
+        onApproachExit={(id) => {
+          const obj = allObjects.find((o) => o.id === id);
+          if (obj && obj.events.some((e) => e.trigger === 'approach_exit')) onObjectClick(obj, 'approach_exit');
         }}
       />
     </Physics>

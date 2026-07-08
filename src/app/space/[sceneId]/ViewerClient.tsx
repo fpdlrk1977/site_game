@@ -210,6 +210,11 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         const targetId = sep >= 0 ? ev.value.slice(0, sep) : ev.value;
         const clip = sep >= 0 ? ev.value.slice(sep + 1) : '';
         if (targetId && clip) setClipRequests((m) => ({ ...m, [targetId]: { name: clip, t: Date.now() } }));
+      } else if (ev.action === 'play_animation' && ev.value) {
+        // 자기 자신 클립 재생 — 모든 트리거에서 동작하도록 clipRequests(→ ViewerObject externalClip)로 라우팅.
+        // 핵심: interact(E)에서도 재생돼 "근접 하이라이트+E프롬프트"와 애니메이션이 같은 상호작용에 묶인다.
+        // click/hover는 ViewerObject internalClip, area는 PhysicsObject activeClip 경로와 중복되나 같은 클립이라 무해.
+        setClipRequests((m) => ({ ...m, [obj.id]: { name: ev.value, t: Date.now() } }));
       } else if (ev.action === 'move_object' && ev.value) {
         // value = "대상objectId|dx,dy,dz|초" — 원래 저장 위치 기준 오프셋으로 부드럽게 이동
         const [targetId, offsetStr, durStr] = ev.value.split('|');

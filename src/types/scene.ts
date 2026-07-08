@@ -54,7 +54,10 @@ export interface EventSchema {
   id: string;
   // interact: 플레이 모드에서 캐릭터가 근접(기본 3m)했을 때 E키(모바일=액션 버튼)로 발동.
   //   NPC 대화·문 열기·아이템 줍기 등 "다가가 상호작용" 문법. 탐색 모드에선 발동 안 함(클릭 이벤트로 대체).
-  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact';
+  // approach_enter/exit: 플레이 모드에서 캐릭터가 오브젝트 근접 범위(interact와 동일 반경, 기본 3m)에
+  //   들어오거나 벗어날 때 키 없이 자동 발동. 오브젝트는 솔리드 유지 가능(area와 달리 센서 불필요).
+  //   "다가가면 NPC가 손 흔들기/사운드" 같은 근접 자동 연출. area(임의 볼륨 진입)와 달리 오브젝트 중심 반경.
+  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit';
   action:
     | 'open_url'
     | 'show_popup'

@@ -272,6 +272,8 @@ const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
   area_enter: 'Area Enter',
   area_exit: 'Area Exit',
   interact: 'Interact (E)',
+  approach_enter: 'Approach In (근접)',
+  approach_exit: 'Approach Out',
 };
 const ACTION_LABELS: Record<string, string> = {
   open_url: 'URL 열기',
@@ -1294,6 +1296,7 @@ function InspectorInner() {
   // Is Sensor를 켜면 오브젝트가 통과 가능한 트리거 영역이 된다는 안내만 표시.
   const showAreaEnterHint = newTrigger === 'area_enter' || newTrigger === 'area_exit';
   const showInteractHint = newTrigger === 'interact';
+  const showApproachHint = newTrigger === 'approach_enter' || newTrigger === 'approach_exit';
 
   // 대화(말풍선) — dialogue 또는 레거시 interactLabel에서 편집값을 구성
   const dlg: DialogueConfig = obj.dialogue ?? (obj.interactLabel?.trim()
@@ -1318,6 +1321,8 @@ function InspectorInner() {
               { value: 'area_enter', label: 'Area Enter' },
               { value: 'area_exit', label: 'Area Exit' },
               { value: 'interact', label: 'Interact (E)' },
+              { value: 'approach_enter', label: 'Approach In (근접)' },
+              { value: 'approach_exit', label: 'Approach Out' },
             ]}
           />
         </div>
@@ -1360,6 +1365,15 @@ function InspectorInner() {
           플레이 모드에서 캐릭터가 가까이(약 3m) 가면 화면에 <b>E</b> 프롬프트가 뜨고,
           E키(모바일=버튼)를 누르면 발동합니다. NPC 대화·간판·아이템 등에 쓰세요.
           탐색 모드에선 발동하지 않습니다(대신 Click 트리거 사용).
+        </p>
+      )}
+
+      {showApproachHint && (
+        <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
+          플레이 모드에서 캐릭터가 오브젝트에 근접(약 3m)하면 <b>키 없이 자동</b>으로 발동합니다
+          (In=들어올 때, Out=벗어날 때). 다가가면 NPC가 손 흔들기·사운드 재생 같은 연출에 쓰세요.
+          오브젝트를 <b>솔리드로 유지</b>한 채 쓸 수 있습니다(Area와 달리 센서 불필요).
+          영역 반경 기반이라 임의 구역 트리거는 Area를 쓰세요.
         </p>
       )}
 

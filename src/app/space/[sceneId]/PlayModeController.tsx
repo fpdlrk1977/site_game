@@ -132,6 +132,12 @@ interface Props {
   onInteractableChange?: (objectId: string | null) => void;
   /** E키(또는 모바일 액션)로 상호작용 발동 시 */
   onInteract?: (objectId: string) => void;
+  /** approach_enter/exit 이벤트를 가진 오브젝트들의 월드 위치 (근접 자동 트리거용) */
+  approachables?: { id: string; x: number; y: number; z: number }[];
+  /** 캐릭터가 approach 대상 근접 범위에 새로 들어왔을 때 */
+  onApproachEnter?: (objectId: string) => void;
+  /** 캐릭터가 approach 대상 근접 범위를 벗어났을 때 */
+  onApproachExit?: (objectId: string) => void;
 }
 
 export function PlayModeController({
@@ -150,10 +156,15 @@ export function PlayModeController({
   interactRange = 3,
   onInteractableChange,
   onInteract,
+  approachables,
+  onApproachEnter,
+  onApproachExit,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   // 현재 근접한 상호작용 대상 id (useFrame이 갱신, keydown이 읽음)
   const activeInteractRef = useRef<string | null>(null);
+  // 현재 approach 범위 안에 있는 오브젝트 id 집합 (enter/exit 경계 감지용)
+  const approachingRef = useRef<Set<string>>(new Set());
   // keydown 핸들러(1회 등록)가 최신 콜백을 읽도록 ref로 보관
   const onInteractRef = useRef(onInteract);
   onInteractRef.current = onInteract;
@@ -390,6 +401,23 @@ export function PlayModeController({
     } else if (activeInteractRef.current !== null) {
       activeInteractRef.current = null;
       onInteractableChange?.(null);
+    }
+
+    // ── approach 근접 자동 트리거 — 범위 경계를 넘는 순간 enter/exit 발동 ──
+    // (interact와 동일 반경. 오브젝트별 in/out 상태를 Set으로 추적해 프레임마다 경계 교차만 콜백)
+    if (approachables && approachables.length > 0) {
+      const inside = approachingRef.current;
+      for (const it of approachables) {
+        const dx = it.x - newPos.x;
+        const dy = it.y - newPos.y;
+        const dz = it.z - newPos.z;
+        const within = Math.sqrt(dx * dx + dy * dy + dz * dz) <= interactRange;
+        const was = inside.has(it.id);
+        if (within && !was) { inside.add(it.id); onApproachEnter?.(it.id); }
+        else if (!within && was) { inside.delete(it.id); onApproachExit?.(it.id); }
+      }
+    } else if (approachingRef.current.size > 0) {
+      approachingRef.current.clear();
     }
 
     // 애니메이션 상태 업데이트
