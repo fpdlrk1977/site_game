@@ -108,10 +108,10 @@ function HierarchyItem({
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
         onContextMenu={(e) => { e.preventDefault(); selectObject(obj.id); setMenuOpen(true); }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
-        className={`flex items-center pr-2 py-[3px] rounded-xs cursor-pointer group transition-all text-xs ${
+        className={`flex items-center px-1 py-[2px] rounded-xs cursor-pointer group transition-all text-xs ${
           isSelected
-            ? 'bg-primary/20 text-foreground'
-            : 'text-foreground/70 hover:bg-surface'
+            ? 'bg-primary/10 text-foreground'
+            : 'text-foreground/70 hover:bg-background'
         } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-muted' : ''} ${isDragging ? 'opacity-30' : ''}`}
       >
         {/* 깊이 인덴트 + 트리 라인 */}
@@ -130,7 +130,10 @@ function HierarchyItem({
 
         {/* 그룹 펼치기/접기 (그룹일 때만 화살표 표시, 일반 오브젝트는 spacer 없음) */}
         {hasChildren && (
-          <span style={{ marginLeft: depth === 0 ? 8 : 0 }} className="shrink-0">
+          <span 
+          // style={{ marginLeft: depth === 0 ? 8 : 0 }} 
+          className="shrink-0"
+          >
             <button
               onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
               className="w-4 h-4 flex items-center justify-center text-[9px] text-muted hover:text-foreground transition-colors rounded"
@@ -142,8 +145,9 @@ function HierarchyItem({
 
         {/* 오브젝트 아이콘 */}
         <span
-          style={{ marginLeft: !hasChildren && depth === 0 ? 8 : 0 }}
-          className={`text-[11px] w-4 text-center shrink-0 ${isSelected ? 'opacity-90' : 'opacity-50'}`}
+          // style={{ marginLeft: !hasChildren && depth === 0 ? 8 : 0 }}
+          // className={`text-[11px] w-4 text-center shrink-0 ${isSelected ? 'opacity-90' : 'opacity-50'}`}
+          className={`text-[11px] w-4 text-center shrink-0`}
         >
           {getIcon(obj)}
         </span>
