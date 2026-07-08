@@ -390,6 +390,7 @@ export function EditorCanvas() {
             makeDefault
             enableDamping={false}
             zoomSpeed={2}
+            screenSpacePanning={false}
             minPolarAngle={0.1}
             maxPolarAngle={Math.PI / 2 - 0.08}
             minDistance={1}

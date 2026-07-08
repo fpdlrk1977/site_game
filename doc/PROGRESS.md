@@ -67,9 +67,16 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **Events E2 — 오브젝트 이동 + 사운드**: `move_object`(value `"objectId|dx,dy,dz|초"` — **원래 저장 위치 기준** 오프셋으로 easeInOutQuad 이동, (0,0,0) 이벤트로 원위치 복귀) + `play_sound`(value=오디오 URL, URL별 HTMLAudioElement 재사용). 구현은 visOverride와 동일 패턴 — `ViewerClient`의 `posOverride`를 effectiveScene에 주입, 단일 rAF 루프가 이징. rapier 2.2.0은 RigidBody position prop 변경 시 setTranslation 텔레포트라 **플레이 모드에서 콜라이더도 함께 이동**(E2E 검증: `/test/move-object` 페이지 + 헤드리스 Edge — 탐색 클릭 move·플레이 area_enter move·Audio 패치 사운드 로그 모두 확인). 에디터는 대상 SelectBox+XYZRow 이동량+시간 입력, 사운드는 URL 입력·▶ 미리듣기.
 - **Events E2 완료 — 인터랙션 어포던스**: 클릭/호버 이벤트가 있는 오브젝트 위에 카메라를 향한 펄스 **힌트 링**을 띄워 방문자에게 상호작용 가능함을 알림. `ViewerCanvas`의 별도 레이어 `InteractionHints`로 구현 — **오브젝트 렌더 경로(재질/GLB) 미변경**(depthTest=false + renderOrder 999, `objWorldPos` 재사용, useFrame 빌보드·펄스). **탐색 모드 뷰어/임베드에서만** 렌더(플레이 모드·에디터 미표시). 씬별 토글 `EnvSchema.showInteractionHints`(미설정=켜짐) — 에디터 Environment 패널 'Interaction' 섹션. area_enter/exit만 있는 오브젝트엔 링 없음(호버로 발견되는 트리거가 아니라서). E2E: `/test/move-object`에서 클릭·호버 오브젝트에만 링 뜨는 것 스크린샷 확인.
 
-## 최근 완료 (2026-07-08) — 에디터 카메라 2건
-- **초기 카메라 더 멀리**: `EditorCanvas` Canvas `camera.position` `[5,4,8]`(원점 거리 ~10) → `[9,7,13]`(~17.3)로 뒤로 빼 씬 전체가 보이게.
-- **휠 줌: 스텝↑ + '확대 안 먹던' 버그 수정**: (1) `OrbitControls`에 `zoomSpeed={2}` 추가(기본 1이라 많이 굴려야 했음). (2) **진짜 원인** — `onChange`가 `ctrl.object.position.y < 0.3`을 직접 클램프해, 카메라를 낮은 각도로 내리면 휠 dolly가 대상 쪽으로 당길 때 이 클램프가 카메라를 도로 위로 밀어 **줌을 상쇄**(카메라 움직인 뒤 휠 막 굴려도 확대 안 되던 증상)했음 → position.y 직접 클램프 **제거**(target.y≥0 + `maxPolarAngle`<90°(0.02→0.08로 살짝 강화) 조합이면 카메라는 항상 바닥 위라 불필요). 검증: tsc 클린. **실동작 브라우저 확인 필요**(에디터 인증 필요 — 낮은 각도에서 휠 확대 잘 되는지·바닥 뚫는지).
+## 최근 완료 (2026-07-08~09) — 에디터 카메라 손질 (모두 `EditorCanvas` `OrbitControls`/Canvas)
+- **초기 카메라 더 멀리**: Canvas `camera.position` `[5,4,8]`(원점 거리 ~10) → `[9,7,13]`(~17.3)로 뒤로 빼 씬 전체가 보이게.
+- **휠 줌: 스텝↑ + '확대 안 먹던' 버그 수정**: (1) `zoomSpeed={2}` 추가(기본 1이라 많이 굴려야 했음). (2) **진짜 원인** — `onChange`가 `ctrl.object.position.y < 0.3`을 직접 클램프해, 카메라를 낮은 각도로 내리면 휠 dolly가 대상 쪽으로 당길 때 이 클램프가 카메라를 도로 위로 밀어 **줌을 상쇄**(카메라 움직인 뒤 휠 막 굴려도 확대 안 되던 증상)했음 → position.y 직접 클램프 **제거**(target.y≥0 + `maxPolarAngle`<90°(0.02→0.08) 조합이면 카메라는 항상 바닥 위라 불필요).
+- **관성(damping) 제거**: `enableDamping={false}` — drei 기본값이 켜져 있어 드래그 놓아도 스르륵 미끄러지던 것 → 손 떼면 즉시 멈춤.
+- **우클릭 패닝이 각도를 바꾸던 버그 수정**: `screenSpacePanning={false}` — 기본(화면평면 패닝)일 땐 비스듬한 각도에서 세로 드래그에 월드 Y성분이 섞이고, `onChange`의 `target.y<0` 클램프가 **타겟만 붙잡고 카메라는 안 붙잡아** 각도가 정면으로 눕던 문제 → 바닥평면(XZ) 패닝으로 바꿔 타겟 y 불변 → 각도 안 바뀜(사용자 기대 "우클릭=바닥 이동"과도 일치).
+- 검증: 모두 tsc 클린. **에디터 인증 필요 → 브라우저 실동작 확인 대기**.
+- **참고(현 마우스 스킴)**: 회전=**Ctrl+좌클릭**, 패닝=우클릭, 선택박스=좌클릭, 줌=휠. (사용자는 ctrl+우클릭=회전으로 기대했음 — 원하면 `mouseButtons`로 추가 가능.)
+- **미해결/후속 (2026-07-09 중단, 다음에)**:
+  - **확대 시 패닝/줌이 거리비례라 찔끔찔끔** — 근본 해법은 **"선택 오브젝트로 포커스"**(F키/더블클릭 → orbit pivot을 선택물로 이동+프레이밍). 현재 없음. 사용자에게 추가 제안했고 **보류(오늘은 여기까지)**. `cameraViewRequest`(시점 프리셋)·`cameraBookmarks`는 이미 있음 → 이걸 참고해 `focusSelected` 스토어 액션+`EditorCanvas` 핸들러로 구현 예정.
+  - 옵션 후보: `zoomToCursor`(커서 쪽으로 줌 — 사용자 설명은 했으나 미적용), ctrl+우클릭 회전 매핑.
 
 ## 최근 완료 (2026-07-08) — UX 수정 3건
 - **잠긴 오브젝트 클릭 시 선택 해제**: 오브젝트 선택 후 잠긴 오브젝트를 클릭하면 선택이 안 풀리던 문제(잠긴 것은 R3F가 hit 처리 → `onPointerMissed` 미발동, `handleClick`은 `if(locked) return`이라 아무 것도 안 함) → 세 `handleClick`(라이트/프리미티브·콘텐츠/GLB)의 잠금 분기를 `if(object.locked){ if(!shiftKey) selectObject(null); return; }`로 변경 → 잠긴 것 클릭 = 빈 공간 클릭처럼 선택 해제(shift+클릭은 다중선택 유지 위해 무변경). 검증: tsc 클린.
