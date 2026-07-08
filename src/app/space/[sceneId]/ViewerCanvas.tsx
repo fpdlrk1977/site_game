@@ -212,14 +212,26 @@ interface Props {
   dialogueNonce?: number;
   /** 런타임 통과 가능(콜라이더 제거) 오브젝트 id 집합 — set_passable/toggle_collision */
   passableIds?: Set<string>;
+  /** 플레이 모드 카메라 포커스 대상 objectId — focus_object가 플레이에서 발동됐을 때 */
+  playFocusId?: string | null;
+  /** 캐릭터 이동 잠금 — 팝업·포커스 등 상호작용 진행 중 */
+  movementLocked?: boolean;
 }
 
 const EMPTY_CLIPS: Record<string, ClipReq> = {};
 
-export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, playFocusId, movementLocked }: Props) {
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
   const orbitRef = useRef<OrbitControlsImpl>(null);
+  // 플레이 모드 포커스 지점 — 대상 objectId의 월드 위치+반경을 PlayCanvas에 넘겨 카메라 줌에 사용
+  const playFocusPoint = playFocusId
+    ? (() => {
+        const wp = objWorldPos(objects, playFocusId);
+        if (!wp) return null;
+        return { x: wp.x, y: wp.y, z: wp.z, radius: objFocusRadius(objects, scene.assets ?? [], playFocusId) };
+      })()
+    : null;
 
   const useHdr = (environment.hdrPreset ?? 'none') !== 'none';
   const isSkyMode = !useHdr && environment.sky.type === 'sky';
@@ -364,7 +376,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* ── 플레이 모드 ── */}
       {playMode && (
         <Suspense fallback={null}>
-          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} />
+          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} focusPoint={playFocusPoint} movementLocked={movementLocked} />
         </Suspense>
       )}
 

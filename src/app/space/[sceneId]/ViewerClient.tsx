@@ -8,6 +8,13 @@ import { RichContent } from '@/components/ui/RichContent';
 import { effectiveDialogue } from './useObjectDialogue';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, Vector3 } from '@/types/scene';
 
+// 이 액션들이 (플레이 모드에서) 발동되면 상호작용이 끝날 때까지(팝업 닫기/Esc) 캐릭터 이동을 잠근다.
+// 새로 "발동 중엔 못 움직이게" 하고 싶은 액션이 생기면 여기에 추가만 하면 자동 적용된다.
+const MOVEMENT_LOCKING_ACTIONS: ReadonlySet<EventSchema['action']> = new Set<EventSchema['action']>([
+  'show_popup',
+  'focus_object',
+]);
+
 const ViewerCanvas = dynamic(
   () => import('./ViewerCanvas').then((m) => m.ViewerCanvas),
   {
@@ -61,6 +68,19 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 카메라 요청 — id가 objectId면 그 오브젝트로 포커스, null이면 초기(홈) 시점으로 복귀
   const [focusRequest, setFocusRequest] = useState<{ id: string | null; t: number } | null>(null);
   const resetCamera = () => setFocusRequest({ id: null, t: Date.now() });
+  // 플레이 모드 카메라 포커스 대상 — focus_object가 플레이에서 발동되면 그 오브젝트로 줌(팔로우 대체).
+  const [playFocus, setPlayFocus] = useState<{ id: string } | null>(null);
+  // 상호작용 진행 중 플래그 — true면 캐릭터 이동 잠금. MOVEMENT_LOCKING_ACTIONS 발동 시 켜짐.
+  const [interactionLock, setInteractionLock] = useState(false);
+  // 상호작용 종료 — 팝업 닫기·카메라 포커스 복귀·이동 잠금 해제를 한 번에 (팝업 닫기 버튼/Esc가 호출)
+  const endInteraction = () => { setPopup(null); setPlayFocus(null); setInteractionLock(false); };
+  // Esc로 상호작용 종료 (팝업 없는 포커스 단독일 때도 빠져나올 수 있게)
+  useEffect(() => {
+    if (!interactionLock) return;
+    const onKey = (e: KeyboardEvent) => { if (e.code === 'Escape') endInteraction(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [interactionLock]);
   // animate_object 액션용 런타임 클립 요청 (objectId → {name, t})
   const [clipRequests, setClipRequests] = useState<Record<string, { name: string; t: number }>>({});
 
@@ -143,9 +163,11 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
 
-  // 탐색 모드로 돌아가면 근접 프롬프트 정리 (PlayCanvas 언마운트 시 null 콜백이 안 올 수 있음)
+  // 모드 전환 시 근접 프롬프트 + 진행 중 상호작용(포커스/잠금) 정리 — 잠금이 다음 모드로 새는 것 방지
   useEffect(() => {
     if (!playMode) setInteractTarget(null);
+    setPlayFocus(null);
+    setInteractionLock(false);
   }, [playMode]);
 
   // 방문 이벤트 수집
@@ -199,8 +221,9 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
           return { ...v, [ev.value]: !cur };
         });
       } else if (ev.action === 'focus_object' && ev.value) {
-        // 탐색 모드에서 카메라를 대상 오브젝트로 이동 (플레이 모드는 캐릭터 카메라라 무시됨)
-        setFocusRequest({ id: ev.value, t: Date.now() });
+        // 탐색 모드: OrbitControls 카메라를 대상으로 이동. 플레이 모드: 팔로우 대신 대상 줌(playFocus).
+        if (playMode) setPlayFocus({ id: ev.value });
+        else setFocusRequest({ id: ev.value, t: Date.now() });
       } else if (ev.action === 'reset_camera') {
         // 카메라를 초기 시점으로 복귀 (탐색 모드)
         resetCamera();
@@ -243,6 +266,11 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         }
       }
     }
+    // 이동 잠금 — 플레이 모드에서 이동을 막는 액션(팝업·포커스 등)이 하나라도 발동되면 상호작용 잠금.
+    // 해제는 endInteraction()(팝업 닫기/Esc). 중앙 목록 MOVEMENT_LOCKING_ACTIONS로 확장 관리.
+    if (playMode && matchingEvents.some((e) => MOVEMENT_LOCKING_ACTIONS.has(e.action))) {
+      setInteractionLock(true);
+    }
   };
 
   // E 프롬프트/버튼 표시 조건 — 근접 대상이 interact 이벤트를 갖거나, E로 여는 대화(show='interact')일 때.
@@ -254,7 +282,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} />
+      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} />
 
       {/* 상단 오버레이 — 독립 URL(/space)에서만 풀 UI */}
       {variant === 'standalone' && (
@@ -369,13 +397,13 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         <div className="absolute inset-0 flex items-center justify-center p-4 z-50">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setPopup(null)}
+            onClick={endInteraction}
           />
           <div className="relative bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-modal">
             <h3 className="text-lg font-bold text-slate-900 mb-3">{popup.title}</h3>
             <RichContent value={popup.content} onLight />
             <button
-              onClick={() => setPopup(null)}
+              onClick={endInteraction}
               className="mt-5 w-full py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold text-sm hover:from-violet-500 hover:to-cyan-500 transition-all"
             >
               닫기

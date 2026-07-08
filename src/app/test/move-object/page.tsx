@@ -83,6 +83,11 @@ const scene: ProjectSceneSchema = {
     // 플레이 모드 이동 대상 — 솔리드 physics: 비주얼이 RigidBody 자식이라
     // 움직이면 콜라이더 텔레포트까지 검증됨
     makeBox('target-b', 'TARGET-B', { x: -3.5, y: 0.75, z: 0 }, '#ef4444', { physics: true }),
+    // 플레이 모드 interact(E) 트리거 — 스폰(z=6) 앞에 두어 걸어가 E로 자기 자신을 위로 +3 이동.
+    //   "interact + move_object(self)"가 area/click과 동일하게 동작하는지 검증.
+    makeBox('interact-box', 'INTERACT-E', { x: 0, y: 0.75, z: 4 }, '#eab308', {
+      events: [{ id: 'ev-move-i', trigger: 'interact', action: 'move_object', value: 'interact-box|0,3,0|1' }],
+    }),
   ],
 };
 

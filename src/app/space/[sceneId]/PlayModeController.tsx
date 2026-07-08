@@ -138,6 +138,10 @@ interface Props {
   onApproachEnter?: (objectId: string) => void;
   /** 캐릭터가 approach 대상 근접 범위를 벗어났을 때 */
   onApproachExit?: (objectId: string) => void;
+  /** 플레이 모드 카메라 포커스 — 설정되면 팔로우 대신 이 지점을 프레이밍(줌). null이면 팔로우 복귀 */
+  focusPoint?: { x: number; y: number; z: number; radius: number } | null;
+  /** true면 캐릭터 이동(WASD/모바일/점프) 잠금 — 팝업·포커스 등 상호작용 진행 중 */
+  movementLocked?: boolean;
 }
 
 export function PlayModeController({
@@ -159,6 +163,8 @@ export function PlayModeController({
   approachables,
   onApproachEnter,
   onApproachExit,
+  focusPoint,
+  movementLocked = false,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   // 현재 근접한 상호작용 대상 id (useFrame이 갱신, keydown이 읽음)
@@ -298,6 +304,9 @@ export function PlayModeController({
       vz += -Math.cos(az) * mobile.fwd - Math.sin(az) * mobile.strafe;
     }
 
+    // 상호작용 잠금 — 이동 입력 무시(중력·낙사는 계속 적용, 캐릭터가 제자리에 멈춤)
+    if (movementLocked) { vx = 0; vz = 0; }
+
     const len = Math.sqrt(vx * vx + vz * vz);
     if (len > 0) { vx = (vx / len) * speed; vz = (vz / len) * speed; }
 
@@ -307,8 +316,8 @@ export function PlayModeController({
     }
     verticalVelRef.current -= GRAVITY * delta;
 
-    // 점프 — 직전 프레임의 지면 판정(computedGrounded)에서만 허용
-    if ((keys.current.space || mobile?.jump) && groundedRef.current) {
+    // 점프 — 직전 프레임의 지면 판정(computedGrounded)에서만 허용 (잠금 중 금지)
+    if ((keys.current.space || mobile?.jump) && groundedRef.current && !movementLocked) {
       verticalVelRef.current = playerJumpForce;
       groundedRef.current = false;
       keys.current.space = false;
@@ -435,19 +444,34 @@ export function PlayModeController({
       );
     }
 
-    // 팔로우 카메라
-    const d = cameraDistanceRef.current;
-    const el = elevationRef.current;
-    _targetPos.current.set(newPos.x, newPos.y + 1, newPos.z);
-    camTarget.current.lerp(_targetPos.current, 0.12);
+    // 카메라 — 포커스 지점이 있으면 대상을 프레이밍(줌), 없으면 캐릭터 팔로우
+    if (focusPoint) {
+      // 대상 크기(radius)에 맞춰 적당한 거리로 다가감. 현재 카메라가 보던 방향(side)은 유지.
+      _targetPos.current.set(focusPoint.x, focusPoint.y, focusPoint.z);
+      const persp = camera as THREE.PerspectiveCamera;
+      const fov = persp.isPerspectiveCamera ? persp.fov : 60;
+      const dist = (focusPoint.radius / Math.sin((fov / 2) * DEG2RAD)) * 1.6;
+      _camPos.current.copy(camera.position).sub(_targetPos.current);
+      if (_camPos.current.lengthSq() < 1e-6) _camPos.current.set(0.6, 0.5, 0.8);
+      _camPos.current.normalize().multiplyScalar(dist).add(_targetPos.current);
+      camera.position.lerp(_camPos.current, 0.12);
+      camTarget.current.lerp(_targetPos.current, 0.15);
+      camera.lookAt(camTarget.current);
+    } else {
+      // 팔로우 카메라
+      const d = cameraDistanceRef.current;
+      const el = elevationRef.current;
+      _targetPos.current.set(newPos.x, newPos.y + 1, newPos.z);
+      camTarget.current.lerp(_targetPos.current, 0.12);
 
-    const camX = camTarget.current.x + d * Math.sin(az) * Math.cos(el);
-    const camY = camTarget.current.y + d * Math.sin(el);
-    const camZ = camTarget.current.z + d * Math.cos(az) * Math.cos(el);
+      const camX = camTarget.current.x + d * Math.sin(az) * Math.cos(el);
+      const camY = camTarget.current.y + d * Math.sin(el);
+      const camZ = camTarget.current.z + d * Math.cos(az) * Math.cos(el);
 
-    _camPos.current.set(camX, camY, camZ);
-    camera.position.lerp(_camPos.current, 0.1);
-    camera.lookAt(camTarget.current);
+      _camPos.current.set(camX, camY, camZ);
+      camera.position.lerp(_camPos.current, 0.1);
+      camera.lookAt(camTarget.current);
+    }
   });
 
   return (

@@ -219,9 +219,13 @@ interface Props {
   onInteractPromptChange?: (obj: ObjectNodeSchema | null) => void;
   /** 런타임 통과 가능(콜라이더 제거) 오브젝트 id 집합 — set_passable/toggle_collision */
   passableIds?: Set<string>;
+  /** 플레이 모드 카메라 포커스 지점(월드+반경) — 있으면 팔로우 대신 대상 줌 */
+  focusPoint?: { x: number; y: number; z: number; radius: number } | null;
+  /** 캐릭터 이동 잠금 — 팝업·포커스 등 상호작용 진행 중 */
+  movementLocked?: boolean;
 }
 
-export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds }: Props) {
+export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, focusPoint, movementLocked }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
@@ -417,6 +421,8 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
           const obj = allObjects.find((o) => o.id === id);
           if (obj && obj.events.some((e) => e.trigger === 'approach_exit')) onObjectClick(obj, 'approach_exit');
         }}
+        focusPoint={focusPoint}
+        movementLocked={movementLocked}
       />
     </Physics>
   );
