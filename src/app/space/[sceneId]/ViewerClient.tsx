@@ -395,10 +395,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       {/* 팝업 모달 */}
       {popup && (
         <div className="absolute inset-0 flex items-center justify-center p-4 z-50">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={endInteraction}
-          />
+          {/* 배경(overlay) 클릭으로는 닫히지 않음 — 오직 '닫기' 버튼으로만. 뒤 캔버스 클릭도 이 div가 가림 */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-modal">
             <h3 className="text-lg font-bold text-slate-900 mb-3">{popup.title}</h3>
             <RichContent value={popup.content} onLight />
@@ -410,6 +408,19 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
             </button>
           </div>
         </div>
+      )}
+
+      {/* 포커스 단독(팝업 없음) — 투명 차단막으로 뒤 캔버스 클릭 차단. 우상단 닫기 버튼 + Esc로 복귀 */}
+      {interactionLock && !popup && (
+        <>
+          <div className="absolute inset-0 z-40" />
+          <button
+            onClick={endInteraction}
+            className="absolute top-4 right-4 z-50 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm text-white text-xs font-semibold px-3 py-2 rounded-xs hover:bg-black/70 transition-colors"
+          >
+            ✕ 닫기 <span className="text-white/50">(Esc)</span>
+          </button>
+        </>
       )}
     </div>
   );

@@ -174,6 +174,9 @@ export function PlayModeController({
   // keydown 핸들러(1회 등록)가 최신 콜백을 읽도록 ref로 보관
   const onInteractRef = useRef(onInteract);
   onInteractRef.current = onInteract;
+  // 드래그/터치 회전 핸들러(1회 등록)가 최신 잠금 상태를 읽도록 ref로 보관
+  const lockedRef = useRef(movementLocked);
+  lockedRef.current = movementLocked;
   const { camera } = useThree();
   const { world } = useRapier();
   const elevationRef = useRef(0.45);
@@ -245,9 +248,9 @@ export function PlayModeController({
 
   // 마우스 드래그 카메라 회전
   useEffect(() => {
-    const onDown = (e: MouseEvent) => { isDragging.current = true; lastMouseRef.current = { x: e.clientX, y: e.clientY }; };
+    const onDown = (e: MouseEvent) => { if (lockedRef.current) return; isDragging.current = true; lastMouseRef.current = { x: e.clientX, y: e.clientY }; };
     const onMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
+      if (lockedRef.current || !isDragging.current) return;
       const dx = e.clientX - lastMouseRef.current.x;
       const dy = e.clientY - lastMouseRef.current.y;
       lastMouseRef.current = { x: e.clientX, y: e.clientY };
@@ -256,9 +259,11 @@ export function PlayModeController({
     };
     const onUp = () => { isDragging.current = false; };
     const onTouchStart = (e: TouchEvent) => {
+      if (lockedRef.current) return;
       if (e.touches.length === 1) lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     };
     const onTouchMove = (e: TouchEvent) => {
+      if (lockedRef.current) return;
       if (e.touches.length === 1) {
         const dx = e.touches[0].clientX - lastTouchRef.current.x;
         const dy = e.touches[0].clientY - lastTouchRef.current.y;
@@ -450,7 +455,7 @@ export function PlayModeController({
       _targetPos.current.set(focusPoint.x, focusPoint.y, focusPoint.z);
       const persp = camera as THREE.PerspectiveCamera;
       const fov = persp.isPerspectiveCamera ? persp.fov : 60;
-      const dist = (focusPoint.radius / Math.sin((fov / 2) * DEG2RAD)) * 1.6;
+      const dist = (focusPoint.radius / Math.sin((fov / 2) * DEG2RAD)) * 2.2;
       _camPos.current.copy(camera.position).sub(_targetPos.current);
       if (_camPos.current.lengthSq() < 1e-6) _camPos.current.set(0.6, 0.5, 0.8);
       _camPos.current.normalize().multiplyScalar(dist).add(_targetPos.current);

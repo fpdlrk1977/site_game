@@ -43,7 +43,7 @@ function SpeechBubble({ text, y, speaker, hint }: { text: string; y: number; spe
       <div style={{
         transform: 'translateY(-50%)',
         position: 'relative',
-        background: 'rgba(255,255,255,0.97)',
+        background: 'rgba(255,255,255,0.7)',
         color: '#1f2937',
         fontSize: '14px',
         fontWeight: 600,
@@ -71,7 +71,7 @@ function SpeechBubble({ text, y, speaker, hint }: { text: string; y: number; spe
           position: 'absolute', bottom: '-7px', left: '50%', transform: 'translateX(-50%)',
           width: 0, height: 0,
           borderLeft: '7px solid transparent', borderRight: '7px solid transparent',
-          borderTop: '7px solid rgba(255,255,255,0.97)',
+          borderTop: '7px solid rgba(255,255,255,0.7)',
         }} />
       </div>
     </Html>
