@@ -86,6 +86,17 @@ body {
 }
 canvas, * > canvas { transition: none !important; }
 
+/* ── 팝업 등장 애니메이션 (show_popup 위치 프리셋별) ───────────── */
+@keyframes popupBackdrop { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popupFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popupScale { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes popupSlideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: none; } }
+@keyframes popupSlideInLeft { from { opacity: 0; transform: translateX(-100%); } to { opacity: 1; transform: none; } }
+@keyframes popupSlideInRight { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[popup"] { animation: none !important; }
+}
+
 /* ── 스크롤바 ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--background); }

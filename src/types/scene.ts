@@ -51,6 +51,9 @@ export interface EnvSchema {
   // 오브젝트 아래 부드러운 접지 그림자(drei ContactShadows). 미설정/false = 꺼짐(opt-in).
   // 바닥에 '붙은 느낌'을 강화하지만 매 프레임 렌더라 비용이 있어 기본은 꺼둔다.
   contactShadows?: boolean;
+  // 씬 전역 기본 팝업 스타일 (Phase 2). 개별 이벤트의 popup이 설정한 필드가 우선하고,
+  //   비운 필드는 이 기본값 → 하드 기본값 순으로 폴백한다(interactRange 패턴). 스타일 전용(mode/제목은 이벤트별).
+  defaultPopup?: Pick<PopupConfig, 'position' | 'width' | 'height' | 'bg' | 'anim'>;
 }
 
 export interface EventSchema {
@@ -85,6 +88,28 @@ export interface EventSchema {
   // 그 외: 기존 의미(URL/텍스트/이벤트명/클립명).
   value: string;
   eventPayload?: Record<string, unknown>;
+  // show_popup 전용 표시 설정(옵셔널·하위호환). 없으면 기존 RichContent 자동판별 팝업.
+  popup?: PopupConfig;
+}
+
+// show_popup 팝업의 표시 방식/스타일 (Phase 1).
+export interface PopupConfig {
+  //  auto  = value를 RichContent가 자동판별(이미지/영상/YouTube/URL링크/텍스트) — 기존 동작
+  //  url   = value(웹사이트 URL)를 <iframe src>로 팝업 안에 삽입
+  //  html  = value(HTML 문자열)를 <iframe srcdoc sandbox>로 격리 렌더
+  mode?: 'auto' | 'url' | 'html';
+  width?: string;   // 예: '800px' | '90vw' — iframe 모드 팝업 카드 너비(미설정=기본값)
+  height?: string;  // 예: '600px' | '80vh'
+  bg?: string;      // 카드 배경색(미설정=흰색)
+  title?: string;   // 팝업 제목(미설정=오브젝트 이름)
+  // 팝업 위치 프리셋 (Phase 2). center=중앙 모달(기본), left/right=사이드 패널, bottom=바텀시트.
+  position?: 'center' | 'left' | 'right' | 'bottom';
+  // 등장 애니메이션 (Phase 3). auto=위치에 맞게 자동(기본), none/fade/scale/slide.
+  anim?: 'auto' | 'none' | 'fade' | 'scale' | 'slide';
+  // 몰입형(chrome=false)이면 제목바·하단 닫기버튼을 숨기고 플로팅 ✕만 + 여백 0(edge-to-edge iframe용). 미설정=true.
+  chrome?: boolean;
+  // 카드 내부 여백 override. 예: '0' | '24px'. 미설정이면 기본 여백.
+  padding?: string;
 }
 
 export type ColliderType = 'box' | 'sphere' | 'capsule' | 'hull' | 'trimesh';

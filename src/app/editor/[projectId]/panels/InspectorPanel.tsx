@@ -10,8 +10,9 @@ import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { RichContent } from '@/components/ui/RichContent';
+import { PopupFrame } from '@/components/ui/PopupFrame';
 import { InfoHint } from '@/components/ui/InfoHint';
-import type { ObjectNodeSchema, ColliderType, EventSchema, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig } from '@/types/scene';
 import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
 function evalMath(expr: string): number | null {
@@ -783,6 +784,55 @@ function EnvironmentPanel() {
         </div>
       </GroupBox>
 
+      {/* 팝업 기본값 — 씬 전역 show_popup 스타일 (개별 이벤트가 우선) */}
+      <GroupBox>
+        <SectionHeader title="팝업 기본값" hint="show_popup 팝업의 씬 전역 기본 위치·크기·배경색. 개별 이벤트에서 지정한 값이 이 기본값보다 우선합니다." />
+        <div className="px-3 pb-4 space-y-1.5">
+          {(() => {
+            const dp = env.defaultPopup ?? {};
+            const setDP = (patch: Partial<typeof dp>) => updateEnvironment({ defaultPopup: { ...dp, ...patch } });
+            const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+            return (
+              <>
+                <label className="block">
+                  <span className="text-[10px] text-muted/50 block mb-1">위치</span>
+                  <SelectBox
+                    value={dp.position ?? 'center'}
+                    onChange={(v) => { setDP({ position: v as PopupConfig['position'] }); pushHistory(); }}
+                    options={[
+                      { value: 'center', label: '중앙 모달 (기본)' },
+                      { value: 'bottom', label: '하단 시트' },
+                      { value: 'left', label: '왼쪽 패널' },
+                      { value: 'right', label: '오른쪽 패널' },
+                    ]}
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <label className="block">
+                    <span className="text-[10px] text-muted/50 block mb-1">기본 너비</span>
+                    <input type="text" value={dp.width ?? ''} onChange={(e) => setDP({ width: e.target.value })} onBlur={pushHistory} placeholder="예: 800px" className={inputCls} />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] text-muted/50 block mb-1">기본 높이</span>
+                    <input type="text" value={dp.height ?? ''} onChange={(e) => setDP({ height: e.target.value })} onBlur={pushHistory} placeholder="예: 600px" className={inputCls} />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="text-[10px] text-muted/50 block mb-1">기본 배경색</span>
+                  <div className="flex items-center gap-1.5">
+                    <input type="color" value={dp.bg || '#ffffff'} onChange={(e) => setDP({ bg: e.target.value })} onBlur={pushHistory} className="w-7 h-7 rounded-xs border border-border bg-surface shrink-0 cursor-pointer" />
+                    <input type="text" value={dp.bg ?? ''} onChange={(e) => setDP({ bg: e.target.value })} onBlur={pushHistory} placeholder="#ffffff (기본 흰색)" className={inputCls} />
+                  </div>
+                </label>
+                <p className="text-[10px] text-muted/60 leading-relaxed">
+                  이 씬의 모든 팝업에 적용되는 기본값이에요. 개별 이벤트에서 위치·크기·배경색을 지정하면 그 값이 우선합니다.
+                </p>
+              </>
+            );
+          })()}
+        </div>
+      </GroupBox>
+
       {/* Player */}
       <GroupBox>
         <SectionHeader title="Player" hint="플레이(걷기) 모드의 캐릭터·속도·점프. 캐릭터 GLB를 지정하지 않으면 기본 캡슐로 걸어다녀요." />
@@ -1083,11 +1133,13 @@ function InspectorInner() {
   const [newTrigger, setNewTrigger] = useState<EventSchema['trigger']>('click');
   const [newAction, setNewAction] = useState<EventSchema['action']>('show_popup');
   const [newValue, setNewValue] = useState('');
+  // show_popup 팝업 설정(모드/크기/색). undefined=auto(기존 동작).
+  const [newPopup, setNewPopup] = useState<PopupConfig | undefined>(undefined);
   // null이면 신규 추가, 값이 있으면 그 이벤트를 수정 중
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // 이벤트 프리뷰 팝업
-  const [previewPopup, setPreviewPopup] = useState<string | null>(null);
+  const [previewPopup, setPreviewPopup] = useState<{ content: string; config?: PopupConfig } | null>(null);
 
   // 배열(Array) 복제 파라미터 — 개수(원본 포함)와 복제 간 간격
   const [arrayCount, setArrayCount] = useState(5);
@@ -1257,14 +1309,38 @@ function InspectorInner() {
     pushHistory();
   };
 
+  // 팝업 설정을 저장 형태로 정리 — auto(기본)이고 스타일도 없으면 undefined로 떨궈 스키마를 깨끗하게 유지.
+  const cleanPopup = (p: PopupConfig | undefined): PopupConfig | undefined => {
+    if (!p) return undefined;
+    const mode = p.mode ?? 'auto';
+    const hasPos = !!(p.position && p.position !== 'center');
+    const hasAnim = !!(p.anim && p.anim !== 'auto');
+    const hasChrome = p.chrome === false;
+    const hasPad = !!(p.padding && p.padding.trim());
+    const hasStyle = !!(p.width || p.height || p.bg || p.title?.trim() || hasPos || hasAnim || hasChrome || hasPad);
+    if (mode === 'auto' && !hasStyle) return undefined;
+    return {
+      mode,
+      ...(hasPos ? { position: p.position } : {}),
+      ...(hasAnim ? { anim: p.anim } : {}),
+      ...(hasChrome ? { chrome: false } : {}),
+      ...(hasPad ? { padding: p.padding } : {}),
+      ...(p.width ? { width: p.width } : {}),
+      ...(p.height ? { height: p.height } : {}),
+      ...(p.bg ? { bg: p.bg } : {}),
+      ...(p.title?.trim() ? { title: p.title.trim() } : {}),
+    };
+  };
+
   const addEvent = () => {
     // show_popup(빈 내용 허용)·reset_camera(값 불필요)를 제외하면 값이 있어야 추가 가능
     if (!newValue.trim() && newAction !== 'show_popup' && newAction !== 'reset_camera') return;
+    const popupToSave = newAction === 'show_popup' ? cleanPopup(newPopup) : undefined;
     if (editingId) {
       // 기존 이벤트 수정
       updateObject(obj.id, {
         events: obj.events.map((e) =>
-          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim() } : e,
+          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim(), popup: popupToSave } : e,
         ),
       });
     } else {
@@ -1273,11 +1349,13 @@ function InspectorInner() {
         trigger: newTrigger,
         action: newAction,
         value: newValue.trim(),
+        ...(popupToSave ? { popup: popupToSave } : {}),
       };
       updateObject(obj.id, { events: [...obj.events, ev] });
     }
     pushHistory();
     setNewValue('');
+    setNewPopup(undefined);
     setEditingId(null);
     setShowAddEvent(false);
   };
@@ -1287,12 +1365,14 @@ function InspectorInner() {
     setNewTrigger(ev.trigger);
     setNewAction(ev.action);
     setNewValue(ev.value);
+    setNewPopup(ev.popup);
     setShowAddEvent(true);
   };
 
   const cancelEventForm = () => {
     setShowAddEvent(false);
     setNewValue('');
+    setNewPopup(undefined);
     setEditingId(null);
   };
 
@@ -1401,6 +1481,116 @@ function InspectorInner() {
             : '팝업 내용'}
         </span>
         {(() => {
+          if (newAction === 'show_popup') {
+            const p = newPopup ?? {};
+            const mode = p.mode ?? 'auto';
+            const setP = (patch: Partial<PopupConfig>) => setNewPopup({ ...p, ...patch });
+            const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+            return (
+              <div className="space-y-2">
+                <SelectBox
+                  value={mode}
+                  onChange={(m) => setP({ mode: m as PopupConfig['mode'] })}
+                  options={[
+                    { value: 'auto', label: '자동 (텍스트·이미지·영상·YouTube)' },
+                    { value: 'url', label: '웹사이트 URL (iframe 삽입)' },
+                    { value: 'html', label: '커스텀 HTML (샌드박스)' },
+                  ]}
+                />
+                {mode === 'html' ? (
+                  <textarea
+                    value={newValue}
+                    onChange={(e) => setNewValue(e.target.value)}
+                    placeholder={'<div style="padding:16px">안녕하세요</div>'}
+                    rows={5}
+                    className={`${inputCls} font-mono resize-y`}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={newValue}
+                    onChange={(e) => setNewValue(e.target.value)}
+                    placeholder={mode === 'url' ? 'https://example.com' : '텍스트 또는 이미지/영상/YouTube URL'}
+                    className={inputCls}
+                    onKeyDown={(e) => e.key === 'Enter' && addEvent()}
+                  />
+                )}
+                <div className="space-y-1.5 border-t border-border/60 pt-2">
+                  <label className="block">
+                    <span className="text-[10px] text-muted/50 block mb-1">위치</span>
+                    <SelectBox
+                      value={p.position ?? 'center'}
+                      onChange={(v) => setP({ position: v as PopupConfig['position'] })}
+                      options={[
+                        { value: 'center', label: '중앙 모달 (기본)' },
+                        { value: 'bottom', label: '하단 시트' },
+                        { value: 'left', label: '왼쪽 패널' },
+                        { value: 'right', label: '오른쪽 패널' },
+                      ]}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] text-muted/50 block mb-1">애니메이션</span>
+                    <SelectBox
+                      value={p.anim ?? 'auto'}
+                      onChange={(v) => setP({ anim: v as PopupConfig['anim'] })}
+                      options={[
+                        { value: 'auto', label: '자동 (위치에 맞게)' },
+                        { value: 'fade', label: '페이드' },
+                        { value: 'scale', label: '스케일' },
+                        { value: 'slide', label: '슬라이드' },
+                        { value: 'none', label: '없음' },
+                      ]}
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <label className="block">
+                      <span className="text-[10px] text-muted/50 block mb-1">너비 (선택)</span>
+                      <input type="text" value={p.width ?? ''} onChange={(e) => setP({ width: e.target.value })} placeholder="예: 800px, 90vw" className={inputCls} />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] text-muted/50 block mb-1">높이 (선택)</span>
+                      <input type="text" value={p.height ?? ''} onChange={(e) => setP({ height: e.target.value })} placeholder="예: 600px, 80vh" className={inputCls} />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="text-[10px] text-muted/50 block mb-1">제목 (선택)</span>
+                    <input type="text" value={p.title ?? ''} onChange={(e) => setP({ title: e.target.value })} placeholder="오브젝트 이름" className={inputCls} />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] text-muted/50 block mb-1">배경색 (선택)</span>
+                    <div className="flex items-center gap-1.5">
+                      <input type="color" value={p.bg || '#ffffff'} onChange={(e) => setP({ bg: e.target.value })} className="w-7 h-7 rounded-xs border border-border bg-surface shrink-0 cursor-pointer" />
+                      <input type="text" value={p.bg ?? ''} onChange={(e) => setP({ bg: e.target.value })} placeholder="#ffffff (기본 흰색)" className={inputCls} />
+                    </div>
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-[10px] text-muted/50">제목·닫기 표시 (chrome)</span>
+                    <Toggle value={p.chrome !== false} onChange={(v) => setP({ chrome: v })} />
+                  </label>
+                  {p.chrome === false && (
+                    <p className="text-muted/40 text-[10px] leading-relaxed">
+                      몰입형 — 제목바·하단 닫기 버튼을 숨기고 우상단 플로팅 ✕만 표시, 여백 0(iframe이 카드에 꽉 참).
+                    </p>
+                  )}
+                  <label className="block">
+                    <span className="text-[10px] text-muted/50 block mb-1">내부 여백 (선택)</span>
+                    <input type="text" value={p.padding ?? ''} onChange={(e) => setP({ padding: e.target.value })} placeholder="예: 0, 24px" className={inputCls} />
+                  </label>
+                  {(mode === 'url' || mode === 'html') && (
+                    <p className="text-muted/50 text-[10px] leading-relaxed">
+                      {mode === 'url'
+                        ? '일부 사이트는 보안설정(X-Frame-Options)으로 삽입이 차단될 수 있어요. 그 경우 팝업 안 ‘새 탭에서 열기’ 버튼으로 열립니다.'
+                        : 'HTML은 샌드박스(iframe)로 격리 렌더돼 페이지 스타일/스크립트에 영향을 주지 않아요.'}
+                    </p>
+                  )}
+                  <p className="text-muted/40 text-[10px] leading-relaxed">
+                    비운 항목은 씬 기본 팝업 설정 → 하드 기본값 순으로 적용돼요. (Environment → 팝업 기본값)
+                  </p>
+                </div>
+              </div>
+            );
+          }
           if (newAction === 'reset_camera') {
             return <p className="text-muted/60 text-[10px] py-1">값이 필요 없습니다 — 클릭 시 카메라가 초기 시점으로 복귀합니다.</p>;
           }
@@ -1552,20 +1742,45 @@ function InspectorInner() {
   return (
     <aside className="flex flex-col bg-surface border-l border-border overflow-hidden relative h-full">
       {/* 이벤트 프리뷰 팝업 오버레이 */}
-      {previewPopup !== null && (
-        <div className="absolute inset-0 z-10 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewPopup(null)}>
-          <div className="bg-sidebar border border-border rounded-2xl p-5 w-full max-w-xs shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-[10px] text-muted/60 mb-2 font-semibold tracking-wide">팝업 미리보기</p>
-            <RichContent value={previewPopup} />
-            <button
-              onClick={() => setPreviewPopup(null)}
-              className="mt-4 w-full py-1.5 rounded-xs bg-primary text-white  text-[11px] font-semibold hover:bg-primary/80 transition-colors"
+      {previewPopup !== null && (() => {
+        // 뷰어와 동일 병합(이벤트 config > 씬 defaultPopup)으로 모드/크기/배경을 미리보기.
+        // 위치 프리셋은 에디터에선 중앙 고정으로 보여주고(실제 위치는 뷰어), 모드(iframe/html)는 실제로 렌더한다.
+        const c = previewPopup.config;
+        const d = environment.defaultPopup;
+        const mode = c?.mode ?? 'auto';
+        const isFrame = mode === 'url' || mode === 'html';
+        const width = c?.width ?? d?.width;
+        const height = c?.height ?? d?.height;
+        const bg = c?.bg ?? d?.bg;
+        const posNote = c?.position && c.position !== 'center'
+          ? ` · 뷰어에선 ${({ bottom: '하단', left: '왼쪽', right: '오른쪽' } as Record<string, string>)[c.position]} 배치`
+          : '';
+        const cardStyle = isFrame
+          ? { width: width || 'min(80vw, 720px)', height: height || 'min(70vh, 520px)', background: bg }
+          : { width: width || undefined, background: bg };
+        return (
+          <div className="absolute inset-0 z-10 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewPopup(null)}>
+            <div
+              className={`bg-white border border-border rounded-2xl shadow-2xl ${isFrame ? 'flex flex-col p-4 max-w-[92vw] max-h-[88vh]' : 'p-5 w-full max-w-sm max-h-[80vh] overflow-y-auto'}`}
+              style={cardStyle}
+              onClick={(e) => e.stopPropagation()}
             >
-              닫기
-            </button>
+              <p className="text-[10px] text-muted/60 mb-2 font-semibold tracking-wide shrink-0">팝업 미리보기{posNote}</p>
+              {isFrame ? (
+                <div className="flex-1 min-h-0"><PopupFrame value={previewPopup.content} config={c} /></div>
+              ) : (
+                <RichContent value={previewPopup.content} onLight />
+              )}
+              <button
+                onClick={() => setPreviewPopup(null)}
+                className="mt-3 shrink-0 w-full py-1.5 rounded-xs bg-primary text-white  text-[11px] font-semibold hover:bg-primary/80 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
         <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">{obj.isGroup ? 'Inspector — 그룹' : 'Inspector'}</span>
       </div>
@@ -2270,7 +2485,7 @@ function InspectorInner() {
                     <button
                       onClick={() => {
                         if (ev.action === 'open_url' && ev.value) window.open(ev.value, '_blank');
-                        else if (ev.action === 'show_popup') setPreviewPopup(ev.value || '(내용 없음)');
+                        else if (ev.action === 'show_popup') setPreviewPopup({ content: ev.value || '(내용 없음)', config: ev.popup });
                         else if (ev.action === 'emit_event') addToast(`이벤트 발송 테스트: "${ev.value}"`, 'success');
                         else if (ev.action === 'play_animation') addToast(`애니메이션 클립: "${ev.value}"`, 'info');
                         else if (ev.action === 'go_to_scene') addToast(`씬 이동: "${sceneName(ev.value)}" (플레이/뷰어에서 동작)`, 'info');

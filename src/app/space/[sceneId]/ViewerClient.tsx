@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { MobileControls } from './MobileControls';
 import { RichContent } from '@/components/ui/RichContent';
+import { PopupFrame } from '@/components/ui/PopupFrame';
 import { effectiveDialogue } from './useObjectDialogue';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, Vector3 } from '@/types/scene';
 
@@ -45,7 +46,7 @@ interface Props {
 }
 
 export function ViewerClient({ scene, projectName = '', isOwner = false, projectId = '', hideBadge = false, variant = 'standalone', onBridge }: Props) {
-  const [popup, setPopup] = useState<{ title: string; content: string } | null>(null);
+  const [popup, setPopup] = useState<{ title: string; content: string; config?: EventSchema['popup'] } | null>(null);
   // 둘러보기 전용 씬은 걷기(플레이) 불가 — 항상 탐색으로만 동작
   const walkDisabled = scene.environment.disableWalk === true;
   // 씬별 기본 진입 모드 — 'play'면 접속하자마자 플레이 모드로 시작 (미설정/둘러보기전용 = 탐색)
@@ -199,7 +200,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         if (!opened) setPopup({ title: obj.name, content: ev.value });
       } else if (ev.action === 'show_popup') {
         // 팝업은 뷰어(임베드 포함) 안에 직접 렌더 — 플레이어가 바로 본다.
-        setPopup({ title: obj.name, content: ev.value });
+        setPopup({ title: ev.popup?.title?.trim() || obj.name, content: ev.value, config: ev.popup });
         // iframe이면 부모에도 통지(호스트가 자체 UI로 처리하고 싶을 때 선택적으로 구독).
         if (onBridge && window.parent !== window) {
           onBridge({ type: 'park3d:popup', sceneId: scene.sceneId, objectId: obj.id, objectName: obj.name, value: ev.value });
@@ -392,23 +393,87 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         </div>
       )}
 
-      {/* 팝업 모달 */}
-      {popup && (
-        <div className="absolute inset-0 flex items-center justify-center p-4 z-50">
-          {/* 배경(overlay) 클릭으로는 닫히지 않음 — 오직 '닫기' 버튼으로만. 뒤 캔버스 클릭도 이 div가 가림 */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-modal">
-            <h3 className="text-lg font-bold text-slate-900 mb-3">{popup.title}</h3>
-            <RichContent value={popup.content} onLight />
-            <button
-              onClick={endInteraction}
-              className="mt-5 w-full py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold text-sm hover:from-violet-500 hover:to-cyan-500 transition-all"
+      {/* 팝업 모달 — 위치 프리셋(center/left/right/bottom) + iframe/auto 본문 + 등장 애니메이션.
+          씬 기본 팝업 스타일(defaultPopup)을 이벤트별 config로 덮어쓴다(이벤트 우선). */}
+      {popup && (() => {
+        const d = scene.environment.defaultPopup;
+        const c = popup.config;
+        const mode = c?.mode ?? 'auto';
+        const isFrame = mode === 'url' || mode === 'html';
+        const pos = c?.position ?? d?.position ?? 'center';
+        const width = c?.width ?? d?.width;
+        const height = c?.height ?? d?.height;
+        const bg = c?.bg ?? d?.bg;
+        const anim = c?.anim ?? d?.anim ?? 'auto';
+        const chrome = c?.chrome !== false;  // 미설정/true = 제목바+닫기버튼, false = 몰입형(플로팅 ✕)
+        const pad = c?.padding;              // 카드 내부 여백 override
+
+        // center + auto + 크기 미지정 + chrome = 기존 컴팩트 모달 그대로(하위호환).
+        const legacyCompact = pos === 'center' && !isFrame && !width && !height && chrome;
+
+        // 위치별 오버레이 정렬 / 카드 기본 크기 / 모서리 / 기본 애니메이션
+        const posCfg = {
+          center: { wrap: 'items-center justify-center p-4', w: 'min(90vw, 860px)', h: 'min(82vh, 620px)', round: 'rounded-2xl', anim: 'animate-[popupScale_0.18s_ease-out]' },
+          bottom: { wrap: 'items-end justify-center p-0 sm:p-4', w: 'min(100vw, 1100px)', h: 'min(62vh, 540px)', round: 'rounded-t-2xl sm:rounded-2xl', anim: 'animate-[popupSlideUp_0.24s_ease-out]' },
+          left:   { wrap: 'items-stretch justify-start p-0', w: 'min(92vw, 440px)', h: '100%', round: 'rounded-r-2xl', anim: 'animate-[popupSlideInLeft_0.24s_ease-out]' },
+          right:  { wrap: 'items-stretch justify-end p-0', w: 'min(92vw, 440px)', h: '100%', round: 'rounded-l-2xl', anim: 'animate-[popupSlideInRight_0.24s_ease-out]' },
+        }[pos];
+
+        // 애니메이션 종류 — auto면 위치별 기본, 그 외는 지정값(slide는 위치에 맞는 방향).
+        const animClass =
+          anim === 'none' ? '' :
+          anim === 'fade' ? 'animate-[popupFade_0.2s_ease-out]' :
+          anim === 'scale' ? 'animate-[popupScale_0.18s_ease-out]' :
+          anim === 'slide' ? (pos === 'left' ? 'animate-[popupSlideInLeft_0.24s_ease-out]' : pos === 'right' ? 'animate-[popupSlideInRight_0.24s_ease-out]' : 'animate-[popupSlideUp_0.24s_ease-out]') :
+          posCfg.anim;
+
+        // 여백: padding 지정 우선 → 몰입형(chrome=false)은 0 → 그 외는 클래스 기본(p-6/p-4)
+        const padStyle = pad != null ? { padding: pad } : (!chrome ? { padding: 0 } : {});
+        const cardStyle = legacyCompact
+          ? { background: bg, ...padStyle }
+          : { width: width || posCfg.w, height: height || (isFrame || pos !== 'center' ? posCfg.h : undefined), background: bg, ...padStyle };
+
+        return (
+          <div className={`absolute inset-0 flex ${posCfg.wrap} z-50`}>
+            {/* 배경(overlay) 클릭으로는 닫히지 않음 — 오직 '닫기' 버튼으로만. 뒤 캔버스 클릭도 이 div가 가림 */}
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[popupBackdrop_0.2s_ease-out]" />
+            <div
+              className={`relative bg-white border border-slate-200 shadow-modal ${posCfg.round} ${animClass} ${legacyCompact ? 'p-6 w-full max-w-md' : 'flex flex-col p-4 max-w-[96vw] max-h-full'}`}
+              style={cardStyle}
             >
-              닫기
-            </button>
+              {chrome && <h3 className="text-lg font-bold text-slate-900 mb-3 shrink-0">{popup.title}</h3>}
+              {isFrame ? (
+                <div className="flex-1 min-h-0">
+                  <PopupFrame value={popup.content} config={c} />
+                </div>
+              ) : legacyCompact ? (
+                <RichContent value={popup.content} onLight />
+              ) : (
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <RichContent value={popup.content} onLight />
+                </div>
+              )}
+              {chrome ? (
+                <button
+                  onClick={endInteraction}
+                  className="mt-4 shrink-0 w-full py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold text-sm hover:from-violet-500 hover:to-cyan-500 transition-all"
+                >
+                  닫기
+                </button>
+              ) : (
+                // 몰입형 — 카드 우상단 플로팅 ✕
+                <button
+                  onClick={endInteraction}
+                  aria-label="닫기"
+                  className="absolute top-2 right-2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-black/45 text-white text-sm hover:bg-black/65 transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 포커스 단독(팝업 없음) — 투명 차단막으로 뒤 캔버스 클릭 차단. 우상단 닫기 버튼 + Esc로 복귀 */}
       {interactionLock && !popup && (
