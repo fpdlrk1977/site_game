@@ -11,7 +11,7 @@ import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { RichContent } from '@/components/ui/RichContent';
 import { InfoHint } from '@/components/ui/InfoHint';
-import type { ObjectNodeSchema, ColliderType, EventSchema, ContentConfig, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig } from '@/types/scene';
 import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
 function evalMath(expr: string): number | null {
@@ -286,11 +286,14 @@ const ACTION_LABELS: Record<string, string> = {
   reset_camera: '카메라 초기화',
   animate_object: '오브젝트 애니메이션',
   move_object: '오브젝트 이동',
+  set_passable: '통과 가능(문 열기)',
+  set_solid: '통과 불가(문 닫기)',
+  toggle_collision: '통과 토글',
   play_sound: '사운드 재생',
 };
 
 // value가 대상 objectId인 액션들 (에디터에서 오브젝트 선택 드롭다운 표시)
-const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object', 'focus_object']);
+const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object', 'focus_object', 'set_passable', 'set_solid', 'toggle_collision']);
 
 // ── GLB 애니메이션 클립 선택기 ─────────────────────────────────
 // three-stdlib GLTFLoader가 이 GLB의 animations를 파싱 못하는 문제 우회:
@@ -1048,13 +1051,13 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, updateObject, pushHistory, alignSelected, batchUpdateObjects } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected } = useSceneStore();
   const { addToast } = useToast();
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
 
-  // 섹션 접기 상태
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // 섹션 접기 상태 — Array(반복 복제)는 가끔 쓰는 툴이라 기본 접힘
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(['array']));
   const toggleSection = (key: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -1073,6 +1076,10 @@ function InspectorInner() {
 
   // 이벤트 프리뷰 팝업
   const [previewPopup, setPreviewPopup] = useState<string | null>(null);
+
+  // 배열(Array) 복제 파라미터 — 개수(원본 포함)와 복제 간 간격
+  const [arrayCount, setArrayCount] = useState(5);
+  const [arrayOffset, setArrayOffset] = useState({ x: 2, y: 0, z: 0 });
 
   // go_to_scene 액션용 씬 목록 — 폼을 열거나 이미 씬 이동 이벤트가 있을 때만 로드
   const [sceneList, setSceneList] = useState<{ id: string; name: string }[]>([]);
@@ -1327,6 +1334,9 @@ function InspectorInner() {
               { value: 'hide_object', label: '오브젝트 숨김' },
               { value: 'toggle_object', label: '오브젝트 토글' },
               { value: 'move_object', label: '오브젝트 이동' },
+              { value: 'set_passable', label: '통과 가능(문 열기)' },
+              { value: 'set_solid', label: '통과 불가(문 닫기)' },
+              { value: 'toggle_collision', label: '통과 토글' },
               { value: 'focus_object', label: '카메라 포커스' },
               { value: 'reset_camera', label: '카메라 초기화' },
               { value: 'play_animation', label: '애니메이션 재생' },
@@ -1456,8 +1466,17 @@ function InspectorInner() {
               value: o.id,
               label: o.id === obj?.id ? `${o.name} (이 오브젝트)` : o.name,
             }));
+            const isDoorAction = newAction === 'set_passable' || newAction === 'set_solid' || newAction === 'toggle_collision';
             return opts.length > 0 ? (
-              <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="대상 오브젝트 선택..." />
+              <div className="space-y-1.5">
+                <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="대상 오브젝트 선택..." />
+                {isDoorAction && (
+                  <p className="text-muted/50 text-[10px]">
+                    대상의 <b>콜라이더만</b> 켜고/끕니다(모습은 그대로). 플레이 모드에서 통과 가능/불가가 바뀌어요 —
+                    문·차단봉 등에 씁니다. 애니메이션(문 열림)은 별도 이벤트로 함께 거세요. 탐색 모드엔 영향 없음.
+                  </p>
+                )}
+              </div>
             ) : (
               <p className="text-muted/60 text-[10px] py-1">대상으로 지정할 오브젝트가 없습니다.</p>
             );
@@ -1580,6 +1599,30 @@ function InspectorInner() {
               )}
             </div>
           )}
+        </GroupBox>
+
+        {/* Array — 일정 간격 반복 복제 (울타리·기둥·계단 등) */}
+        <GroupBox>
+          <SectionHeader title="Array" hint="선택한 오브젝트를 일정 간격으로 여러 개 복제해요. 울타리·기둥·계단처럼 반복 배치에 씁니다. 개수는 원본 포함, 간격은 복제 사이 거리(단위: m)." isOpen={isOpen('array')} onToggle={() => toggleSection('array')} />
+            <div className="px-3 pb-4 space-y-2">
+              <LabeledNum label="개수 (원본 포함)" value={arrayCount} onChange={(v) => setArrayCount(Math.max(2, Math.min(100, Math.round(v))))} onCommit={() => {}} min={2} max={100} precision={0} dragStep={1} />
+              <XYZRow label="간격 (m)" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
+                onChangeX={(v) => setArrayOffset((o) => ({ ...o, x: v }))}
+                onChangeY={(v) => setArrayOffset((o) => ({ ...o, y: v }))}
+                onChangeZ={(v) => setArrayOffset((o) => ({ ...o, z: v }))}
+                onCommit={() => {}} dragStep={0.5}
+              />
+              <button
+                onClick={() => {
+                  arraySelected(arrayCount, arrayOffset);
+                  addToast(`${arrayCount - 1}개 복제 생성`, 'success');
+                }}
+                className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
+              >
+                ⊞ 배열 생성 ({arrayCount}개)
+              </button>
+              <p className="text-[10px] text-muted/50">현재 위치에서 간격만큼 떨어뜨려 {arrayCount - 1}개를 추가합니다. 되돌리기(Ctrl+Z) 가능.</p>
+            </div>
         </GroupBox>
 
         {/* Content (content 오브젝트만) */}

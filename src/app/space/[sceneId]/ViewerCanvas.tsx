@@ -210,11 +210,13 @@ interface Props {
   interactHighlightId?: string | null;
   /** E키 nonce — 대화 열기/다음 문장 */
   dialogueNonce?: number;
+  /** 런타임 통과 가능(콜라이더 제거) 오브젝트 id 집합 — set_passable/toggle_collision */
+  passableIds?: Set<string>;
 }
 
 const EMPTY_CLIPS: Record<string, ClipReq> = {};
 
-export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId, dialogueNonce }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds }: Props) {
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
   const orbitRef = useRef<OrbitControlsImpl>(null);
@@ -362,7 +364,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* ── 플레이 모드 ── */}
       {playMode && (
         <Suspense fallback={null}>
-          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} />
+          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} />
         </Suspense>
       )}
 

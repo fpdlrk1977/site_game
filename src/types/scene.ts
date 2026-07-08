@@ -68,6 +68,9 @@ export interface EventSchema {
     | 'reset_camera'   // value 불필요 (카메라를 초기 시점으로 복귀, 탐색 모드)
     | 'animate_object' // value = "대상objectId|클립이름" (대상 GLB의 애니메이션 재생)
     | 'move_object'    // value = "대상objectId|dx,dy,dz|초" (원래 저장 위치 기준 오프셋으로 부드럽게 이동)
+    | 'set_passable'   // value = 대상 objectId (플레이 모드 콜라이더 제거 → 통과 가능, 문 열기)
+    | 'set_solid'      // value = 대상 objectId (콜라이더 복구 → 다시 막힘, 문 닫기)
+    | 'toggle_collision' // value = 대상 objectId (통과 가능/막힘 토글)
     | 'play_sound';    // value = 오디오 URL (mp3 등)
   // go_to_scene: 이동할 대상 sceneId. show/hide/toggle/focus_object: 대상 objectId.
   // reset_camera: value 없음. animate_object: "objectId|clipName".

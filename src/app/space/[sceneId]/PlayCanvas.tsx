@@ -217,9 +217,11 @@ interface Props {
   mobileInputRef?: React.MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
   /** 근접한 상호작용(interact) 대상이 바뀔 때 — 뷰어의 E 프롬프트 표시용 */
   onInteractPromptChange?: (obj: ObjectNodeSchema | null) => void;
+  /** 런타임 통과 가능(콜라이더 제거) 오브젝트 id 집합 — set_passable/toggle_collision */
+  passableIds?: Set<string>;
 }
 
-export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange }: Props) {
+export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
@@ -235,19 +237,22 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   const interactables = allObjects
     .filter((o) => !o.parentId && o.visible && needsProximity(o))
     .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z }));
+  // 런타임 통과(콜라이더 제거) 대상 — set_passable/toggle_collision. 시각은 유지하고 콜라이더만 뺀다(문 열림).
+  const isPassable = (o: ObjectNodeSchema) => !!passableIds?.has(o.id);
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);
   // 그룹은 GroupWithCollision으로 처리: 자식 오브젝트 각각에 콜라이더 적용
   // (그룹에 physics가 켜져 있어도 그룹 자체는 PhysicsObject로 렌더하지 않음 — 이중 렌더 방지)
   const allGroups = rootObjects.filter((o) => o.isGroup && o.visible);
-  // 모션+콜라이더 켠 그룹 → 하나의 kinematic 강체로 묶어 이동(진짜 장애물). pulse 제외.
+  // 모션+콜라이더 켠 그룹 → 하나의 kinematic 강체로 묶어 이동(진짜 장애물). pulse·통과 대상 제외.
   const isGroupMovingCollider = (o: ObjectNodeSchema) =>
     !!o.motion && o.motion.collider === true && o.motion.type !== 'pulse';
-  const movingGroupColliders = allGroups.filter(isGroupMovingCollider);
-  // 모션은 있지만 콜라이더 미동반 그룹 → 시각 전용(장식). ViewerObject로 렌더해 애니메이션만.
-  const movingGroups = allGroups.filter((o) => !!o.motion && !isGroupMovingCollider(o));
-  // 모션 없는 그룹 → 기존 정적 GroupWithCollision(자식별 콜라이더).
-  const groupObjects = allGroups.filter((o) => !o.motion);
+  const movingGroupColliders = allGroups.filter((o) => isGroupMovingCollider(o) && !isPassable(o));
+  // 모션 없는 그룹 → 기존 정적 GroupWithCollision(자식별 콜라이더). 통과 대상 제외(아래 movingGroups에서 시각만).
+  const groupObjects = allGroups.filter((o) => !o.motion && !isPassable(o));
+  // 나머지 그룹 → 시각 전용(장식). ViewerObject로 렌더해 애니메이션/표시만, 콜라이더 없음.
+  //   = 모션+콜라이더 미동반 그룹 + 통과 대상 그룹(모션·콜라이더 유무 무관). 여집합으로 잡아 누락 방지.
+  const movingGroups = allGroups.filter((o) => !movingGroupColliders.includes(o) && !groupObjects.includes(o));
   // 조상 체인 정보 — 자식이 숨은 그룹 아래인지, 움직이는 그룹(하나의 강체로 이동) 아래인지.
   //   움직이는 그룹의 자식은 그 그룹 강체에 실려 함께 이동하므로 개별 콜라이더 라우팅에서 제외한다.
   const ancestorInfo = (o: ObjectNodeSchema) => {
@@ -262,18 +267,21 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
     return { visible, underMovingGroup };
   };
   // 이동 콜라이더 오브젝트 — 루트뿐 아니라 정적 그룹의 자식까지 포함(월드 kinematic으로 처리).
-  //   움직이는 그룹 아래(강체에 실림) 또는 숨은 조상 아래는 제외.
+  //   움직이는 그룹 아래(강체에 실림)·숨은 조상 아래·통과 대상은 제외.
   const movingColliderObjects = allObjects.filter((o) => {
-    if (!o.visible || !isMovingColliderObj(o)) return false;
+    if (!o.visible || !isMovingColliderObj(o) || isPassable(o)) return false;
     const a = ancestorInfo(o);
     return a.visible && !a.underMovingGroup;
   });
   // 위치가 움직이는 모션(float/spin/orbit/wander)인데 콜라이더 미동반 → 시각 전용(콜라이더 없음, 통과 가능).
   //   (정적 콜라이더를 붙이면 시각은 떠다니는데 벽만 원래 자리에 남는 '유령 콜라이더' 버그가 됨)
   //   루트만 여기서 렌더(중첩 자식은 GroupWithCollision이 처리). pulse는 제자리라 autoObjects에 남김.
-  const visualMotionObjects = rootObjects.filter((o) => o.visible && isVisualOnlyMotionObj(o));
-  const autoObjects = rootObjects.filter((o) => !o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isVisualOnlyMotionObj(o));
-  const physicsObjects = rootObjects.filter((o) => o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o));
+  const visualMotionObjects = rootObjects.filter((o) => o.visible && isVisualOnlyMotionObj(o) && !isPassable(o));
+  // 통과(콜라이더 제거) 대상 루트 오브젝트 — 콜라이더 없이 시각만(모션 있으면 애니메이션도) 렌더. 문 열림.
+  const passableVisualObjects = rootObjects.filter((o) => o.visible && !o.light && !o.isGroup && isPassable(o));
+  // ⚠ 숨김(hide_object)·통과 오브젝트는 콜라이더에서 제외 — 예전엔 visible 무시로 '보이지 않는 벽'이 남았음.
+  const autoObjects = rootObjects.filter((o) => o.visible && !o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isVisualOnlyMotionObj(o) && !isPassable(o));
+  const physicsObjects = rootObjects.filter((o) => o.visible && o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isPassable(o));
 
   const characterAsset = scene.environment.playerCharacterId
     ? assets.find((a) => a.id === scene.environment.playerCharacterId)
@@ -344,6 +352,11 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
 
       {/* 움직이는 모션·콜라이더 미동반 — 시각 전용(콜라이더 없음, 통과 가능) */}
       {visualMotionObjects.map((obj) => (
+        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* 통과(set_passable/toggle_collision) 대상 루트 오브젝트 — 콜라이더 없이 시각만(문 열림) */}
+      {passableVisualObjects.map((obj) => (
         <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 

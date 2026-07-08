@@ -50,6 +50,14 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
   // 런타임 오브젝트 표시/숨김 오버라이드 (show/hide/toggle_object 액션) — objectId → visible
   const [visOverride, setVisOverride] = useState<Record<string, boolean>>({});
+  // 런타임 콜라이더 통과 오버라이드 (set_passable/set_solid/toggle_collision — 문 열기/닫기) — objectId → passable
+  //   true면 플레이 모드에서 콜라이더 제거(시각은 유지, 통과 가능). PlayCanvas로 id Set 전달.
+  const [passOverride, setPassOverride] = useState<Record<string, boolean>>({});
+  const passableIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const id in passOverride) if (passOverride[id]) s.add(id);
+    return s;
+  }, [passOverride]);
   // 카메라 요청 — id가 objectId면 그 오브젝트로 포커스, null이면 초기(홈) 시점으로 복귀
   const [focusRequest, setFocusRequest] = useState<{ id: string | null; t: number } | null>(null);
   const resetCamera = () => setFocusRequest({ id: null, t: Date.now() });
@@ -215,6 +223,12 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
             z: base.z + (Number.isFinite(dz) ? dz : 0),
           }, Number.isFinite(dur) ? Math.max(0, dur) : 1);
         }
+      } else if (ev.action === 'set_passable' && ev.value) {
+        setPassOverride((p) => ({ ...p, [ev.value]: true }));
+      } else if (ev.action === 'set_solid' && ev.value) {
+        setPassOverride((p) => ({ ...p, [ev.value]: false }));
+      } else if (ev.action === 'toggle_collision' && ev.value) {
+        setPassOverride((p) => ({ ...p, [ev.value]: !p[ev.value] }));
       } else if (ev.action === 'play_sound' && ev.value) {
         playSound(ev.value);
       } else if (ev.action === 'emit_event') {
@@ -235,7 +249,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} />
+      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} />
 
       {/* 상단 오버레이 — 독립 URL(/space)에서만 풀 UI */}
       {variant === 'standalone' && (

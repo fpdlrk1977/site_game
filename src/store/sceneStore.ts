@@ -85,6 +85,8 @@ interface SceneActions {
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
   moveObject: (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   duplicateSelected: () => void;
+  // 선택 오브젝트를 일정 간격으로 count개(원본 포함)까지 배열 복제 — 울타리·기둥 등. offset은 복제 간 간격.
+  arraySelected: (count: number, offset: { x: number; y: number; z: number }) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
@@ -665,6 +667,56 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         ...withHistory({ objects, environment }, past),
       });
     }
+  },
+
+  arraySelected: (count, offset) => {
+    const { selectedId, objects, environment, past } = get();
+    if (!selectedId || count < 2) return;
+    const src = objects.find((o) => o.id === selectedId);
+    if (!src) return;
+
+    const additions: ObjectNodeSchema[] = [];
+    const newIds: string[] = [];
+
+    for (let i = 1; i < count; i++) {
+      const dx = offset.x * i, dy = offset.y * i, dz = offset.z * i;
+      const pos = { x: src.position.x + dx, y: src.position.y + dy, z: src.position.z + dz };
+
+      if (src.isGroup) {
+        // 중첩 그룹 포함 전체 하위 계층 재귀 복제 (duplicateSelected와 동일 패턴)
+        const idMap = new Map<string, string>();
+        const newDescendants: ObjectNodeSchema[] = [];
+        const collectAll = (parentId: string): void => {
+          for (const child of objects.filter((o) => o.parentId === parentId)) {
+            const newId = MathUtils.generateUUID();
+            idMap.set(child.id, newId);
+            newDescendants.push({ ...child, id: newId });
+            if (child.isGroup) collectAll(child.id);
+          }
+        };
+        const newGroupId = MathUtils.generateUUID();
+        idMap.set(src.id, newGroupId);
+        collectAll(src.id);
+        additions.push({ ...src, id: newGroupId, name: `${src.name} ${i}`, position: pos });
+        for (const o of newDescendants) {
+          additions.push({ ...o, parentId: idMap.get(o.parentId!) ?? o.parentId });
+        }
+        newIds.push(newGroupId);
+      } else {
+        const id = MathUtils.generateUUID();
+        additions.push({ ...src, id, name: `${src.name} ${i}`, position: pos, parentId: src.parentId });
+        newIds.push(id);
+      }
+    }
+
+    if (additions.length === 0) return;
+    set({
+      objects: [...objects, ...additions],
+      selectedId: newIds[newIds.length - 1],
+      selectedIds: [selectedId, ...newIds],
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
   },
 
   groupSelected: () => {
