@@ -125,7 +125,19 @@ export interface PhysicsSchema {
   restitution: number;
 }
 
-export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane';
+export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane' | 'frustum' | 'loft';
+
+// 프리미티브 확장 지오메트리 파라미터(옵셔널=하위호환). 미설정이면 각진 기본 형태.
+export interface PrimitiveGeom {
+  // box: 모서리 둥글기(0=각짐). 반변(0.5) 기준 0~0.5.
+  cornerRadius?: number;
+  // box 둥근 모서리 부드러움(세그먼트). 기본 4.
+  cornerSegments?: number;
+  // frustum: 윗면 크기 배율(아랫면=1 기준). 0=뾰족(각뿔), 1=박스. 0~1.
+  topScale?: number;
+  // loft: 아래→위 각 단면의 크기 배율(0~1). 2개 이상. 각뿔대(frustum)를 N단면으로 일반화.
+  sections?: number[];
+}
 
 export type ContentType = 'text' | 'image' | 'video';
 
@@ -175,6 +187,8 @@ export interface ObjectNodeSchema {
   name: string;
   assetId: string | null;
   primitiveShape?: PrimitiveShape;
+  // 프리미티브 확장 지오메트리 파라미터(둥근 박스 cornerRadius·각뿔대 topScale 등).
+  geom?: PrimitiveGeom;
   material?: MaterialOverride;
   parentId: string | null;
   layer: string;

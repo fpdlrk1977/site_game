@@ -46,6 +46,8 @@ export function CommandPalette({ onClose }: Props) {
     { id: 'add-box', label: '박스 추가', icon: '□', group: '추가', action: () => { addObject('box'); onClose(); } },
     { id: 'add-sphere', label: '구체 추가', icon: '○', group: '추가', action: () => { addObject('sphere'); onClose(); } },
     { id: 'add-cylinder', label: '원기둥 추가', icon: '⬡', group: '추가', action: () => { addObject('cylinder'); onClose(); } },
+    { id: 'add-frustum', label: '각뿔대 추가', icon: '⏢', group: '추가', action: () => { addObject('frustum'); onClose(); } },
+    { id: 'add-loft', label: '로프트 추가', icon: '⧖', group: '추가', action: () => { addObject('loft'); onClose(); } },
     { id: 'add-plane', label: '평면 추가', icon: '▭', group: '추가', action: () => { addObject('plane'); onClose(); } },
     { id: 'add-light-point', label: '포인트 라이트 추가', icon: '💡', group: '추가', action: () => { addLightObject('point'); onClose(); } },
     { id: 'add-light-spot', label: '스팟 라이트 추가', icon: '🔦', group: '추가', action: () => { addLightObject('spot'); onClose(); } },

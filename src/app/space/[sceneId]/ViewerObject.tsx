@@ -14,6 +14,7 @@ import { useObjectDialogue, effectiveDialogue } from "./useObjectDialogue";
 import { glbLocalBboxCache } from "@/lib/glbBboxCache";
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
+import { createPrimitiveGeometry } from "@/lib/primitiveGeometry";
 
 const DEG2RAD = Math.PI / 180;
 
@@ -565,6 +566,14 @@ export function ViewerObject({
   const dialogueNonce = useContext(DialogueAdvanceContext);
   const [hovered, setHovered] = useState(false);
   const [internalClip, setInternalClip] = useState<ClipRequest | null>(null);
+
+  // 프리미티브 지오메트리(둥근 박스·각뿔대 등 확장 파라미터 반영). GLB/콘텐츠/라이트/파티클은 null.
+  const isPrimitive = !object.assetId && !object.content && !object.light && !object.particle;
+  const primGeom = useMemo(
+    () => (isPrimitive ? createPrimitiveGeometry(object.primitiveShape, object.geom) : null),
+    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(',')],
+  );
+  useEffect(() => () => primGeom?.dispose(), [primGeom]);
   // 내부(click/hover)·PhysicsObject(area)·animate_object 요청 중 가장 최근(t) 것을 사용
   const effectiveClip = [internalClip, activeClipProp, externalClip]
     .filter((c): c is ClipRequest => !!c)
@@ -814,6 +823,7 @@ export function ViewerObject({
 
   const primMesh = (
     <mesh
+      geometry={primGeom ?? undefined}
       castShadow
       receiveShadow
       onPointerOver={(e) => {
@@ -826,10 +836,6 @@ export function ViewerObject({
         handleClick();
       }}
     >
-      {object.primitiveShape === "box" && <boxGeometry args={[1, 1, 1]} />}
-      {object.primitiveShape === "sphere" && <sphereGeometry args={[0.5, 32, 32]} />}
-      {object.primitiveShape === "cylinder" && <cylinderGeometry args={[0.5, 0.5, 1, 32]} />}
-      {object.primitiveShape === "plane" && <planeGeometry args={[1, 1]} />}
       <meshStandardMaterial
         color={color}
         roughness={roughness}

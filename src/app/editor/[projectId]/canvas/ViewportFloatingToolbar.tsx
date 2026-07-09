@@ -25,6 +25,8 @@ const SHAPES: { shape: PrimitiveShape; label: string; icon: string }[] = [
   { shape: 'box',      label: '박스',   icon: '⬛' },
   { shape: 'sphere',   label: '구체',   icon: '⬤' },
   { shape: 'cylinder', label: '원기둥', icon: '⬭' },
+  { shape: 'frustum',  label: '각뿔대', icon: '⏢' },
+  { shape: 'loft',     label: '로프트', icon: '⧖' },
   { shape: 'plane',    label: '평면',   icon: '▬' },
 ];
 

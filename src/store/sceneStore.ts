@@ -104,6 +104,8 @@ interface SceneActions {
   arraySelected: (count: number, offset: { x: number; y: number; z: number }) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
+  /** 구운(bake) GLB 에셋으로 대상 오브젝트(+자손)를 대체 — Merge/Boolean 결과 반영. 원본 제거 + 에셋 오브젝트 1개 추가(단일 undo) */
+  mergeIntoAsset: (rootIds: string[], asset: AssetRefSchema, position: Vec3Schema, name: string) => void;
   // ── 프리팹 ──
   /** 선택한 루트 오브젝트/그룹으로 프리팹 정의를 만들고, 그 선택물을 인스턴스 #1로 태깅 */
   createPrefab: (name?: string) => void;
@@ -149,6 +151,8 @@ const SHAPE_NAMES: Record<PrimitiveShape, string> = {
   sphere: '구체',
   cylinder: '원기둥',
   plane: '평면',
+  frustum: '각뿔대',
+  loft: '로프트',
 };
 
 // 히스토리 스택 최대 길이 (past/future 공통)
@@ -188,11 +192,19 @@ function makeBaseObject(overrides: Partial<ObjectNodeSchema> & { name: string })
   };
 }
 
+// 셰이프별 기본 지오메트리 파라미터(둥근 박스·각뿔대 등). 미지정 = 기존 각진 형태.
+const SHAPE_DEFAULT_GEOM: Partial<Record<PrimitiveShape, ObjectNodeSchema['geom']>> = {
+  frustum: { topScale: 0.5 },
+  loft: { sections: [1, 0.7, 0.4] },
+};
+
 function makeObject(shape: PrimitiveShape): ObjectNodeSchema {
   objectCounter += 1;
+  const geom = SHAPE_DEFAULT_GEOM[shape];
   return makeBaseObject({
     name: `${SHAPE_NAMES[shape]} ${objectCounter}`,
     primitiveShape: shape,
+    ...(geom ? { geom: { ...geom } } : {}),
     material: { color: '#a78bfa', roughness: 0.5, metalness: 0.1 },
     position: { x: 0, y: 0.5, z: 0 },
   });
@@ -502,6 +514,26 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     // 밑면을 바닥에 자동 정렬 — bbox가 이미 캐시돼 있으면 즉시, 아니면 pending으로 두고 GlbObject 로드 시 재시도
     pendingFloorSnap.add(obj.id);
     get().floorSnapObject(obj.id);
+  },
+
+  mergeIntoAsset: (rootIds, asset, position, name) => {
+    const { objects, assets, environment, past } = get();
+    // 대상 루트들의 모든 자손 수집 → 제거
+    const collectDesc = (id: string): string[] => {
+      const children = objects.filter((o) => o.parentId === id);
+      return [id, ...children.flatMap((c) => collectDesc(c.id))];
+    };
+    const toRemove = new Set(rootIds.flatMap(collectDesc));
+    objectCounter += 1;
+    const merged = makeBaseObject({ name, assetId: asset.id, position: { ...position } });
+    set({
+      objects: [...objects.filter((o) => !toRemove.has(o.id)), merged],
+      assets: assets.some((a) => a.id === asset.id) ? assets : [...assets, asset],
+      selectedId: merged.id,
+      selectedIds: [merged.id],
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
   },
 
   floorSnapObject: (id) => {

@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useLayoutEffect, useState, Suspense } from 'react';
+import { useRef, useLayoutEffect, useMemo, useEffect, useState, Suspense } from 'react';
 import * as THREE from 'three';
 import { Text3D, Center } from '@react-three/drei';
+import { createPrimitiveGeometry } from '@/lib/primitiveGeometry';
 import { useShallow } from 'zustand/react/shallow';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
@@ -268,6 +269,13 @@ export function EditorObjectInstance({ object }: Props) {
   const roughness = object.material?.roughness ?? 0.5;
   const metalness = object.material?.metalness ?? 0.1;
   const emissive = object.material?.emissive ?? '#000000';
+
+  // 프리미티브 지오메트리(둥근 박스·각뿔대 등 확장 파라미터 반영). 파라미터 바뀌면 재생성·이전 것 dispose.
+  const primGeom = useMemo(
+    () => createPrimitiveGeometry(object.primitiveShape, object.geom),
+    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(',')],
+  );
+  useEffect(() => () => primGeom.dispose(), [primGeom]);
   const handleClick = (shiftKey: boolean) => {
     if (object.locked) { if (!shiftKey) selectObject(null); return; }
     // 그룹 내부 오브젝트면 최상위 조상 그룹을 선택
@@ -372,16 +380,13 @@ export function EditorObjectInstance({ object }: Props) {
         </Suspense>
       ) : (
         <mesh
+          geometry={primGeom}
           onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}
           castShadow
           receiveShadow
         >
-          {object.primitiveShape === 'box' && <boxGeometry args={[1, 1, 1]} />}
-          {object.primitiveShape === 'sphere' && <sphereGeometry args={[0.5, 32, 32]} />}
-          {object.primitiveShape === 'cylinder' && <cylinderGeometry args={[0.5, 0.5, 1, 32]} />}
-          {object.primitiveShape === 'plane' && <planeGeometry args={[1, 1]} />}
           <meshStandardMaterial
             color={color}
             roughness={roughness}

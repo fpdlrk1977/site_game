@@ -8,6 +8,10 @@ import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
+import { persistCurrentScene } from '@/lib/saveScene';
+import { buildMergedGlb } from '@/lib/mergeObjects';
+import { buildBooleanGlb, type BooleanOp } from '@/lib/booleanObjects';
+import { uploadGlbBlob } from '@/lib/uploadAsset';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
@@ -1129,8 +1133,47 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab } = useSceneStore();
   const { addToast } = useToast();
+  const [merging, setMerging] = useState(false);
+
+  // 여러 프리미티브를 하나의 GLB 에셋으로 굽는다(Merge). 원본 제거 + 에셋 오브젝트 1개로 대체.
+  const handleMerge = async (rootIds: string[]) => {
+    if (!projectId || merging) return;
+    setMerging(true);
+    try {
+      const result = await buildMergedGlb(useSceneStore.getState().objects, rootIds);
+      if (!result) { addToast('합칠 프리미티브가 없어요 (GLB/콘텐츠/라이트는 병합 대상이 아닙니다).', 'error'); return; }
+      const asset = await uploadGlbBlob(result.blob, '합친 오브젝트', projectId, 'model');
+      mergeIntoAsset(rootIds, asset, result.center, '합친 오브젝트');
+      const save = await persistCurrentScene();
+      if (save.status === 'conflict') addToast('합쳤지만 다른 탭·기기에서 씬이 먼저 저장돼 반영하지 못했어요. 새로고침 후 다시 시도해 주세요.', 'error');
+      else addToast(`${result.count}개를 하나로 합쳤어요`, 'success');
+    } catch (err) {
+      addToast(`합치기 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`, 'error');
+    } finally {
+      setMerging(false);
+    }
+  };
+
+  // Boolean(합집합/차집합/교집합) — base ∘ tool. subtract는 먼저 선택한 것(base)에서 나중 것(tool)을 뺀다.
+  const handleBoolean = async (baseId: string, toolId: string, op: BooleanOp) => {
+    if (!projectId || merging) return;
+    setMerging(true);
+    try {
+      const result = await buildBooleanGlb(useSceneStore.getState().objects, baseId, toolId, op);
+      if (!result) { addToast('두 프리미티브에만 적용할 수 있어요 (GLB/콘텐츠/라이트 제외).', 'error'); return; }
+      const asset = await uploadGlbBlob(result.blob, 'Boolean 결과', projectId, 'model');
+      mergeIntoAsset([baseId, toolId], asset, result.center, 'Boolean 결과');
+      const save = await persistCurrentScene();
+      if (save.status === 'conflict') addToast('처리했지만 다른 탭·기기에서 씬이 먼저 저장돼 반영하지 못했어요. 새로고침 후 다시 시도해 주세요.', 'error');
+      else addToast('Boolean 연산 완료', 'success');
+    } catch (err) {
+      addToast(`Boolean 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`, 'error');
+    } finally {
+      setMerging(false);
+    }
+  };
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
 
@@ -1250,6 +1293,39 @@ function InspectorInner() {
               />
             </label>
           </div>
+
+          {/* 합치기(Merge) — 여러 프리미티브를 하나의 GLB 객체로 */}
+          <SectionHeader title="합치기" icon="⛶" />
+          <div className="px-3 py-3 space-y-2">
+            <button
+              onClick={() => handleMerge(selectedIds)}
+              disabled={merging}
+              className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {merging ? '합치는 중…' : '⛶ 하나로 합치기'}
+            </button>
+            <p className="text-[10px] text-muted/50">선택한 프리미티브를 <b>진짜 하나의 객체</b>로 병합해 새 에셋으로 만들어요. 병합 후엔 개별 편집이 안 되며 되돌리기(Ctrl+Z)로 취소할 수 있어요. (GLB·콘텐츠·라이트는 병합 제외)</p>
+          </div>
+
+          {/* Boolean — 정확히 2개 선택 시. base=먼저 선택, tool=나중 선택 */}
+          {selectedIds.length === 2 && (
+            <>
+              <SectionHeader title="Boolean" icon="◑" />
+              <div className="px-3 py-3 space-y-2">
+                <div className="grid grid-cols-3 gap-1">
+                  <button onClick={() => handleBoolean(selectedIds[0], selectedIds[1], 'union')} disabled={merging}
+                    className="py-1.5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground text-[10px] transition-colors disabled:opacity-50" title="두 형태를 합칩니다">합집합</button>
+                  <button onClick={() => handleBoolean(selectedIds[0], selectedIds[1], 'subtract')} disabled={merging}
+                    className="py-1.5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground text-[10px] transition-colors disabled:opacity-50" title="먼저 선택한 것에서 나중 것을 뺍니다(구멍 뚫기)">빼기</button>
+                  <button onClick={() => handleBoolean(selectedIds[0], selectedIds[1], 'intersect')} disabled={merging}
+                    className="py-1.5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground text-[10px] transition-colors disabled:opacity-50" title="두 형태가 겹치는 부분만 남깁니다">교집합</button>
+                </div>
+                <p className="text-[10px] text-muted/50">
+                  <b>빼기</b>는 <b>{objects.find((o) => o.id === selectedIds[0])?.name ?? '첫 번째'}</b>(먼저 선택)에서 <b>{objects.find((o) => o.id === selectedIds[1])?.name ?? '두 번째'}</b>(나중 선택)를 뺍니다. 예: 몸체에서 실린더를 빼 바퀴 자리 구멍. 결과는 새 에셋이 되고 Ctrl+Z로 취소돼요.
+                </p>
+              </div>
+            </>
+          )}
 
           {/* 정렬 */}
           <SectionHeader title="정렬" icon="⊞" />
@@ -1981,6 +2057,86 @@ function InspectorInner() {
             </div>
           )}
         </GroupBox>
+
+        {/* Geometry — 프리미티브 확장 파라미터(둥근 박스·각뿔대·로프트) */}
+        {(obj.primitiveShape === 'box' || obj.primitiveShape === 'frustum' || obj.primitiveShape === 'loft') && (
+          <GroupBox>
+            <SectionHeader title="Geometry" hint="프리미티브 형태 조절. 박스는 모서리 둥글기, 각뿔대는 윗면 크기, 로프트는 아래→위 단면 크기를 층마다 조절해요." isOpen={isOpen('geometry')} onToggle={() => toggleSection('geometry')} />
+            {isOpen('geometry') && (
+              <div className="px-3 pb-4 space-y-2">
+                {obj.primitiveShape === 'box' && (
+                  <>
+                    <LabeledNum
+                      label="모서리 둥글기"
+                      value={obj.geom?.cornerRadius ?? 0}
+                      onChange={(v) => updateObject(obj.id, { geom: { ...obj.geom, cornerRadius: Math.max(0, Math.min(0.5, v)) } })}
+                      onCommit={pushHistory}
+                      min={0} max={0.5} precision={2} dragStep={0.01}
+                    />
+                    {(obj.geom?.cornerRadius ?? 0) > 0 && (
+                      <LabeledNum
+                        label="둥근면 부드러움"
+                        value={obj.geom?.cornerSegments ?? 4}
+                        onChange={(v) => updateObject(obj.id, { geom: { ...obj.geom, cornerSegments: Math.max(1, Math.min(10, Math.round(v))) } })}
+                        onCommit={pushHistory}
+                        min={1} max={10} precision={0} dragStep={1}
+                      />
+                    )}
+                    <p className="text-[10px] text-muted/50">둥글기 0 = 각진 기본 박스.</p>
+                  </>
+                )}
+                {obj.primitiveShape === 'frustum' && (
+                  <>
+                    <LabeledNum
+                      label="윗면 크기"
+                      value={obj.geom?.topScale ?? 0.5}
+                      onChange={(v) => updateObject(obj.id, { geom: { ...obj.geom, topScale: Math.max(0, Math.min(1, v)) } })}
+                      onCommit={pushHistory}
+                      min={0} max={1} precision={2} dragStep={0.02}
+                    />
+                    <p className="text-[10px] text-muted/50">0 = 뾰족한 각뿔, 1 = 박스. 아랫면 기준 윗면 배율.</p>
+                  </>
+                )}
+                {obj.primitiveShape === 'loft' && (() => {
+                  const sections = obj.geom?.sections && obj.geom.sections.length >= 2 ? obj.geom.sections : [1, 0.7, 0.4];
+                  const setSections = (next: number[]) => updateObject(obj.id, { geom: { ...obj.geom, sections: next } });
+                  return (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-muted/50 tracking-wide">단면 (아래 → 위)</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => { setSections([...sections, sections[sections.length - 1]]); pushHistory(); }}
+                            disabled={sections.length >= 8}
+                            className="w-5 h-5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground text-[11px] leading-none disabled:opacity-40"
+                            title="단면 추가"
+                          >+</button>
+                          <button
+                            onClick={() => { if (sections.length > 2) { setSections(sections.slice(0, -1)); pushHistory(); } }}
+                            disabled={sections.length <= 2}
+                            className="w-5 h-5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground text-[11px] leading-none disabled:opacity-40"
+                            title="마지막 단면 제거"
+                          >−</button>
+                        </div>
+                      </div>
+                      {sections.map((sv, i) => (
+                        <LabeledNum
+                          key={i}
+                          label={`단면 ${i + 1}${i === 0 ? ' (바닥)' : i === sections.length - 1 ? ' (꼭대기)' : ''}`}
+                          value={sv}
+                          onChange={(v) => setSections(sections.map((x, j) => (j === i ? Math.max(0, Math.min(1, v)) : x)))}
+                          onCommit={pushHistory}
+                          min={0} max={1} precision={2} dragStep={0.02}
+                        />
+                      ))}
+                      <p className="text-[10px] text-muted/50">아래→위 각 층의 폭(0~1). 층을 늘려 병·꽃병·로켓·탑처럼 굴곡진 형태를 만들어요.</p>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+          </GroupBox>
+        )}
 
         {/* Array — 일정 간격 반복 복제 (울타리·기둥·계단 등) */}
         <GroupBox>

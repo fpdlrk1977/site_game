@@ -67,6 +67,50 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **Events E2 — 오브젝트 이동 + 사운드**: `move_object`(value `"objectId|dx,dy,dz|초"` — **원래 저장 위치 기준** 오프셋으로 easeInOutQuad 이동, (0,0,0) 이벤트로 원위치 복귀) + `play_sound`(value=오디오 URL, URL별 HTMLAudioElement 재사용). 구현은 visOverride와 동일 패턴 — `ViewerClient`의 `posOverride`를 effectiveScene에 주입, 단일 rAF 루프가 이징. rapier 2.2.0은 RigidBody position prop 변경 시 setTranslation 텔레포트라 **플레이 모드에서 콜라이더도 함께 이동**(E2E 검증: `/test/move-object` 페이지 + 헤드리스 Edge — 탐색 클릭 move·플레이 area_enter move·Audio 패치 사운드 로그 모두 확인). 에디터는 대상 SelectBox+XYZRow 이동량+시간 입력, 사운드는 URL 입력·▶ 미리듣기.
 - **Events E2 완료 — 인터랙션 어포던스**: 클릭/호버 이벤트가 있는 오브젝트 위에 카메라를 향한 펄스 **힌트 링**을 띄워 방문자에게 상호작용 가능함을 알림. `ViewerCanvas`의 별도 레이어 `InteractionHints`로 구현 — **오브젝트 렌더 경로(재질/GLB) 미변경**(depthTest=false + renderOrder 999, `objWorldPos` 재사용, useFrame 빌보드·펄스). **탐색 모드 뷰어/임베드에서만** 렌더(플레이 모드·에디터 미표시). 씬별 토글 `EnvSchema.showInteractionHints`(미설정=켜짐) — 에디터 Environment 패널 'Interaction' 섹션. area_enter/exit만 있는 오브젝트엔 링 없음(호버로 발견되는 트리거가 아니라서). E2E: `/test/move-object`에서 클릭·호버 오브젝트에만 링 뜨는 것 스크린샷 확인.
 
+## 진행 중 (2026-07-09) — 인앱 3D 모델링 (일반인 온보딩 장벽 해소)
+> **스코프 5단계 전부 코드 완료(tsc·로직테스트 통과). 브라우저 실클릭 확인만 남음 — 사용자가 나중에 일괄 검증 예정.**
+
+### 배경/합의
+- **문제 인식(사용자)**: 일반인은 GLB를 어디서 구하는지 모르고 Blender를 못 씀 → import-only만으론 진입장벽. 간단하게라도 객체를 만들고·조합하고·움직일 수 있어야 함(예: 바퀴 만들고 몸체 만들고 색 입혀 조립해 굴리기).
+- **경쟁 조사 결론(2026-07-09)**: Spline은 이미 물리·Walk/Fly 게임컨트롤·19종+ 이벤트·인툴 모델링(프리미티브+불리언)·AI 3D생성 보유 → **기능 체크박스 경쟁으론 불리**. 우리 빈칸 = **다중 씬 사이트 + 커스텀 도메인 배포 + Event Bridge(임베드 호스트 페이지 연동)**. 인툴 모델링은 "Blender 재구현"이 아니라 **간단 조립 도구** 수준으로 진입장벽만 낮추는 게 목표.
+- **확정 스코프(순서)**: ①**프리미티브 확장**(둥근 박스·각뿔대) → **Merge**(여러 오브젝트→진짜 하나, GLB로 구워 기존 에셋 파이프라인 재사용) → **Boolean**(합치기/빼기·구멍 뚫기, bake 방식) → ②**Loft**(다단면) → ③**서브디비전 제외**. (유선형 자유곡면=서브디비전 박스모델링은 스코프 밖 — Loft까지가 현실적 상한.)
+- **핵심 판단**: "조립+움직임"은 이미 프리미티브+그룹+Prefab+motion(spin)으로 대부분 가능. 진짜 부족한 건 "새 형태 만들기". 콜라이더: 둥근 박스=box→cuboid 근사, 각뿔대=hull/trimesh 근사(변경 불필요).
+
+### Phase 1 완료 — 프리미티브 확장 (둥근 박스 + 각뿔대)
+- **스키마(`scene.ts`)**: `PrimitiveShape`에 `'frustum'` 추가 + `PrimitiveGeom { cornerRadius?, cornerSegments?, topScale? }` + `ObjectNodeSchema.geom?`(옵셔널=하위호환).
+- **공용 팩토리 `src/lib/primitiveGeometry.ts`(신규)**: `createPrimitiveGeometry(shape, geom)` 단일 소스 — 기존 5곳 인라인 `<boxGeometry>` 등을 대체. 둥근 박스=`RoundedBoxGeometry`(three/examples), **각뿔대=4각 CylinderGeometry(radiusTop=0.5√2·topScale)를 45° 회전**해 축정렬 사각 단면(법선·UV 정확). `primitiveGeomKey`(인스턴싱/메모 키).
+- **배선**: `EditorObjectInstance`·`ViewerObject`(둘 다 `geometry={primGeom}` prop + useMemo/dispose, ViewerObject는 early-return 前 hook·isPrimitive 가드) · `InstancedPrimitives`(배칭 키에 geom 포함 + 대표 오브젝트로 지오메트리 생성). 콜라이더(`PhysicsObject`/`PlayCanvas`)는 무변경(frustum→hull/trimesh, 둥근박스→cuboid 자연 근사).
+- **UI**: 추가 메뉴(`ViewportFloatingToolbar` SHAPES + `CommandPalette`)에 '각뿔대' 추가 + Inspector **Geometry 섹션**(box=모서리 둥글기·둥근면 부드러움, frustum=윗면 크기). 둥근 박스는 별도 타입 아니라 **box의 cornerRadius 파라미터**(0=기존 각진 박스).
+- **bbox**: 프리미티브는 단위 박스([-0.5,0.5]³) — frustum(topScale≤1)·둥근 박스 모두 범위 내라 바닥스냅/정렬 그대로 정확.
+- **검증**: **tsc 클린** + **지오메트리 수치 테스트 11/11 통과**(각뿔대 아랫면 반폭 0.5·윗면 0.25@topScale0.5·apex@0·box@1, 둥근 박스 단위 박스 유지, 키 구분 — `tsx` 임시 스크립트) + **에디터/뷰어 라우트 200·컴파일 정상**. **에디터 실클릭(각뿔대 추가·둥근 박스 슬라이더·인스턴싱) 브라우저 확인 필요**.
+### Phase 2 완료 — Merge (여러 프리미티브 → 진짜 하나의 객체)
+- **핵심 결정**: 병합 결과를 새 스키마 필드 없이 **GLB로 구워(bake) 기존 에셋 파이프라인에 태운다** → '하나의 에셋 오브젝트'가 됨. Prefab(개별 요소 살아있는 묶음)과 달리 **되돌릴 수 없는 진짜 병합**(Blender Join).
+- **업로드 공용화 `src/lib/uploadAsset.ts`(신규)**: `uploadGlbBlob(body, name, projectId, type)` — Storage 업로드 + assets DB insert + 썸네일 → AssetRefSchema. `AssetBrowser.uploadGlb`의 중복 로직을 이 함수로 추출(AssetBrowser도 이걸 호출하도록 리팩터, 회귀 없음 확인).
+- **병합 로직 `src/lib/mergeObjects.ts`(신규)**: `buildMergedGlb(objects, rootIds)` — 루트들의 서브트리에서 **프리미티브만** 수집(GLB/콘텐츠/라이트/파티클 제외) → 각 월드행렬로 `createPrimitiveGeometry`+`MeshStandardMaterial` 메쉬 생성 → 전체 월드 bbox 중심 기준 로컬로 옮겨 `GLTFExporter.parseAsync({binary})` → `{ blob, center, count }`. 대상 없으면 null.
+- **스토어 `mergeIntoAsset(rootIds, asset, position, name)`**: 대상 루트+자손 제거 + 에셋 추가(중복 방지) + 에셋 오브젝트 1개를 center에 배치(단일 undo).
+- **UI**: Inspector **다중선택 패널에 '합치기' 섹션**(⛶ 하나로 합치기) — async(GLB 굽기+업로드) busy 상태·토스트·persist. 안내: 병합 후 개별 편집 불가·Ctrl+Z 취소 가능·GLB/콘텐츠/라이트 제외.
+- **검증**: **tsc 클린** + **병합 GLB 빌드 테스트 7/7 통과**(count·유효 GLB 'glTF' 매직·중심 계산·프리미티브 필터·GLB만이면 null — `tsx`+FileReader 폴리필. Node엔 FileReader 없지만 **브라우저엔 항상 있어 실앱 정상**) + 에디터/뷰어 200. **에디터 실클릭(2+ 선택→합치기→에셋화·바닥배치·원본 제거) 브라우저 확인 필요**.
+- **알려진 제약**: 프리미티브만(GLB 병합 후속) · undo 시 원본은 복원되나 업로드된 에셋 파일/DB행·assets 목록 항목은 남음(파일은 이미 커밋됨 — 일관성 위해 유지) · 텍스처 UV 없음(단색/PBR만).
+- **다음**: Boolean(합치기/빼기·구멍 뚫기, `three-bvh-csg`로 bake→같은 파이프라인) → Loft.
+
+### Phase 3 완료 — Boolean (합집합/차집합/교집합·구멍 뚫기)
+- **의존성**: `three-bvh-csg@0.0.16` 설치(최신 0.0.18은 three-mesh-bvh≥0.9.7 peer라 drei의 three-mesh-bvh@0.8.3과 충돌 → **0.0.16이 0.8.3과 호환**, 기존 것에 dedupe·충돌 없음). `npm install three-bvh-csg@0.0.16`.
+- **로직 `src/lib/booleanObjects.ts`(신규)**: `buildBooleanGlb(objects, baseId, toolId, op)` — 프리미티브 2개를 `Brush`로 만들어(월드행렬 반영, base 월드 bbox 중심으로 정렬) `Evaluator`(useGroups=false)로 ADDITION/SUBTRACTION/INTERSECTION 계산 → base 머티리얼 적용 → GLTFExporter로 GLB. 대상이 프리미티브 아니면 null.
+- **UI**: Inspector 다중선택 패널에 **정확히 2개 선택 시** 'Boolean' 섹션(합집합/빼기/교집합) — Merge와 동일하게 `mergeIntoAsset`으로 원본 2개→에셋 1개 대체. **빼기=먼저 선택(base) − 나중 선택(tool)**(안내에 이름 표기). 예: 몸체에서 실린더 빼 바퀴 자리 구멍.
+- **검증**: **tsc 클린** + **CSG 테스트 10/10 통과**(union/subtract/intersect 각각 유효 GLB 'glTF' 매직·크기>0 + 프리미티브 아니면 null — `tsx`+FileReader 폴리필) + 에디터 200·컴파일 정상. **에디터 실클릭(2개 선택→빼기→구멍 뚫린 결과) 브라우저 확인 필요**.
+- **알려진 제약**: 프리미티브 2개만(GLB·다중 대상 후속) · 연쇄 Boolean은 결과 에셋을 다시 프리미티브와 못 뺌(에셋이 됨 — 후속은 GLB Boolean 지원 시) · 되돌릴 수 없음(Ctrl+Z 취소).
+
+### Phase 4 완료 — Loft (다단면·각뿔대의 N단면 일반화)
+- **로직**: `primitiveGeometry.ts`에 `makeLoft(sections[])` — **각뿔대(2단면)를 N단면으로 일반화**. `LatheGeometry`(4각+45° 회전)의 프로파일 **양끝을 축(반경 0)에 붙여 상·하 캡을 자동 생성** → 법선·캡·UV 안전. 각 단면 배율(0~1)로 층마다 폭 조절 → 병·꽃병·로켓·탑처럼 굴곡진 형태. 새 `PrimitiveShape 'loft'` + `PrimitiveGeom.sections?: number[]`.
+- **배선**: 팩토리/키(`primitiveGeomKey`·InstancedPrimitives makeKey)·3개 렌더 경로 memo 의존성에 sections 반영. SHAPE_NAMES('로프트')·기본 geom(`{sections:[1,0.7,0.4]}`)·추가 메뉴(툴바+커맨드팔레트). Inspector Geometry 섹션에 **단면 슬라이더 목록 + 추가/제거(2~8층)**.
+- **콜라이더/bbox**: loft→trimesh/hull 근사(변경 불필요), sections≤1이라 단위 박스 bbox 유지.
+- **검증**: **tsc 클린** + **로프트 지오메트리 테스트 5/5 통과**(높이 1·최대 반폭 0.5·가운데 단면이 끝보다 좁음[다단면 증명]·법선 유한·미지정 폴백 — `tsx`) + 에디터 200·컴파일 정상. **에디터 실클릭(로프트 추가·단면 추가/조절) 브라우저 확인 필요**.
+
+### 🎯 인앱 모델링 스코프 전체 완료 (①프리미티브확장 → Merge → Boolean → ②Loft, ③서브디비전 제외)
+- **신규 라이브러리/의존성**: `three-bvh-csg@0.0.16`(Boolean). 신규 lib 4개: `primitiveGeometry.ts`·`mergeObjects.ts`·`booleanObjects.ts`·`uploadAsset.ts`.
+- **자동차 예시 달성 경로**: 둥근 박스(몸체) + 각뿔대/실린더(바퀴) → 색·재질 → 그룹/프리팹 → motion(spin) 굴리기, 또는 Boolean 빼기로 바퀴 자리 구멍, Merge로 하나의 객체화. "만들고·조합하고·움직이는" 흐름이 코드로 완성됨.
+- **미착수(스코프 밖/후속)**: 유선형 자유곡면(서브디비전 박스모델링) · GLB 대상 Merge/Boolean · 텍스처 UV · loft 원형 단면 옵션 · 대칭(mirror) 편집.
+
 ## 최근 완료 (2026-07-09) — Prefab MVP (원본↔인스턴스 동기화)
 
 - **설계 합의**: (사용자 결정) **씬 단위 저장**(scene_data.prefabs[], DB 마이그레이션 없음·후속에 프로젝트 단위 승격 가능) + **필드그룹 단위 override**(material/events/motion/physics/transform/… 그룹별 override·revert).

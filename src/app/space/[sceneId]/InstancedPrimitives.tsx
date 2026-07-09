@@ -3,20 +3,14 @@
 import { useRef, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { ObjectNodeSchema } from '@/types/scene';
+import { createPrimitiveGeometry } from '@/lib/primitiveGeometry';
 
 const DEG2RAD = Math.PI / 180;
 
-const GEOMETRIES: Record<string, () => THREE.BufferGeometry> = {
-  box: () => new THREE.BoxGeometry(1, 1, 1),
-  sphere: () => new THREE.SphereGeometry(0.5, 32, 32),
-  cylinder: () => new THREE.CylinderGeometry(0.5, 0.5, 1, 32),
-  plane: () => new THREE.PlaneGeometry(1, 1),
-};
-
 function InstancedGroup({
-  shape, color, roughness, metalness, emissive, objects,
+  sample, color, roughness, metalness, emissive, objects,
 }: {
-  shape: string;
+  sample: ObjectNodeSchema; // 그룹 대표(형태·geom 동일) — 지오메트리 생성용
   color: string;
   roughness: number;
   metalness: number;
@@ -25,7 +19,11 @@ function InstancedGroup({
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
 
-  const geometry = useMemo(() => (GEOMETRIES[shape] ?? GEOMETRIES.box)(), [shape]);
+  const geometry = useMemo(
+    () => createPrimitiveGeometry(sample.primitiveShape, sample.geom),
+    [sample.primitiveShape, sample.geom?.cornerRadius, sample.geom?.cornerSegments, sample.geom?.topScale, (sample.geom?.sections ?? []).join(',')],
+  );
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   useEffect(() => {
     const mesh = meshRef.current;
@@ -67,7 +65,9 @@ function makeKey(obj: ObjectNodeSchema): string {
   const roughness = obj.material?.roughness ?? 0.5;
   const metalness = obj.material?.metalness ?? 0.1;
   const emissive = obj.material?.emissive ?? '#000000';
-  return `${obj.primitiveShape}|${color}|${roughness}|${metalness}|${emissive}`;
+  // geom 파라미터(둥근 박스·각뿔대·로프트)까지 키에 포함 — 다른 파라미터는 다른 인스턴스 그룹으로 분리.
+  const g = `${obj.geom?.cornerRadius ?? 0}:${obj.geom?.cornerSegments ?? 4}:${obj.geom?.topScale ?? 0.5}:${(obj.geom?.sections ?? []).join(',')}`;
+  return `${obj.primitiveShape}|${color}|${roughness}|${metalness}|${emissive}|${g}`;
 }
 
 /** Returns the set of object IDs that are batched into InstancedMesh (3+ identical static primitives). */
@@ -111,11 +111,11 @@ export function InstancedPrimitives({ objects }: Props) {
       {Array.from(groups.entries()).map(([key, objs]) => {
         if (objs.length < 3) return null;
         const parts = key.split('|');
-        const [shape, color, roughnessStr, metalnessStr, emissive] = parts;
+        const [, color, roughnessStr, metalnessStr, emissive] = parts;
         return (
           <InstancedGroup
             key={key}
-            shape={shape}
+            sample={objs[0]}
             color={color}
             roughness={parseFloat(roughnessStr)}
             metalness={parseFloat(metalnessStr)}
