@@ -10,17 +10,29 @@ import {
   AssetRefSchema,
   EnvSchema,
   ProjectSceneSchema,
+  PrefabSchema,
+  PrefabOverrideGroup,
   DEFAULT_ENVIRONMENT,
   DEFAULT_PHYSICS,
   PrimitiveShape,
   ContentType,
   ParticlePreset,
   LightType,
+  Vector3 as Vec3Schema,
 } from '@/types/scene';
+import {
+  buildPrefab,
+  instantiate as instantiatePrefabNodes,
+  syncInstances,
+  rebuildPrefabFromInstance,
+  overrideGroupsFromPatch,
+} from '@/lib/prefab';
 
 interface HistoryEntry {
   objects: ObjectNodeSchema[];
   environment: EnvSchema;
+  // 프리팹 정의도 함께 스냅샷(프리팹 관련 액션만 채움). 미설정 = 이 액션은 prefabs를 안 바꿈 → undo 시 현재값 유지.
+  prefabs?: PrefabSchema[];
 }
 
 export interface LayerState {
@@ -35,6 +47,8 @@ interface SceneState {
   objects: ObjectNodeSchema[];
   assets: AssetRefSchema[];
   environment: EnvSchema;
+  // 프리팹 원본 정의 라이브러리(씬 단위). 인스턴스는 objects에 구워진 채로 존재한다.
+  prefabs: PrefabSchema[];
   layers: Record<string, LayerState>;
   selectedId: string | null;
   selectedIds: string[];
@@ -90,6 +104,19 @@ interface SceneActions {
   arraySelected: (count: number, offset: { x: number; y: number; z: number }) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
+  // ── 프리팹 ──
+  /** 선택한 루트 오브젝트/그룹으로 프리팹 정의를 만들고, 그 선택물을 인스턴스 #1로 태깅 */
+  createPrefab: (name?: string) => void;
+  /** 프리팹 정의를 새 인스턴스로 씬에 배치(bake) */
+  instantiatePrefab: (prefabId: string, position?: Vec3Schema) => void;
+  /** 선택 인스턴스의 현재 상태를 원본 정의에 반영하고 다른 인스턴스를 재동기화(각자 override 보존) */
+  applyInstanceToPrefab: (instanceRootId: string) => void;
+  /** 선택 인스턴스의 override를 버리고 원본 값으로 되돌림(그룹 지정 시 그 그룹만) */
+  revertInstance: (instanceRootId: string, group?: PrefabOverrideGroup) => void;
+  /** 프리팹 정의 삭제 — 인스턴스는 태그를 벗고 독립 오브젝트가 됨(씬에는 유지) */
+  deletePrefab: (prefabId: string) => void;
+  /** 프리팹 이름 변경 */
+  renamePrefab: (prefabId: string, name: string) => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -251,6 +278,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   objects: [],
   assets: [],
   environment: DEFAULT_ENVIRONMENT,
+  prefabs: [],
   selectedId: null,
   transformMode: 'translate',
   transformSpace: 'world',
@@ -281,6 +309,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       objects: data.objects,
       assets: data.assets ?? [],
       environment: data.environment,
+      prefabs: data.prefabs ?? [],
       selectedId: null,
       selectedIds: [],
       isModified: false,
@@ -497,10 +526,23 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   updateObject: (id, patch) => {
-    const { objects, environment, _prevSnapshot } = get();
+    const { objects, environment, prefabs, _prevSnapshot } = get();
+    const target = objects.find((o) => o.id === id);
+    // 프리팹 인스턴스 노드를 편집하면, 바뀐 필드가 속한 override 그룹을 기록 → 동기화 시 그 그룹은 원본을 안 따른다.
+    let overridePatch: Partial<ObjectNodeSchema> | null = null;
+    if (target?.prefabInstanceId && target.prefabId) {
+      const def = prefabs.find((p) => p.id === target.prefabId);
+      const isRoot = !!def && target.prefabNodeKey === def.rootKey;
+      const groups = overrideGroupsFromPatch(Object.keys(patch), isRoot);
+      if (groups.length > 0) {
+        const merged = new Set<PrefabOverrideGroup>(target.prefabOverrides ?? []);
+        groups.forEach((g) => merged.add(g));
+        overridePatch = { prefabOverrides: [...merged] };
+      }
+    }
     set({
       _prevSnapshot: _prevSnapshot ?? { objects, environment },
-      objects: objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+      objects: objects.map((o) => (o.id === id ? { ...o, ...patch, ...overridePatch } : o)),
       isModified: true,
     });
   },
@@ -841,6 +883,108 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
+  // ── 프리팹 ──
+  createPrefab: (name) => {
+    const { selectedId, objects, environment, prefabs, past } = get();
+    if (!selectedId) return;
+    const src = objects.find((o) => o.id === selectedId);
+    if (!src || src.parentId) return; // 루트 오브젝트/그룹만
+    if (src.prefabInstanceId) return;  // 이미 프리팹 인스턴스면 무시
+    const { prefab, tagged } = buildPrefab(objects, selectedId, name?.trim() || src.name || '프리팹');
+    const taggedById = new Map(tagged.map((t) => [t.id, t]));
+    set({
+      objects: objects.map((o) => taggedById.get(o.id) ?? o),
+      prefabs: [...prefabs, prefab],
+      isModified: true,
+      ...withHistory({ objects, environment, prefabs }, past),
+    });
+  },
+
+  instantiatePrefab: (prefabId, position?: Vec3Schema) => {
+    const { objects, environment, prefabs, past } = get();
+    const prefab = prefabs.find((p) => p.id === prefabId);
+    if (!prefab) return;
+    const { objects: newObjects, rootId } = instantiatePrefabNodes(prefab, { position });
+    set({
+      objects: [...objects, ...newObjects],
+      selectedId: rootId,
+      selectedIds: [rootId],
+      isModified: true,
+      ...withHistory({ objects, environment, prefabs }, past),
+    });
+  },
+
+  applyInstanceToPrefab: (instanceRootId) => {
+    const { objects, environment, prefabs, past } = get();
+    const root = objects.find((o) => o.id === instanceRootId);
+    if (!root?.prefabId || !root.prefabInstanceId) return;
+    const prefab = prefabs.find((p) => p.id === root.prefabId);
+    if (!prefab) return;
+    const iid = root.prefabInstanceId;
+    // 1) 인스턴스 현재 상태로 def 재구성  2) 소스 인스턴스의 override 초기화(이제 def에 반영됨)  3) 전체 재동기화
+    const newPrefab = rebuildPrefabFromInstance(objects, prefab, instanceRootId);
+    const clearedSource = objects.map((o) =>
+      o.prefabInstanceId === iid ? { ...o, prefabOverrides: [] } : o,
+    );
+    const newPrefabs = prefabs.map((p) => (p.id === newPrefab.id ? newPrefab : p));
+    const synced = syncInstances(clearedSource, newPrefab);
+    set({
+      objects: synced,
+      prefabs: newPrefabs,
+      isModified: true,
+      ...withHistory({ objects, environment, prefabs }, past),
+    });
+  },
+
+  revertInstance: (instanceRootId, group) => {
+    const { objects, environment, prefabs, past } = get();
+    const root = objects.find((o) => o.id === instanceRootId);
+    if (!root?.prefabId || !root.prefabInstanceId) return;
+    const prefab = prefabs.find((p) => p.id === root.prefabId);
+    if (!prefab) return;
+    const iid = root.prefabInstanceId;
+    // override 제거(그룹 지정 시 그 그룹만) → 재동기화가 원본 값을 다시 당겨온다.
+    const cleared = objects.map((o) =>
+      o.prefabInstanceId === iid
+        ? { ...o, prefabOverrides: group ? (o.prefabOverrides ?? []).filter((g) => g !== group) : [] }
+        : o,
+    );
+    const synced = syncInstances(cleared, prefab);
+    set({
+      objects: synced,
+      isModified: true,
+      ...withHistory({ objects, environment, prefabs }, past),
+    });
+  },
+
+  deletePrefab: (prefabId) => {
+    const { objects, environment, prefabs, past } = get();
+    if (!prefabs.some((p) => p.id === prefabId)) return;
+    // 인스턴스는 씬에 유지하되 프리팹 태그를 벗겨 독립 오브젝트로 만든다.
+    const detached = objects.map((o) =>
+      o.prefabId === prefabId
+        ? { ...o, prefabId: undefined, prefabInstanceId: undefined, prefabNodeKey: undefined, prefabOverrides: undefined }
+        : o,
+    );
+    set({
+      objects: detached,
+      prefabs: prefabs.filter((p) => p.id !== prefabId),
+      isModified: true,
+      ...withHistory({ objects, environment, prefabs }, past),
+    });
+  },
+
+  renamePrefab: (prefabId, name) => {
+    const { environment, objects, prefabs, past } = get();
+    const trimmed = name.trim();
+    if (!trimmed || !prefabs.some((p) => p.id === prefabId)) return;
+    set({
+      prefabs: prefabs.map((p) => (p.id === prefabId ? { ...p, name: trimmed } : p)),
+      isModified: true,
+      ...withHistory({ objects, environment, prefabs }, past),
+    });
+  },
+
   updateEnvironment: (patch) => {
     const { environment, objects, _prevSnapshot } = get();
     set({
@@ -857,27 +1001,30 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   undo: () => {
-    const { past, objects, environment, future } = get();
+    const { past, objects, environment, prefabs, future } = get();
     if (past.length === 0) return;
     const prev = past[past.length - 1];
     set({
       objects: prev.objects,
       environment: prev.environment,
+      // 스냅샷에 prefabs가 있으면 복원(프리팹 액션), 없으면 현재값 유지(그 액션은 prefabs 미변경).
+      prefabs: prev.prefabs ?? prefabs,
       past: past.slice(0, -1),
-      future: [{ objects, environment }, ...future],
+      future: [{ objects, environment, prefabs }, ...future],
       isModified: true,
       _prevSnapshot: null,
     });
   },
 
   redo: () => {
-    const { past, objects, environment, future } = get();
+    const { past, objects, environment, prefabs, future } = get();
     if (future.length === 0) return;
     const next = future[0];
     set({
       objects: next.objects,
       environment: next.environment,
-      past: pushPast(past, { objects, environment }),
+      prefabs: next.prefabs ?? prefabs,
+      past: pushPast(past, { objects, environment, prefabs }),
       future: future.slice(1),
       isModified: true,
       _prevSnapshot: null,

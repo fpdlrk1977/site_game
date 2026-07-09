@@ -201,6 +201,50 @@ export interface ObjectNodeSchema {
   // 이 오브젝트의 상호작용 근접 범위(m) 오버라이드 — 미설정이면 씬 기본값(EnvSchema.interactRange ?? 3).
   //   interact(E)/approach 트리거·E 프롬프트·하이라이트에 적용.
   interactRange?: number;
+
+  // ── 프리팹 인스턴스 링크 (전부 옵셔널 = 하위호환) ──
+  // 이 오브젝트가 프리팹에서 펼쳐진(bake) 인스턴스 노드면 아래 태그가 붙는다.
+  // 뷰어/임베드는 이 태그를 무시하고 평범한 오브젝트로 렌더한다(동기화는 에디터 전용).
+  prefabId?: string;           // 어느 프리팹 정의(scene.prefabs[].id)에서 나왔나
+  prefabInstanceId?: string;   // 한 번 배치한 인스턴스 묶음의 id — 같은 인스턴스의 노드들을 묶는다
+  prefabNodeKey?: string;      // 원본 정의의 어느 노드(PrefabNode.nodeKey)에 대응하나
+  prefabOverrides?: PrefabOverrideGroup[]; // 이 노드에서 원본을 안 따르는 필드그룹 목록
+}
+
+// 인스턴스 override 추적 단위(필드그룹). 이 그룹에 속한 필드를 인스턴스에서 편집하면
+// 동기화 시 그 그룹은 원본을 안 따른다. (transform=자식 노드 트랜스폼. 루트 트랜스폼은 항상 인스턴스 소유라 미추적.)
+export type PrefabOverrideGroup =
+  | 'transform'
+  | 'material'
+  | 'events'
+  | 'motion'
+  | 'physics'
+  | 'content'
+  | 'light'
+  | 'particle'
+  | 'name'
+  | 'visibility'
+  | 'dialogue';
+
+// 프리팹 정의의 노드 하나. id/parentId 절대참조 대신 안정적 nodeKey/parentKey로 트리를 표현.
+export type PrefabNodeData = Omit<
+  ObjectNodeSchema,
+  'id' | 'parentId' | 'prefabId' | 'prefabInstanceId' | 'prefabNodeKey' | 'prefabOverrides'
+>;
+
+export interface PrefabNode {
+  nodeKey: string;             // 프리팹 내에서 안정적인 노드 식별자
+  parentKey: string | null;    // null = 프리팹 루트
+  data: PrefabNodeData;        // 오브젝트 필드(절대 id/parentId·프리팹 태그 제외)
+}
+
+// 프리팹 원본 정의 — 씬 단위 라이브러리(scene_data.prefabs)에 저장(MVP).
+export interface PrefabSchema {
+  id: string;
+  name: string;
+  rootKey: string;             // nodes 중 루트 노드의 nodeKey
+  nodes: PrefabNode[];
+  thumbnailUrl?: string;
 }
 
 export interface MotionConfig {
@@ -239,6 +283,8 @@ export interface ProjectSceneSchema {
   environment: EnvSchema;
   assets: AssetRefSchema[];
   objects: ObjectNodeSchema[];
+  // 프리팹 원본 정의 라이브러리(씬 단위·MVP). 미설정 = 프리팹 없음(하위호환).
+  prefabs?: PrefabSchema[];
 }
 
 export const DEFAULT_PHYSICS: PhysicsSchema = {
@@ -291,6 +337,7 @@ export function normalizeSceneData(
       environment: (raw.environment as EnvSchema | undefined) ?? DEFAULT_ENVIRONMENT,
       assets: Array.isArray(raw.assets) ? (raw.assets as AssetRefSchema[]) : [],
       objects: raw.objects as ObjectNodeSchema[],
+      prefabs: Array.isArray(raw.prefabs) ? (raw.prefabs as PrefabSchema[]) : [],
     };
   }
   return makeEmptySceneData(projectId, sceneId);

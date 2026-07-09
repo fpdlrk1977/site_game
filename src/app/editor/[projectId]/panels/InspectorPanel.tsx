@@ -12,7 +12,22 @@ import { SelectBox } from '@/components/ui/SelectBox';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { InfoHint } from '@/components/ui/InfoHint';
-import type { ObjectNodeSchema, ColliderType, EventSchema, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
+
+// 프리팹 override 그룹 → 한글 라벨
+const OVERRIDE_LABELS: Record<PrefabOverrideGroup, string> = {
+  transform: '위치/회전/크기',
+  material: '재질',
+  events: '이벤트',
+  motion: '모션',
+  physics: '물리',
+  content: '콘텐츠',
+  light: '조명',
+  particle: '파티클',
+  name: '이름',
+  visibility: '표시',
+  dialogue: '대화',
+};
 import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
 function evalMath(expr: string): number | null {
@@ -1114,7 +1129,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab } = useSceneStore();
   const { addToast } = useToast();
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
@@ -1275,7 +1290,38 @@ function InspectorInner() {
             <p className="text-[10px] text-primary">뷰포트에서 드래그해 위치 조정 · 스케일/속성은 Player 섹션에서</p>
           </div>
         )}
-        <EnvironmentPanel />
+        <div className="flex-1 overflow-y-auto">
+          {!isCharSelected && prefabs.length > 0 && (
+            <GroupBox>
+              <SectionHeader title="Prefab 라이브러리" icon="◇" hint="이 씬의 프리팹 원본 목록. '배치'를 누르면 새 인스턴스를 씬에 추가해요. 삭제하면 정의만 지워지고 이미 배치된 오브젝트는 독립 오브젝트로 남습니다." />
+              <div className="px-3 pb-4 space-y-1.5">
+                {prefabs.map((p) => {
+                  const count = new Set(objects.filter((o) => o.prefabId === p.id).map((o) => o.prefabInstanceId)).size;
+                  return (
+                    <div key={p.id} className="flex items-center gap-1.5 bg-background border border-border rounded-xs px-2 py-1.5">
+                      <span className="text-[11px] text-foreground font-medium flex-1 truncate" title={p.name}>◇ {p.name}</span>
+                      <span className="text-[10px] text-muted shrink-0">{count}</span>
+                      <button
+                        onClick={() => { instantiatePrefab(p.id); addToast(`'${p.name}' 배치`, 'success'); }}
+                        className="px-2 py-0.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[10px] font-semibold transition-colors shrink-0"
+                      >
+                        배치
+                      </button>
+                      <button
+                        onClick={() => { if (confirm(`'${p.name}' 프리팹 정의를 삭제할까요?\n이미 배치된 ${count}개 인스턴스는 독립 오브젝트로 남습니다.`)) { deletePrefab(p.id); addToast('프리팹 정의 삭제됨', 'success'); } }}
+                        title="프리팹 정의 삭제(인스턴스는 유지)"
+                        className="px-1 py-0.5 rounded-xs text-muted hover:text-red-500 text-[11px] transition-colors shrink-0"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </GroupBox>
+          )}
+          <EnvironmentPanel />
+        </div>
       </aside>
     );
   }
@@ -1806,6 +1852,92 @@ function InspectorInner() {
           />
         </div>
 
+        {/* Prefab — 원본 정의화 / 인스턴스 동기화 */}
+        {(() => {
+          const prefabDef = obj.prefabId ? prefabs.find((p) => p.id === obj.prefabId) : undefined;
+          const isInstance = !!obj.prefabInstanceId && !!prefabDef;
+          const canCreate = !isInstance && !obj.parentId; // 루트 오브젝트/그룹만 프리팹화
+          if (!isInstance && !canCreate) return null;
+
+          const instanceRoot = isInstance
+            ? objects.find((o) => o.prefabInstanceId === obj.prefabInstanceId && o.prefabNodeKey === prefabDef!.rootKey)
+            : undefined;
+          const overrides = isInstance
+            ? [...new Set(
+                objects
+                  .filter((o) => o.prefabInstanceId === obj.prefabInstanceId)
+                  .flatMap((o) => o.prefabOverrides ?? []),
+              )]
+            : [];
+          const instanceCount = prefabDef
+            ? new Set(objects.filter((o) => o.prefabId === prefabDef.id).map((o) => o.prefabInstanceId)).size
+            : 0;
+
+          return (
+            <GroupBox>
+              <SectionHeader title="Prefab" icon="◇" hint="여러 오브젝트를 재사용 가능한 원본으로 묶어요. 원본을 고치면 모든 인스턴스가 함께 바뀌고(동기화), 인스턴스별로 값을 바꾸면 그 항목만 원본을 안 따릅니다(override)." />
+              <div className="px-3 pb-4 space-y-2">
+                {!isInstance && canCreate && (
+                  <>
+                    <button
+                      onClick={() => { createPrefab(); addToast('프리팹으로 만들었어요', 'success'); }}
+                      className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
+                    >
+                      ◇ 프리팹으로 만들기
+                    </button>
+                    <p className="text-[10px] text-muted/50">이 오브젝트{obj.isGroup ? '(그룹)' : ''}를 원본으로 등록합니다. 이후 복제한 인스턴스는 원본 수정 시 함께 바뀌어요.</p>
+                  </>
+                )}
+                {isInstance && instanceRoot && (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-primary font-semibold flex-1 truncate">◇ {prefabDef!.name}</span>
+                      <span className="text-[10px] text-muted shrink-0">인스턴스 {instanceCount}개</span>
+                    </div>
+                    {overrides.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] text-muted">이 인스턴스에서 원본과 다른 항목:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {overrides.map((g) => (
+                            <button
+                              key={g}
+                              onClick={() => { revertInstance(instanceRoot.id, g); addToast(`'${OVERRIDE_LABELS[g]}' 원본으로 되돌림`, 'success'); }}
+                              title="클릭하면 이 항목만 원본으로 되돌립니다"
+                              className="px-1.5 py-0.5 rounded-xs bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] hover:bg-amber-500/25 transition-colors cursor-pointer"
+                            >
+                              {OVERRIDE_LABELS[g]} ✕
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-muted/50">원본과 동일한 인스턴스입니다.</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-1 pt-0.5">
+                      <button
+                        onClick={() => { applyInstanceToPrefab(instanceRoot.id); addToast('원본에 반영했어요 (다른 인스턴스도 갱신)', 'success'); }}
+                        title="이 인스턴스의 현재 상태를 원본에 반영 → 다른 인스턴스도 갱신됩니다(각자 override는 유지)"
+                        className="py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
+                      >
+                        원본에 반영
+                      </button>
+                      <button
+                        onClick={() => { revertInstance(instanceRoot.id); addToast('원본으로 되돌렸어요', 'success'); }}
+                        disabled={overrides.length === 0}
+                        title="이 인스턴스의 모든 override를 버리고 원본 값으로 되돌립니다"
+                        className="py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary text-[11px] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        원본으로 되돌리기
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-muted/50">위치/회전/크기는 항상 인스턴스별로 유지돼요(동기화 대상 아님).</p>
+                  </>
+                )}
+              </div>
+            </GroupBox>
+          );
+        })()}
+
         {/* Transform */}
         <GroupBox>
           <SectionHeader title="Transform" hint="위치·회전·크기. 기즈모 회전 중 Shift를 누르면 15°씩 스냅돼요. GLB는 추가 시 밑면이 바닥에 자동 정렬되고, '바닥에 놓기'로 다시 맞출 수 있어요." isOpen={isOpen('transform')} onToggle={() => toggleSection('transform')} />
@@ -1914,14 +2046,31 @@ function InspectorInner() {
                 </>
               )}
 
+              {(obj.content.type === 'image' || obj.content.type === 'video') && (
+                <div>
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">
+                    {obj.content.type === 'image' ? '이미지 URL' : '동영상 URL'}
+                  </span>
+                  <input
+                    type="text"
+                    value={obj.content.url ?? ''}
+                    onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, url: e.target.value } })}
+                    onBlur={pushHistory}
+                    placeholder={obj.content.type === 'image' ? 'https://example.com/img.jpg' : 'https://www.youtube.com/...'}
+                    className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              )}
+            </div>}
+          </GroupBox>
+        )}
 
-              {/* Material (primitive + text content 오브젝트) */}
+        {/* Material (프리미티브 + 텍스트 콘텐츠 오브젝트) — 그룹/GLB/파티클/이미지·영상 콘텐츠는 제외 */}
         {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && (
-          // <GroupBox>
-          //   <SectionHeader title="Material" isOpen={isOpen('material')} onToggle={() => toggleSection('material')} />
-          <>
+          <GroupBox>
+            <SectionHeader title="Material" hint="색상·자체발광·거칠기·금속성. 프리미티브(박스/구체/원기둥 등)와 텍스트 콘텐츠에 적용돼요." isOpen={isOpen('material')} onToggle={() => toggleSection('material')} />
             {isOpen('material') && (
-              <div className="space-y-2 mt-2">
+              <div className="px-3 pb-4 space-y-2">
                 <div className='flex gap-2'>
                   <div className='flex-1'>
                     <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Color</span>
@@ -1983,31 +2132,9 @@ function InspectorInner() {
                       min={0} max={1} precision={2} dragStep={0.005}
                     />
                   </div>
-                  
                 </div>
               </div>
             )}
-            </>
-          // </GroupBox>
-        )}
-
-
-              {(obj.content.type === 'image' || obj.content.type === 'video') && (
-                <div>
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">
-                    {obj.content.type === 'image' ? '이미지 URL' : '동영상 URL'}
-                  </span>
-                  <input
-                    type="text"
-                    value={obj.content.url ?? ''}
-                    onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, url: e.target.value } })}
-                    onBlur={pushHistory}
-                    placeholder={obj.content.type === 'image' ? 'https://example.com/img.jpg' : 'https://www.youtube.com/...'}
-                    className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              )}
-            </div>}
           </GroupBox>
         )}
 
