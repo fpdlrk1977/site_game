@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState, useCallback, useMemo, Suspense } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, Grid, Sky, Environment } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
@@ -12,6 +12,7 @@ import { ObjectRefsContext } from "./ObjectRefsContext";
 import { pointerDownOnObjectRef } from "./boxSelectState";
 import { PostProcessingEffects } from "@/components/three/PostProcessingEffects";
 import { GroundPlane } from "@/components/three/GroundPlane";
+import { worldBBox } from "@/lib/objectBBox";
 import { DefaultEnvironment } from "@/components/three/DefaultEnvironment";
 import { SceneToneMapping } from "@/components/three/SceneToneMapping";
 import { BoundaryWalls } from "@/components/three/BoundaryWalls";
@@ -103,6 +104,100 @@ function GroupScopeIndicator() {
         나가기 (Esc)
       </button>
     </div>
+  );
+}
+
+// 박스(단위) 8꼭짓점 중 한 축만 다른 12개 엣지(인덱스: x=i&1, y=i&2, z=i&4)
+const BOX_EDGE_PAIRS: [number, number][] = [
+  [0, 1], [2, 3], [4, 5], [6, 7], // x
+  [0, 2], [1, 3], [4, 6], [5, 7], // y
+  [0, 4], [1, 5], [2, 6], [3, 7], // z
+];
+
+// 선택 오버레이 (Canvas 내부, 별도 레이어) — 오브젝트 렌더는 건드리지 않는다.
+//  ① 드래그 미리보기: 드래그 중 박스에 '닿는' 오브젝트들에 연보라 와이어프레임(닿기 선택과 일치)
+//  ② 선택 바운더리: 2개 이상 선택 시 전체를 감싸는 청록 바운딩 박스(무엇이 선택됐는지 한눈에)
+function SelectionOverlay({
+  dragRectRef, isDraggingRef,
+}: {
+  dragRectRef: React.MutableRefObject<{ x1: number; y1: number; x2: number; y2: number } | null>;
+  isDraggingRef: React.MutableRefObject<boolean>;
+}) {
+  const selectedIds = useSceneStore((s) => s.selectedIds);
+  const { camera, size } = useThree();
+
+  const bounds = useMemo(() => {
+    // matrixAutoUpdate는 true로 둔다 — Box3Helper.updateMatrixWorld가 box로부터 position/scale을 세팅한 뒤
+    // updateMatrix()로 행렬에 합성돼야 실제 박스가 union 영역을 따라간다(false면 원점 단위박스로 고정되는 버그).
+    const h = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color("#22d3ee"));
+    const m = h.material as THREE.LineBasicMaterial;
+    m.transparent = true; m.opacity = 0.9; m.depthTest = false;
+    h.renderOrder = 999;
+    h.visible = false;
+    return h;
+  }, []);
+
+  const preview = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
+    const m = new THREE.LineBasicMaterial({ color: "#a78bfa", transparent: true, opacity: 0.9, depthTest: false });
+    const ls = new THREE.LineSegments(g, m);
+    ls.renderOrder = 999; ls.frustumCulled = false; ls.visible = false;
+    return ls;
+  }, []);
+
+  useFrame(() => {
+    const { objects, assets } = useSceneStore.getState();
+
+    // ② 선택 묶음 바운더리 (2개 이상)
+    if (selectedIds.length >= 2) {
+      const box = new THREE.Box3().makeEmpty();
+      for (const id of selectedIds) {
+        const b = worldBBox(objects, assets, id);
+        if (b && !b.isEmpty()) box.union(b);
+      }
+      if (!box.isEmpty()) { bounds.visible = true; bounds.box.copy(box); bounds.updateMatrixWorld(true); }
+      else bounds.visible = false;
+    } else {
+      bounds.visible = false;
+    }
+
+    // ① 드래그 미리보기 (드래그 중일 때만)
+    const rect = isDraggingRef.current ? dragRectRef.current : null;
+    if (!rect) { preview.visible = false; return; }
+    const verts: number[] = [];
+    for (const obj of objects) {
+      if (obj.locked || !obj.visible || obj.isGroup) continue;
+      const b = worldBBox(objects, assets, obj.id);
+      if (!b || b.isEmpty()) continue;
+      const cs: THREE.Vector3[] = [];
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (let i = 0; i < 8; i++) {
+        const v = new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z);
+        cs.push(v);
+        const p = v.clone().project(camera);
+        const sx = (p.x * 0.5 + 0.5) * size.width;
+        const sy = (-p.y * 0.5 + 0.5) * size.height;
+        minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
+        minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+      }
+      if (minX <= rect.x2 && maxX >= rect.x1 && minY <= rect.y2 && maxY >= rect.y1) {
+        for (const [a, c] of BOX_EDGE_PAIRS) {
+          verts.push(cs[a].x, cs[a].y, cs[a].z, cs[c].x, cs[c].y, cs[c].z);
+        }
+      }
+    }
+    if (verts.length === 0) { preview.visible = false; return; }
+    preview.visible = true;
+    preview.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(verts), 3));
+    preview.geometry.computeBoundingSphere();
+  });
+
+  return (
+    <>
+      <primitive object={bounds} />
+      <primitive object={preview} />
+    </>
   );
 }
 
@@ -405,6 +500,9 @@ export function EditorCanvas() {
             .map((obj) => (
               <EditorObjectInstance key={obj.id} object={obj} />
             ))}
+
+          {/* 선택 오버레이 — 드래그 미리보기 + 선택 묶음 바운더리 (오브젝트 렌더 미변경) */}
+          <SelectionOverlay dragRectRef={dragRectRef} isDraggingRef={isDraggingRef} />
 
           {(environment.boundary ?? 0) > 0 && (
             <BoundaryGizmo sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} />
