@@ -478,7 +478,9 @@ export function PlayModeController({
       const camZ = camTarget.current.z + d * Math.cos(az) * Math.cos(el);
 
       _camPos.current.set(camX, camY, camZ);
-      camera.position.lerp(_camPos.current, 0.1);
+      // 관성 제거 — 카메라 위치를 궤도 지점에 즉시 반영(회전 시 미끄러지지 않고 손 떼면 즉시 멈춤).
+      // 캐릭터 추적의 부드러움은 위의 camTarget lerp(0.12)가 담당하므로 팔로우 자체는 여전히 부드럽다.
+      camera.position.copy(_camPos.current);
       camera.lookAt(camTarget.current);
     }
   });
