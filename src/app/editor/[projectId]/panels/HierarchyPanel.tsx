@@ -236,9 +236,29 @@ function HierarchyItem({
 }
 
 export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
-  const { objects, selectObject, selectObjects, moveObject } = useSceneStore();
+  const { objects, selectedId, selectObject, selectObjects, moveObject } = useSceneStore();
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // 선택된 오브젝트가 그룹 안에 있으면 조상 그룹들을 전부 펼쳐 트리에서 보이게 한다.
+  // (뷰포트에서 자식을 더블클릭해 드릴인 선택하면, 중첩이면 부모+상위 그룹이 모두 펼쳐짐)
+  useEffect(() => {
+    if (!selectedId) return;
+    const ancestors: string[] = [];
+    let cur = objects.find((o) => o.id === selectedId);
+    while (cur?.parentId) {
+      ancestors.push(cur.parentId);
+      const pid = cur.parentId;
+      cur = objects.find((o) => o.id === pid);
+    }
+    if (ancestors.length === 0) return;
+    setExpanded((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const id of ancestors) if (!next.has(id)) { next.add(id); changed = true; }
+      return changed ? next : prev;
+    });
+  }, [selectedId, objects]);
   const anchorIndexRef = useRef<number>(-1);
   // 드래그 이동 상태 — 검색 중에는 순서가 필터링돼 혼란스러우므로 비활성화
   const dragEnabled = !search.trim();

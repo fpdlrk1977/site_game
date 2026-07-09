@@ -13,6 +13,8 @@ interface Props {
   selected: boolean;
   hovered?: boolean;
   onClick: (shiftKey: boolean) => void;
+  /** 더블클릭 — 그룹 안이어도 이 오브젝트를 직접 선택(그룹 진입) */
+  onDoubleClick?: (shiftKey: boolean) => void;
   onHoverChange?: (hovered: boolean) => void;
   wireframe?: boolean;
   /** physics 활성 시 콜라이더 가이드 표시 — 모델의 실제 바운딩박스에 맞춰 그린다 */
@@ -21,7 +23,7 @@ interface Props {
   objectId?: string;
 }
 
-export function GlbObject({ url, selected, hovered = false, onClick, onHoverChange, wireframe = false, colliderGuide, objectId }: Props) {
+export function GlbObject({ url, selected, hovered = false, onClick, onDoubleClick, onHoverChange, wireframe = false, colliderGuide, objectId }: Props) {
   const { scene } = useGLTF(url);
   const clone = useMemo(() => {
     const c = SkeletonUtils.clone(scene);
@@ -92,6 +94,7 @@ export function GlbObject({ url, selected, hovered = false, onClick, onHoverChan
       <primitive
         object={clone}
         onClick={(e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => { e.stopPropagation(); onClick(e.nativeEvent.shiftKey); }}
+        onDoubleClick={(e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => { e.stopPropagation(); onDoubleClick?.(e.nativeEvent.shiftKey); }}
         onPointerOver={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onHoverChange?.(true); }}
         onPointerOut={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onHoverChange?.(false); }}
       />

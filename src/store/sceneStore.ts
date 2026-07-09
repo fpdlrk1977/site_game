@@ -52,6 +52,9 @@ interface SceneState {
   layers: Record<string, LayerState>;
   selectedId: string | null;
   selectedIds: string[];
+  // 그룹 격리(isolation) 스코프 — 더블클릭으로 '진입'한 그룹 id. 설정 시 단일 클릭이 이 그룹 안에서만
+  // 형제 오브젝트를 선택한다(최상위 그룹으로 튕기지 않음). 빈 곳 클릭/Esc/스코프 밖 클릭으로 해제.
+  groupScope: string | null;
   transformMode: 'translate' | 'rotate' | 'scale';
   transformSpace: 'world' | 'local';
   snapEnabled: boolean;
@@ -77,6 +80,8 @@ interface SceneState {
 interface SceneActions {
   loadScene: (data: ProjectSceneSchema, savedVersion?: number) => void;
   selectObject: (id: string | null) => void;
+  /** 그룹 격리 스코프 진입/해제(null=해제) */
+  setGroupScope: (id: string | null) => void;
   toggleSelectObject: (id: string) => void;
   selectObjects: (ids: string[]) => void;
   deleteSelected: () => void;
@@ -97,6 +102,8 @@ interface SceneActions {
   requestRecallBookmark: (slot: number) => void;
   setCameraBookmark: (slot: number, position: [number, number, number], target: [number, number, number]) => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
+  /** 여러 오브젝트의 트랜스폼을 한 번에 원자적으로 커밋(기즈모 전용). _prevSnapshot에 의존하지 않아 undo 기준 오염이 없다. */
+  commitTransforms: (updates: { id: string; position: Vec3Schema; rotation: Vec3Schema; scale: Vec3Schema }[]) => void;
   setObjectLocked: (id: string, locked: boolean) => void;
   moveObject: (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   duplicateSelected: () => void;
@@ -292,6 +299,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   environment: DEFAULT_ENVIRONMENT,
   prefabs: [],
   selectedId: null,
+  groupScope: null,
   transformMode: 'translate',
   transformSpace: 'world',
   snapEnabled: false,
@@ -324,6 +332,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       prefabs: data.prefabs ?? [],
       selectedId: null,
       selectedIds: [],
+      groupScope: null,
       isModified: false,
       savedVersion,
       past: [],
@@ -333,6 +342,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   selectObject: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+  setGroupScope: (id) => set({ groupScope: id }),
   selectObjects: (ids) => set({ selectedIds: ids, selectedId: ids[ids.length - 1] ?? null }),
 
   toggleSelectObject: (id) => set((s) => {
@@ -576,6 +586,22 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       _prevSnapshot: _prevSnapshot ?? { objects, environment },
       objects: objects.map((o) => (o.id === id ? { ...o, ...patch, ...overridePatch } : o)),
       isModified: true,
+    });
+  },
+
+  commitTransforms: (updates) => {
+    const { objects, environment, past } = get();
+    const map = new Map(updates.map((u) => [u.id, u]));
+    set({
+      objects: objects.map((o) => {
+        const u = map.get(o.id);
+        return u ? { ...o, position: { ...u.position }, rotation: { ...u.rotation }, scale: { ...u.scale } } : o;
+      }),
+      isModified: true,
+      // 직전에 커밋 안 된 편집 스냅샷 잔재를 버려 히스토리 오염 차단(기즈모는 자체 baseline으로 원자 커밋).
+      _prevSnapshot: null,
+      // 이 변환 '직전'의 objects를 undo 기준으로 원자적 커밋 → undo가 항상 일관된 단일 상태로 복원.
+      ...withHistory({ objects, environment }, past),
     });
   },
 
@@ -858,49 +884,27 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const group = objects.find((o) => o.id === selectedId);
     if (!group?.isGroup) return;
 
-    const DEG2RAD = Math.PI / 180;
-    const RAD2DEG = 180 / Math.PI;
-
-    const groupQuat = new Quaternion().setFromEuler(
-      new Euler(
-        group.rotation.x * DEG2RAD,
-        group.rotation.y * DEG2RAD,
-        group.rotation.z * DEG2RAD,
-      ),
-    );
+    // 행렬 기반: 자식의 참 월드행렬(그룹 체인 포함)을 새 부모(그룹의 부모=중첩이면 조부모, 아니면 root)
+    // 기준 로컬로 변환해 decompose. 회전+비균일 스케일에서도 위치/방향/크기가 어긋나지 않는다
+    // (기존엔 scale을 성분별 곱 후 회전 → 회전·스케일 비가환으로 자식 위치가 산발적으로 틀어졌음).
+    const newParentId = group.parentId;
+    const parentInv = newParentId
+      ? computeWorldMatrix(objects, newParentId).invert()
+      : new Matrix4();
 
     const children = objects.filter((o) => o.parentId === selectedId);
+    const p = new Vector3(), q = new Quaternion(), s = new Vector3();
     const restoredChildren = children.map((c) => {
-      // 자식 로컬 좌표 → 그룹 scale 적용 → 그룹 rotation 적용 → 그룹 위치 더하기
-      const localPos = new Vector3(c.position.x, c.position.y, c.position.z);
-      localPos.x *= group.scale.x;
-      localPos.y *= group.scale.y;
-      localPos.z *= group.scale.z;
-      localPos.applyQuaternion(groupQuat);
-      localPos.x += group.position.x;
-      localPos.y += group.position.y;
-      localPos.z += group.position.z;
-
-      // 월드 rotation = 그룹 rotation * 자식 rotation
-      const childQuat = new Quaternion().setFromEuler(
-        new Euler(c.rotation.x * DEG2RAD, c.rotation.y * DEG2RAD, c.rotation.z * DEG2RAD),
-      );
-      const worldEuler = new Euler().setFromQuaternion(groupQuat.clone().multiply(childQuat));
-
+      const world = computeWorldMatrix(objects, c.id);
+      const local = new Matrix4().multiplyMatrices(parentInv, world);
+      local.decompose(p, q, s);
+      const e = new Euler().setFromQuaternion(q);
       return {
         ...c,
-        parentId: null,
-        position: { x: localPos.x, y: localPos.y, z: localPos.z },
-        rotation: {
-          x: worldEuler.x * RAD2DEG,
-          y: worldEuler.y * RAD2DEG,
-          z: worldEuler.z * RAD2DEG,
-        },
-        scale: {
-          x: c.scale.x * group.scale.x,
-          y: c.scale.y * group.scale.y,
-          z: c.scale.z * group.scale.z,
-        },
+        parentId: newParentId,
+        position: { x: p.x, y: p.y, z: p.z },
+        rotation: { x: e.x * RAD2DEG_M, y: e.y * RAD2DEG_M, z: e.z * RAD2DEG_M },
+        scale: { x: s.x, y: s.y, z: s.z },
       };
     });
 

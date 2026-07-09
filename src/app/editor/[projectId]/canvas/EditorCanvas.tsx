@@ -76,6 +76,36 @@ function CameraCapture({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.
 
 type SelBox = { left: number; top: number; width: number; height: number };
 
+// 그룹 격리 스코프 진입 시 상단 배너 — 사용자가 "그룹 안에서 편집 중"임을 알리고 나가기 제공.
+function GroupScopeIndicator() {
+  const groupScope = useSceneStore((s) => s.groupScope);
+  const name = useSceneStore((s) => s.objects.find((o) => o.id === s.groupScope)?.name);
+  const setGroupScope = useSceneStore((s) => s.setGroupScope);
+  const selectObject = useSceneStore((s) => s.selectObject);
+
+  useEffect(() => {
+    if (!groupScope) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setGroupScope(null); selectObject(null); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [groupScope, setGroupScope, selectObject]);
+
+  if (!groupScope) return null;
+  return (
+    <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-full bg-primary/90 text-white text-[11px] px-3 py-1 shadow-lg backdrop-blur pointer-events-auto">
+      <span className="font-medium">◲ 그룹 편집 중{name ? ` — ${name}` : ''}</span>
+      <button
+        onClick={() => { setGroupScope(null); selectObject(null); }}
+        className="rounded-full bg-white/20 hover:bg-white/30 px-2 py-0.5 transition-colors cursor-pointer"
+      >
+        나가기 (Esc)
+      </button>
+    </div>
+  );
+}
+
 export function EditorCanvas() {
   const orbitRef = useRef<OrbitControlsImpl>(null);
   const objectRefsRef = useRef<Map<string, THREE.Object3D>>(new Map());
@@ -237,17 +267,41 @@ export function EditorCanvas() {
       return parent ? getRootId(parent) : obj.id;
     };
 
+    const cam = cameraRef.current;
+    if (!cam) { resetDrag(); return; }
+    const box = new THREE.Box3();
+    const corner = new THREE.Vector3();
+
     for (const obj of objects) {
       if (obj.locked || !obj.visible || obj.isGroup) continue;
       const obj3d = objectRefsRef.current.get(obj.id);
       if (!obj3d) continue;
-      const wp = new THREE.Vector3();
-      obj3d.getWorldPosition(wp);
-      wp.project(cameraRef.current);
-      // NDC → canvas-local pixel coords
-      const sx = (wp.x * 0.5 + 0.5) * wr.width;
-      const sy = (-wp.y * 0.5 + 0.5) * wr.height;
-      if (sx >= x1 && sx <= x2 && sy >= y1 && sy <= y2) {
+
+      // 오브젝트의 월드 바운딩박스를 화면에 투영 → 스크린 AABB
+      box.setFromObject(obj3d);
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      if (!box.isEmpty()) {
+        for (let i = 0; i < 8; i++) {
+          corner.set(
+            i & 1 ? box.max.x : box.min.x,
+            i & 2 ? box.max.y : box.min.y,
+            i & 4 ? box.max.z : box.min.z,
+          );
+          corner.project(cam);
+          const sx = (corner.x * 0.5 + 0.5) * wr.width;
+          const sy = (-corner.y * 0.5 + 0.5) * wr.height;
+          minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
+          minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+        }
+      } else {
+        // 폴백: bbox가 없으면(빈 오브젝트) 원점 한 점
+        corner.setFromMatrixPosition(obj3d.matrixWorld).project(cam);
+        minX = maxX = (corner.x * 0.5 + 0.5) * wr.width;
+        minY = maxY = (-corner.y * 0.5 + 0.5) * wr.height;
+      }
+
+      // 스크린 AABB가 드래그 사각형과 '겹치기만 해도' 선택(닿기 선택). AABB∩AABB 교차 판정.
+      if (minX <= x2 && maxX >= x1 && minY <= y2 && maxY >= y1) {
         const rootId = getRootId(obj);
         if (!matchingIds.includes(rootId)) matchingIds.push(rootId);
       }
@@ -260,7 +314,7 @@ export function EditorCanvas() {
 
   const useHdr = (environment.hdrPreset ?? "none") !== "none";
   const isSkyMode = !useHdr && environment.sky.type === "sky";
-  const skyColor = environment.sky.type === "color" ? environment.sky.value : "#1a1a2e";
+  const skyColor = environment.sky.type === "color" ? environment.sky.value : "#FFD2D2";
 
   return (
     <ObjectRefsContext.Provider value={objectRefsRef}>
@@ -278,7 +332,10 @@ export function EditorCanvas() {
           camera={{ position: [9, 7, 13], fov: 60 }}
           gl={{ preserveDrawingBuffer: true, toneMapping: THREE.LinearToneMapping }}
           onPointerMissed={() => {
-            if (!isDraggingRef.current) useSceneStore.getState().selectObject(null);
+            if (!isDraggingRef.current) {
+              useSceneStore.getState().selectObject(null);
+              useSceneStore.getState().setGroupScope(null); // 빈 곳 클릭 → 그룹 격리 스코프 해제
+            }
           }}
           style={{ width: "100%", height: "100%" }}
         >
@@ -334,7 +391,7 @@ export function EditorCanvas() {
             args={[50, 50]}
             cellSize={1}
             cellThickness={0.4}
-            cellColor="#3f3f46"
+            cellColor="#eee"
             sectionSize={5}
             sectionThickness={0.8}
             sectionColor="#52525b"
@@ -406,6 +463,8 @@ export function EditorCanvas() {
             }}
           />
         </Canvas>
+
+        <GroupScopeIndicator />
 
         {selBox && (
           <div

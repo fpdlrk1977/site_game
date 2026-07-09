@@ -311,7 +311,7 @@ export const DEFAULT_PHYSICS: PhysicsSchema = {
 };
 
 export const DEFAULT_ENVIRONMENT: EnvSchema = {
-  sky: { type: 'color', value: '#1a1a2e' },
+  sky: { type: 'color', value: '#FFD2D2' },
   fog: { enabled: false, color: '#ffffff', near: 10, far: 100 },
   lights: {
     ambientIntensity: 0.6,

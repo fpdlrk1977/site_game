@@ -28,7 +28,7 @@ interface Props {
 
 function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedIds, transformMode, transformSpace,
-    snapEnabled, snapTranslate, snapRotate, updateObject, pushHistory } = useSceneStore();
+    snapEnabled, snapTranslate, snapRotate, commitTransforms } = useSceneStore();
   const refsMap = useObjectRefs();
 
   // ref callback → group이 마운트되는 순간 상태 업데이트 → 리렌더 발생
@@ -39,19 +39,25 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const dragStartQuaternions = useRef<Map<string, THREE.Quaternion>>(new Map());
   const dragStartScales = useRef<Map<string, THREE.Vector3>>(new Map());
 
-  // pivotEl이 준비되거나 선택이 바뀌면 centroid로 피벗 재배치
-  useEffect(() => {
+  // 피벗을 선택 오브젝트들의 '월드 bbox union 중심'에 둔다.
+  //  - 그룹 단일 기즈모(bbox 중심)와 동일 기준 → 다중선택 기즈모와 그룹 기즈모 위치가 일치(문제 B 해결).
+  //  - 드래그 중이 아니면 매 프레임 재동기화 → undo/redo 등 외부 위치 변경 후에도 피벗이 오브젝트를 따라간다
+  //    (스테일 피벗이 다음 상호작용에서 잘못된 델타로 오브젝트를 끌어당기던 문제 A 해결).
+  const syncPivot = () => {
     if (!pivotEl || selectedIds.length < 2) return;
-    let cx = 0, cy = 0, cz = 0, n = 0;
+    const { objects, assets } = useSceneStore.getState();
+    const box = new THREE.Box3().makeEmpty();
     for (const id of selectedIds) {
-      const ref = refsMap.current.get(id);
-      if (ref) { cx += ref.position.x; cy += ref.position.y; cz += ref.position.z; n++; }
+      const b = worldBBox(objects, assets, id);
+      if (b && !b.isEmpty()) box.union(b);
     }
-    if (n === 0) return;
-    pivotEl.position.set(cx / n, cy / n, cz / n);
+    if (box.isEmpty()) return;
+    box.getCenter(pivotEl.position);
     pivotEl.rotation.set(0, 0, 0);
     pivotEl.scale.set(1, 1, 1);
-  }, [pivotEl, selectedIds, refsMap]);
+  };
+  useEffect(syncPivot, [pivotEl, selectedIds]); // 초기/선택 변경 시 배치
+  useFrame(() => { if (!gizmoDraggingRef.current) syncPivot(); }); // 드래그 아닐 때 지속 동기화
 
   return (
     <>
@@ -140,6 +146,9 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
             gizmoDraggingRef.current = false;
             if (orbitRef.current) orbitRef.current.enabled = true;
             const { objects: objs } = useSceneStore.getState();
+            // 모든 대상의 최종 트랜스폼을 모아 원자적으로 1회 커밋(undo 기준 오염 없음).
+            type Vec3 = { x: number; y: number; z: number };
+            const updates: { id: string; position: Vec3; rotation: Vec3; scale: Vec3 }[] = [];
             for (const id of selectedIds) {
               const ref = refsMap.current.get(id);
               if (!ref) continue;
@@ -155,13 +164,14 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
                   finalY = Math.max(0, ref.position.y);
                 }
               }
-              updateObject(id, {
+              updates.push({
+                id,
                 position: { x: ref.position.x, y: finalY, z: ref.position.z },
                 rotation: { x: ref.rotation.x * RAD2DEG, y: ref.rotation.y * RAD2DEG, z: ref.rotation.z * RAD2DEG },
                 scale: { x: ref.scale.x, y: ref.scale.y, z: ref.scale.z },
               });
             }
-            pushHistory();
+            if (updates.length > 0) commitTransforms(updates);
           }}
         />
       )}
@@ -171,7 +181,7 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
 
 function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate,
-    objects, assets, updateObject, updateEnvironment, pushHistory } = useSceneStore();
+    objects, assets, commitTransforms, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
   // 기즈모는 "형상 중심에 놓인 프록시"에 붙는다 → 위젯이 원점(하단)이 아니라 중심에 뜨고,
   // 프록시는 재부모화되지 않으므로 예전의 scene graph 에러도 없다. 조작은 오브젝트로 역매핑.
@@ -265,14 +275,16 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
           const pos = target.position, rot = target.rotation, scl = target.scale;
           if (isCharPreview) {
             updateEnvironment({ playerStartPosition: { x: pos.x, y: Math.max(0, pos.y), z: pos.z } });
+            pushHistory();
           } else {
-            updateObject(selectedId!, {
+            // 원자적 커밋(단일 대상) — _prevSnapshot 오염 없이 undo 기준 일관.
+            commitTransforms([{
+              id: selectedId!,
               position: { x: pos.x, y: pos.y, z: pos.z },
               rotation: { x: rot.x * RAD2DEG, y: rot.y * RAD2DEG, z: rot.z * RAD2DEG },
               scale: { x: scl.x, y: scl.y, z: scl.z },
-            });
+            }]);
           }
-          pushHistory();
         }}
       />
     </>

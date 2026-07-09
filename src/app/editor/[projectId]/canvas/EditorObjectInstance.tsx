@@ -87,12 +87,7 @@ function LightObjectInstance({ object }: Props) {
     object.rotation.x, object.rotation.y, object.rotation.z, object.visible]);
 
 
-  const handleClick = (shiftKey: boolean) => {
-    if (object.locked) { if (!shiftKey) selectObject(null); return; }
-    const targetId = findRootAncestorId(object);
-    if (shiftKey) toggleSelectObject(targetId);
-    else selectObject(targetId);
-  };
+  const handleClick = (shiftKey: boolean) => selectByClick(object, shiftKey);
 
   return (
     <group ref={groupRef} onPointerDown={markObjectHit}>
@@ -119,6 +114,7 @@ function LightObjectInstance({ object }: Props) {
       {/* 아이콘 — 클릭 가능한 시각 표시자 */}
       <mesh
         onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+        onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
       >
         <octahedronGeometry args={[0.18, 0]} />
         <meshBasicMaterial color={iconColor} />
@@ -144,6 +140,55 @@ function LightObjectInstance({ object }: Props) {
       )}
     </group>
   );
+}
+
+// object의 조상(자기 포함) 중 parentId===scopeId 인 노드(=스코프 그룹의 직속 자식) id. 스코프 밖이면 null.
+function scopeChildOnPath(object: ObjectNodeSchema, scopeId: string): string | null {
+  const all = useSceneStore.getState().objects;
+  let cur: ObjectNodeSchema | undefined = object;
+  while (cur) {
+    if (cur.parentId === scopeId) return cur.id;
+    if (!cur.parentId) return null;
+    const pid: string = cur.parentId;
+    cur = all.find((o) => o.id === pid);
+  }
+  return null;
+}
+
+// 단일 클릭 — 기본은 최상위 조상 그룹 선택. 단, 그룹 격리 스코프에 '진입'한 상태면
+// 그 스코프 안에서 형제(스코프의 직속 자식)를 선택한다. 스코프 밖을 클릭하면 스코프 해제 후 최상위 선택.
+function selectByClick(object: ObjectNodeSchema, shiftKey: boolean) {
+  const store = useSceneStore.getState();
+  if (object.locked) { if (!shiftKey) { store.selectObject(null); store.setGroupScope(null); } return; }
+
+  const scope = store.groupScope;
+  let targetId: string;
+  if (scope && store.objects.some((o) => o.id === scope)) {
+    const inScope = scopeChildOnPath(object, scope);
+    if (inScope) {
+      targetId = inScope; // 스코프 내 형제 선택 — 최상위로 튕기지 않음
+    } else {
+      store.setGroupScope(null); // 스코프 밖 클릭 → 해제
+      targetId = findRootAncestorId(object);
+    }
+  } else {
+    targetId = findRootAncestorId(object);
+  }
+  if (shiftKey) store.toggleSelectObject(targetId);
+  else store.selectObject(targetId);
+}
+
+// 더블 클릭 — 클릭한 '바로 그 오브젝트(리프)'를 직접 선택하고, 그 부모 그룹으로 격리 스코프에 진입한다.
+// 이후 단일 클릭은 그 그룹 안의 형제를 고를 수 있다(빈 곳/Esc/스코프 밖 클릭으로 나감).
+// R3F onDoubleClick은 레이가 맞은 가장 깊은 메쉬에서 먼저 발생하므로 중첩 그룹이어도 정확히 그 자식을 고른다.
+// (계층 트리는 selectedId 변화를 감지해 조상 그룹들을 자동으로 펼친다.)
+function selectExact(object: ObjectNodeSchema, shiftKey: boolean) {
+  if (object.locked) return;
+  const store = useSceneStore.getState();
+  // 그룹을 더블클릭하면 그 그룹으로 진입(scope=자기 자신), 리프면 부모 그룹으로 진입.
+  store.setGroupScope(object.isGroup ? object.id : (object.parentId ?? null));
+  if (shiftKey) store.toggleSelectObject(object.id);
+  else store.selectObject(object.id);
 }
 
 // 중첩 그룹 클릭 시 최상위 조상 그룹 ID를 반환
@@ -190,27 +235,12 @@ function GroupObjectInstance({ object }: Props) {
       object.rotation.x, object.rotation.y, object.rotation.z,
       object.scale.x, object.scale.y, object.scale.z, object.visible]);
 
-  const handleClick = (shiftKey: boolean) => {
-    if (object.locked) { if (!shiftKey) selectObject(null); return; }
-    // 중첩 그룹인 경우 최상위 조상 그룹을 선택
-    const targetId = findRootAncestorId(object);
-    if (shiftKey) toggleSelectObject(targetId);
-    else selectObject(targetId);
-  };
-
   return (
-    <group
-      ref={groupRef}
-      onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
-      onPointerDown={markObjectHit}
-    >
-      {/* 선택 표시 — 그룹 중심에 작은 마커 */}
-      {isSelected && (
-        <mesh>
-          <octahedronGeometry args={[0.15, 0]} />
-          <meshBasicMaterial color="#7c3aed" wireframe />
-        </mesh>
-      )}
+    // 그룹 <group>에는 onClick을 두지 않는다 — 자식 클릭이 findRootAncestorId로 이미 그룹을 선택하며,
+    // 여기에 onClick을 두면 자식 클릭이 조상 그룹으로 버블링돼 스코프 선택을 덮어쓴다(형제 클릭이 최상위로 튕기던 버그).
+    <group ref={groupRef} onPointerDown={markObjectHit}>
+      {/* 그룹 선택 마커(원점의 마름모)는 제거 — 기즈모(bbox 중심)와 위치가 달라 오해를 줬음.
+          선택 표시는 기즈모 + 계층 트리 하이라이트로 충분. 그룹 선택/진입은 자식 클릭으로 처리된다. */}
       {children.map((child) => (
         <EditorObjectInstance key={child.id} object={child} />
       ))}
@@ -276,13 +306,7 @@ export function EditorObjectInstance({ object }: Props) {
     [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(',')],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
-  const handleClick = (shiftKey: boolean) => {
-    if (object.locked) { if (!shiftKey) selectObject(null); return; }
-    // 그룹 내부 오브젝트면 최상위 조상 그룹을 선택
-    const targetId = findRootAncestorId(object);
-    if (shiftKey) toggleSelectObject(targetId);
-    else selectObject(targetId);
-  };
+  const handleClick = (shiftKey: boolean) => selectByClick(object, shiftKey);
 
   // 파티클 이미터 렌더링
   if (object.particle) {
@@ -312,6 +336,7 @@ export function EditorObjectInstance({ object }: Props) {
       <group
         ref={groupRef}
         onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+        onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
         onPointerDown={markObjectHit}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
@@ -373,6 +398,7 @@ export function EditorObjectInstance({ object }: Props) {
             selected={isSelected}
             hovered={hovered}
             onClick={(shiftKey) => handleClick(shiftKey)}
+            onDoubleClick={(shiftKey) => selectExact(object, shiftKey)}
             onHoverChange={(h) => setHovered(h && !object.locked)}
             wireframe={wireframeMode}
             colliderGuide={object.physics.enabled ? (object.physics.isSensor ? 'sensor' : 'solid') : undefined}
@@ -382,6 +408,7 @@ export function EditorObjectInstance({ object }: Props) {
         <mesh
           geometry={primGeom}
           onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+          onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}
           castShadow

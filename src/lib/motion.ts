@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import type { MotionConfig } from '@/types/scene';
 
+// spin 회전 합성용 스크래치 (프레임당 할당 방지)
+const _baseQuat = new THREE.Quaternion();
+const _spinQuat = new THREE.Quaternion();
+const _spinAxis = new THREE.Vector3();
+const _baseEuler = new THREE.Euler();
+
 // wander(유동) 로밍 상태 — 인스턴스별로 하나씩 보관
 export interface WanderState {
   cur: THREE.Vector3;
@@ -26,20 +32,16 @@ export function computeMotion(
 ): void {
   const spd = motion.speed ?? 1;
   let px = basePos[0], py = basePos[1], pz = basePos[2];
-  let rx = baseRot[0], ry = baseRot[1], rz = baseRot[2];
   let s = 1;
+  let spinAngle: number | null = null; // null이면 회전 델타 없음(baseRot 유지)
 
   switch (motion.type) {
     case 'float':
       py += Math.sin(t * spd) * (motion.amplitude ?? 0.5);
       break;
-    case 'spin': {
-      const ax = motion.axis ?? 'y';
-      if (ax === 'x') rx = baseRot[0] + t * spd;
-      else if (ax === 'z') rz = baseRot[2] + t * spd;
-      else ry = baseRot[1] + t * spd;
+    case 'spin':
+      spinAngle = t * spd;
       break;
-    }
     case 'pulse':
       s = 1 + Math.sin(t * spd * 2) * (motion.amplitude ?? 0.2);
       break;
@@ -66,6 +68,18 @@ export function computeMotion(
   }
 
   out.pos.set(px, py, pz);
-  out.rot.set(rx, ry, rz);
+  if (spinAngle !== null) {
+    // 기본 회전(baseRot) 이후 '오브젝트 로컬 축' 기준으로 회전(post-multiply) → 눕히거나 기울인
+    // 물체도 축 기준으로 깔끔히 돈다(오일러 성분을 직접 더하면 baseRot≠0일 때 세차운동/wobble 발생).
+    const ax = motion.axis ?? 'y';
+    _baseEuler.set(baseRot[0], baseRot[1], baseRot[2], 'XYZ');
+    _baseQuat.setFromEuler(_baseEuler);
+    _spinAxis.set(ax === 'x' ? 1 : 0, ax === 'y' ? 1 : 0, ax === 'z' ? 1 : 0);
+    _spinQuat.setFromAxisAngle(_spinAxis, spinAngle);
+    _baseQuat.multiply(_spinQuat);
+    out.rot.setFromQuaternion(_baseQuat);
+  } else {
+    out.rot.set(baseRot[0], baseRot[1], baseRot[2]);
+  }
   out.scl.set(baseScl[0] * s, baseScl[1] * s, baseScl[2] * s);
 }
