@@ -1,23 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Move, RotateCcw, Maximize2, Globe, Crosshair,
   Grid3x3, Box, Layers, Undo2, Redo2, AlignCenter, Camera,
 } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
+import { Tooltip } from '@/components/ui/Tooltip';
 import type { PrimitiveShape } from '@/types/scene';
-
-function Tip({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="relative group/tip">
-      {children}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-sidebar border border-border text-[10px] font-medium text-foreground rounded-xs whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity duration-100 pointer-events-none z-[200] shadow-xl shadow-black/20">
-        {label}
-      </div>
-    </div>
-  );
-}
 
 const SEP = <div className="w-px h-4 bg-border/60 shrink-0" />;
 
@@ -66,7 +56,7 @@ export function ViewportFloatingToolbar() {
         {/* Transform 모드 */}
         <div className="flex items-center bg-background/50 rounded-xs p-0.5 gap-0.5">
           {MODE_BTNS.map(({ mode, icon, title }) => (
-            <Tip key={mode} label={title}>
+            <Tooltip key={mode} content={title}>
               <button
                 onClick={() => setTransformMode(mode)}
                 className={`w-7 h-7 rounded-xs flex items-center justify-center transition-all ${
@@ -77,25 +67,25 @@ export function ViewportFloatingToolbar() {
               >
                 {icon}
               </button>
-            </Tip>
+            </Tooltip>
           ))}
         </div>
 
         {/* 좌표계 */}
-        <Tip label={transformSpace === 'world' ? '월드 → 로컬' : '로컬 → 월드'}>
+        <Tooltip content={transformSpace === 'world' ? '월드 → 로컬' : '로컬 → 월드'}>
           <button
             onClick={() => setTransformSpace(transformSpace === 'world' ? 'local' : 'world')}
             className="w-7 h-7 flex items-center justify-center rounded-xs text-muted hover:text-foreground hover:bg-background transition-all"
           >
             {transformSpace === 'world' ? <Globe size={13} /> : <Crosshair size={13} />}
           </button>
-        </Tip>
+        </Tooltip>
 
         {SEP}
 
         {/* 스냅 */}
         <div className="flex items-center bg-background/50 rounded-xs p-0.5 gap-0.5">
-          <Tip label={snapEnabled ? '스냅 끄기' : '스냅 켜기'}>
+          <Tooltip content={snapEnabled ? '스냅 끄기' : '스냅 켜기'}>
             <button
               onClick={() => setSnap(!snapEnabled)}
               className={`w-7 h-7 rounded-xs flex items-center justify-center transition-all ${
@@ -106,9 +96,9 @@ export function ViewportFloatingToolbar() {
             >
               <Grid3x3 size={12} />
             </button>
-          </Tip>
+          </Tooltip>
           {SNAP_STEPS.map((step) => (
-            <Tip key={step} label={`스냅 ${step}`}>
+            <Tooltip key={step} content={`스냅 ${step}`}>
               <button
                 onClick={() => setSnap(true, step)}
                 className={`px-1.5 h-7 rounded-xs text-[10px] font-mono transition-all ${
@@ -119,7 +109,7 @@ export function ViewportFloatingToolbar() {
               >
                 {step}
               </button>
-            </Tip>
+            </Tooltip>
           ))}
         </div>
 
@@ -128,37 +118,37 @@ export function ViewportFloatingToolbar() {
         {/* 도형 추가 */}
         <div className="flex items-center gap-0">
           {SHAPES.map(({ shape, label, icon }) => (
-            <Tip key={shape} label={`${label} 추가`}>
+            <Tooltip key={shape} content={`${label} 추가`}>
               <button
                 onClick={() => addObject(shape)}
                 className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all text-sm"
               >
                 {icon}
               </button>
-            </Tip>
+            </Tooltip>
           ))}
-          <Tip label="펜 툴 — 2D 그려서 3D 만들기 (돌출·회전체)">
+          <Tooltip content="펜 툴 — 2D 그려서 3D 만들기 (돌출·회전체)">
             <button
               onClick={() => setPenToolOpen(true)}
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-background transition-all text-sm"
             >
               ✏
             </button>
-          </Tip>
-          <Tip label="복셀 — 큐브를 쌓아 만들기 (도트 감성)">
+          </Tooltip>
+          <Tooltip content="복셀 — 큐브를 쌓아 만들기 (도트 감성)">
             <button
               onClick={() => setVoxelToolOpen(true)}
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-background transition-all text-sm"
             >
               🧊
             </button>
-          </Tip>
+          </Tooltip>
         </div>
 
         {SEP}
 
         {/* 와이어프레임 */}
-        <Tip label={wireframeMode ? '솔리드 모드' : '와이어프레임'}>
+        <Tooltip content={wireframeMode ? '솔리드 모드' : '와이어프레임'}>
           <button
             onClick={toggleWireframe}
             className={`w-7 h-7 rounded-xs flex items-center justify-center transition-all ${
@@ -169,43 +159,43 @@ export function ViewportFloatingToolbar() {
           >
             {wireframeMode ? <Layers size={13} /> : <Box size={13} />}
           </button>
-        </Tip>
+        </Tooltip>
 
         {SEP}
 
         {/* Undo / Redo */}
         <div className="flex items-center bg-background/50 rounded-xs p-0.5 gap-0.5">
-          <Tip label="실행 취소 (Ctrl+Z)">
+          <Tooltip content="실행 취소 (Ctrl+Z)">
             <button
               onClick={undo}
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
             >
               <Undo2 size={13} />
             </button>
-          </Tip>
-          <Tip label="다시 실행 (Ctrl+Y)">
+          </Tooltip>
+          <Tooltip content="다시 실행 (Ctrl+Y)">
             <button
               onClick={redo}
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
             >
               <Redo2 size={13} />
             </button>
-          </Tip>
+          </Tooltip>
         </div>
 
         {SEP}
 
         {/* 카메라 북마크 */}
         <div className="flex items-center bg-background/50 rounded-xs p-0.5 gap-0.5">
-          <Tip label="카메라 북마크 — 클릭: 이동 / Shift+클릭: 현재 뷰 저장">
+          <Tooltip content="카메라 북마크 — 클릭: 이동 / Shift+클릭: 현재 뷰 저장">
             <div className="w-6 h-7 flex items-center justify-center text-muted">
               <Camera size={12} />
             </div>
-          </Tip>
+          </Tooltip>
           {[1, 2, 3, 4, 5].map((slot) => {
             const saved = !!cameraBookmarks[slot];
             return (
-              <Tip key={slot} label={saved ? `뷰 ${slot}로 이동 (Shift+클릭: 재저장)` : `현재 뷰를 ${slot}에 저장 (Shift+클릭)`}>
+              <Tooltip key={slot} content={saved ? `뷰 ${slot}로 이동 (Shift+클릭: 재저장)` : `현재 뷰를 ${slot}에 저장 (Shift+클릭)`}>
                 <button
                   onClick={(e) => {
                     if (e.shiftKey) requestSaveBookmark(slot);
@@ -219,7 +209,7 @@ export function ViewportFloatingToolbar() {
                 >
                   {slot}
                 </button>
-              </Tip>
+              </Tooltip>
             );
           })}
         </div>
@@ -228,7 +218,7 @@ export function ViewportFloatingToolbar() {
 
         {/* 정렬 */}
         <div className="relative" ref={alignRef}>
-          <Tip label={canAlign ? '정렬' : '2개 이상 선택'}>
+          <Tooltip content={canAlign ? '정렬' : '2개 이상 선택'}>
             <button
               onClick={() => setShowAlign((v) => !v)}
               disabled={!canAlign}
@@ -242,7 +232,7 @@ export function ViewportFloatingToolbar() {
             >
               <AlignCenter size={13} />
             </button>
-          </Tip>
+          </Tooltip>
           {showAlign && canAlign && (
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-surface border border-border rounded-xs shadow-dropdown z-50 p-2 min-w-[160px]">
               <div className="text-[10px] font-semibold text-muted uppercase tracking-wider px-1 mb-1.5">정렬</div>
