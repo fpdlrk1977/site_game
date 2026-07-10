@@ -11,7 +11,7 @@ import { PhysicsObject } from './PhysicsObject';
 import { PlayModeController } from './PlayModeController';
 import { effectiveDialogue } from './useObjectDialogue';
 import { computeMotion, makeWanderState } from '@/lib/motion';
-import { worldMatrix } from '@/lib/objectBBox';
+import { worldMatrix, localCenter } from '@/lib/objectBBox';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -29,7 +29,7 @@ type ColliderOnEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) 
 
 // motion.collider가 켜진 오브젝트 — kinematic RigidBody를 모션으로 구동해 "진짜 이동 장애물"로.
 // (시각은 ViewerObject noMotion으로 정적 처리 → RigidBody가 움직이면 자식 메시가 함께 이동. pulse 제외)
-const _mcOut = { pos: new THREE.Vector3(), rot: new THREE.Euler(), scl: new THREE.Vector3() };
+const _mcOut = { pos: new THREE.Vector3(), rot: new THREE.Euler(), scl: new THREE.Vector3(), quat: new THREE.Quaternion() };
 const _mcQuat = new THREE.Quaternion();
 const _mcPos = new THREE.Vector3();
 const _mcQuatBase = new THREE.Quaternion();
@@ -51,12 +51,15 @@ function MovingCollider({ object, assets, onEvent, allObjects }: {
   const basePos: [number, number, number] = [_mcPos.x, _mcPos.y, _mcPos.z];
   const baseRot: [number, number, number] = [_mcEuler.x, _mcEuler.y, _mcEuler.z];
   const worldScl: [number, number, number] = [_mcScl.x, _mcScl.y, _mcScl.z];
+  // 형상 중심 피벗(프리미티브=0, GLB 등은 원점이 중심과 달라 spin wobble → 중심 기준 회전)
+  const lc = localCenter(allObjects, assets, object.id);
+  const pivot: [number, number, number] | null = lc ? [lc.x, lc.y, lc.z] : null;
   useFrame((state, dt) => {
     const rb = rbRef.current;
     if (!rb || !object.motion) return;
-    computeMotion(object.motion, basePos, baseRot, worldScl, state.clock.elapsedTime + phase.current, dt, wander.current, _mcOut);
+    computeMotion(object.motion, basePos, baseRot, worldScl, state.clock.elapsedTime + phase.current, dt, wander.current, _mcOut, pivot);
     rb.setNextKinematicTranslation(_mcOut.pos);
-    rb.setNextKinematicRotation(_mcQuat.setFromEuler(_mcOut.rot));
+    rb.setNextKinematicRotation(_mcOut.quat);
   });
   return (
     <RigidBody
@@ -89,12 +92,15 @@ function MovingGroupCollider({ object, assets, onEvent, allObjects }: {
   const basePos: [number, number, number] = [object.position.x, object.position.y, object.position.z];
   const baseRot: [number, number, number] = [object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD];
   const baseScl: [number, number, number] = [object.scale.x, object.scale.y, object.scale.z];
+  // 그룹은 원점(자식 위치 평균)이 형상 중심과 어긋날 수 있어, 형상 중심을 회전 피벗으로 넘겨 제자리 회전시킨다.
+  const lc = localCenter(allObjects, assets, object.id);
+  const pivot: [number, number, number] | null = lc ? [lc.x, lc.y, lc.z] : null;
   useFrame((state, dt) => {
     const rb = rbRef.current;
     if (!rb || !object.motion) return;
-    computeMotion(object.motion, basePos, baseRot, baseScl, state.clock.elapsedTime + phase.current, dt, wander.current, _mcOut);
+    computeMotion(object.motion, basePos, baseRot, baseScl, state.clock.elapsedTime + phase.current, dt, wander.current, _mcOut, pivot);
     rb.setNextKinematicTranslation(_mcOut.pos);
-    rb.setNextKinematicRotation(_mcQuat.setFromEuler(_mcOut.rot));
+    rb.setNextKinematicRotation(_mcOut.quat);
   });
   return (
     <RigidBody

@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { useSceneStore } from "@/store/sceneStore";
 import { EditorObjectInstance } from "./EditorObjectInstance";
 import { GizmoController } from "./GizmoController";
-import { ObjectRefsContext } from "./ObjectRefsContext";
+import { ObjectRefsContext, useObjectRefs } from "./ObjectRefsContext";
 import { pointerDownOnObjectRef } from "./boxSelectState";
 import { PostProcessingEffects } from "@/components/three/PostProcessingEffects";
 import { GroundPlane } from "@/components/three/GroundPlane";
@@ -125,6 +125,7 @@ function SelectionOverlay({
 }) {
   const selectedIds = useSceneStore((s) => s.selectedIds);
   const { camera, size } = useThree();
+  const refs = useObjectRefs();
 
   const bounds = useMemo(() => {
     // matrixAutoUpdate는 true로 둔다 — Box3Helper.updateMatrixWorld가 box로부터 position/scale을 세팅한 뒤
@@ -149,15 +150,33 @@ function SelectionOverlay({
   useFrame(() => {
     const { objects, assets } = useSceneStore.getState();
 
-    // ② 선택 묶음 바운더리 (2개 이상)
-    if (selectedIds.length >= 2) {
+    // ② 선택 바운더리. 드래그 중에도 실시간으로 따라오도록 '라이브 Three 객체(ref)'로 계산한다
+    //    (worldBBox는 스키마 기반이라 기즈모 드래그 중엔 커밋 전까지 안 움직임 → 마우스 뗄 때 튀던 문제).
+    //    - 2개 이상 선택: 청록(#22d3ee) 묶음 박스
+    //    - 그룹 1개 선택: 그룹은 자체 아웃라인이 없으므로 보라(#7c3aed) 박스로 선택 표시(단일 오브젝트 가이드와 통일)
+    const single = selectedIds.length === 1 ? objects.find((o) => o.id === selectedIds[0]) : undefined;
+    const showBounds = selectedIds.length >= 2 || single?.isGroup === true;
+    if (showBounds) {
       const box = new THREE.Box3().makeEmpty();
+      const tmp = new THREE.Box3();
       for (const id of selectedIds) {
-        const b = worldBBox(objects, assets, id);
-        if (b && !b.isEmpty()) box.union(b);
+        const o3 = refs.current.get(id);
+        if (o3) {
+          tmp.setFromObject(o3);
+          if (!tmp.isEmpty()) box.union(tmp);
+        } else {
+          const b = worldBBox(objects, assets, id); // 폴백(ref 미등록 시)
+          if (b && !b.isEmpty()) box.union(b);
+        }
       }
-      if (!box.isEmpty()) { bounds.visible = true; bounds.box.copy(box); bounds.updateMatrixWorld(true); }
-      else bounds.visible = false;
+      if (!box.isEmpty()) {
+        bounds.visible = true;
+        (bounds.material as THREE.LineBasicMaterial).color.set(selectedIds.length >= 2 ? "#22d3ee" : "#7c3aed");
+        bounds.box.copy(box);
+        bounds.updateMatrixWorld(true);
+      } else {
+        bounds.visible = false;
+      }
     } else {
       bounds.visible = false;
     }

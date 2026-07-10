@@ -12,6 +12,7 @@ import { InteractHighlightContext } from "./InteractHighlightContext";
 import { DialogueAdvanceContext } from "./DialogueAdvanceContext";
 import { useObjectDialogue, effectiveDialogue } from "./useObjectDialogue";
 import { glbLocalBboxCache } from "@/lib/glbBboxCache";
+import { localCenter } from "@/lib/objectBBox";
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
 import { createPrimitiveGeometry } from "@/lib/primitiveGeometry";
@@ -332,18 +333,20 @@ function ImagePlane({
 
 // 앰비언트 모션 — 베이스 변환(pos/rot/scl) + 타입별 델타를 useFrame로 적용. 콘텐츠는 로컬 원점.
 // spin/pulse는 이 그룹(=오브젝트 원점) 기준이라 제자리에서 돈다/커진다. 계산은 computeMotion 공유.
-const _mOut = { pos: new THREE.Vector3(), rot: new THREE.Euler(), scl: new THREE.Vector3() };
+const _mOut = { pos: new THREE.Vector3(), rot: new THREE.Euler(), scl: new THREE.Vector3(), quat: new THREE.Quaternion() };
 function MotionGroup({
   pos,
   rot,
   scl,
   motion,
+  pivot,
   children,
 }: {
   pos: [number, number, number];
   rot: [number, number, number];
   scl: [number, number, number];
   motion: MotionConfig;
+  pivot?: [number, number, number] | null; // 회전 피벗(로컬 형상 중심) — 그룹 spin 제자리 회전용
   children: React.ReactNode;
 }) {
   const ref = useRef<THREE.Group>(null);
@@ -353,9 +356,9 @@ function MotionGroup({
   useFrame((state, dt) => {
     const g = ref.current;
     if (!g) return;
-    computeMotion(motion, pos, rot, scl, state.clock.elapsedTime + phase.current, dt, wander.current, _mOut);
+    computeMotion(motion, pos, rot, scl, state.clock.elapsedTime + phase.current, dt, wander.current, _mOut, pivot);
     g.position.copy(_mOut.pos);
-    g.rotation.copy(_mOut.rot);
+    g.quaternion.copy(_mOut.quat); // 쿼터니언 직접 적용 — 오일러 왕복 없이 축 기준 깔끔한 회전
     g.scale.copy(_mOut.scl);
   });
 
@@ -372,16 +375,18 @@ function Xform({
   rot,
   scl,
   motion,
+  pivot,
   children,
 }: {
   pos: [number, number, number];
   rot: [number, number, number];
   scl: [number, number, number];
   motion?: MotionConfig;
+  pivot?: [number, number, number] | null;
   children: React.ReactNode;
 }) {
   return motion ? (
-    <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion}>
+    <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} pivot={pivot}>
       {children}
     </MotionGroup>
   ) : (
@@ -574,6 +579,14 @@ export function ViewerObject({
     [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(',')],
   );
   useEffect(() => () => primGeom?.dispose(), [primGeom]);
+
+  // 모션 회전 피벗(로컬 형상 중심) — 그룹은 원점이 중심과 어긋나 spin이 wobble → 중심 기준 회전.
+  // 콜라이더 경로(PlayCanvas)와 동일한 보정을 시각(MotionGroup)에도 적용해 탐색/플레이 모드 일관.
+  const motionPivot = useMemo<[number, number, number] | null>(() => {
+    if (!object.motion) return null;
+    const c = localCenter(allObjects, assets, object.id);
+    return c ? [c.x, c.y, c.z] : null;
+  }, [object.motion, object.id, allObjects, assets]);
   // 내부(click/hover)·PhysicsObject(area)·animate_object 요청 중 가장 최근(t) 것을 사용
   const effectiveClip = [internalClip, activeClipProp, externalClip]
     .filter((c): c is ClipRequest => !!c)
@@ -609,7 +622,7 @@ export function ViewerObject({
     const gScl: [number, number, number] = noTransform ? [1, 1, 1] : [object.scale.x, object.scale.y, object.scale.z];
     const gInner = children.map((child) => <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />);
     return motion ? (
-      <MotionGroup pos={gPos} rot={gRot} scl={gScl} motion={motion}>
+      <MotionGroup pos={gPos} rot={gRot} scl={gScl} motion={motion} pivot={motionPivot}>
         {gInner}
       </MotionGroup>
     ) : (
@@ -694,7 +707,7 @@ export function ViewerObject({
       </Suspense>
     );
     return motion ? (
-      <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion}>
+      <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
         {glb}
       </MotionGroup>
     ) : (
@@ -714,7 +727,7 @@ export function ViewerObject({
       const tEmissive = object.material?.emissive ?? "#000000";
       return (
         <>
-          <Xform pos={pos} rot={rot} scl={scl} motion={motion}>
+          <Xform pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
             <group
               onClick={(e) => {
                 e.stopPropagation();
@@ -759,7 +772,7 @@ export function ViewerObject({
     if (type === "image" && object.content.url) {
       return (
         <>
-          <Xform pos={pos} rot={rot} scl={scl} motion={motion}>
+          <Xform pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
             <Suspense fallback={null}>
               <ImagePlane
                 position={[0, 0, 0]}
@@ -785,7 +798,7 @@ export function ViewerObject({
       }
       if (url) {
         return (
-          <Xform pos={pos} rot={rot} scl={scl} motion={motion}>
+          <Xform pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
             <VideoMesh
               position={[0, 0, 0]}
               rotation={[0, 0, 0]}
@@ -802,7 +815,7 @@ export function ViewerObject({
     }
     // 빈 플레이스홀더 (image URL 없음, video URL 없음)
     return (
-      <Xform pos={pos} rot={rot} scl={scl} motion={motion}>
+      <Xform pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
         <mesh
           onClick={(e) => {
             e.stopPropagation();
@@ -849,7 +862,7 @@ export function ViewerObject({
   return (
     <>
       {motion ? (
-        <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion}>
+        <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
           {primMesh}
         </MotionGroup>
       ) : (
