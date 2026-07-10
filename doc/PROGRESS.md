@@ -131,6 +131,20 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
   - **펜 툴 팝업 UX (2026-07-10)**: **헤더 드래그로 이동 + 뒤 overlay 제거**(씬 보며 작업 — 에디터 작업 팝업만 해당, 확인/공유 모달은 overlay 유지). 드래그 중에만 뜨는 투명 캡처 레이어로 마우스 추적, ✕/Esc로만 닫힘(바깥 클릭 닫기 없음). **돌출↔회전체 탭 전환 시 전체 지우기**(`switchMode` — 두 모드 그리기 방식이 달라 이전 점 이어그리기 방지).
 - **검증**: tsc 클린. **브라우저 실동작 확인 완료(사용자 — 펜 툴 그리기·닫기·탭전환·스냅·다중드래그·팝업 드래그 이동 정상)**. Export/Cloner 실동작은 사용자 확인 완료 표기.
 
+## 최근 완료 (2026-07-10) — 카메라 초기 뷰 + Inspector 수치 실시간 반영
+
+- **초기 진입 시 자동 전체 맞춤 (에디터 + 탐색 뷰어)**: 넓은 공간을 저장 후 대시보드로 재진입하면 초기 뷰가 너무 가깝던 문제 → **들어오자마자 Shift+F(전체 맞춤) 뷰로 시작**. Shift+F(=`requestFocusAll`, 전체 맞춤)는 무변경.
+  - **에디터**(`EditorCanvas`의 신규 in-Canvas `InitialFit`): `useFrame` 1회, `orbitRef` 준비될 때까지 대기 후 fit. **`sceneStore.sceneLoadTick`(loadScene마다 증가)에 묶어 '로드 시점'에만** 실행 → 새 빈 씬에서 첫 오브젝트 추가 시 카메라 튐 방지, 씬 전환 시 재-fit, 편집·저장 중엔 재-fit 안 함. **주의**: 처음엔 EditorCanvas '바깥' useEffect로 넣었더니 `orbitRef`가 `<Canvas>` 내부(R3F 별도 렌더러)에서 붙어 마운트 시 null → 안 걸림. **fit은 반드시 Canvas 내부 컴포넌트에서** 할 것.
+  - **탐색 뷰어**(`ViewerCanvas`의 신규 `InitialFit`): 동일하게 `useFrame` 1회 one-shot(탐색 모드만). 기준은 에디터와 동일(루트 오브젝트 position bbox 중심 + 3/4 각도).
+  - 한계: **position 기반 프레이밍**(Shift+F와 동일) — 원점에 큰 GLB 하나만 있는 씬은 다소 가까울 수 있음(focus-all을 실제 bbox 크기 기준으로 바꾸면 둘 다 개선, 후속).
+- **Inspector 트랜스폼 수치 실시간 반영 (기즈모 드래그 중)**: 기존엔 기즈모가 드래그 중 Three 객체 ref만 조작하고 마우스업에 `commitTransforms` 1회만 커밋 → Inspector 수치가 놓을 때만 갱신되던 것 → **드래그 중 실시간 갱신**. **성능 격리가 핵심**: 매 프레임 `objects[]`를 갱신하면 전체 캔버스가 리렌더되므로(알려진 이슈), **메인 스토어와 분리된 라이브 채널**을 둠.
+  - **`src/store/liveTransformStore.ts`(신규)**: `live: {id, position, rotation(deg), scale} | null` + `setLive`. 기즈모는 **구독 없이** `getState().setLive(...)`로 게시(기즈모 리렌더 X), Inspector의 Transform 입력부만 구독(그 서브트리만 리렌더). transient(저장 무관).
+  - **`GizmoController`(SingleGizmo)**: `onChange`에서 매 프레임 게시(회전 deg 변환·y바닥 클램프 반영), `onMouseUp`에서 `setLive(null)` + 기존 `commitTransforms` 확정.
+  - **`InspectorPanel`의 `LiveTransformRows`(신규 내부 컴포넌트)**: 라이브 채널 구독(`live.id===obj.id`면 라이브 값, 아니면 `obj` 값). `NumInput`이 focus 아닐 때 prop 변화를 반영하므로 그대로 동작. 다중 선택 패널엔 트랜스폼 수치가 없어 SingleGizmo만 대상(완전).
+  - **재사용 규칙**: `liveTransformStore`가 표준 채널 — 앞으로 새 '직접 조작' 도구는 `setLive` 게시만 하면 관련 수치 표시부가 자동 실시간 반영. (사용자 지시: 수치 입력부는 이 패턴 적용)
+  - 제약: 캐릭터 스폰 포인트 기즈모는 라이브 미게시(별도 `env` 값) → 스폰 좌표는 여전히 마우스업에 갱신(필요 시 동일 패턴 확장).
+- **검증**: tsc 클린 + dev 컴파일 정상. **초기 진입 뷰(에디터/탐색) 사용자 확인 완료.** 실시간 Inspector는 브라우저 확인 대기.
+
 ## ✅ 브라우저 실동작 확인 완료 (2026-07-10, 사용자 일괄 검증)
 
 아래 항목 전부 브라우저 실동작 확인됨 — 개별 항목 본문의 "브라우저 확인 필요" 표기는 이 확인으로 해소:
