@@ -61,6 +61,8 @@ interface SceneState {
   focusSelectedRequest: number | null;
   // .glb 내보내기 요청 — ids가 비면 씬 전체(루트 오브젝트 전부). EditorCanvas가 라이브 Three 객체로 처리.
   exportRequest: { ids: string[]; name: string; _tick: number } | null;
+  // 펜 툴(2D 프로파일 → 돌출/회전체) 모달 열림 상태.
+  penToolOpen: boolean;
   cameraViewRequest: { view: 'top' | 'front' | 'right'; _tick: number } | null;
   isModified: boolean;
   // 마지막으로 로드/저장한 시점의 DB scenes.version 값 — 저장 시 낙관적 잠금에 사용.
@@ -88,6 +90,8 @@ interface SceneActions {
   setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
   setTransformSpace: (space: 'world' | 'local') => void;
   addObject: (shape: PrimitiveShape) => void;
+  /** 펜 툴 프로파일로 돌출/회전체 오브젝트 생성 */
+  addProfileObject: (shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean) => void;
   addAsset: (asset: AssetRefSchema) => void;
   addAssetObject: (asset: AssetRefSchema) => void;
   addContentObject: (type: ContentType) => void;
@@ -99,6 +103,8 @@ interface SceneActions {
   requestFocusSelected: () => void;
   /** 오브젝트(들)를 .glb로 내보내기. ids 비우면 씬 전체. */
   requestExport: (ids: string[], name: string) => void;
+  /** 펜 툴 모달 열기/닫기 */
+  setPenToolOpen: (open: boolean) => void;
   requestCameraView: (view: 'top' | 'front' | 'right') => void;
   duplicateInPlace: () => void;
   requestSaveBookmark: (slot: number) => void;
@@ -163,6 +169,8 @@ const SHAPE_NAMES: Record<PrimitiveShape, string> = {
   plane: '평면',
   frustum: '각뿔대',
   loft: '로프트',
+  extrude: '돌출',
+  lathe: '회전체',
 };
 
 // 히스토리 스택 최대 길이 (past/future 공통)
@@ -313,6 +321,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   focusAllRequest: null,
   focusSelectedRequest: null,
   exportRequest: null,
+  penToolOpen: false,
   cameraViewRequest: null,
   isModified: false,
   savedVersion: 1,
@@ -374,6 +383,25 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
+  addProfileObject: (shape, profile, extrudeDepth, closed) => {
+    objectCounter += 1;
+    const obj = makeBaseObject({
+      name: `${shape === 'lathe' ? '회전체' : '돌출'} ${objectCounter}`,
+      primitiveShape: shape,
+      geom: shape === 'extrude' ? { profile, extrudeDepth } : { profile, profileClosed: closed },
+      material: { color: '#a78bfa', roughness: 0.5, metalness: 0.1 },
+      position: { x: 0, y: 0.5, z: 0 },
+    });
+    const { objects, environment, past } = get();
+    set({
+      objects: [...objects, obj],
+      selectedId: obj.id,
+      selectedIds: [obj.id],
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
   setSnap: (enabled, translate, rotate) =>
     set((s) => ({
       snapEnabled: enabled,
@@ -399,6 +427,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   requestFocusAll: () => set({ focusAllRequest: Date.now() }),
   requestFocusSelected: () => set({ focusSelectedRequest: Date.now() }),
   requestExport: (ids, name) => set({ exportRequest: { ids, name, _tick: Date.now() } }),
+  setPenToolOpen: (open) => set({ penToolOpen: open }),
 
   requestCameraView: (view) => set({ cameraViewRequest: { view, _tick: Date.now() } }),
 

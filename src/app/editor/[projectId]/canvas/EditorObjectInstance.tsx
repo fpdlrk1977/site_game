@@ -304,7 +304,7 @@ export function EditorObjectInstance({ object }: Props) {
   // 프리미티브 지오메트리(둥근 박스·각뿔대 등 확장 파라미터 반영). 파라미터 바뀌면 재생성·이전 것 dispose.
   const primGeom = useMemo(
     () => createPrimitiveGeometry(object.primitiveShape, object.geom),
-    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(',')],
+    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profile?.length],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
   const handleClick = (shiftKey: boolean) => selectByClick(object, shiftKey);

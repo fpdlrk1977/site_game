@@ -49,6 +49,7 @@ export function CommandPalette({ onClose }: Props) {
     { id: 'add-frustum', label: '각뿔대 추가', icon: '⏢', group: '추가', action: () => { addObject('frustum'); onClose(); } },
     { id: 'add-loft', label: '로프트 추가', icon: '⧖', group: '추가', action: () => { addObject('loft'); onClose(); } },
     { id: 'add-plane', label: '평면 추가', icon: '▭', group: '추가', action: () => { addObject('plane'); onClose(); } },
+    { id: 'pen-tool', label: '펜 툴 (그려서 3D 만들기)', icon: '✏', group: '추가', action: () => { useSceneStore.getState().setPenToolOpen(true); onClose(); } },
     { id: 'add-light-point', label: '포인트 라이트 추가', icon: '💡', group: '추가', action: () => { addLightObject('point'); onClose(); } },
     { id: 'add-light-spot', label: '스팟 라이트 추가', icon: '🔦', group: '추가', action: () => { addLightObject('spot'); onClose(); } },
     { id: 'add-light-dir', label: '방향 라이트 추가', icon: '☀️', group: '추가', action: () => { addLightObject('directional'); onClose(); } },

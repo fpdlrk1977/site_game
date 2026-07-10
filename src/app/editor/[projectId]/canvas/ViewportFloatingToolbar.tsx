@@ -37,7 +37,7 @@ export function ViewportFloatingToolbar() {
     transformMode, transformSpace, snapEnabled, snapTranslate, wireframeMode,
     selectedIds, cameraBookmarks,
     setTransformMode, setTransformSpace, setSnap, toggleWireframe,
-    addObject, undo, redo, alignSelected, requestSaveBookmark, requestRecallBookmark,
+    addObject, undo, redo, alignSelected, requestSaveBookmark, requestRecallBookmark, setPenToolOpen,
   } = useSceneStore();
 
   const [showAlign, setShowAlign] = useState(false);
@@ -137,6 +137,14 @@ export function ViewportFloatingToolbar() {
               </button>
             </Tip>
           ))}
+          <Tip label="펜 툴 — 2D 그려서 3D 만들기 (돌출·회전체)">
+            <button
+              onClick={() => setPenToolOpen(true)}
+              className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-background transition-all text-sm"
+            >
+              ✏
+            </button>
+          </Tip>
         </div>
 
         {SEP}

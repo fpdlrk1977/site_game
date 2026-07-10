@@ -125,7 +125,7 @@ export interface PhysicsSchema {
   restitution: number;
 }
 
-export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane' | 'frustum' | 'loft';
+export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane' | 'frustum' | 'loft' | 'extrude' | 'lathe';
 
 // 프리미티브 확장 지오메트리 파라미터(옵셔널=하위호환). 미설정이면 각진 기본 형태.
 export interface PrimitiveGeom {
@@ -137,6 +137,12 @@ export interface PrimitiveGeom {
   topScale?: number;
   // loft: 아래→위 각 단면의 크기 배율(0~1). 2개 이상. 각뿔대(frustum)를 N단면으로 일반화.
   sections?: number[];
+  // extrude/lathe: 펜 툴로 그린 2D 프로파일 점들. extrude=닫힌 단면(돌출), lathe=반쪽 단면(회전체).
+  profile?: { x: number; y: number }[];
+  // 프로파일이 닫힌 폐곡선인지. lathe에서 true면 닫힌 단면을 축에서 떨어뜨려 회전(도넛·링).
+  profileClosed?: boolean;
+  // extrude: 돌출 두께(정규화 전 로컬 단위). 기본 0.5.
+  extrudeDepth?: number;
 }
 
 export type ContentType = 'text' | 'image' | 'video';
