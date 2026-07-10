@@ -11,6 +11,8 @@ const SHAPE_ICONS: Record<string, string> = {
 };
 
 function getIcon(obj: ObjectNodeSchema) {
+  if (obj.clonerClone) return '▹';    // 클로너가 생성한 복제본
+  if (obj.clonerConfig) return '◎';   // 클로너 그룹
   if (obj.isGroup) return '📁';
   if (obj.content) return obj.content.type === 'text' ? '𝐓' : obj.content.type === 'image' ? '🖼' : '▶';
   if (obj.assetId) return '📦';

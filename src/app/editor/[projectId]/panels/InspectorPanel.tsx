@@ -1134,7 +1134,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner } = useSceneStore();
   const { addToast } = useToast();
   const [merging, setMerging] = useState(false);
 
@@ -2166,9 +2166,55 @@ function InspectorInner() {
           </GroupBox>
         )}
 
-        {/* Array — 일정 간격 반복 복제 (울타리·기둥·계단 등) */}
+        {/* Cloner (라이브 비파괴 배열) — 클로너 그룹일 때 파라미터를 바꾸면 복제본이 실시간 재생성 */}
+        {obj.clonerConfig && (() => {
+          const cfg = obj.clonerConfig!;
+          const cloneCount = objects.filter((o) => o.parentId === obj.id).length;
+          const setCfg = (patch: Partial<typeof cfg>) => updateCloner(obj.id, { ...cfg, ...patch });
+          return (
+            <GroupBox>
+              <SectionHeader title="Cloner (라이브)" icon="◎" hint="비파괴 배열 — 개수/간격/모드를 바꾸면 복제본이 실시간으로 다시 생성돼요. 소스(원본) 1개를 편집하면 모든 복제본에 반영됩니다. 복제본은 트리에서 클로너 그룹 아래에 뜹니다." />
+              <div className="px-3 pb-4 space-y-2">
+                <div className="grid grid-cols-2 gap-1">
+                  {(['linear', 'radial'] as const).map((m) => (
+                    <button key={m} onClick={() => { setCfg({ mode: m }); pushHistory(); }}
+                      className={`py-1 rounded-xs text-[10px] transition-colors ${cfg.mode === m ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
+                    >{m === 'linear' ? '선형 (Linear)' : '원형 (Radial)'}</button>
+                  ))}
+                </div>
+                <LabeledNum label="개수 (원본 포함)" value={cfg.count} onChange={(v) => setCfg({ count: Math.max(2, Math.min(200, Math.round(v))) })} onCommit={pushHistory} min={2} max={200} precision={0} dragStep={1} />
+                {cfg.mode === 'linear' ? (
+                  <XYZRow label="간격 (m)" x={cfg.offset.x} y={cfg.offset.y} z={cfg.offset.z}
+                    onChangeX={(v) => setCfg({ offset: { ...cfg.offset, x: v } })}
+                    onChangeY={(v) => setCfg({ offset: { ...cfg.offset, y: v } })}
+                    onChangeZ={(v) => setCfg({ offset: { ...cfg.offset, z: v } })}
+                    onCommit={pushHistory} dragStep={0.5}
+                  />
+                ) : (
+                  <>
+                    <LabeledNum label="반경 (m)" value={cfg.radius ?? 3} onChange={(v) => setCfg({ radius: Math.max(0.1, v) })} onCommit={pushHistory} min={0.1} max={100} precision={2} dragStep={0.25} />
+                    <div>
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">원이 도는 축</span>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(['x', 'y', 'z'] as const).map((ax) => (
+                          <button key={ax} onClick={() => { setCfg({ axis: ax }); pushHistory(); }}
+                            className={`py-1 rounded-xs text-[10px] uppercase transition-colors ${(cfg.axis ?? 'y') === ax ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
+                          >{ax}{ax === 'y' ? ' (바닥)' : ''}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+                <p className="text-[10px] text-muted/50">현재 {cloneCount}개 배치 중. 소스를 편집하면 복제본에 자동 반영돼요.</p>
+              </div>
+            </GroupBox>
+          );
+        })()}
+
+        {/* Array — 일정 간격 반복 복제 (울타리·기둥·계단 등). 클로너 그룹엔 위 Cloner 섹션을 쓰므로 숨김. */}
+        {!obj.clonerConfig && !obj.clonerClone && (
         <GroupBox>
-          <SectionHeader title="Array / Cloner" hint="선택 오브젝트를 여러 개 복제 배치해요. 선형(Linear)=일정 간격 나열(울타리·기둥·계단), 원형(Radial)=중심 기준 원형 배치(시계 숫자·원형 테이블 의자). 개수는 원본 포함, 되돌리기(Ctrl+Z) 가능." isOpen={isOpen('array')} onToggle={() => toggleSection('array')} />
+          <SectionHeader title="Array / Cloner" hint="선택 오브젝트를 여러 개 복제 배치해요. 선형(Linear)=일정 간격 나열(울타리·기둥·계단), 원형(Radial)=중심 기준 원형 배치(시계 숫자·원형 테이블 의자). 개수는 원본 포함, 되돌리기(Ctrl+Z) 가능. '라이브 클로너'로 만들면 이후 개수·간격을 실시간으로 바꿀 수 있어요." isOpen={isOpen('array')} onToggle={() => toggleSection('array')} />
             <div className="px-3 pb-4 space-y-2">
               {/* 모드 토글 */}
               <div className="grid grid-cols-2 gap-1">
@@ -2205,22 +2251,33 @@ function InspectorInner() {
                   </div>
                 </>
               )}
+              {/* 위 설정을 공유하는 두 방식 — 한 번 복제(독립) vs 라이브 클로너(계속 편집) */}
               <button
                 onClick={() => {
                   arraySelected(arrayCount, arrayOffset, arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : null);
-                  addToast(`${arrayMode === 'radial' ? '원형' : '선형'} ${arrayCount - 1}개 복제 생성`, 'success');
+                  addToast(`독립 복제 ${arrayCount - 1}개 생성`, 'success');
                 }}
-                className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
+                className="w-full py-1.5 rounded-xs bg-background border border-border text-muted hover:text-foreground hover:bg-surface text-[11px] font-medium transition-colors"
               >
-                {arrayMode === 'radial' ? '◎' : '⊞'} 배열 생성 ({arrayCount}개)
+                {arrayMode === 'radial' ? '◎' : '⊞'} 한 번 복제 ({arrayCount}개, 독립)
               </button>
+              {!obj.parentId && (
+                <button
+                  onClick={() => {
+                    makeCloner({ mode: arrayMode, count: arrayCount, offset: arrayOffset, ...(arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : {}) });
+                    addToast('라이브 클로너로 만들었어요', 'success');
+                  }}
+                  className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
+                >
+                  ◎ 라이브 클로너로 만들기 ({arrayCount}개)
+                </button>
+              )}
               <p className="text-[10px] text-muted/50">
-                {arrayMode === 'radial'
-                  ? `원본을 원 위 한 점에 두고 나머지 ${arrayCount - 1}개를 원형으로 균등 배치합니다.`
-                  : `현재 위치에서 간격만큼 떨어뜨려 ${arrayCount - 1}개를 추가합니다.`}
+                <b>한 번 복제</b> = 독립 오브젝트를 지금 만듦(이후 개수 못 바꿈). <b>라이브 클로너</b> = 만든 뒤에도 개수·간격을 실시간으로 바꾸고, 소스를 편집하면 전부 반영돼요.
               </p>
             </div>
         </GroupBox>
+        )}
 
         {/* Content (content 오브젝트만) */}
         {obj.content && (

@@ -219,6 +219,10 @@ export interface ObjectNodeSchema {
   // ── 프리팹 인스턴스 링크 (전부 옵셔널 = 하위호환) ──
   // 이 오브젝트가 프리팹에서 펼쳐진(bake) 인스턴스 노드면 아래 태그가 붙는다.
   // 뷰어/임베드는 이 태그를 무시하고 평범한 오브젝트로 렌더한다(동기화는 에디터 전용).
+  // ── 클로너 ──
+  clonerConfig?: ClonerConfig; // 설정되면 이 그룹은 클로너(소스 1개 + 자동 생성 복제본들)
+  clonerClone?: boolean;       // 클로너가 생성한 복제본(재생성 시 제거·교체됨). 소스엔 없음.
+
   prefabId?: string;           // 어느 프리팹 정의(scene.prefabs[].id)에서 나왔나
   prefabInstanceId?: string;   // 한 번 배치한 인스턴스 묶음의 id — 같은 인스턴스의 노드들을 묶는다
   prefabNodeKey?: string;      // 원본 정의의 어느 노드(PrefabNode.nodeKey)에 대응하나
@@ -259,6 +263,15 @@ export interface PrefabSchema {
   rootKey: string;             // nodes 중 루트 노드의 nodeKey
   nodes: PrefabNode[];
   thumbnailUrl?: string;
+}
+
+// 클로너(비파괴 배열) 설정 — 이 그룹은 소스 1개를 count개로 실시간 복제 배치한다.
+export interface ClonerConfig {
+  mode: 'linear' | 'radial';
+  count: number;                 // 원본 포함 총 개수
+  offset: Vector3;               // linear: 복제 간 간격
+  radius?: number;               // radial: 반경
+  axis?: 'x' | 'y' | 'z';        // radial: 원이 도는 축
 }
 
 export interface MotionConfig {

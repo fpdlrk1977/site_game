@@ -27,6 +27,8 @@ import {
   rebuildPrefabFromInstance,
   overrideGroupsFromPatch,
 } from '@/lib/prefab';
+import { regenerateCloner, clonerPlacement, DEFAULT_CLONER } from '@/lib/cloner';
+import type { ClonerConfig } from '@/types/scene';
 
 interface HistoryEntry {
   objects: ObjectNodeSchema[];
@@ -112,6 +114,10 @@ interface SceneActions {
   arraySelected: (count: number, offset: { x: number; y: number; z: number }, radial?: { radius: number; axis: 'x' | 'y' | 'z' } | null) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
+  /** 선택 오브젝트를 '클로너 그룹'으로 감싼다(비파괴 배열). config 미지정 시 기본값. */
+  makeCloner: (config?: ClonerConfig) => void;
+  /** 클로너 설정 변경 → 복제본 실시간 재생성. _prevSnapshot 패턴(호출부 pushHistory로 커밋). */
+  updateCloner: (groupId: string, config: ClonerConfig) => void;
   /** 구운(bake) GLB 에셋으로 대상 오브젝트(+자손)를 대체 — Merge/Boolean 결과 반영. 원본 제거 + 에셋 오브젝트 1개 추가(단일 undo) */
   mergeIntoAsset: (rootIds: string[], asset: AssetRefSchema, position: Vec3Schema, name: string) => void;
   // ── 프리팹 ──
@@ -847,6 +853,43 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedIds: [selectedId, ...newIds],
       isModified: true,
       ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  makeCloner: (config) => {
+    const { selectedId, objects, environment, past } = get();
+    if (!selectedId) return;
+    const src = objects.find((o) => o.id === selectedId);
+    if (!src || src.parentId || src.clonerConfig || src.clonerClone) return; // 루트·비클로너·비복제본만
+    const cfg: ClonerConfig = config ? { ...config } : { ...DEFAULT_CLONER };
+    objectCounter += 1;
+    const clonerGroup = makeBaseObject({
+      name: `클로너 ${objectCounter}`,
+      isGroup: true,
+      position: { ...src.position }, // 그룹(=패턴 중심)을 소스 자리에
+      clonerConfig: cfg,
+    });
+    const gid = clonerGroup.id;
+    const p0 = clonerPlacement(cfg, 0); // 소스를 placement(0)로
+    const rebased = objects.map((o) => (o.id === src.id ? { ...o, parentId: gid, position: { x: p0.x, y: p0.y, z: p0.z } } : o));
+    const regenerated = regenerateCloner([...rebased, clonerGroup], gid, cfg);
+    set({
+      objects: regenerated,
+      selectedId: gid,
+      selectedIds: [gid],
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  updateCloner: (groupId, config) => {
+    const { objects, environment, _prevSnapshot } = get();
+    const withCfg = objects.map((o) => (o.id === groupId ? { ...o, clonerConfig: { ...config } } : o));
+    const regenerated = regenerateCloner(withCfg, groupId, config);
+    set({
+      _prevSnapshot: _prevSnapshot ?? { objects, environment },
+      objects: regenerated,
+      isModified: true,
     });
   },
 
