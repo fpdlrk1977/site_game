@@ -24,16 +24,20 @@ interface Props {
   object: ObjectNodeSchema;
 }
 
-function ColliderOverlay({ object }: { object: ObjectNodeSchema }) {
+// 콜라이더 시각화 — 실제 지오메트리 bbox 기준으로 크기·중심을 맞춘다(고정 단위 박스 X).
+// box/구체는 bbox=1이라 기존(1.02/0.51)과 픽셀상 동일하고, 돌출/로프트 등 얇은 형상만 실제 크기로 축소된다.
+// (에디터 전용 시각화 — 런타임 콜라이더엔 영향 없음.)
+function ColliderOverlay({ object, size, center }: { object: ObjectNodeSchema; size: [number, number, number]; center: [number, number, number] }) {
   if (!object.physics.enabled) return null;
   const isSensor = object.physics.isSensor;
   const type = object.physics.colliderType ?? 'box';
   const isSphere = type === 'sphere';
+  const r = Math.max(size[0], size[1], size[2]) / 2; // 구 오버레이 반경 = bbox 최대 반너비
 
   if (!isSensor) {
     return (
-      <mesh>
-        {isSphere ? <sphereGeometry args={[0.51, 12, 12]} /> : <boxGeometry args={[1.02, 1.02, 1.02]} />}
+      <mesh position={center}>
+        {isSphere ? <sphereGeometry args={[r * 1.02, 12, 12]} /> : <boxGeometry args={[size[0] * 1.02, size[1] * 1.02, size[2] * 1.02]} />}
         <meshBasicMaterial color="#22c55e" wireframe transparent opacity={0.5} />
       </mesh>
     );
@@ -41,12 +45,12 @@ function ColliderOverlay({ object }: { object: ObjectNodeSchema }) {
 
   return (
     <>
-      <mesh>
-        {isSphere ? <sphereGeometry args={[0.51, 12, 12]} /> : <boxGeometry args={[1.02, 1.02, 1.02]} />}
+      <mesh position={center}>
+        {isSphere ? <sphereGeometry args={[r * 1.02, 12, 12]} /> : <boxGeometry args={[size[0] * 1.02, size[1] * 1.02, size[2] * 1.02]} />}
         <meshBasicMaterial color="#3b82f6" wireframe transparent opacity={0.8} />
       </mesh>
-      <mesh>
-        {isSphere ? <sphereGeometry args={[0.5, 12, 12]} /> : <boxGeometry args={[1.0, 1.0, 1.0]} />}
+      <mesh position={center}>
+        {isSphere ? <sphereGeometry args={[r, 12, 12]} /> : <boxGeometry args={[size[0], size[1], size[2]]} />}
         <meshBasicMaterial color="#3b82f6" transparent opacity={0.1} depthWrite={false} />
       </mesh>
     </>
@@ -308,6 +312,24 @@ export function EditorObjectInstance({ object }: Props) {
     [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profile?.length],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
+
+  // 실제 지오메트리 bounding box(원시) — 선택/호버 가이드와 콜라이더 오버레이가 공유한다.
+  // (돌출/로프트/평면처럼 한 축이 얇은 형상에서 고정 단위 박스 가이드가 과대 표시되던 문제 수정.
+  //  normalizeUnit이 최대 변만 1로 맞춰 다른 축은 <1이 되므로.) box/구체는 bbox=1이라 무변화.
+  const bbox = useMemo(() => {
+    primGeom.computeBoundingBox();
+    const b = primGeom.boundingBox;
+    if (!b) return { size: [1, 1, 1] as [number, number, number], center: [0, 0, 0] as [number, number, number] };
+    return {
+      size: [
+        Math.max(b.max.x - b.min.x, 0.02),
+        Math.max(b.max.y - b.min.y, 0.02),
+        Math.max(b.max.z - b.min.z, 0.02),
+      ] as [number, number, number],
+      center: [(b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2] as [number, number, number],
+    };
+  }, [primGeom]);
+
   const handleClick = (shiftKey: boolean) => selectByClick(object, shiftKey);
 
   // 파티클 이미터 렌더링
@@ -380,7 +402,7 @@ export function EditorObjectInstance({ object }: Props) {
             <meshBasicMaterial color={isSelected ? '#7c3aed' : '#a78bfa'} wireframe />
           </mesh>
         )}
-        <ColliderOverlay object={object} />
+        <ColliderOverlay object={object} size={bbox.size} center={bbox.center} />
       </group>
     );
   }
@@ -429,13 +451,13 @@ export function EditorObjectInstance({ object }: Props) {
         </mesh>
       )}
       {!assetRef && (isSelected || hovered) && (
-        <mesh>
-          <boxGeometry args={[1.05, 1.05, 1.05]} />
+        <mesh position={bbox.center}>
+          <boxGeometry args={[bbox.size[0] * 1.04, bbox.size[1] * 1.04, bbox.size[2] * 1.04]} />
           <meshBasicMaterial color={isSelected ? '#7c3aed' : '#a78bfa'} wireframe />
         </mesh>
       )}
       {/* 콜라이더 시각화 — 에디터 전용 (GLB는 GlbObject가 실제 바운딩박스 기준으로 그림) */}
-      {!assetRef && <ColliderOverlay object={object} />}
+      {!assetRef && <ColliderOverlay object={object} size={bbox.size} center={bbox.center} />}
     </group>
   );
 }

@@ -197,7 +197,7 @@ function PlacementGhost({ posRef }: { posRef: React.MutableRefObject<THREE.Vecto
       </mesh> */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
         <boxGeometry args={[1.5, 1.5, 0]} />
-        <meshBasicMaterial color="#ff0000" transparent opacity={0.85} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color="#FF66C2" transparent opacity={0.4} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );

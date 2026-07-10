@@ -139,6 +139,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **잠긴 그룹 하위 자물쇠 disabled**: `HierarchyPanel`이 각 행의 조상 체인을 확인(`lockedByAncestor`)해, 잠긴 조상이 있으면 그 행의 자물쇠 토글을 **disabled**(개별 해제 불가, "상위 그룹에서 잠금 해제" 안내). 그룹 잠금 캐스케이드(자손 locked=true)와 짝을 이룸.
 - **툴바 Undo/Redo·카메라 북마크 버튼 주석 처리**(`ViewportFloatingToolbar`): 두 블록을 `{/* ... */}`로 감싸 숨김(중첩 라벨 주석 제거 후 래핑). 관련 import·store 값은 복원 편의로 유지(미사용 경고만, noUnusedLocals off라 빌드 무해). 단축키 Ctrl+Z/Y는 유지.
 - **도형 추가 = 스플릿 버튼**: `[아이콘][▾]` (아이콘 좌·화살표 우, 다른 드롭다운과 통일). **아이콘=마지막 선택 도형(기본 박스) 즉시 배치**(`beginPlacement`), **화살표=목록 열기**. 목록에서 도형 고르면 `selectedShape` 갱신 + 즉시 배치. `Shapes` 아이콘 import 제거.
+- **선택/호버 가이드 외곽선을 실제 bbox 기준으로**(`EditorObjectInstance`): 기존 고정 `1.05³` 단위 박스라 **돌출/로프트/평면 등 한 축이 얇은 형상에서 가이드가 실제보다 크게** 떴음(`normalizeUnit`이 최대 변만 1로 맞춰 나머지 축<1). → `primGeom.boundingBox`로 `guideBox`(size·center) 계산해 여백 ×1.04로 감싸게 수정. box/구체는 bbox=1이라 무변화. **브라우저 확인 완료(펜툴 돌출 가이드 정상)**. (물리 켠 오브젝트의 `ColliderOverlay` 고정 박스는 별개 이슈로 미수정 — 돌출 런타임 콜라이더는 trimesh.)
 - 검증: tsc 클린 + editor 200 + ✓ Compiled.
 
 ## 최근 완료 (2026-07-10) — 경계 벽 2차 + move_object 그룹 플레이 모드
