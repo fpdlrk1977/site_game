@@ -266,7 +266,8 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 - `go_to_scene`: **경로의 현재 씬 id를 대상 id로 치환**해 이동 → `/space`·`/embed`·커스텀도메인(경로에 id 포함 시) 모두 대응. 경로에 id 없으면 `/space/{id}` 폴백. (뷰어 통합 리팩터 2026-07-07)
 - `focus_object`: 탐색=OrbitControls 이동, **플레이=팔로우 대신 대상 줌**(2026-07-08, 팝업 닫기/Esc로 복귀+이동 잠금 해제). `reset_camera`: 탐색(orbit) 모드 전용 — 플레이는 캐릭터 팔로우 카메라라 무시됨.
-- 솔리드(비센서) 오브젝트는 area 트리거로 팝업/URL/씬이동은 되나 **애니메이션 재생 안 됨**(activeClip 센서 전용).
+- ~~솔리드는 area 트리거로 애니메이션 재생 안 됨~~ **[해소 — 2026-07-10]**: `ViewerClient.handleObjectEvent`가 **모든 트리거에서 `play_animation` 처리**(→ clipRequests→externalClip)하고, 솔리드는 `PlayModeController`의 물리 접촉 콜백 `onObstacleEnter`가 area_enter를 발동하므로 → **솔리드+area+애니메이션 동작**. (센서는 PhysicsObject activeClip 경로와 중복이나 같은 클립이라 무해.)
+- **트리거 확장(Distance/Collision) 이미 커버**: Distance ≈ `approach_enter/exit`(오브젝트 중심 반경 자동 트리거), Collision ≈ **솔리드 오브젝트의 area_enter/exit**(`onObstacleEnter`가 캐릭터 물리 접촉 시 발동 — 센서 불필요). 별도 트리거 추가는 중복이라 미도입.
 - `interact` 트리거: **플레이 모드 전용 + 루트 오브젝트 전용**(중첩 그룹 자식은 로컬 좌표라 근접 판정 제외). 범위 고정 3m·정면 조건 없음(최근접). 키는 E 고정. ~~**임베드는 프롬프트 UI 미표시**~~ **[해소 — ViewerClient 통합]**: E 프롬프트(데스크톱 키캡/모바일 버튼)는 variant 게이팅이 아니라 `playMode`만 체크 → **`defaultMode='play'` 임베드에서 정상 표시**(임베드는 모드 토글이 없어 defaultMode 고정이므로 interact 쓰려면 play로 설정). `Is Sensor` 통과는 버그가 아니라 트리거 영역의 정의 — 막고 싶으면 센서 끄기(기본 솔리드).
 - `move_object`: **그룹 대상은 탐색 모드 전용** — 플레이 모드에선 자식 RigidBody의 props가 안 바뀌어 rapier 동기화 effect가 미발동, 자식 콜라이더가 안 따라감. 플레이에서 움직일 건 개별 오브젝트를 대상으로. 이동한 솔리드 위에 선 캐릭터는 같이 안 실려감(텔레포트라 이동 플랫폼은 아님). ~~임베드는 E2 미지원~~ → **임베드도 전체 액션 지원**(아래 뷰어 통합 참고).
 - `play_sound`: 오디오 URL 직접 입력만(AssetBrowser audio 탭 WIP). area 트리거는 브라우저 자동재생 정책에 막히면 무음(조용히 무시).

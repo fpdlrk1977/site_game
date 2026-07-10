@@ -1134,7 +1134,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport } = useSceneStore();
   const { addToast } = useToast();
   const [merging, setMerging] = useState(false);
 
@@ -1204,6 +1204,9 @@ function InspectorInner() {
   // 배열(Array) 복제 파라미터 — 개수(원본 포함)와 복제 간 간격
   const [arrayCount, setArrayCount] = useState(5);
   const [arrayOffset, setArrayOffset] = useState({ x: 2, y: 0, z: 0 });
+  const [arrayMode, setArrayMode] = useState<'linear' | 'radial'>('linear');
+  const [arrayRadius, setArrayRadius] = useState(3);
+  const [arrayAxis, setArrayAxis] = useState<'x' | 'y' | 'z'>('y');
 
   // go_to_scene 액션용 씬 목록 — 폼을 열거나 이미 씬 이동 이벤트가 있을 때만 로드
   const [sceneList, setSceneList] = useState<{ id: string; name: string }[]>([]);
@@ -1368,6 +1371,17 @@ function InspectorInner() {
           </div>
         )}
         <div className="flex-1 overflow-y-auto">
+          {!isCharSelected && (
+            <div className="px-3 pt-3">
+              <button
+                onClick={() => { requestExport([], 'scene'); addToast('씬 전체 GLB 내보내기 시작', 'success'); }}
+                title="씬의 모든 오브젝트를 하나의 .glb 파일로 내보내기"
+                className="w-full py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all"
+              >
+                ⬇ 씬 전체 GLB로 내보내기
+              </button>
+            </div>
+          )}
           {!isCharSelected && prefabs.length > 0 && (
             <GroupBox>
               <SectionHeader title="Prefab 라이브러리" icon="◇" hint="이 씬의 프리팹 원본 목록. '배치'를 누르면 새 인스턴스를 씬에 추가해요. 삭제하면 정의만 지워지고 이미 배치된 오브젝트는 독립 오브젝트로 남습니다." />
@@ -1925,14 +1939,21 @@ function InspectorInner() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* 이름 */}
-        <div className="px-3 py-2">
+        {/* 이름 + GLB 내보내기 */}
+        <div className="px-3 py-2 flex items-center gap-1.5">
           <input
             value={obj.name}
             onChange={(e) => updateObject(obj.id, { name: e.target.value })}
             onBlur={pushHistory}
-            className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+            className="flex-1 min-w-0 bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
           />
+          <button
+            onClick={() => { requestExport(selectedIds.length > 0 ? selectedIds : [obj.id], obj.name || 'object'); addToast('GLB 내보내기 시작', 'success'); }}
+            title="이 오브젝트를 .glb 파일로 내보내기(다운로드)"
+            className="shrink-0 h-[30px] px-2 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary text-[11px] transition-all"
+          >
+            ⬇ GLB
+          </button>
         </div>
 
         {/* Prefab — 원본 정의화 / 인스턴스 동기화 */}
@@ -2147,25 +2168,57 @@ function InspectorInner() {
 
         {/* Array — 일정 간격 반복 복제 (울타리·기둥·계단 등) */}
         <GroupBox>
-          <SectionHeader title="Array" hint="선택한 오브젝트를 일정 간격으로 여러 개 복제해요. 울타리·기둥·계단처럼 반복 배치에 씁니다. 개수는 원본 포함, 간격은 복제 사이 거리(단위: m)." isOpen={isOpen('array')} onToggle={() => toggleSection('array')} />
+          <SectionHeader title="Array / Cloner" hint="선택 오브젝트를 여러 개 복제 배치해요. 선형(Linear)=일정 간격 나열(울타리·기둥·계단), 원형(Radial)=중심 기준 원형 배치(시계 숫자·원형 테이블 의자). 개수는 원본 포함, 되돌리기(Ctrl+Z) 가능." isOpen={isOpen('array')} onToggle={() => toggleSection('array')} />
             <div className="px-3 pb-4 space-y-2">
+              {/* 모드 토글 */}
+              <div className="grid grid-cols-2 gap-1">
+                {(['linear', 'radial'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setArrayMode(m)}
+                    className={`py-1 rounded-xs text-[10px] transition-colors ${arrayMode === m ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
+                  >
+                    {m === 'linear' ? '선형 (Linear)' : '원형 (Radial)'}
+                  </button>
+                ))}
+              </div>
               <LabeledNum label="개수 (원본 포함)" value={arrayCount} onChange={(v) => setArrayCount(Math.max(2, Math.min(100, Math.round(v))))} onCommit={() => {}} min={2} max={100} precision={0} dragStep={1} />
-              <XYZRow label="간격 (m)" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
-                onChangeX={(v) => setArrayOffset((o) => ({ ...o, x: v }))}
-                onChangeY={(v) => setArrayOffset((o) => ({ ...o, y: v }))}
-                onChangeZ={(v) => setArrayOffset((o) => ({ ...o, z: v }))}
-                onCommit={() => {}} dragStep={0.5}
-              />
+              {arrayMode === 'linear' ? (
+                <XYZRow label="간격 (m)" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
+                  onChangeX={(v) => setArrayOffset((o) => ({ ...o, x: v }))}
+                  onChangeY={(v) => setArrayOffset((o) => ({ ...o, y: v }))}
+                  onChangeZ={(v) => setArrayOffset((o) => ({ ...o, z: v }))}
+                  onCommit={() => {}} dragStep={0.5}
+                />
+              ) : (
+                <>
+                  <LabeledNum label="반경 (m)" value={arrayRadius} onChange={(v) => setArrayRadius(Math.max(0.1, v))} onCommit={() => {}} min={0.1} max={100} precision={2} dragStep={0.25} />
+                  <div>
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">원이 도는 축</span>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(['x', 'y', 'z'] as const).map((ax) => (
+                        <button key={ax} onClick={() => setArrayAxis(ax)}
+                          className={`py-1 rounded-xs text-[10px] uppercase transition-colors ${arrayAxis === ax ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
+                        >{ax}{ax === 'y' ? ' (바닥)' : ''}</button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
               <button
                 onClick={() => {
-                  arraySelected(arrayCount, arrayOffset);
-                  addToast(`${arrayCount - 1}개 복제 생성`, 'success');
+                  arraySelected(arrayCount, arrayOffset, arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : null);
+                  addToast(`${arrayMode === 'radial' ? '원형' : '선형'} ${arrayCount - 1}개 복제 생성`, 'success');
                 }}
                 className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
               >
-                ⊞ 배열 생성 ({arrayCount}개)
+                {arrayMode === 'radial' ? '◎' : '⊞'} 배열 생성 ({arrayCount}개)
               </button>
-              <p className="text-[10px] text-muted/50">현재 위치에서 간격만큼 떨어뜨려 {arrayCount - 1}개를 추가합니다. 되돌리기(Ctrl+Z) 가능.</p>
+              <p className="text-[10px] text-muted/50">
+                {arrayMode === 'radial'
+                  ? `원본을 원 위 한 점에 두고 나머지 ${arrayCount - 1}개를 원형으로 균등 배치합니다.`
+                  : `현재 위치에서 간격만큼 떨어뜨려 ${arrayCount - 1}개를 추가합니다.`}
+              </p>
             </div>
         </GroupBox>
 

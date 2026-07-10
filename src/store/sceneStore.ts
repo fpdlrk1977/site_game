@@ -57,6 +57,8 @@ interface SceneState {
   focusAllRequest: number | null;
   // 선택 오브젝트(들)로 카메라 프레이밍 요청(F키/더블클릭). tick 값으로 EditorCanvas가 감지.
   focusSelectedRequest: number | null;
+  // .glb 내보내기 요청 — ids가 비면 씬 전체(루트 오브젝트 전부). EditorCanvas가 라이브 Three 객체로 처리.
+  exportRequest: { ids: string[]; name: string; _tick: number } | null;
   cameraViewRequest: { view: 'top' | 'front' | 'right'; _tick: number } | null;
   isModified: boolean;
   // 마지막으로 로드/저장한 시점의 DB scenes.version 값 — 저장 시 낙관적 잠금에 사용.
@@ -93,6 +95,8 @@ interface SceneActions {
   requestFocusAll: () => void;
   /** 선택 오브젝트로 카메라 프레이밍(orbit pivot 이동 + 거리 맞춤). 시점 방향은 유지. */
   requestFocusSelected: () => void;
+  /** 오브젝트(들)를 .glb로 내보내기. ids 비우면 씬 전체. */
+  requestExport: (ids: string[], name: string) => void;
   requestCameraView: (view: 'top' | 'front' | 'right') => void;
   duplicateInPlace: () => void;
   requestSaveBookmark: (slot: number) => void;
@@ -104,8 +108,8 @@ interface SceneActions {
   setObjectLocked: (id: string, locked: boolean) => void;
   moveObject: (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   duplicateSelected: () => void;
-  // 선택 오브젝트를 일정 간격으로 count개(원본 포함)까지 배열 복제 — 울타리·기둥 등. offset은 복제 간 간격.
-  arraySelected: (count: number, offset: { x: number; y: number; z: number }) => void;
+  // 선택 오브젝트를 count개(원본 포함)로 배열 복제. linear=offset 간격 나열(울타리·기둥), radial=중심 기준 원형 배치(시계 숫자·원형 테이블 의자).
+  arraySelected: (count: number, offset: { x: number; y: number; z: number }, radial?: { radius: number; axis: 'x' | 'y' | 'z' } | null) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
   /** 구운(bake) GLB 에셋으로 대상 오브젝트(+자손)를 대체 — Merge/Boolean 결과 반영. 원본 제거 + 에셋 오브젝트 1개 추가(단일 undo) */
@@ -302,6 +306,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   focusTarget: null,
   focusAllRequest: null,
   focusSelectedRequest: null,
+  exportRequest: null,
   cameraViewRequest: null,
   isModified: false,
   savedVersion: 1,
@@ -387,6 +392,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   requestFocusAll: () => set({ focusAllRequest: Date.now() }),
   requestFocusSelected: () => set({ focusSelectedRequest: Date.now() }),
+  requestExport: (ids, name) => set({ exportRequest: { ids, name, _tick: Date.now() } }),
 
   requestCameraView: (view) => set({ cameraViewRequest: { view, _tick: Date.now() } }),
 
@@ -778,7 +784,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     }
   },
 
-  arraySelected: (count, offset) => {
+  arraySelected: (count, offset, radial) => {
     const { selectedId, objects, environment, past } = get();
     if (!selectedId || count < 2) return;
     const src = objects.find((o) => o.id === selectedId);
@@ -787,9 +793,25 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const additions: ObjectNodeSchema[] = [];
     const newIds: string[] = [];
 
+    // radial: 원 위의 각 위치(중심 기준 오프셋). axis=원이 도는 축(원 평면의 법선).
+    const ringOffset = (theta: number) => {
+      const r = radial!.radius, c = Math.cos(theta) * r, s = Math.sin(theta) * r;
+      if (radial!.axis === 'x') return { x: 0, y: c, z: s };
+      if (radial!.axis === 'z') return { x: c, y: s, z: 0 };
+      return { x: c, y: 0, z: s }; // y(기본): XZ 평면
+    };
+    // 원본을 각도 0에 두고 중심을 역산 → 원본은 제자리, 나머지가 원을 그린다.
+    const o0 = radial ? ringOffset(0) : null;
+    const center = o0 ? { x: src.position.x - o0.x, y: src.position.y - o0.y, z: src.position.z - o0.z } : null;
+
     for (let i = 1; i < count; i++) {
-      const dx = offset.x * i, dy = offset.y * i, dz = offset.z * i;
-      const pos = { x: src.position.x + dx, y: src.position.y + dy, z: src.position.z + dz };
+      let pos: { x: number; y: number; z: number };
+      if (radial && center) {
+        const off = ringOffset((2 * Math.PI / count) * i);
+        pos = { x: center.x + off.x, y: center.y + off.y, z: center.z + off.z };
+      } else {
+        pos = { x: src.position.x + offset.x * i, y: src.position.y + offset.y * i, z: src.position.z + offset.z * i };
+      }
 
       if (src.isGroup) {
         // 중첩 그룹 포함 전체 하위 계층 재귀 복제 (duplicateSelected와 동일 패턴)

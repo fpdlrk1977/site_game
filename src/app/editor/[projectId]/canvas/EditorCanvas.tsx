@@ -13,6 +13,7 @@ import { pointerDownOnObjectRef } from "./boxSelectState";
 import { PostProcessingEffects } from "@/components/three/PostProcessingEffects";
 import { GroundPlane } from "@/components/three/GroundPlane";
 import { worldBBox } from "@/lib/objectBBox";
+import { exportObjectsToGlb } from "@/lib/exportGlb";
 import { DefaultEnvironment } from "@/components/three/DefaultEnvironment";
 import { SceneToneMapping } from "@/components/three/SceneToneMapping";
 import { BoundaryWalls } from "@/components/three/BoundaryWalls";
@@ -239,6 +240,7 @@ export function EditorCanvas() {
     focusTarget,
     focusAllRequest,
     focusSelectedRequest,
+    exportRequest,
     cameraViewRequest,
     objects,
     bookmarkSaveRequest,
@@ -306,6 +308,19 @@ export function EditorCanvas() {
     cam.position.copy(center).addScaledVector(dir, dist);
     orbitRef.current.update();
   }, [focusSelectedRequest]);
+
+  // .glb 내보내기 — 라이브 Three 객체(refs)를 클론해 GLTFExporter로 export 후 다운로드.
+  useEffect(() => {
+    if (!exportRequest) return;
+    const ids = exportRequest.ids.length > 0
+      ? exportRequest.ids
+      : useSceneStore.getState().objects.filter((o) => !o.parentId && o.visible).map((o) => o.id);
+    const objs3d = ids
+      .map((id) => objectRefsRef.current.get(id))
+      .filter((o): o is THREE.Object3D => !!o);
+    if (objs3d.length === 0) return;
+    exportObjectsToGlb(objs3d, exportRequest.name).catch(() => {});
+  }, [exportRequest]);
 
   // Camera view preset (Numpad7=Top, Numpad1=Front, Numpad3=Right)
   // 씬 바운드에 맞춰 중심·거리를 잡아 전체가 자연스럽게 담기게 한다(고정 거리 X).
@@ -532,12 +547,12 @@ export function EditorCanvas() {
             position={[0, -0.001, 0]}
             args={[50, 50]}
             cellSize={1}
-            cellThickness={0.4}
-            cellColor="#eee"
+            cellThickness={0.5}
+            cellColor="#666"
             sectionSize={5}
             sectionThickness={0.8}
-            sectionColor="#52525b"
-            fadeDistance={80}
+            sectionColor="#ddd"
+            fadeDistance={100}
             fadeStrength={1}
             infiniteGrid
           />
