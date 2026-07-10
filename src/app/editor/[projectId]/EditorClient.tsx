@@ -14,6 +14,7 @@ import { ViewportFloatingToolbar } from './canvas/ViewportFloatingToolbar';
 import { ViewportOrientationGizmo } from './canvas/ViewportOrientationGizmo';
 import { CommandPalette } from './panels/CommandPalette';
 import { PenToolModal } from './panels/PenToolModal';
+import { VoxelToolModal } from './panels/VoxelToolModal';
 import { Toaster } from '@/components/ui/Toaster';
 import type { ProjectSceneSchema } from '@/types/scene';
 
@@ -187,6 +188,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       <Toaster />
       {showCommandPalette && <CommandPalette onClose={() => setShowCommandPalette(false)} />}
       <PenToolModal />
+      <VoxelToolModal />
     </div>
   );
 }

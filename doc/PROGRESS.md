@@ -145,6 +145,37 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
   - 제약: 캐릭터 스폰 포인트 기즈모는 라이브 미게시(별도 `env` 값) → 스폰 좌표는 여전히 마우스업에 갱신(필요 시 동일 패턴 확장).
 - **검증**: tsc 클린 + dev 컴파일 정상. **초기 진입 뷰(에디터/탐색)·실시간 Inspector 모두 브라우저 실동작 확인 완료(사용자).**
 
+## 최근 완료 (2026-07-10) — 텍스처 매핑 (프리미티브 표면 이미지) + Textures 에셋
+
+사용자 아이디어 목록 대조 결과 미구현이던 "텍스처 업로드 & 이미지 매핑" 구현(복셀은 미착수로 남김). 프리미티브 표면에 이미지(포스터/사진/로고)를 입힌다.
+
+- **스키마(`scene.ts`)**: `MaterialOverride`에 `textureUrl?`·`textureRepeat?: {x,y}` 추가. `AssetRefSchema.type`에 `'texture'` 추가.
+- **공용 렌더 `src/components/three/PrimitiveMaterial.tsx`(신규)**: 색상+선택적 `map`. `TextureLoader` **비동기 로드(비-Suspense)** → 인라인 mesh에 Suspense 경계 없이 안전. `wrapS/wrapT=RepeatWrapping`+`repeat(x,y)`, `SRGBColorSpace`. **텍스처 있으면 베이스 색을 흰색으로**(재질 색에 안 물들고 이미지 원본대로). key로 텍스처 유무 전환 시 재질 remount(셰이더 재컴파일 이슈 회피). 에디터(`EditorObjectInstance`)·뷰어(`ViewerObject`) 둘 다 이걸로 교체.
+- **인스턴싱 제외**: 텍스처 있는 프리미티브는 단일 재질 배칭 불가라 `getInstancedIds`·`InstancedPrimitives` 두 곳에서 제외 → 개별 렌더(텍스처 유지).
+- **에셋 DB 등록 승격 `uploadImageTexture(file, projectId)`(`uploadAsset.ts`)**: GLB·오디오와 동일 패턴 — Storage(`textures/{pid}/`) + `assets` DB행(type `'texture'`, 썸네일=이미지 자체). 기존 ground/boundary처럼 "URL만 쓰고 버리는" 방식이 아니라 **라이브러리에서 재사용 가능 + 삭제로 정리 대상 추적**.
+- **AssetBrowser Textures 탭**(WIP 해제): 썸네일 그리드(`TextureCard`) + 업로드 + **클릭→선택한 프리미티브(들)에 적용**(`applyTextureToSelection`) + 삭제. `modelAssets` 필터에서 texture 제외.
+- **Inspector Material 텍스처 UI**: "Texture (이미지)" 라벨 옆 **Toggle 스위치**(켜면 영역 표시, 텍스처 있으면 자동 ON, 끄면 해제) + **`TexturePicker`(신규 `src/components/ui/TexturePicker.tsx`)** — SelectBox 형태(트리거+`useDropdown`)이되 드롭다운이 **3열 썸네일 그리드 + 맨 아래 넓은 업로드 버튼**. 적용 시 미리보기 + 타일 반복(가로/세로) 컨트롤. 공용 `SelectBox`는 텍스트 전용/앱 전역 사용이라 텍스처 전용으로 분리(위치·닫기 로직은 useDropdown 공유).
+  - 텍스처 넣는 경로 3가지: ①Material 스위치→픽커 ②픽커 하단 업로드 ③Textures 탭 선택→적용. 업로드는 전부 `uploadImageTexture`로 assets>texture 등록.
+- **검증**: tsc 클린 + dev 컴파일 정상. **브라우저 실동작 확인 완료(사용자 — 매핑·타일반복·Textures 탭·스위치·썸네일 픽커 정상).**
+- **알려진 제약**: 프리미티브만(GLB 자체 재질·텍스트 콘텐츠 제외) · 면별 텍스처 아님(도형 전체 UV) · 라이브러리에서 텍스처 삭제해도 적용된 오브젝트의 `material.textureUrl`은 자동 정리 안 됨(로드 실패 시 색상으로 graceful 폴백, 참조 GC는 후속) · 에셋은 씬 단위(scene_data.assets[], 다른 씬과 공유 X — 모델·오디오와 동일).
+
+## 최근 완료 (2026-07-10) — 복셀(Voxel) 방식 (마인크래프트식 큐브 쌓기)
+
+사용자 아이디어 목록 중 마지막 미구현이던 복셀 구현. 펜 툴/Merge와 **동일 파이프라인**(모달 → GLB로 bake → 에셋 등록 → 배치)이라 뷰어/임베드/물리/인스턴싱 코드 무변경으로 렌더된다. **인앱 모델링(프리미티브·펜·클로너·익스포트·텍스처·복셀) 스코프 전부 완료.**
+
+- **스토어**: `voxelToolOpen`/`setVoxelToolOpen`(penToolOpen 미러).
+- **bake 로직 `src/lib/voxelModel.ts`(신규)**: `buildVoxelGlb(voxels)` — 각 복셀=1×1×1 BoxGeometry, **정점 색(vertex color)으로 단일 메쉬에 병합**(`mergeGeometries`)해 드로우콜/파일 최소화. sRGB→linear 변환(정점색은 선형). X/Z 중심 정렬 + 바닥(min.y) 0에 앉힘 → GLTFExporter binary. `MeshStandardMaterial{vertexColors:true}`.
+- **에디터 `src/app/editor/[projectId]/panels/VoxelToolModal.tsx`(신규)**: 펜 툴과 동일한 **드래그 이동 + no-overlay** 작업 팝업.
+  - **2D 그리드 페인터**(SVG) — **좌클릭 칠하기 / 우클릭 지우기**(드래그 지원, `paintMode` ref로 드래그 중 일관), 컨텍스트메뉴 차단.
+  - **색상**: 컬러픽커 + **프리셋 SelectBox**(각 옵션에 색 스와치 아이콘). **그리드 크기 SelectBox**(8/16/24/32, 픽셀 고정 340이라 칸수↑=칸작아짐, 줄이면 범위 밖 복셀 제거).
+  - **높이(Y) 레이어** ±로 쌓기. **쌓기 도우미**: 바로 아래층=보라 점선 외곽선, 더 아래층=옅은 발자국, **「아래 복사」**(아래층을 현재층에 복사=기둥·벽), 3D에 **현재 편집 층 반투명 판**.
+  - **실시간 3D 미리보기**(R3F Canvas + OrbitControls, **무한 그리드**, 그리드 중심 고정) — 쌓이는 모습 즉시 확인.
+  - **전체 지우기 = 완전 초기화**(복셀 + 높이 0). 그리드 선은 배경 대비 `currentColor`(전경색) 기반.
+  - **만들기** → `buildVoxelGlb` → `uploadGlbBlob`(model) → `addAsset`+`addAssetObject`(바닥 스냅 배치) → persist.
+- **진입점**: 툴바 🧊(펜툴 ✏ 옆) + 커맨드팔레트 '복셀 (큐브 쌓아 만들기)'.
+- **검증**: tsc 클린 + dev 컴파일 정상. **브라우저 실동작 확인 완료(사용자 — 칠/지우기·색·크기·쌓기 도우미·미리보기 정상).**
+- **알려진 제약/후속**: 편집이 **레이어별 2D 페인팅**(3D 면 클릭 배치 아님) · 내부 면 컬링 없음(vertex color 단일 메쉬라 실사용 크기엔 무난) · 색만(텍스처 스킨은 후속) · 그리드 크기 변경 시 3D 카메라는 마운트 시점 값 유지(재프레이밍은 orbit으로).
+
 ## ✅ 브라우저 실동작 확인 완료 (2026-07-10, 사용자 일괄 검증)
 
 아래 항목 전부 브라우저 실동작 확인됨 — 개별 항목 본문의 "브라우저 확인 필요" 표기는 이 확인으로 해소:
@@ -241,7 +272,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **경계 벽 2차**: 그라데이션 페이드/one-sided/면별 텍스처/스카이박스 대안/원형·커스텀 모양.
 - **조명 L2 (c)**: 라이트 색(warm/cool) 스키마 — 나머지 L2(톤매핑·바닥스냅·무드프리셋·ContactShadows)는 완료.
 - ~~**Prefab**: 미착수. 착수 전 override/동기화 규칙 설계 필요.~~ **[MVP 완료 2026-07-09 — 아래 참고]**
-- **AssetBrowser 탭**: Materials/Textures/HDR/Audio (WIP). ※ 텍스처는 지금 ground·boundary가 개별 업로드로 우회 중.
+- **AssetBrowser 탭**: Materials/HDR (WIP). ※ **Textures·Audio는 완료**. ground·boundary 텍스처는 여전히 개별 업로드(에셋 등록 아님) — 원하면 uploadImageTexture로 통합 가능.
 
 ### 🗺️ 대형 로드맵 (원본 `ROADMAP.md`/`FEATURE_LIST.md` — 이 핸드오프 요약에 누락됐던 것들)
 

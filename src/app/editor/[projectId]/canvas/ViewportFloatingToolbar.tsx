@@ -37,7 +37,7 @@ export function ViewportFloatingToolbar() {
     transformMode, transformSpace, snapEnabled, snapTranslate, wireframeMode,
     selectedIds, cameraBookmarks,
     setTransformMode, setTransformSpace, setSnap, toggleWireframe,
-    addObject, undo, redo, alignSelected, requestSaveBookmark, requestRecallBookmark, setPenToolOpen,
+    addObject, undo, redo, alignSelected, requestSaveBookmark, requestRecallBookmark, setPenToolOpen, setVoxelToolOpen,
   } = useSceneStore();
 
   const [showAlign, setShowAlign] = useState(false);
@@ -143,6 +143,14 @@ export function ViewportFloatingToolbar() {
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-background transition-all text-sm"
             >
               ✏
+            </button>
+          </Tip>
+          <Tip label="복셀 — 큐브를 쌓아 만들기 (도트 감성)">
+            <button
+              onClick={() => setVoxelToolOpen(true)}
+              className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-background transition-all text-sm"
+            >
+              🧊
             </button>
           </Tip>
         </div>
