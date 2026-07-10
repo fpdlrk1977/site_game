@@ -156,6 +156,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       }),
     };
   }, [scene, visOverride, posOverride]);
+  // move_object로 이동 중인 오브젝트 id 집합 — PlayCanvas가 그룹을 kinematic 강체로 라우팅(콜라이더 동반).
+  const movedIds = useMemo(() => new Set(Object.keys(posOverride)), [posOverride]);
   const [isTouch, setIsTouch] = useState(false);
   const supabase = useState(() => createBrowserSupabase())[0];
   const mobileInputRef = useRef({ fwd: 0, strafe: 0, jump: false });
@@ -283,7 +285,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} />
+      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} />
 
       {/* 상단 오버레이 — 독립 URL(/space)에서만 풀 UI */}
       {variant === 'standalone' && (

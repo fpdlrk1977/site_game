@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Monitor } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { ViewportToolbar } from './panels/ViewportToolbar';
 import { EditorGnb, type GnbTab } from './panels/EditorGnb';
@@ -129,7 +129,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     return (
       <div className="min-h-screen bg-sidebar flex items-center justify-center p-6 text-center">
         <div>
-          <div className="text-5xl mb-4">🖥️</div>
+          <Monitor size={48} className="mx-auto mb-4 text-muted" />
           <h2 className="text-xl font-bold text-foreground mb-2">PC에서 이용해 주세요</h2>
           <p className="text-muted text-sm">에디터는 1280px 이상의 화면에서 지원됩니다.</p>
         </div>

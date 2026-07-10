@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Globe, Plus } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import { ProjectCard } from './ProjectCard';
@@ -102,11 +103,11 @@ export default async function DashboardPage() {
           /* 빈 상태 */
           <div className="flex flex-col items-center justify-center py-32 text-center">
             <div className="relative mb-6">
-              <div className="w-28 h-28 rounded-3xl bg-surface border border-border flex items-center justify-center text-5xl shadow-inner">
-                🌐
+              <div className="w-28 h-28 rounded-3xl bg-surface border border-border flex items-center justify-center text-muted shadow-inner">
+                <Globe size={48} />
               </div>
-              <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-xs font-bold shadow-lg shadow-violet-500/25 animate-bounce">
-                +
+              <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-violet-500/25 animate-bounce">
+                <Plus size={15} />
               </div>
             </div>
             <h2 className="text-xl font-semibold mb-2">아직 프로젝트가 없어요</h2>

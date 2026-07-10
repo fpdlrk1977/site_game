@@ -5,6 +5,7 @@
 //  · 회전체(Lathe): 반쪽 단면을 Y축 기준 360° 회전(도자기·컵·와인잔). 좌우 무관(절대값=반경).
 //  · 곡선(Smooth) 토글: 찍은 점들을 지나는 부드러운 스플라인. 점은 드래그로 조정 가능.
 import { useState, useEffect, useRef } from 'react';
+import { PenTool, X, Check } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 
@@ -224,8 +225,8 @@ export function PenToolModal() {
           className="flex items-center justify-between mb-2.5 cursor-move select-none"
           onMouseDown={onHeaderDown}
         >
-          <span className="text-[13px] font-semibold text-foreground">✏ 펜 툴 — 2D 그려서 3D 만들기</span>
-          <button onMouseDown={(e) => e.stopPropagation()} onClick={close} className="text-muted hover:text-foreground text-sm px-1 cursor-pointer">✕</button>
+          <span className="text-[13px] font-semibold text-foreground flex items-center gap-1.5"><PenTool size={14} /> 펜 툴 — 2D 그려서 3D 만들기</span>
+          <button onMouseDown={(e) => e.stopPropagation()} onClick={close} className="text-muted hover:text-foreground px-1 cursor-pointer"><X size={15} /></button>
         </div>
 
         <div className="flex gap-1.5 mb-2">
@@ -239,11 +240,11 @@ export function PenToolModal() {
           <button onClick={() => setSmooth((v) => !v)}
             className={`px-2.5 rounded-xs text-[11px] transition-colors ${smooth ? 'bg-primary text-white' : 'bg-background text-muted hover:text-foreground'}`}
             title="찍은 점들을 지나는 부드러운 곡선으로"
-          >{smooth ? '곡선 ✓' : '곡선'}</button>
+          ><span className="inline-flex items-center gap-1">곡선 {smooth && <Check size={11} />}</span></button>
           <button onClick={() => setSnapGrid((v) => !v)}
             className={`px-2.5 rounded-xs text-[11px] transition-colors ${snapGrid ? 'bg-primary text-white' : 'bg-background text-muted hover:text-foreground'}`}
             title="점을 격자 교차점에 붙여 정확히 그리기"
-          >{snapGrid ? '스냅 ✓' : '스냅'}</button>
+          ><span className="inline-flex items-center gap-1">스냅 {snapGrid && <Check size={11} />}</span></button>
         </div>
 
         <svg
@@ -291,7 +292,7 @@ export function PenToolModal() {
           {mode === 'extrude'
             ? '점을 찍어 단면을 그린 뒤 첫 점(보라)을 다시 클릭해 닫으세요(3점+). 두께만큼 세워집니다(별·하트 기둥).'
             : '세로축 오른쪽에 반쪽 단면을 그리세요(2점+, 왼쪽 클릭은 오른쪽에 맞춰짐·점선=회전 미러). 첫 점을 클릭해 닫으면 도넛·링이 돼요.'}
-          {' '}점 드래그로 조정. <b>Shift+드래그</b>=여러 점 선택→함께 이동, <b>Delete</b>=선택 삭제, <b>Ctrl+Z</b>=점 취소{closed ? ' · 닫힘✓' : ''}.
+          {' '}점 드래그로 조정. <b>Shift+드래그</b>=여러 점 선택→함께 이동, <b>Delete</b>=선택 삭제, <b>Ctrl+Z</b>=점 취소{closed ? ' · 닫힘' : ''}.
         </p>
 
         {mode === 'extrude' && (

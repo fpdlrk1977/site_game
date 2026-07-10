@@ -13,14 +13,22 @@ export interface EnvSchema {
   ground?: { enabled: boolean; color: string; preset?: GroundPreset; textureUrl?: string };
   boundary?: number;  // 경계 X 반경(중심→벽). >0이면 이동 제한(콜라이더) 항상 존재
   boundaryZ?: number; // 경계 Z 반경. 미설정 시 boundary와 같음(정사각) — 직사각 지원
-  // 경계 벽 시각 — 미설정/none = 안 보임(투명, 영역만). color=단색 벽, texture=이미지 매핑 벽.
+  // 경계 벽 시각 — 미설정/none = 안 보임(투명, 영역만). color=단색 벽, texture=이미지 매핑 벽,
+  //   skybox=4면 벽 대신 360° 파노라마 구(球)로 씬을 감쌈.
   boundaryWall?: {
-    style?: 'none' | 'color' | 'texture';
+    style?: 'none' | 'color' | 'texture' | 'skybox';
     color?: string;
     textureUrl?: string;
     height?: number;   // 벽 높이 (기본 8)
     opacity?: number;  // 0~1 (기본 1)
     ceiling?: boolean; // 천장 포함(완전한 방)
+    // Phase 2 —
+    gradient?: boolean;   // 위로 갈수록 투명하게 페이드(딱딱한 벽 대신 지평선 느낌)
+    oneSided?: boolean;   // 안쪽에서만 보이기(밖에선 투명) — 뷰어 전용, 에디터는 항상 양면
+    // 면별 텍스처(texture 스타일 전용) — 지정한 면은 이 이미지, 나머지는 textureUrl 폴백.
+    faceTextures?: { front?: string; back?: string; left?: string; right?: string };
+    // skybox 스타일일 때 감쌀 360° 파노라마(equirectangular) 이미지 URL.
+    skyboxUrl?: string;
   };
   fog: { enabled: boolean; color: string; near: number; far: number };
   lights: {

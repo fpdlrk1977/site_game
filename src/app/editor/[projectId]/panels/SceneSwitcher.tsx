@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { X, ChevronDown, Check } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { usePlan } from '@/hooks/usePlan';
 import { useDropdown } from '@/hooks/useDropdown';
@@ -32,7 +33,7 @@ function TemplatePickerModal({
       <div className="relative bg-surface border border-border rounded-2xl w-full max-w-lg shadow-modal overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground">씬 템플릿 선택</h3>
-          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors">✕</button>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors"><X size={16} /></button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -234,7 +235,7 @@ export function SceneSwitcher() {
       >
         <span className="text-[10px] text-muted shrink-0">씬</span>
         <span className="truncate flex-1 text-left">{currentScene?.name ?? '...'}</span>
-        <span className="text-muted shrink-0">▾</span>
+        <ChevronDown size={12} className="text-muted shrink-0" />
       </button>
 
       {open && typeof document !== 'undefined' && createPortal(
@@ -262,15 +263,15 @@ export function SceneSwitcher() {
                     : 'text-foreground hover:bg-background'
                 }`}
               >
-                {scene.id === sceneId && <span className="mr-1.5 opacity-70">✓</span>}
+                {scene.id === sceneId && <Check size={12} className="inline mr-1.5 opacity-70" />}
                 {scene.name}
               </button>
               {scene.id !== sceneId && (
                 <button
                   onClick={() => deleteScene(scene.id, scene.name)}
-                  className="hidden group-hover:flex w-7 items-center justify-center py-2 text-muted/60 hover:text-danger transition-colors text-xs"
+                  className="hidden group-hover:flex w-7 items-center justify-center py-2 text-muted/60 hover:text-danger transition-colors"
                 >
-                  ✕
+                  <X size={13} />
                 </button>
               )}
             </div>

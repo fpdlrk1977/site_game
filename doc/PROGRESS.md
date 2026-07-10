@@ -121,6 +121,34 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **자동차 예시 달성 경로**: 둥근 박스(몸체) + 각뿔대/실린더(바퀴) → 색·재질 → 그룹/프리팹 → motion(spin) 굴리기, 또는 Boolean 빼기로 바퀴 자리 구멍, Merge로 하나의 객체화. "만들고·조합하고·움직이는" 흐름이 코드로 완성됨.
 - **미착수(스코프 밖/후속)**: 유선형 자유곡면(서브디비전 박스모델링) · GLB 대상 Merge/Boolean · 텍스처 UV · loft 원형 단면 옵션 · 대칭(mirror) 편집.
 
+## 최근 완료 (2026-07-10) — 에디터 UX 3종 (아이콘 lucide화 · 배치 모드 · 툴바 드롭다운)
+
+사용자 요청 3건. 컨펌 후 진행(단순 반투명 고스트 · 한 번 배치 후 종료 · 이모지 전부 lucide).
+
+- **아이콘 전면 lucide화**: 이모지·텍스트 글리프(▾▸ ↺ ⌂ ✕ ▶ ■ ✓ ✏ 📦🧍🎵 🔥❄️ 🌅🌙 ⬛⬤ 등)·이미지 아이콘을 전부 `lucide-react`로 교체. 대상: `ViewportFloatingToolbar`(도형·펜·복셀), `AssetBrowser`(카드·탭·오디오·재질·HDR·콘텐츠·파티클·라이트), `HierarchyPanel`(트리 아이콘·표시/잠금·컨텍스트메뉴), `InspectorPanel`(SectionHeader 화살표/아이콘·무드·그라운드·파티클/라이트 SelectBox·합치기·정렬·프리팹·클로너·GLB내보내기·이벤트 미리보기/수정/삭제), `CommandPalette`(전 명령 아이콘), `SceneSwitcher`·`VersionHistoryModal`·`PenToolModal`·`VoxelToolModal`·`EditorOnboarding`·`EditorClient`·`EditorGnb`·`Toaster`·`ThemeToggle`, 대시보드(`ProjectCard`·`ShareModal`·`CustomDomainModal`·`page`·`NewProject*`). 카테고리/무드 라벨 이모지까지 전부 아이콘화(사용자 결정). **유지**: 키보드 단축키 표기(⌃⇧G·⌃D)와 범례 화살표(↑↓↵)는 아이콘 아니라 텍스트 표기라 그대로. **주의**: `CheckCircle2`(deprecated alias)가 Turbopack HMR에서 module-factory 에러 → 정식 `CircleCheck`로 교체. 검증: tsc 클린 + editor·dashboard 200 + 렌더 에러 없음.
+- **오브젝트/에셋 배치 모드**: add 버튼(도형·GLB·콘텐츠·파티클·라이트) 클릭 시 즉시 중앙 생성하지 않고 **뷰포트에서 클릭한 위치에 생성**. 스토어 `pendingPlacement` state + `beginPlacement`/`commitPlacement`/`cancelPlacement`. add* 5종에 `placeAt?:{x,z}` 옵션 파라미터(단일 히스토리 유지, y는 타입별 기본/바닥스냅 유지). `EditorCanvas`: 바닥(y=0) 평면 레이캐스트로 **단순 반투명 박스+바닥 링 고스트가 마우스 따라다님**(`PlacementGhost`, useFrame), 좌클릭=생성(**한 번 배치 후 종료**), **ESC 취소**, 상단 안내 배너 + crosshair 커서. 배치 클릭이 OrbitControls 좌드래그·선택박스·onPointerMissed 해제와 안 겹치게 게이트(`justPlacedRef`·orbit 일시 비활성). 호출부: 툴바 도형 + AssetBrowser 4탭. 검증: tsc 클린 + editor 200.
+- **툴바 드롭다운화**(`ViewportFloatingToolbar`): 펼쳐져 있던 **스냅**(켜기 토글 + 0.25/0.5/1/2)과 **카메라 북마크**(1~5, 저장/이동)를 각각 **아이콘+ChevronDown 드롭다운**으로 접음(정렬 드롭다운과 동일 `openMenu` 패턴·바깥클릭 닫기). 북마크는 Shift+클릭 대신 슬롯별 이동/저장 버튼 명시. 도형 아이콘도 lucide(Box/Circle/Cylinder/Cone/Hexagon/Square)·펜=PenTool·복셀=Boxes. 검증: tsc 클린.
+
+## 최근 완료 (2026-07-10) — 경계 벽 2차 + move_object 그룹 플레이 모드
+
+### 경계 벽 2차 (원형 제외 — 그라데이션·one-sided·면별 텍스처·스카이박스)
+`BoundaryWalls.tsx` 재작성 + 스키마 확장. **하위호환**: 기존 color/texture 벽은 그대로.
+- **스키마(`scene.ts` `boundaryWall`)**: `style`에 `'skybox'` 추가 + `gradient?`·`oneSided?`·`faceTextures?{front/back/left/right}`·`skyboxUrl?`.
+- **그라데이션**: 위→아래 알파 페이드. **셰이더 수정 없이** planeGeometry 정점에 vertexColors 알파(위 정점 a=0, 아래 a=1, quad 보간) — three 0.185 vertex-alpha 지원 이용(안전). 지평선처럼 벽 윗부분이 사라짐.
+- **one-sided**: 중심을 향한 면만 보이게 `FrontSide`(밖에선 투명). **에디터는 편집 편의로 항상 양면(DoubleSide)**, 뷰어에서만 적용. 천장은 항상 양면(아래서 보이게).
+- **면별 텍스처**: texture 스타일에서 앞/뒤/왼/오 각 면에 개별 이미지(미지정 면은 기본 textureUrl 폴백). 벽별 벽화/창문 등.
+- **스카이박스**: 4면 벽 대신 360° equirect 파노라마를 큰 구(BackSide, `meshBasicMaterial toneMapped=false`)로 씬을 감쌈. 반경=max(경계)×2.2+20.
+- **렌더 안전화**: 기존 drei `useTexture`(Suspense)를 **비-Suspense `TextureLoader`**로 교체(PrimitiveMaterial 패턴) — 인라인 mesh에 Suspense 경계 불필요.
+- **에디터 UI**(Environment→Boundary): 스타일에 '스카이박스' 추가 + 면별 텍스처 2×2 슬롯(업로드/교체/제거) + 스카이박스 업로드 + 그라데이션·안쪽만 토글. 공용 업로더 `uploadBoundaryImage` + 단일 파일입력 target 라우팅(`bwUploadTarget`).
+- **검증**: tsc 클린 + dev 컴파일(editor 200). **실동작 브라우저 확인 필요**(그라데이션 페이드·one-sided 밖에서 투명·면별 이미지·스카이박스 파노라마). 남음: 원형/커스텀 모양(콜라이더도 원형 대응 필요).
+
+### move_object 그룹 플레이 모드
+그룹을 move_object로 옮기면 시각만 미끄러지고 콜라이더는 원자리에 남던(유령 콜라이더) 문제 해결. **먼저 '이미 되어있나' 꼼꼼히 확인 → 미구현 확정 후 착수.**
+- **원인**: `GroupWithCollision`은 자식 콜라이더가 부모 `<group>` 이동을 안 따라감(fixed 바디는 부모 월드행렬을 매 프레임 재샘플 안 함).
+- **해결**: `ViewerClient`가 `movedIds`(=posOverride 대상 id 집합) 생성 → `ViewerCanvas`→`PlayCanvas` 배선(passableIds와 동일 패턴). PlayCanvas가 옮겨지는(모션 없는) 그룹을 **`MovedGroupCollider`**(신규)로 라우팅 = `kinematicPosition` + `colliders="hull"` 강체를 매 프레임 `setNextKinematicTranslation(object.position)`으로 구동(effectiveScene이 posOverride로 위치 갱신). 그룹 라우팅 필터(`groupObjects`/`movingGroups`)에서 movedGroups 제외(이중 렌더/시각전용 누락 방지).
+- **단일 오브젝트**는 기존대로 정상(fixed 바디 position prop → setTranslation) — 무변경.
+- **검증**: tsc 클린 + dev 컴파일. **실동작 브라우저 확인 필요**(플레이 모드에서 그룹 move_object 시 캐릭터가 옮겨진 그룹에 실제로 막히는지, [[project_e2e_play_mode_testing]] 방식 권장). 제약: hull 근사·라이딩 미구현.
+
 ## 최근 완료 (2026-07-10) — AssetBrowser Materials·HDR 탭 (WIP 해제)
 
 마지막 두 WIP 탭 구현 → **AssetBrowser 4개 탭(Materials/Textures/HDR/Audio) 전부 완료.** 둘 다 `AssetBrowser.tsx` 단독 변경(스키마·렌더 경로 무변경 — 기존 필드 재사용).
@@ -288,7 +316,7 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
   - **Phase 3 완료(2026-07-08)**: (1) **등장 애니메이션 종류 선택** `PopupConfig.anim: 'auto'|'none'|'fade'|'scale'|'slide'` — auto=위치별 기본(기존), slide는 위치에 맞는 방향 자동. `globals.css`에 `popupFade` 추가, `ViewerClient`가 anim→animClass 매핑. 씬 기본값(`defaultPopup`)에도 anim 포함. (2) **chrome/padding 옵션** `PopupConfig.chrome?`(미설정/true=제목바+하단 닫기, **false=몰입형: 제목·닫기 숨김 + 우상단 플로팅 ✕ + 여백 0** → edge-to-edge iframe용), `padding?`(카드 내부 여백 override, 예 '0'|'24px'). chrome=false는 legacyCompact 제외라 구조 카드로 렌더. (3) **에디터 ▶ 미리보기를 PopupFrame로** — `previewPopup` state를 `{content, config}`로 바꿔 뷰어와 동일 병합(이벤트>씬기본)으로 **모드(iframe/html) 실제 렌더 + 크기/배경 반영**. 위치 프리셋은 에디터 미리보기에선 중앙 고정 + "뷰어에선 ○○ 배치" 주석(실제 위치는 뷰어). 에디터 이벤트 폼에 애니메이션 드롭다운·chrome 토글·여백 입력 추가, `cleanPopup`이 anim/chrome/padding 보존. 검증: **tsc 클린 + dev `/test/move-object` 200**. **실동작 브라우저 확인 필요**(anim 5종·몰입형 chrome=false 플로팅닫기·여백0 iframe·▶ 미리보기 iframe 렌더).
   - **팝업 Phase 완료** — 후속 후보(미착수): 팝업 안 여러 액션 버튼(CTA), 등장/퇴장 분리 애니메이션, 팝업 열림 시 이벤트 트리거 체이닝.
 - **대화 시스템 고도화 — 대사 종료 액션(버튼)·거리 LOD·1회성 [완료 2026-07-08]**: (1) **대사 종료 시 액션 = 말풍선 안 버튼** — `EventSchema.trigger`에 `dialogue_end` 추가. **자동발동이 아니라**(사용자 피드백: always+이벤트 문제·끝나자마자 넘어가면 당황) 대화 **마지막 문장에 액션 버튼**을 띄우고 **방문자가 누르면** 발동. `DialogueConfig.endButtonLabel`(기본 '확인'). `SpeechBubble` 안 3D Html 버튼(pointerEvents auto + onMouseDown/onTouchStart stopPropagation으로 카메라 드래그 차단 — 플레이 모드는 포인터락 없어 클릭 가능) → `dv.confirm()` → `onEvent(obj,'dialogue_end')` → 기존 `handleObjectEvent` 파이프라인(팝업·씬이동·문열기 등 전 액션). 데스크톱은 E키(근접+끝)로도 확정. auto 대화는 종료 이벤트 있으면 **마지막 문장에서 순환 멈춰 버튼 유지**. (2) **거리 LOD** — `SpeechBubble`을 `<group ref>`로 감싸 useFrame에서 카메라 거리 계산, 12m부터 페이드→20m 넘으면 사실상 숨김(직접 style.opacity, setState 없음, drei `distanceFactor` 원근축소와 병행). (3) **1회성** — `DialogueConfig.once`. `active = wantActive && !dismissed && !(once && seen)`. seen 시점: 버튼 확정(confirm) 또는 (버튼 없는 대화는) 끝까지 보고 근접 해제 시. `dismissed`=버튼 눌러 이번 세션 닫음(근접 풀리면 리셋). 미묘한 자동발동 로직(firedRef 등)은 버튼 방식으로 대체돼 단순화됨. **미완료(대화 남은 것)**: 선택지(분기), 하단 대화창 모드. 에디터: 트리거 '대사 종료 시'(버튼 안내), 대화 섹션 '1회성' 토글 + (종료 이벤트 있을 때) '종료 버튼' 이름 입력. 검증: **tsc 클린 + dev `/test/move-object` 200**. **실동작 브라우저 확인 필요**(근접→대사 끝 버튼 등장→클릭→액션, 멀어지면 페이드, once 재방문 안 뜸 — [[project_e2e_play_mode_testing]] 방식 권장).
-- **경계 벽 2차**: 그라데이션 페이드/one-sided/면별 텍스처/스카이박스 대안/원형·커스텀 모양.
+- **경계 벽 2차**: ~~그라데이션 페이드/one-sided/면별 텍스처/스카이박스 대안~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]** / **원형·커스텀 모양만 남음**(콜라이더도 원형 대응 필요라 별도).
 - ~~**조명 L2 (c)**: 라이트 색(warm/cool) 스키마~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]**. L2 전체 완료.
 - ~~**Prefab**: 미착수. 착수 전 override/동기화 규칙 설계 필요.~~ **[MVP 완료 2026-07-09 — 아래 참고]**
 - ~~**AssetBrowser 탭**: Materials/HDR (WIP)~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]**. **4개 탭(Materials/Textures/HDR/Audio) 전부 완료.** ground·boundary 텍스처는 여전히 개별 업로드(에셋 등록 아님) — 원하면 uploadImageTexture로 통합 가능.
@@ -343,7 +371,7 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - ~~솔리드는 area 트리거로 애니메이션 재생 안 됨~~ **[해소 — 2026-07-10]**: `ViewerClient.handleObjectEvent`가 **모든 트리거에서 `play_animation` 처리**(→ clipRequests→externalClip)하고, 솔리드는 `PlayModeController`의 물리 접촉 콜백 `onObstacleEnter`가 area_enter를 발동하므로 → **솔리드+area+애니메이션 동작**. (센서는 PhysicsObject activeClip 경로와 중복이나 같은 클립이라 무해.)
 - **트리거 확장(Distance/Collision) 이미 커버**: Distance ≈ `approach_enter/exit`(오브젝트 중심 반경 자동 트리거), Collision ≈ **솔리드 오브젝트의 area_enter/exit**(`onObstacleEnter`가 캐릭터 물리 접촉 시 발동 — 센서 불필요). 별도 트리거 추가는 중복이라 미도입.
 - `interact` 트리거: **플레이 모드 전용 + 루트 오브젝트 전용**(중첩 그룹 자식은 로컬 좌표라 근접 판정 제외). 범위 고정 3m·정면 조건 없음(최근접). 키는 E 고정. ~~**임베드는 프롬프트 UI 미표시**~~ **[해소 — ViewerClient 통합]**: E 프롬프트(데스크톱 키캡/모바일 버튼)는 variant 게이팅이 아니라 `playMode`만 체크 → **`defaultMode='play'` 임베드에서 정상 표시**(임베드는 모드 토글이 없어 defaultMode 고정이므로 interact 쓰려면 play로 설정). `Is Sensor` 통과는 버그가 아니라 트리거 영역의 정의 — 막고 싶으면 센서 끄기(기본 솔리드).
-- `move_object`: **그룹 대상은 탐색 모드 전용** — 플레이 모드에선 자식 RigidBody의 props가 안 바뀌어 rapier 동기화 effect가 미발동, 자식 콜라이더가 안 따라감. 플레이에서 움직일 건 개별 오브젝트를 대상으로. 이동한 솔리드 위에 선 캐릭터는 같이 안 실려감(텔레포트라 이동 플랫폼은 아님). ~~임베드는 E2 미지원~~ → **임베드도 전체 액션 지원**(아래 뷰어 통합 참고).
+- `move_object`: ~~**그룹 대상은 탐색 모드 전용**~~ **[완료 2026-07-10 — 그룹도 플레이 모드 이동, 아래 '최근 완료' 참고]**. 방식: `movedIds`(posOverride 대상) 배선 → 옮겨지는 그룹을 `MovedGroupCollider`(kinematicPosition hull 강체)로 라우팅해 콜라이더가 함께 이동. **제약(남음)**: 그룹 자식은 볼록 껍질(hull) 근사(오목 형상 두꺼워짐)·한번 옮긴 그룹은 이후 hull 콜라이더 유지(자식별 정밀 콜라이더→hull). 이동한 솔리드 위에 선 캐릭터는 같이 안 실려감(텔레포트라 이동 플랫폼은 아님·rapier 라이딩 미구현). 임베드도 ViewerClient 공유라 자동 지원.
 - `play_sound`: 오디오 URL 직접 입력만(AssetBrowser audio 탭 WIP). area 트리거는 브라우저 자동재생 정책에 막히면 무음(조용히 무시).
 - 인터랙션 힌트 링(2026-07-07 개선): **occlusion 적용** — `depthTest` 기본값(true)으로 앞 오브젝트가 뒤 오브젝트 링을 가림(엑스레이·겹침 문제 해결). 위치는 **GLB bbox 캐시(`glbLocalBboxCache`) 기반 실제 상단**(뷰어의 `GlbViewer`도 캐시 저장)으로 정확해짐, 캐시 없으면 스케일 근사. `InteractionHints`가 매 프레임 높이 갱신(GLB 늦은 로드 대응). 회전 미반영(근사). 그룹 자체엔 링 없음(자식 기준). 에디터 뷰포트엔 안 뜸(뷰어 전용).
 - 톤매핑 **Linear 전역 적용**: 저장 색을 정확히 렌더하지만 값>1 밝은 영역은 하드클립(부드러운 롤오프 없음). 밝은 HDR/강광 씬은 노출 슬라이더로 낮출 것. 기존 published 씬도 룩이 바뀜(더 진한 색).

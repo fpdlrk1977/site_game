@@ -1,7 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { ArrowLeftRight, User } from 'lucide-react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
+import {
+  ArrowLeftRight, User, ChevronDown, ChevronRight, RotateCcw, Combine, Download, X, Pencil, Play,
+  Sunrise, Sun, Sunset, Moon, Lightbulb, Flashlight, Flame, Wind, Sparkles, Snowflake,
+  Sprout, Mountain, Waves, Gem, Droplet, Palette, Music,
+  SlidersHorizontal, AlignCenter, Component, Grid2x2, CircleDot,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { MathUtils } from 'three';
 import * as THREE from 'three';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
@@ -278,7 +284,7 @@ function SectionHeader({
   onToggle,
 }: {
   title: string;
-  icon?: string;
+  icon?: ReactNode;
   hint?: string;
   isOpen?: boolean;
   onToggle?: () => void;
@@ -296,13 +302,13 @@ function SectionHeader({
         collapsible ? 'cursor-pointer hover:text-foreground hover:bg-surface/70 transition-colors' : ''
       }`}
     > */}
-      {icon && <span className="text-[12px] opacity-60 font-normal not-italic">{icon}</span>}
+      {icon && <span className="opacity-60 flex items-center">{icon}</span>}
       <span className="flex-1 text-foreground flex items-center gap-1.5">
         {title}
         {hint && <InfoHint text={hint} />}
       </span>
       {collapsible && (
-        <span className="text-muted/40 text-[10px]">{isOpen ? '▾' : '▸'}</span>
+        <span className="text-muted/40">{isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
       )}
     </div>
   );
@@ -434,19 +440,19 @@ function GlbClipPicker({ url, value, onChange }: { url: string; value: string; o
 // ── 분위기(Mood) 프리셋 ────────────────────────────────────────
 // 기존 씬 설정(HDR 프리셋 + 라이트 강도/태양 위치 + 노출)을 한 번에 세팅.
 // 클릭 시 updateEnvironment로 묶음 적용 — 개별 값은 이후 각 컨트롤에서 미세조정 가능.
-const MOOD_PRESETS: { id: string; label: string; emoji: string; env: Partial<EnvSchema> }[] = [
+const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<EnvSchema> }[] = [
   // 기본값 복귀 — HDR/라이트/노출을 DEFAULT_ENVIRONMENT 상태로 되돌린다(무드 해제).
-  { id: 'default', label: '기본', emoji: '↺', env: { hdrPreset: 'none', toneMappingExposure: 1,
+  { id: 'default', label: '기본', icon: RotateCcw, env: { hdrPreset: 'none', toneMappingExposure: 1,
     lights: { ambientIntensity: 0.6, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 }, directionalColor: '#ffffff', ambientColor: '#ffffff' } } },
-  { id: 'morning', label: '아침', emoji: '🌅', env: { hdrPreset: 'dawn', toneMappingExposure: 1.05,
+  { id: 'morning', label: '아침', icon: Sunrise, env: { hdrPreset: 'dawn', toneMappingExposure: 1.05,
     lights: { ambientIntensity: 0.55, directionalIntensity: 1.0, directionalPosition: { x: 8, y: 5, z: 6 }, directionalColor: '#ffe4c4', ambientColor: '#dfe8ff' } } },
-  { id: 'noon', label: '한낮', emoji: '☀️', env: { hdrPreset: 'park', toneMappingExposure: 1.0,
+  { id: 'noon', label: '한낮', icon: Sun, env: { hdrPreset: 'park', toneMappingExposure: 1.0,
     lights: { ambientIntensity: 0.6, directionalIntensity: 1.5, directionalPosition: { x: 4, y: 12, z: 4 }, directionalColor: '#fffaf0', ambientColor: '#ffffff' } } },
-  { id: 'sunset', label: '노을', emoji: '🌇', env: { hdrPreset: 'sunset', toneMappingExposure: 0.95,
+  { id: 'sunset', label: '노을', icon: Sunset, env: { hdrPreset: 'sunset', toneMappingExposure: 0.95,
     lights: { ambientIntensity: 0.5, directionalIntensity: 1.0, directionalPosition: { x: 10, y: 3, z: 2 }, directionalColor: '#ff9d5c', ambientColor: '#ffcfa8' } } },
-  { id: 'night', label: '밤', emoji: '🌙', env: { hdrPreset: 'night', toneMappingExposure: 0.85,
+  { id: 'night', label: '밤', icon: Moon, env: { hdrPreset: 'night', toneMappingExposure: 0.85,
     lights: { ambientIntensity: 0.3, directionalIntensity: 0.4, directionalPosition: { x: 3, y: 8, z: 5 }, directionalColor: '#9db4e8', ambientColor: '#4a5a80' } } },
-  { id: 'studio', label: '스튜디오', emoji: '💡', env: { hdrPreset: 'studio', toneMappingExposure: 1.0,
+  { id: 'studio', label: '스튜디오', icon: Lightbulb, env: { hdrPreset: 'studio', toneMappingExposure: 1.0,
     lights: { ambientIntensity: 0.7, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 }, directionalColor: '#ffffff', ambientColor: '#ffffff' } } },
 ];
 
@@ -517,6 +523,46 @@ function EnvironmentPanel() {
     } finally {
       setBoundaryTexUploading(false);
     }
+  };
+
+  // 경계 이미지 범용 업로더 — 면별 텍스처/스카이박스가 공유. 성공 시 public URL 반환.
+  const uploadBoundaryImage = async (file: File): Promise<string | null> => {
+    if (!projectId) return null;
+    if (file.size > 8 * 1024 * 1024) { addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error'); return null; }
+    try {
+      const supabase = createBrowserSupabase();
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const path = `boundary/${projectId}/tex_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+      const { error } = await supabase.storage.from('assets').upload(path, file, { contentType: file.type, upsert: true });
+      if (error) throw error;
+      return supabase.storage.from('assets').getPublicUrl(path).data.publicUrl;
+    } catch (err) {
+      addToast('이미지 업로드 실패', 'error'); console.error(err); return null;
+    }
+  };
+
+  // 면별 텍스처/스카이박스 업로드 대상 라우팅 — 단일 파일 입력을 target으로 공유.
+  const [bwUploadTarget, setBwUploadTarget] = useState<'front' | 'back' | 'left' | 'right' | 'skybox' | null>(null);
+  const [bwUploading, setBwUploading] = useState(false);
+  const bwUploadRef = useRef<HTMLInputElement>(null);
+  const triggerBwUpload = (target: 'front' | 'back' | 'left' | 'right' | 'skybox') => {
+    setBwUploadTarget(target);
+    bwUploadRef.current?.click();
+  };
+  const handleBwFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const target = bwUploadTarget;
+    setBwUploadTarget(null);
+    if (!file || !target) return;
+    setBwUploading(true);
+    const url = await uploadBoundaryImage(file);
+    setBwUploading(false);
+    if (!url) return;
+    const cur = env.boundaryWall ?? {};
+    if (target === 'skybox') updateEnvironment({ boundaryWall: { ...cur, skyboxUrl: url } });
+    else updateEnvironment({ boundaryWall: { ...cur, faceTextures: { ...(cur.faceTextures ?? {}), [target]: url } } });
+    pushHistory();
   };
 
   return (
@@ -604,20 +650,20 @@ function EnvironmentPanel() {
           <div className="px-3 pb-3 space-y-2">
             {/* 프리셋 */}
             {(() => {
-              const GROUND_PRESETS: { id: GroundPreset; label: string; emoji: string }[] = [
-                { id: 'grass',  label: '잔디', emoji: '🌿' },
-                { id: 'dirt',   label: '흙',   emoji: '🟤' },
-                { id: 'sand',   label: '모래', emoji: '🏖' },
-                { id: 'stone',  label: '돌',   emoji: '🪨' },
-                { id: 'water',  label: '물',   emoji: '💧' },
-                { id: 'custom', label: '직접', emoji: '🎨' },
+              const GROUND_PRESETS: { id: GroundPreset; label: string; icon: LucideIcon }[] = [
+                { id: 'grass',  label: '잔디', icon: Sprout },
+                { id: 'dirt',   label: '흙',   icon: Mountain },
+                { id: 'sand',   label: '모래', icon: Waves },
+                { id: 'stone',  label: '돌',   icon: Gem },
+                { id: 'water',  label: '물',   icon: Droplet },
+                { id: 'custom', label: '직접', icon: Palette },
               ];
               const current = env.ground!.preset ?? 'custom';
               return (
                 <SelectBox
                   value={current}
                   onChange={(v) => { updateEnvironment({ ground: { ...env.ground!, preset: v as GroundPreset } }); pushHistory(); }}
-                  options={GROUND_PRESETS.map(({ id, label, emoji }) => ({ value: id, label, icon: emoji }))}
+                  options={GROUND_PRESETS.map(({ id, label, icon: Icon }) => ({ value: id, label, icon: <Icon size={14} /> }))}
                 />
               );
             })()}
@@ -752,7 +798,7 @@ function EnvironmentPanel() {
               const m = MOOD_PRESETS.find((p) => p.id === id);
               if (m) { updateEnvironment(m.env); pushHistory(); setMoodSel(id); }
             }}
-            options={MOOD_PRESETS.map((m) => ({ value: m.id, label: `${m.emoji} ${m.label}` }))}
+            options={MOOD_PRESETS.map((m) => ({ value: m.id, label: m.label, icon: <m.icon size={14} /> }))}
             placeholder="무드 선택..."
           />
         </div>
@@ -1084,14 +1130,17 @@ function EnvironmentPanel() {
                   <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">벽 스타일</span>
                   <SelectBox
                     value={style}
-                    onChange={(v) => { setBw({ style: v as 'none' | 'color' | 'texture' }); pushHistory(); }}
+                    onChange={(v) => { setBw({ style: v as 'none' | 'color' | 'texture' | 'skybox' }); pushHistory(); }}
                     options={[
                       { value: 'none', label: '투명 (영역만)' },
                       { value: 'color', label: '단색 벽' },
                       { value: 'texture', label: '텍스처 벽' },
+                      { value: 'skybox', label: '스카이박스 (360° 파노라마)' },
                     ]}
                   />
                 </div>
+                {/* 면별/스카이박스 업로드 공용 파일 입력 */}
+                <input ref={bwUploadRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleBwFileUpload} />
                 {style === 'color' && (
                   <label className="flex items-center gap-2 text-[10px] text-muted/70">
                     <span className="shrink-0">색</span>
@@ -1134,9 +1183,55 @@ function EnvironmentPanel() {
                       className="hidden"
                       onChange={handleBoundaryTexUpload}
                     />
+                    {/* 면별 텍스처 — 지정한 면만 개별 이미지, 나머지는 위 기본 텍스처 사용 */}
+                    <span className="text-[10px] text-muted/50 block font-semibold tracking-wide pt-1">면별 텍스처 (선택)</span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {([['front', '앞'], ['back', '뒤'], ['left', '왼쪽'], ['right', '오른쪽']] as const).map(([face, label]) => {
+                        const url = bw.faceTextures?.[face];
+                        return (
+                          <div key={face} className="relative rounded-xs overflow-hidden border border-border group h-12 bg-surface">
+                            {url ? (
+                              <img src={url} alt={label} className="w-full h-full object-cover" />
+                            ) : (
+                              <button onClick={() => triggerBwUpload(face)} disabled={bwUploading}
+                                className="w-full h-full flex items-center justify-center text-[10px] text-muted hover:text-primary hover:bg-primary/5 transition-colors disabled:opacity-50">
+                                {label} +
+                              </button>
+                            )}
+                            {url && (
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
+                                <span className="absolute top-0.5 left-1 text-[9px] text-white/90 drop-shadow">{label}</span>
+                                <button onClick={() => triggerBwUpload(face)} className="bg-black/70 text-white rounded px-1.5 py-0.5 text-[9px] hover:bg-primary/80">교체</button>
+                                <button onClick={() => { setBw({ faceTextures: { ...bw.faceTextures, [face]: undefined } }); pushHistory(); }} className="bg-black/70 text-white rounded px-1.5 py-0.5 text-[9px] hover:bg-danger/80">×</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
-                {style !== 'none' && (
+                {style === 'skybox' && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">파노라마 이미지 (equirectangular 2:1)</span>
+                    {bw.skyboxUrl ? (
+                      <div className="relative rounded-xs overflow-hidden border border-border group">
+                        <img src={bw.skyboxUrl} alt="skybox" className="w-full h-16 object-cover" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                          <button onClick={() => triggerBwUpload('skybox')} className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-primary/80">교체</button>
+                          <button onClick={() => { setBw({ skyboxUrl: undefined }); pushHistory(); }} className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-danger/80">제거</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => triggerBwUpload('skybox')} disabled={bwUploading}
+                        className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 whitespace-pre-line">
+                        {bwUploading ? '업로드 중...' : '360° 파노라마 업로드\n좌우로 이어지는 equirectangular 이미지'}
+                      </button>
+                    )}
+                    <p className="text-[10px] text-muted/50">벽 대신 씬 전체를 감쌉니다. 4면 벽·천장 설정은 무시돼요.</p>
+                  </div>
+                )}
+                {(style === 'color' || style === 'texture') && (
                   <>
                     <div className="grid grid-cols-2 gap-2">
                       <LabeledNum label="높이" value={bw.height ?? 8}
@@ -1150,7 +1245,15 @@ function EnvironmentPanel() {
                       <Toggle value={bw.ceiling === true} onChange={(v) => { setBw({ ceiling: v }); pushHistory(); }} />
                       <span>천장 포함 (완전한 방)</span>
                     </label>
-                    <p className="text-[10px] text-muted/50">에디터엔 반투명 미리보기 · 실제 룩은 뷰어에서 확인</p>
+                    <label className="flex items-center gap-2 text-[10px] text-muted/70">
+                      <Toggle value={bw.gradient === true} onChange={(v) => { setBw({ gradient: v }); pushHistory(); }} />
+                      <span>그라데이션 (위로 갈수록 투명)</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[10px] text-muted/70">
+                      <Toggle value={bw.oneSided === true} onChange={(v) => { setBw({ oneSided: v }); pushHistory(); }} />
+                      <span>안쪽에서만 보이기 (밖에선 투명)</span>
+                    </label>
+                    <p className="text-[10px] text-muted/50">에디터엔 반투명 미리보기(양면) · 실제 룩은 뷰어에서 확인</p>
                   </>
                 )}
               </div>
@@ -1363,7 +1466,7 @@ function InspectorInner() {
           </div>
 
           {/* 일괄 편집 */}
-          <SectionHeader title="일괄 편집" icon="◈" />
+          <SectionHeader title="일괄 편집" icon={<SlidersHorizontal size={12} />} />
           <div className="px-3 py-3 space-y-3">
             {allHaveMaterial && (
               <div>
@@ -1397,14 +1500,14 @@ function InspectorInner() {
           </div>
 
           {/* 합치기(Merge) — 여러 프리미티브를 하나의 GLB 객체로 */}
-          <SectionHeader title="합치기" icon="⛶" />
+          <SectionHeader title="합치기" icon={<Combine size={12} />} />
           <div className="px-3 py-3 space-y-2">
             <button
               onClick={() => handleMerge(selectedIds)}
               disabled={merging}
-              className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
             >
-              {merging ? '합치는 중…' : '⛶ 하나로 합치기'}
+              {merging ? '합치는 중…' : <><Combine size={13} /> 하나로 합치기</>}
             </button>
             <p className="text-[10px] text-muted/50">선택한 프리미티브를 <b>진짜 하나의 객체</b>로 병합해 새 에셋으로 만들어요. 병합 후엔 개별 편집이 안 되며 되돌리기(Ctrl+Z)로 취소할 수 있어요. (GLB·콘텐츠·라이트는 병합 제외)</p>
           </div>
@@ -1430,7 +1533,7 @@ function InspectorInner() {
           )}
 
           {/* 정렬 */}
-          <SectionHeader title="정렬" icon="⊞" />
+          <SectionHeader title="정렬" icon={<AlignCenter size={12} />} />
           <div className="px-3 py-3 space-y-3">
             {(['x', 'y', 'z'] as const).map((axis) => (
               <div key={axis}>
@@ -1474,21 +1577,21 @@ function InspectorInner() {
               <button
                 onClick={() => { requestExport([], 'scene'); addToast('씬 전체 GLB 내보내기 시작', 'success'); }}
                 title="씬의 모든 오브젝트를 하나의 .glb 파일로 내보내기"
-                className="w-full py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all"
+                className="w-full py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all inline-flex items-center justify-center gap-1.5"
               >
-                ⬇ 씬 전체 GLB로 내보내기
+                <Download size={13} /> 씬 전체 GLB로 내보내기
               </button>
             </div>
           )}
           {!isCharSelected && prefabs.length > 0 && (
             <GroupBox>
-              <SectionHeader title="Prefab 라이브러리" icon="◇" hint="이 씬의 프리팹 원본 목록. '배치'를 누르면 새 인스턴스를 씬에 추가해요. 삭제하면 정의만 지워지고 이미 배치된 오브젝트는 독립 오브젝트로 남습니다." />
+              <SectionHeader title="Prefab 라이브러리" icon={<Component size={12} />} hint="이 씬의 프리팹 원본 목록. '배치'를 누르면 새 인스턴스를 씬에 추가해요. 삭제하면 정의만 지워지고 이미 배치된 오브젝트는 독립 오브젝트로 남습니다." />
               <div className="px-3 pb-4 space-y-1.5">
                 {prefabs.map((p) => {
                   const count = new Set(objects.filter((o) => o.prefabId === p.id).map((o) => o.prefabInstanceId)).size;
                   return (
                     <div key={p.id} className="flex items-center gap-1.5 bg-background border border-border rounded-xs px-2 py-1.5">
-                      <span className="text-[11px] text-foreground font-medium flex-1 truncate" title={p.name}>◇ {p.name}</span>
+                      <span className="text-[11px] text-foreground font-medium flex-1 truncate flex items-center gap-1.5" title={p.name}><Component size={12} className="shrink-0 text-muted" /> {p.name}</span>
                       <span className="text-[10px] text-muted shrink-0">{count}</span>
                       <button
                         onClick={() => { instantiatePrefab(p.id); addToast(`'${p.name}' 배치`, 'success'); }}
@@ -1499,9 +1602,9 @@ function InspectorInner() {
                       <button
                         onClick={() => { if (confirm(`'${p.name}' 프리팹 정의를 삭제할까요?\n이미 배치된 ${count}개 인스턴스는 독립 오브젝트로 남습니다.`)) { deletePrefab(p.id); addToast('프리팹 정의 삭제됨', 'success'); } }}
                         title="프리팹 정의 삭제(인스턴스는 유지)"
-                        className="px-1 py-0.5 rounded-xs text-muted hover:text-red-500 text-[11px] transition-colors shrink-0"
+                        className="px-1 py-0.5 rounded-xs text-muted hover:text-red-500 transition-colors shrink-0 flex items-center"
                       >
-                        ✕
+                        <X size={12} />
                       </button>
                     </div>
                   );
@@ -1901,7 +2004,7 @@ function InspectorInner() {
                   <SelectBox
                     value={audioAssets.some((a) => a.dracoUrl === newValue) ? newValue : ''}
                     onChange={setNewValue}
-                    options={audioAssets.map((a) => ({ value: a.dracoUrl, label: `🎵 ${a.name}` }))}
+                    options={audioAssets.map((a) => ({ value: a.dracoUrl, label: a.name, icon: <Music size={12} /> }))}
                     placeholder="업로드한 오디오 선택..."
                   />
                 )}
@@ -1913,7 +2016,7 @@ function InspectorInner() {
                   className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                   onKeyDown={(e) => e.key === 'Enter' && addEvent()}
                 />
-                <p className="text-muted/50 text-[10px]">트리거 발동 시 오디오를 재생합니다. Audio 탭에서 올린 파일을 고르거나 URL을 직접 넣을 수 있어요. ▶ 버튼으로 미리듣기.</p>
+                <p className="text-muted/50 text-[10px]">트리거 발동 시 오디오를 재생합니다. Audio 탭에서 올린 파일을 고르거나 URL을 직접 넣을 수 있어요. 재생 버튼으로 미리듣기.</p>
               </div>
             );
           }
@@ -2048,9 +2151,9 @@ function InspectorInner() {
           <button
             onClick={() => { requestExport(selectedIds.length > 0 ? selectedIds : [obj.id], obj.name || 'object'); addToast('GLB 내보내기 시작', 'success'); }}
             title="이 오브젝트를 .glb 파일로 내보내기(다운로드)"
-            className="shrink-0 h-[30px] px-2 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary text-[11px] transition-all"
+            className="shrink-0 h-[30px] px-2 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary text-[11px] transition-all inline-flex items-center gap-1"
           >
-            ⬇ GLB
+            <Download size={12} /> GLB
           </button>
         </div>
 
@@ -2077,7 +2180,7 @@ function InspectorInner() {
 
           return (
             <GroupBox>
-              <SectionHeader title="Prefab" icon="◇" hint="여러 오브젝트를 재사용 가능한 원본으로 묶어요. 원본을 고치면 모든 인스턴스가 함께 바뀌고(동기화), 인스턴스별로 값을 바꾸면 그 항목만 원본을 안 따릅니다(override)." />
+              <SectionHeader title="Prefab" icon={<Component size={12} />} hint="여러 오브젝트를 재사용 가능한 원본으로 묶어요. 원본을 고치면 모든 인스턴스가 함께 바뀌고(동기화), 인스턴스별로 값을 바꾸면 그 항목만 원본을 안 따릅니다(override)." />
               <div className="px-3 pb-4 space-y-2">
                 {!isInstance && canCreate && (
                   <>
@@ -2085,7 +2188,7 @@ function InspectorInner() {
                       onClick={() => { createPrefab(); addToast('프리팹으로 만들었어요', 'success'); }}
                       className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
                     >
-                      ◇ 프리팹으로 만들기
+<span className="inline-flex items-center gap-1.5"><Component size={13} /> 프리팹으로 만들기</span>
                     </button>
                     <p className="text-[10px] text-muted/50">이 오브젝트{obj.isGroup ? '(그룹)' : ''}를 원본으로 등록합니다. 이후 복제한 인스턴스는 원본 수정 시 함께 바뀌어요.</p>
                   </>
@@ -2093,7 +2196,7 @@ function InspectorInner() {
                 {isInstance && instanceRoot && (
                   <>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-primary font-semibold flex-1 truncate">◇ {prefabDef!.name}</span>
+                      <span className="text-[11px] text-primary font-semibold flex-1 truncate flex items-center gap-1.5"><Component size={12} className="shrink-0" /> {prefabDef!.name}</span>
                       <span className="text-[10px] text-muted shrink-0">인스턴스 {instanceCount}개</span>
                     </div>
                     {overrides.length > 0 ? (
@@ -2105,9 +2208,9 @@ function InspectorInner() {
                               key={g}
                               onClick={() => { revertInstance(instanceRoot.id, g); addToast(`'${OVERRIDE_LABELS[g]}' 원본으로 되돌림`, 'success'); }}
                               title="클릭하면 이 항목만 원본으로 되돌립니다"
-                              className="px-1.5 py-0.5 rounded-xs bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] hover:bg-amber-500/25 transition-colors cursor-pointer"
+                              className="px-1.5 py-0.5 rounded-xs bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] hover:bg-amber-500/25 transition-colors cursor-pointer inline-flex items-center gap-1"
                             >
-                              {OVERRIDE_LABELS[g]} ✕
+                              {OVERRIDE_LABELS[g]} <X size={10} />
                             </button>
                           ))}
                         </div>
@@ -2249,7 +2352,7 @@ function InspectorInner() {
           const setCfg = (patch: Partial<typeof cfg>) => updateCloner(obj.id, { ...cfg, ...patch });
           return (
             <GroupBox>
-              <SectionHeader title="Cloner (라이브)" icon="◎" hint="비파괴 배열 — 개수/간격/모드를 바꾸면 복제본이 실시간으로 다시 생성돼요. 소스(원본) 1개를 편집하면 모든 복제본에 반영됩니다. 복제본은 트리에서 클로너 그룹 아래에 뜹니다." />
+              <SectionHeader title="Cloner (라이브)" icon={<Grid2x2 size={12} />} hint="비파괴 배열 — 개수/간격/모드를 바꾸면 복제본이 실시간으로 다시 생성돼요. 소스(원본) 1개를 편집하면 모든 복제본에 반영됩니다. 복제본은 트리에서 클로너 그룹 아래에 뜹니다." />
               <div className="px-3 pb-4 space-y-2">
                 <div className="grid grid-cols-2 gap-1">
                   {(['linear', 'radial'] as const).map((m) => (
@@ -2335,7 +2438,7 @@ function InspectorInner() {
                 }}
                 className="w-full py-1.5 rounded-xs bg-background border border-border text-muted hover:text-foreground hover:bg-surface text-[11px] font-medium transition-colors"
               >
-                {arrayMode === 'radial' ? '◎' : '⊞'} 한 번 복제 ({arrayCount}개, 독립)
+<span className="inline-flex items-center gap-1.5">{arrayMode === 'radial' ? <CircleDot size={13} /> : <Grid2x2 size={13} />} 한 번 복제 ({arrayCount}개, 독립)</span>
               </button>
               {!obj.parentId && (
                 <button
@@ -2345,7 +2448,7 @@ function InspectorInner() {
                   }}
                   className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
                 >
-                  ◎ 라이브 클로너로 만들기 ({arrayCount}개)
+<span className="inline-flex items-center gap-1.5"><Grid2x2 size={13} /> 라이브 클로너로 만들기 ({arrayCount}개)</span>
                 </button>
               )}
               <p className="text-[10px] text-muted/50">
@@ -2550,10 +2653,10 @@ function InspectorInner() {
                   value={obj.particle.preset}
                   onChange={(v) => { updateObject(obj.id, { particle: { ...obj.particle!, preset: v as ParticlePreset } }); pushHistory(); }}
                   options={[
-                    { value: 'fire', label: '불꽃 (Fire)', icon: '🔥' },
-                    { value: 'dust', label: '먼지 (Dust)', icon: '💨' },
-                    { value: 'light', label: '빛 파티클 (Light)', icon: '✨' },
-                    { value: 'snow', label: '눈 (Snow)', icon: '❄️' },
+                    { value: 'fire', label: '불꽃 (Fire)', icon: <Flame size={14} /> },
+                    { value: 'dust', label: '먼지 (Dust)', icon: <Wind size={14} /> },
+                    { value: 'light', label: '빛 파티클 (Light)', icon: <Sparkles size={14} /> },
+                    { value: 'snow', label: '눈 (Snow)', icon: <Snowflake size={14} /> },
                   ]}
                 />
               </div>
@@ -2627,9 +2730,9 @@ function InspectorInner() {
                     value={obj.light.type}
                     onChange={(v) => { updateObject(obj.id, { light: { ...obj.light!, type: v as 'point' | 'spot' | 'directional' } }); pushHistory(); }}
                     options={[
-                      { value: 'point', label: 'Point Light', icon: '💡' },
-                      { value: 'spot', label: 'Spot Light', icon: '🔦' },
-                      { value: 'directional', label: 'Directional Light', icon: '☀️' },
+                      { value: 'point', label: 'Point Light', icon: <Lightbulb size={14} /> },
+                      { value: 'spot', label: 'Spot Light', icon: <Flashlight size={14} /> },
+                      { value: 'directional', label: 'Directional Light', icon: <Sun size={14} /> },
                     ]}
                   />
                 </div>
@@ -3050,22 +3153,22 @@ function InspectorInner() {
                         else if (ev.action === 'play_sound' && ev.value) { new Audio(ev.value).play().catch(() => addToast('오디오 재생 실패 — URL을 확인하세요', 'error')); }
                       }}
                       title="미리보기"
-                      className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                      className="text-muted/50 hover:text-primary w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
                     >
-                      ▶
+                      <Play size={12} />
                     </button>
                     <button
                       onClick={() => startEdit(ev)}
                       title="수정"
-                      className="text-muted/50 hover:text-primary text-[10px] w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                      className="text-muted/50 hover:text-primary w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
                     >
-                      ✎
+                      <Pencil size={12} />
                     </button>
                     <button
                       onClick={() => removeEvent(ev.id)}
-                      className="text-muted/40 hover:text-danger text-[11px] w-4 h-4 flex items-center justify-center rounded hover:bg-danger/10 transition-colors"
+                      className="text-muted/40 hover:text-danger w-4 h-4 flex items-center justify-center rounded hover:bg-danger/10 transition-colors"
                     >
-                      ✕
+                      <X size={12} />
                     </button>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { X, AlertTriangle, Sparkles, Link2, Image as ImageIcon } from 'lucide-react';
 import QRCode from 'qrcode';
 import { usePlan } from '@/hooks/usePlan';
 
@@ -66,7 +67,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
             <h3 className="text-sm font-bold text-foreground">{projectName}</h3>
             <p className="text-[11px] text-muted mt-0.5">3D 공간 공유하기</p>
           </div>
-          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors text-lg leading-none">✕</button>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors"><X size={18} /></button>
         </div>
 
         {/* 탭 */}
@@ -81,7 +82,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
                   : 'text-muted hover:text-foreground'
               }`}
             >
-              {t === 'share' ? '🔗 공유' : '🖼 임베드'}
+              <span className="inline-flex items-center gap-1.5">{t === 'share' ? <><Link2 size={13} /> 공유</> : <><ImageIcon size={13} /> 임베드</>}</span>
             </button>
           ))}
         </div>
@@ -90,7 +91,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
           {/* 비공개 경고 */}
           {!isPublished && (
             <div className="mb-4 px-3 py-2 rounded-xs bg-warning/10 border border-warning/30 text-warning text-xs flex items-center gap-2">
-              <span>⚠</span>
+              <AlertTriangle size={14} className="shrink-0" />
               현재 비공개입니다. 공개 전환 후 공유하세요.
             </div>
           )}
@@ -134,7 +135,7 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
               {!canEmbed ? (
                 /* Pro 플랜 배너 */
                 <div className="bg-gradient-to-br from-violet-600/20 to-cyan-600/20 border border-violet-500/30 rounded-xs p-4 text-center space-y-3">
-                  <div className="text-2xl">✨</div>
+                  <Sparkles size={24} className="mx-auto text-violet-400" />
                   <div>
                     <p className="text-foreground font-semibold text-sm">Pro 플랜 전용</p>
                     <p className="text-muted text-xs mt-1 leading-relaxed">

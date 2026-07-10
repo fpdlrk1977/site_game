@@ -30,6 +30,15 @@ import {
 import { regenerateCloner, clonerPlacement, DEFAULT_CLONER } from '@/lib/cloner';
 import type { ClonerConfig } from '@/types/scene';
 
+// 배치 모드 — add 버튼 클릭 시 즉시 생성하지 않고, 뷰포트에서 클릭한 위치에 생성한다.
+export type PendingPlacement =
+  | { kind: 'shape'; shape: PrimitiveShape }
+  | { kind: 'asset'; asset: AssetRefSchema }
+  | { kind: 'content'; contentType: ContentType }
+  | { kind: 'particle'; preset: ParticlePreset }
+  | { kind: 'light'; lightType: LightType };
+type PlaceXZ = { x: number; z: number };
+
 interface HistoryEntry {
   objects: ObjectNodeSchema[];
   environment: EnvSchema;
@@ -93,13 +102,18 @@ interface SceneActions {
   alignSelected: (axis: 'x' | 'y' | 'z', mode: 'min' | 'center' | 'max') => void;
   setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
   setTransformSpace: (space: 'world' | 'local') => void;
-  addObject: (shape: PrimitiveShape) => void;
+  addObject: (shape: PrimitiveShape, placeAt?: PlaceXZ) => void;
   /** 펜 툴 프로파일로 돌출/회전체 오브젝트 생성 */
   addProfileObject: (shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean) => void;
   addAsset: (asset: AssetRefSchema) => void;
-  addAssetObject: (asset: AssetRefSchema) => void;
-  addContentObject: (type: ContentType) => void;
-  addParticleObject: (preset: ParticlePreset) => void;
+  addAssetObject: (asset: AssetRefSchema, placeAt?: PlaceXZ) => void;
+  addContentObject: (type: ContentType, placeAt?: PlaceXZ) => void;
+  addParticleObject: (preset: ParticlePreset, placeAt?: PlaceXZ) => void;
+  /** 배치 모드 — 뷰포트 클릭 위치에 생성. begin=시작(고스트 따라다님), commit=클릭 위치에 생성, cancel=ESC 취소 */
+  pendingPlacement: PendingPlacement | null;
+  beginPlacement: (p: PendingPlacement) => void;
+  commitPlacement: (x: number, z: number) => void;
+  cancelPlacement: () => void;
   setSnap: (enabled: boolean, translate?: number, rotate?: number) => void;
   requestFocus: () => void;
   requestFocusAll: () => void;
@@ -154,7 +168,7 @@ interface SceneActions {
   copyObjectProperties: () => void;
   pasteObjectProperties: () => void;
   batchUpdateObjects: (ids: string[], patch: (obj: ObjectNodeSchema) => Partial<ObjectNodeSchema>) => void;
-  addLightObject: (type: LightType) => void;
+  addLightObject: (type: LightType, placeAt?: PlaceXZ) => void;
   removeAsset: (id: string) => void;
   /** 특정 에셋을 참조하는 오브젝트(+자손) 전부 삭제. 삭제된 개수 반환(연쇄 삭제용) */
   removeObjectsByAsset: (assetId: string) => number;
@@ -336,6 +350,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   past: [],
   future: [],
   cameraBookmarks: {},
+  pendingPlacement: null,
   bookmarkSaveRequest: null,
   bookmarkRecallRequest: null,
   copiedProperties: null,
@@ -379,8 +394,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   setTransformMode: (mode) => set({ transformMode: mode }),
   setTransformSpace: (space) => set({ transformSpace: space }),
 
-  addObject: (shape) => {
-    const obj = makeObject(shape);
+  addObject: (shape, placeAt) => {
+    let obj = makeObject(shape);
+    if (placeAt) obj = { ...obj, position: { ...obj.position, x: placeAt.x, z: placeAt.z } };
     const { objects, environment, past } = get();
     set({
       objects: [...objects, obj],
@@ -475,12 +491,26 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     }
   },
 
+  beginPlacement: (p) => set({ pendingPlacement: p }),
+  cancelPlacement: () => set({ pendingPlacement: null }),
+  commitPlacement: (x, z) => {
+    const p = get().pendingPlacement;
+    if (!p) return;
+    const at: PlaceXZ = { x, z };
+    if (p.kind === 'shape') get().addObject(p.shape, at);
+    else if (p.kind === 'asset') get().addAssetObject(p.asset, at);
+    else if (p.kind === 'content') get().addContentObject(p.contentType, at);
+    else if (p.kind === 'particle') get().addParticleObject(p.preset, at);
+    else if (p.kind === 'light') get().addLightObject(p.lightType, at);
+    set({ pendingPlacement: null });
+  },
+
   requestSaveBookmark: (slot) => set({ bookmarkSaveRequest: { slot, _tick: Date.now() } }),
   requestRecallBookmark: (slot) => set({ bookmarkRecallRequest: { slot, _tick: Date.now() } }),
   setCameraBookmark: (slot, position, target) =>
     set((s) => ({ cameraBookmarks: { ...s.cameraBookmarks, [slot]: { position, target } } })),
 
-  addContentObject: (type) => {
+  addContentObject: (type, placeAt) => {
     objectCounter += 1;
     const defaults = {
       text: { text: '텍스트를 입력하세요', fontSize: 0.5, color: '#ffffff', depth: 0.1 },
@@ -490,7 +520,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const obj = makeBaseObject({
       name: type === 'text' ? `텍스트 ${objectCounter}` : type === 'image' ? `이미지 ${objectCounter}` : `동영상 ${objectCounter}`,
       primitiveShape: 'plane',
-      position: { x: 0, y: 0.5, z: 0 },
+      position: { x: placeAt?.x ?? 0, y: 0.5, z: placeAt?.z ?? 0 },
       scale: type === 'video' ? { x: 16 / 9, y: 1, z: 1 } : { x: 2, y: 1, z: 1 },
       content: { type, ...defaults[type] },
     });
@@ -504,11 +534,12 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
-  addParticleObject: (preset) => {
+  addParticleObject: (preset, placeAt) => {
     objectCounter += 1;
     const PRESET_NAMES: Record<string, string> = { fire: '불꽃', dust: '먼지', light: '빛 파티클', snow: '눈' };
     const obj = makeBaseObject({
       name: `${PRESET_NAMES[preset] ?? '파티클'} ${objectCounter}`,
+      ...(placeAt ? { position: { x: placeAt.x, y: 0.5, z: placeAt.z } } : {}),
       particle: { preset },
     });
     const { objects, environment, past } = get();
@@ -551,10 +582,11 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     return allToDelete.size;
   },
 
-  addAssetObject: (asset) => {
+  addAssetObject: (asset, placeAt) => {
     objectCounter += 1;
     const obj = makeBaseObject({
       name: asset.name,
+      ...(placeAt ? { position: { x: placeAt.x, y: 0, z: placeAt.z } } : {}),
       assetId: asset.id,
     });
     const { objects, environment, past } = get();
@@ -1203,12 +1235,12 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
-  addLightObject: (type) => {
+  addLightObject: (type, placeAt) => {
     objectCounter += 1;
     const LIGHT_NAMES: Record<LightType, string> = { point: '포인트 라이트', spot: '스팟 라이트', directional: '방향 라이트' };
     const obj = makeBaseObject({
       name: `${LIGHT_NAMES[type]} ${objectCounter}`,
-      position: { x: 0, y: 3, z: 0 },
+      position: { x: placeAt?.x ?? 0, y: 3, z: placeAt?.z ?? 0 },
       light: { type, color: '#ffffff', intensity: 1, distance: 20, decay: 2, castShadow: false },
     });
     const { objects, environment, past } = get();

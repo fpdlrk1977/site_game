@@ -118,6 +118,44 @@ function MovingGroupCollider({ object, assets, onEvent, allObjects }: {
   );
 }
 
+// move_object로 옮겨지는(모션 없는) 그룹 — 그룹 전체를 하나의 kinematic 강체로 묶어 자식 콜라이더가
+// 함께 이동한다. 정적 GroupWithCollision은 자식 콜라이더가 부모 group 이동을 따라가지 않아
+// '유령 콜라이더'(시각만 미끄러지고 벽은 원래 자리)가 되던 것을 해결. posOverride로 매 프레임 갱신되는
+// object.position을 setNextKinematicTranslation으로 반영(회전/스케일은 이동 중 불변). hull 콜라이더 근사.
+const _mgPos = new THREE.Vector3();
+function MovedGroupCollider({ object, assets, onEvent, allObjects }: {
+  object: ObjectNodeSchema;
+  assets: ColliderAssets;
+  onEvent: ColliderOnEvent;
+  allObjects: ObjectNodeSchema[];
+}) {
+  const rbRef = useRef<RapierRigidBody>(null);
+  const baseRot: [number, number, number] = [object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD];
+  const baseScl: [number, number, number] = [object.scale.x, object.scale.y, object.scale.z];
+  const initPos: [number, number, number] = [object.position.x, object.position.y, object.position.z];
+  useFrame(() => {
+    const rb = rbRef.current;
+    if (!rb) return;
+    // object.position은 effectiveScene(posOverride)으로 매 프레임 갱신 — 최신 위치로 kinematic 구동.
+    _mgPos.set(object.position.x, object.position.y, object.position.z);
+    rb.setNextKinematicTranslation(_mgPos);
+  });
+  return (
+    <RigidBody
+      ref={rbRef}
+      type="kinematicPosition"
+      colliders="hull"
+      position={initPos}
+      rotation={baseRot}
+      userData={{ objectId: object.id }}
+    >
+      <group scale={baseScl}>
+        <ViewerObject object={object} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform noMotion />
+      </group>
+    </RigidBody>
+  );
+}
+
 function getColliderType(object: ObjectNodeSchema) {
   // GLB(산·바위 등 오목한 지형 포함)는 trimesh로 실제 메쉬 형태 그대로 충돌 처리.
   // hull(볼록 껍질)은 오목한 형태를 매끈하게 뭉개버려 절벽/급경사가 실제보다 완만한
@@ -225,13 +263,15 @@ interface Props {
   onInteractPromptChange?: (obj: ObjectNodeSchema | null) => void;
   /** 런타임 통과 가능(콜라이더 제거) 오브젝트 id 집합 — set_passable/toggle_collision */
   passableIds?: Set<string>;
+  /** move_object로 런타임 이동 중인 오브젝트 id 집합 — 그룹을 kinematic 강체로 라우팅(콜라이더 동반 이동) */
+  movedIds?: Set<string>;
   /** 플레이 모드 카메라 포커스 지점(월드+반경) — 있으면 팔로우 대신 대상 줌 */
   focusPoint?: { x: number; y: number; z: number; radius: number } | null;
   /** 캐릭터 이동 잠금 — 팝업·포커스 등 상호작용 진행 중 */
   movementLocked?: boolean;
 }
 
-export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, focusPoint, movementLocked }: Props) {
+export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, movedIds, focusPoint, movementLocked }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
@@ -257,6 +297,7 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
     .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z, range: effRange(o) }));
   // 런타임 통과(콜라이더 제거) 대상 — set_passable/toggle_collision. 시각은 유지하고 콜라이더만 뺀다(문 열림).
   const isPassable = (o: ObjectNodeSchema) => !!passableIds?.has(o.id);
+  const isMoved = (o: ObjectNodeSchema) => !!movedIds?.has(o.id);
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);
   // 그룹은 GroupWithCollision으로 처리: 자식 오브젝트 각각에 콜라이더 적용
@@ -266,11 +307,14 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   const isGroupMovingCollider = (o: ObjectNodeSchema) =>
     !!o.motion && o.motion.collider === true && o.motion.type !== 'pulse';
   const movingGroupColliders = allGroups.filter((o) => isGroupMovingCollider(o) && !isPassable(o));
-  // 모션 없는 그룹 → 기존 정적 GroupWithCollision(자식별 콜라이더). 통과 대상 제외(아래 movingGroups에서 시각만).
-  const groupObjects = allGroups.filter((o) => !o.motion && !isPassable(o));
+  // move_object로 옮겨지는(모션 없는) 그룹 → 하나의 kinematic 강체로 묶어 콜라이더까지 함께 이동(유령 콜라이더 방지).
+  //   모션 그룹은 위 movingGroupColliders/아래 movingGroups가 담당하므로 여기선 !motion만.
+  const movedGroups = allGroups.filter((o) => isMoved(o) && !o.motion && !isPassable(o));
+  // 모션 없는 그룹 → 기존 정적 GroupWithCollision(자식별 콜라이더). 통과·이동(move_object) 대상 제외.
+  const groupObjects = allGroups.filter((o) => !o.motion && !isPassable(o) && !isMoved(o));
   // 나머지 그룹 → 시각 전용(장식). ViewerObject로 렌더해 애니메이션/표시만, 콜라이더 없음.
   //   = 모션+콜라이더 미동반 그룹 + 통과 대상 그룹(모션·콜라이더 유무 무관). 여집합으로 잡아 누락 방지.
-  const movingGroups = allGroups.filter((o) => !movingGroupColliders.includes(o) && !groupObjects.includes(o));
+  const movingGroups = allGroups.filter((o) => !movingGroupColliders.includes(o) && !groupObjects.includes(o) && !movedGroups.includes(o));
   // 조상 체인 정보 — 자식이 숨은 그룹 아래인지, 움직이는 그룹(하나의 강체로 이동) 아래인지.
   //   움직이는 그룹의 자식은 그 그룹 강체에 실려 함께 이동하므로 개별 콜라이더 라우팅에서 제외한다.
   const ancestorInfo = (o: ObjectNodeSchema) => {
@@ -356,6 +400,11 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
       {/* 모션+콜라이더 그룹 — 하나의 kinematic 강체로 묶어 이동(진짜 장애물) */}
       {movingGroupColliders.map((obj) => (
         <MovingGroupCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* move_object로 옮겨지는 그룹 — kinematic 강체로 콜라이더까지 함께 이동 */}
+      {movedGroups.map((obj) => (
+        <MovedGroupCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
       {/* 모션 걸린 그룹(콜라이더 미동반) — 시각 전용, MotionGroup 애니메이션 유지 */}

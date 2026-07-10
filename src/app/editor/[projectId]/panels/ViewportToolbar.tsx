@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Save, History, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Save, History, ExternalLink, Hexagon } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
@@ -130,8 +130,8 @@ export function ViewportToolbar({ projectName }: Props) {
         </Tooltip>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="w-5 h-5 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold shadow-md shadow-primary/30">
-            ⬡
+          <div className="w-5 h-5 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-primary/30">
+            <Hexagon size={12} />
           </div>
           <span className="text-xs font-bold text-foreground hidden xl:block">Park3D</span>
         </div>

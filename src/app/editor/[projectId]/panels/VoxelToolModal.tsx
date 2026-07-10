@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
+import { Boxes, X, Plus, Minus } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { useToast } from '@/hooks/useToast';
@@ -170,8 +171,8 @@ export function VoxelToolModal() {
         style={panelPos ? { left: panelPos.x, top: panelPos.y } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
       >
         <div className="flex items-center justify-between mb-2.5 cursor-move select-none" onMouseDown={onHeaderDown}>
-          <span className="text-[13px] font-semibold text-foreground">🧊 복셀 — 큐브를 쌓아 만들기</span>
-          <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setOpen(false)} className="text-muted hover:text-foreground text-sm px-1 cursor-pointer">✕</button>
+          <span className="text-[13px] font-semibold text-foreground flex items-center gap-1.5"><Boxes size={14} /> 복셀 — 큐브를 쌓아 만들기</span>
+          <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setOpen(false)} className="text-muted hover:text-foreground px-1 cursor-pointer"><X size={15} /></button>
         </div>
 
         {/* 컨트롤 */}
@@ -190,9 +191,9 @@ export function VoxelToolModal() {
           <div className="w-px h-5 bg-border/60" />
           {/* 레이어 */}
           <span className="text-[11px] text-muted">높이 Y</span>
-          <button onClick={() => setLayer((l) => Math.max(0, l - 1))} className="w-6 h-6 rounded-xs bg-background text-muted hover:text-foreground text-sm">−</button>
+          <button onClick={() => setLayer((l) => Math.max(0, l - 1))} className="w-6 h-6 rounded-xs bg-background text-muted hover:text-foreground flex items-center justify-center"><Minus size={13} /></button>
           <span className="text-[11px] font-mono text-foreground w-5 text-center">{layer}</span>
-          <button onClick={() => setLayer((l) => l + 1)} className="w-6 h-6 rounded-xs bg-background text-muted hover:text-foreground text-sm">＋</button>
+          <button onClick={() => setLayer((l) => l + 1)} className="w-6 h-6 rounded-xs bg-background text-muted hover:text-foreground flex items-center justify-center"><Plus size={13} /></button>
           <button onClick={copyBelow} disabled={layer === 0 || below1.size === 0}
             className="px-2 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
             title="바로 아래층을 현재층에 그대로 복사(기둥·벽 쌓기)">아래 복사</button>

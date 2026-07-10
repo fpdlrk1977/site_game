@@ -10,6 +10,12 @@ import { uploadGlbBlob, uploadAudioFile, uploadImageTexture } from '@/lib/upload
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
 import type { AssetRefSchema, ContentType, ParticlePreset, LightType, HdrPreset, MaterialOverride } from '@/types/scene';
+import {
+  Package, PersonStanding, Music, Play, Square, X, Check, Plus, Type, Image as ImageIcon, Video,
+  Flame, Wind, Sparkles, Snowflake, Lightbulb, Flashlight, Sun,
+  Ban, Sunset, Sunrise, Moon, TreePine, Trees, Building2, Factory, Sofa, Landmark,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 type Tab = 'models' | 'character' | 'content' | 'particle' | 'lights' | 'materials' | 'textures' | 'hdr' | 'audio';
 
@@ -39,41 +45,41 @@ const MATERIAL_PRESETS: { id: string; label: string; mat: Pick<MaterialOverride,
 ];
 
 // HDR 환경(IBL + 배경) 프리셋 타일 — 씬 전역 hdrPreset을 설정. 'none'=끄기(단색/하늘로 복귀).
-const HDR_TILES: { id: HdrPreset; label: string; emoji: string; swatch: string }[] = [
-  { id: 'none',      label: '끄기',    emoji: '⛶',  swatch: 'linear-gradient(135deg,#e5e7eb,#cbd5e1)' },
-  { id: 'sunset',    label: 'Sunset',  emoji: '🌇', swatch: 'linear-gradient(135deg,#ff9d5c,#c2410c)' },
-  { id: 'dawn',      label: 'Dawn',    emoji: '🌅', swatch: 'linear-gradient(135deg,#fbc2eb,#a6c1ee)' },
-  { id: 'night',     label: 'Night',   emoji: '🌙', swatch: 'linear-gradient(135deg,#1e293b,#0f172a)' },
-  { id: 'forest',    label: 'Forest',  emoji: '🌲', swatch: 'linear-gradient(135deg,#4ade80,#166534)' },
-  { id: 'park',      label: 'Park',    emoji: '🌳', swatch: 'linear-gradient(135deg,#bbf7d0,#60a5fa)' },
-  { id: 'city',      label: 'City',    emoji: '🏙', swatch: 'linear-gradient(135deg,#94a3b8,#475569)' },
-  { id: 'warehouse', label: 'Factory', emoji: '🏭', swatch: 'linear-gradient(135deg,#a8a29e,#57534e)' },
-  { id: 'apartment', label: 'Indoor',  emoji: '🛋', swatch: 'linear-gradient(135deg,#fde9c8,#c8a97e)' },
-  { id: 'lobby',     label: 'Lobby',   emoji: '🏛', swatch: 'linear-gradient(135deg,#f1e4cf,#b0a184)' },
-  { id: 'studio',    label: 'Studio',  emoji: '💡', swatch: 'linear-gradient(135deg,#f8fafc,#cbd5e1)' },
+const HDR_TILES: { id: HdrPreset; label: string; icon: LucideIcon; swatch: string }[] = [
+  { id: 'none',      label: '끄기',    icon: Ban,       swatch: 'linear-gradient(135deg,#e5e7eb,#cbd5e1)' },
+  { id: 'sunset',    label: 'Sunset',  icon: Sunset,    swatch: 'linear-gradient(135deg,#ff9d5c,#c2410c)' },
+  { id: 'dawn',      label: 'Dawn',    icon: Sunrise,   swatch: 'linear-gradient(135deg,#fbc2eb,#a6c1ee)' },
+  { id: 'night',     label: 'Night',   icon: Moon,      swatch: 'linear-gradient(135deg,#1e293b,#0f172a)' },
+  { id: 'forest',    label: 'Forest',  icon: TreePine,  swatch: 'linear-gradient(135deg,#4ade80,#166534)' },
+  { id: 'park',      label: 'Park',    icon: Trees,     swatch: 'linear-gradient(135deg,#bbf7d0,#60a5fa)' },
+  { id: 'city',      label: 'City',    icon: Building2,  swatch: 'linear-gradient(135deg,#94a3b8,#475569)' },
+  { id: 'warehouse', label: 'Factory', icon: Factory,   swatch: 'linear-gradient(135deg,#a8a29e,#57534e)' },
+  { id: 'apartment', label: 'Indoor',  icon: Sofa,      swatch: 'linear-gradient(135deg,#fde9c8,#c8a97e)' },
+  { id: 'lobby',     label: 'Lobby',   icon: Landmark,  swatch: 'linear-gradient(135deg,#f1e4cf,#b0a184)' },
+  { id: 'studio',    label: 'Studio',  icon: Lightbulb, swatch: 'linear-gradient(135deg,#f8fafc,#cbd5e1)' },
 ];
 
-const CONTENT_ITEMS: { type: ContentType; label: string; emoji: string }[] = [
-  { type: 'text',  label: '텍스트', emoji: '𝐓' },
-  { type: 'image', label: '이미지', emoji: '🖼' },
-  { type: 'video', label: '동영상', emoji: '▶' },
+const CONTENT_ITEMS: { type: ContentType; label: string; icon: LucideIcon }[] = [
+  { type: 'text',  label: '텍스트', icon: Type },
+  { type: 'image', label: '이미지', icon: ImageIcon },
+  { type: 'video', label: '동영상', icon: Video },
 ];
 
-const PARTICLE_ITEMS: { preset: ParticlePreset; label: string; emoji: string }[] = [
-  { preset: 'fire',  label: '불꽃',   emoji: '🔥' },
-  { preset: 'dust',  label: '먼지',   emoji: '💨' },
-  { preset: 'light', label: '빛',     emoji: '✨' },
-  { preset: 'snow',  label: '눈',     emoji: '❄️' },
+const PARTICLE_ITEMS: { preset: ParticlePreset; label: string; icon: LucideIcon }[] = [
+  { preset: 'fire',  label: '불꽃',   icon: Flame },
+  { preset: 'dust',  label: '먼지',   icon: Wind },
+  { preset: 'light', label: '빛',     icon: Sparkles },
+  { preset: 'snow',  label: '눈',     icon: Snowflake },
 ];
 
-const LIGHT_ITEMS: { type: LightType; label: string; emoji: string }[] = [
-  { type: 'point',       label: '포인트',     emoji: '💡' },
-  { type: 'spot',        label: '스팟',       emoji: '🔦' },
-  { type: 'directional', label: '방향 라이트', emoji: '☀️' },
+const LIGHT_ITEMS: { type: LightType; label: string; icon: LucideIcon }[] = [
+  { type: 'point',       label: '포인트',     icon: Lightbulb },
+  { type: 'spot',        label: '스팟',       icon: Flashlight },
+  { type: 'directional', label: '방향 라이트', icon: Sun },
 ];
 
 export function AssetBrowser() {
-  const { projectId, assets, environment, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset, removeObjectsByAsset, updateEnvironment, updateObject, pushHistory } = useSceneStore();
+  const { projectId, assets, environment, addAsset, beginPlacement, removeAsset, removeObjectsByAsset, updateEnvironment, updateObject, pushHistory } = useSceneStore();
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -340,8 +346,8 @@ export function AssetBrowser() {
                 title="glb 선택 시 텍스처 이미지 파일도 함께(Ctrl/Cmd로 다중 선택) 고르면 자동으로 파일에 포함됩니다"
               />
               {filteredModels.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} icon="📦"
-                  onAdd={() => addAssetObject(asset)}
+                <AssetCard key={asset.id} asset={asset} icon={Package}
+                  onAdd={() => beginPlacement({ kind: 'asset', asset })}
                   onDelete={() => deleteAsset(asset)}
                   deleting={deletingId === asset.id}
                 />
@@ -366,7 +372,7 @@ export function AssetBrowser() {
                 title="glb 선택 시 텍스처 이미지 파일도 함께(Ctrl/Cmd로 다중 선택) 고르면 자동으로 파일에 포함됩니다"
               />
               {characterAssets.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} icon="🧍"
+                <AssetCard key={asset.id} asset={asset} icon={PersonStanding}
                   onDelete={() => deleteAsset(asset)}
                   deleting={deletingId === asset.id}
                 />
@@ -382,13 +388,13 @@ export function AssetBrowser() {
 
         {tab === 'content' && (
           <div className="grid grid-cols-2 gap-2">
-            {CONTENT_ITEMS.map(({ type, label, emoji }) => (
+            {CONTENT_ITEMS.map(({ type, label, icon: Icon }) => (
               <button
                 key={type}
-                onClick={() => addContentObject(type)}
+                onClick={() => beginPlacement({ kind: 'content', contentType: type })}
                 className="h-[72px] rounded-xs bg-background border border-border hover:border-border/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
               >
-                <span className="text-xl leading-none">{emoji}</span>
+                <Icon size={20} className="text-muted" />
                 <span className="text-[9px] text-muted">{label}</span>
               </button>
             ))}
@@ -397,13 +403,13 @@ export function AssetBrowser() {
 
         {tab === 'particle' && (
           <div className="grid grid-cols-2 gap-2">
-            {PARTICLE_ITEMS.map(({ preset, label, emoji }) => (
+            {PARTICLE_ITEMS.map(({ preset, label, icon: Icon }) => (
               <button
                 key={preset}
-                onClick={() => addParticleObject(preset)}
+                onClick={() => beginPlacement({ kind: 'particle', preset })}
                 className="h-[72px] rounded-xs bg-background border border-border hover:border-primary/60 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
               >
-                <span className="text-xl leading-none">{emoji}</span>
+                <Icon size={20} className="text-muted" />
                 <span className="text-[9px] text-muted">{label}</span>
               </button>
             ))}
@@ -412,13 +418,13 @@ export function AssetBrowser() {
 
         {tab === 'lights' && (
           <div className="grid grid-cols-2 gap-2">
-            {LIGHT_ITEMS.map(({ type, label, emoji }) => (
+            {LIGHT_ITEMS.map(({ type, label, icon: Icon }) => (
               <button
                 key={type}
-                onClick={() => addLightObject(type)}
+                onClick={() => beginPlacement({ kind: 'light', lightType: type })}
                 className="h-[72px] rounded-xs bg-background border border-border hover:border-yellow-500/40 hover:bg-surface transition-all flex flex-col items-center justify-center gap-1.5"
               >
-                <span className="text-xl leading-none">{emoji}</span>
+                <Icon size={20} className="text-muted" />
                 <span className="text-[9px] text-muted text-center leading-snug">{label}</span>
               </button>
             ))}
@@ -433,7 +439,7 @@ export function AssetBrowser() {
               disabled={uploading}
               className="w-full h-10 rounded-xs border-2 border-dashed border-border flex items-center justify-center gap-1.5 text-muted hover:border-primary hover:text-primary transition-all text-[11px] disabled:opacity-40 disabled:cursor-not-allowed mb-2"
             >
-              {uploading ? <span className="animate-pulse">업로드 중…</span> : <><span className="text-base leading-none">+</span> 오디오 업로드 (mp3·wav·ogg)</>}
+              {uploading ? <span className="animate-pulse">업로드 중…</span> : <><Plus size={15} /> 오디오 업로드 (mp3·wav·ogg)</>}
             </button>
             <div className="space-y-1.5">
               {audioAssets.map((asset) => (
@@ -506,9 +512,9 @@ export function AssetBrowser() {
                     style={{ background: tile.swatch }}
                     title={`환경(HDR): ${tile.label}`}
                   >
-                    <span className="text-lg leading-none drop-shadow">{tile.emoji}</span>
+                    <tile.icon size={18} className="text-white drop-shadow" />
                     <span className="text-[9px] text-white font-medium drop-shadow px-1 py-0.5 rounded-sm bg-black/25">{tile.label}</span>
-                    {active && <span className="absolute top-1 right-1 text-[10px] text-white bg-primary rounded-full w-4 h-4 flex items-center justify-center">✓</span>}
+                    {active && <span className="absolute top-1 right-1 text-white bg-primary rounded-full w-4 h-4 flex items-center justify-center"><Check size={10} /></span>}
                   </button>
                 );
               })}
@@ -535,7 +541,7 @@ function UploadButton({ uploading, onClick, label = '.glb', title }: { uploading
         <span className="text-xs animate-pulse">...</span>
       ) : (
         <>
-          <span className="text-xl leading-none">+</span>
+          <Plus size={18} />
           <span className="text-[9px]">{label}</span>
         </>
       )}
@@ -558,19 +564,19 @@ function AudioRow({ asset, onDelete, deleting }: { asset: AssetRefSchema; onDele
     <div className="flex items-center gap-2 bg-background border border-border rounded-xs px-2 py-1.5">
       <button
         onClick={toggle}
-        className="w-6 h-6 shrink-0 rounded-full bg-primary/15 text-primary hover:bg-primary/25 flex items-center justify-center text-[11px] transition-colors"
+        className="w-6 h-6 shrink-0 rounded-full bg-primary/15 text-primary hover:bg-primary/25 flex items-center justify-center transition-colors"
         title={playing ? '정지' : '미리듣기'}
       >
-        {playing ? '■' : '▶'}
+        {playing ? <Square size={11} /> : <Play size={11} />}
       </button>
-      <span className="flex-1 text-[11px] text-foreground truncate" title={asset.name}>🎵 {asset.name}</span>
+      <span className="flex-1 text-[11px] text-foreground truncate flex items-center gap-1.5" title={asset.name}><Music size={12} className="shrink-0 text-muted" /> {asset.name}</span>
       <button
         onClick={onDelete}
         disabled={deleting}
-        className="w-5 h-5 shrink-0 rounded-sm text-muted hover:text-red-500 flex items-center justify-center text-[11px] transition-colors disabled:opacity-40"
+        className="w-5 h-5 shrink-0 rounded-sm text-muted hover:text-red-500 flex items-center justify-center transition-colors disabled:opacity-40"
         title="삭제"
       >
-        {deleting ? '…' : '✕'}
+        {deleting ? '…' : <X size={12} />}
       </button>
     </div>
   );
@@ -600,18 +606,18 @@ function TextureCard({ asset, onApply, onDelete, deleting }: {
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
         disabled={deleting}
-        className="absolute top-1 right-1 w-5 h-5 rounded-sm bg-background/70 text-muted hover:text-red-500 flex items-center justify-center text-[11px] opacity-0 group-hover:opacity-100 transition-all disabled:opacity-40 z-10"
+        className="absolute top-1 right-1 w-5 h-5 rounded-sm bg-background/70 text-muted hover:text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all disabled:opacity-40 z-10"
         title="삭제"
       >
-        {deleting ? '…' : '✕'}
+        {deleting ? '…' : <X size={12} />}
       </button>
     </div>
   );
 }
 
-function AssetCard({ asset, icon, onAdd, onDelete, deleting }: {
+function AssetCard({ asset, icon: Icon, onAdd, onDelete, deleting }: {
   asset: AssetRefSchema;
-  icon: string;
+  icon: LucideIcon;
   onAdd?: () => void;
   onDelete?: () => void;
   deleting?: boolean;
@@ -639,7 +645,7 @@ function AssetCard({ asset, icon, onAdd, onDelete, deleting }: {
         </>
       ) : (
         <>
-          <span className="text-2xl leading-none">{icon}</span>
+          <Icon size={26} className="text-muted" />
           <span className="text-[9px] text-muted truncate w-full text-center px-1">{asset.name}</span>
         </>
       )}
@@ -658,10 +664,10 @@ function AssetCard({ asset, icon, onAdd, onDelete, deleting }: {
       {onDelete && !confirmDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
-          className="absolute top-1 right-1 w-5 h-5 rounded-sm bg-background/80 text-muted hover:bg-danger hover:text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center text-[10px] leading-none"
+          className="absolute top-1 right-1 w-5 h-5 rounded-sm bg-background/80 text-muted hover:bg-danger hover:text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center"
           title="삭제"
         >
-          ✕
+          <X size={11} />
         </button>
       )}
 

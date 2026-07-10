@@ -213,6 +213,8 @@ interface Props {
   dialogueNonce?: number;
   /** 런타임 통과 가능(콜라이더 제거) 오브젝트 id 집합 — set_passable/toggle_collision */
   passableIds?: Set<string>;
+  /** move_object로 런타임 이동 중인 오브젝트 id 집합 — 그룹 콜라이더 동반 이동 라우팅 */
+  movedIds?: Set<string>;
   /** 플레이 모드 카메라 포커스 대상 objectId — focus_object가 플레이에서 발동됐을 때 */
   playFocusId?: string | null;
   /** 캐릭터 이동 잠금 — 팝업·포커스 등 상호작용 진행 중 */
@@ -251,7 +253,7 @@ function InitialFit({ objects, orbitRef }: {
   return null;
 }
 
-export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, playFocusId, movementLocked }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked }: Props) {
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
   const orbitRef = useRef<OrbitControlsImpl>(null);
@@ -417,7 +419,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* ── 플레이 모드 ── */}
       {playMode && (
         <Suspense fallback={null}>
-          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} focusPoint={playFocusPoint} movementLocked={movementLocked} />
+          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} movedIds={movedIds} focusPoint={playFocusPoint} movementLocked={movementLocked} />
         </Suspense>
       )}
 

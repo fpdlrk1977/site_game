@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { createProject } from './actions';
 
 export function NewProjectButton() {
@@ -59,7 +60,7 @@ export function NewProjectButton() {
                   disabled={pending}
                   className="flex-1 py-2.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold text-sm transition-all disabled:opacity-50"
                 >
-                  {pending ? '생성 중...' : '만들기 →'}
+                  {pending ? '생성 중...' : <span className="inline-flex items-center gap-1.5">만들기 <ArrowRight size={14} /></span>}
                 </button>
               </div>
             </form>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { useSceneStore } from '@/store/sceneStore';
 import { normalizeSceneData } from '@/types/scene';
@@ -76,7 +77,7 @@ export function VersionHistoryModal({ onClose }: Props) {
       <div className="relative bg-surface border border-border rounded-2xl w-full max-w-sm shadow-modal overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground">버전 히스토리</h3>
-          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors">✕</button>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors"><X size={16} /></button>
         </div>
 
         <div className="max-h-96 overflow-y-auto">

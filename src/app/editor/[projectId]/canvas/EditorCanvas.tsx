@@ -18,29 +18,94 @@ import { DefaultEnvironment } from "@/components/three/DefaultEnvironment";
 import { SceneToneMapping } from "@/components/three/SceneToneMapping";
 import { BoundaryWalls } from "@/components/three/BoundaryWalls";
 import { CharacterPreview } from "./CharacterPreview";
+import { FolderOpen } from "lucide-react";
 import type { Vector3 as Vec3, HdrPreset } from "@/types/scene";
 
 function BoundaryGizmo({ sizeX, sizeZ }: { sizeX: number; sizeZ: number }) {
   const bx = sizeX;
   const bz = sizeZ;
   const H = 8;
-  const positions = useMemo(() => new Float32Array([
-    // 바닥 사각형
-    -bx, 0.02, -bz,   bx, 0.02, -bz,
-     bx, 0.02, -bz,   bx, 0.02,  bz,
-     bx, 0.02,  bz,  -bx, 0.02,  bz,
-    -bx, 0.02,  bz,  -bx, 0.02, -bz,
-    // 모서리 기둥
-    -bx, 0, -bz,  -bx, H, -bz,
-     bx, 0, -bz,   bx, H, -bz,
-     bx, 0,  bz,   bx, H,  bz,
-    -bx, 0,  bz,  -bx, H,  bz,
-    // 상단 사각형
-    -bx, H, -bz,   bx, H, -bz,
-     bx, H, -bz,   bx, H,  bz,
-     bx, H,  bz,  -bx, H,  bz,
-    -bx, H,  bz,  -bx, H, -bz,
-  ]), [bx, bz]);
+  const positions = useMemo(
+    () =>
+      new Float32Array([
+        // 바닥 사각형
+        -bx,
+        0.02,
+        -bz,
+        bx,
+        0.02,
+        -bz,
+        bx,
+        0.02,
+        -bz,
+        bx,
+        0.02,
+        bz,
+        bx,
+        0.02,
+        bz,
+        -bx,
+        0.02,
+        bz,
+        -bx,
+        0.02,
+        bz,
+        -bx,
+        0.02,
+        -bz,
+        // 모서리 기둥
+        -bx,
+        0,
+        -bz,
+        -bx,
+        H,
+        -bz,
+        bx,
+        0,
+        -bz,
+        bx,
+        H,
+        -bz,
+        bx,
+        0,
+        bz,
+        bx,
+        H,
+        bz,
+        -bx,
+        0,
+        bz,
+        -bx,
+        H,
+        bz,
+        // 상단 사각형
+        -bx,
+        H,
+        -bz,
+        bx,
+        H,
+        -bz,
+        bx,
+        H,
+        -bz,
+        bx,
+        H,
+        bz,
+        bx,
+        H,
+        bz,
+        -bx,
+        H,
+        bz,
+        -bx,
+        H,
+        bz,
+        -bx,
+        H,
+        -bz,
+      ]),
+    [bx, bz],
+  );
   return (
     <lineSegments>
       <bufferGeometry>
@@ -89,13 +154,23 @@ function InitialFit({ orbitRef }: { orbitRef: React.RefObject<OrbitControlsImpl 
     lastTick.current = sceneLoadTick;
     const roots = objects.filter((o) => o.visible && o.parentId === null);
     if (roots.length === 0) return; // 빈 씬 → fit 안 함
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
     for (const o of roots) {
-      minX = Math.min(minX, o.position.x); maxX = Math.max(maxX, o.position.x);
-      minY = Math.min(minY, o.position.y); maxY = Math.max(maxY, o.position.y);
-      minZ = Math.min(minZ, o.position.z); maxZ = Math.max(maxZ, o.position.z);
+      minX = Math.min(minX, o.position.x);
+      maxX = Math.max(maxX, o.position.x);
+      minY = Math.min(minY, o.position.y);
+      maxY = Math.max(maxY, o.position.y);
+      minZ = Math.min(minZ, o.position.z);
+      maxZ = Math.max(maxZ, o.position.z);
     }
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+    const cx = (minX + maxX) / 2,
+      cy = (minY + maxY) / 2,
+      cz = (minZ + maxZ) / 2;
     const spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
     orbit.target.set(cx, cy, cz);
     orbit.object.position.set(cx + spread * 0.8, cy + spread * 0.6, cz + spread * 0.8);
@@ -105,6 +180,28 @@ function InitialFit({ orbitRef }: { orbitRef: React.RefObject<OrbitControlsImpl 
 }
 
 type SelBox = { left: number; top: number; width: number; height: number };
+
+// 배치 모드 고스트 — 마우스 커서(바닥)를 따라다니는 단순 반투명 플레이스홀더 + 바닥 링.
+function PlacementGhost({ posRef }: { posRef: React.MutableRefObject<THREE.Vector3> }) {
+  const pending = useSceneStore((s) => s.pendingPlacement);
+  const groupRef = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (groupRef.current) groupRef.current.position.copy(posRef.current);
+  });
+  if (!pending) return null;
+  return (
+    <group ref={groupRef}>
+      <mesh position={[0, 0.5, 0]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="#7c3aed" transparent opacity={0.3} depthWrite={false} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <ringGeometry args={[0.55, 0.72, 40]} />
+        <meshBasicMaterial color="#7c3aed" transparent opacity={0.85} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
 
 // 그룹 격리 스코프 진입 시 상단 배너 — 사용자가 "그룹 안에서 편집 중"임을 알리고 나가기 제공.
 function GroupScopeIndicator() {
@@ -116,18 +213,26 @@ function GroupScopeIndicator() {
   useEffect(() => {
     if (!groupScope) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setGroupScope(null); selectObject(null); }
+      if (e.key === "Escape") {
+        setGroupScope(null);
+        selectObject(null);
+      }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [groupScope, setGroupScope, selectObject]);
 
   if (!groupScope) return null;
   return (
     <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-full bg-primary/90 text-white text-[11px] px-3 py-1 shadow-lg backdrop-blur pointer-events-auto">
-      <span className="font-medium">◲ 그룹 편집 중{name ? ` — ${name}` : ''}</span>
+      <span className="font-medium flex items-center gap-1.5">
+        <FolderOpen size={13} /> 그룹 편집 중{name ? ` — ${name}` : ""}
+      </span>
       <button
-        onClick={() => { setGroupScope(null); selectObject(null); }}
+        onClick={() => {
+          setGroupScope(null);
+          selectObject(null);
+        }}
         className="rounded-full bg-white/20 hover:bg-white/30 px-2 py-0.5 transition-colors cursor-pointer"
       >
         나가기 (Esc)
@@ -138,16 +243,26 @@ function GroupScopeIndicator() {
 
 // 박스(단위) 8꼭짓점 중 한 축만 다른 12개 엣지(인덱스: x=i&1, y=i&2, z=i&4)
 const BOX_EDGE_PAIRS: [number, number][] = [
-  [0, 1], [2, 3], [4, 5], [6, 7], // x
-  [0, 2], [1, 3], [4, 6], [5, 7], // y
-  [0, 4], [1, 5], [2, 6], [3, 7], // z
+  [0, 1],
+  [2, 3],
+  [4, 5],
+  [6, 7], // x
+  [0, 2],
+  [1, 3],
+  [4, 6],
+  [5, 7], // y
+  [0, 4],
+  [1, 5],
+  [2, 6],
+  [3, 7], // z
 ];
 
 // 선택 오버레이 (Canvas 내부, 별도 레이어) — 오브젝트 렌더는 건드리지 않는다.
 //  ① 드래그 미리보기: 드래그 중 박스에 '닿는' 오브젝트들에 연보라 와이어프레임(닿기 선택과 일치)
 //  ② 선택 바운더리: 2개 이상 선택 시 전체를 감싸는 청록 바운딩 박스(무엇이 선택됐는지 한눈에)
 function SelectionOverlay({
-  dragRectRef, isDraggingRef,
+  dragRectRef,
+  isDraggingRef,
 }: {
   dragRectRef: React.MutableRefObject<{ x1: number; y1: number; x2: number; y2: number } | null>;
   isDraggingRef: React.MutableRefObject<boolean>;
@@ -161,7 +276,9 @@ function SelectionOverlay({
     // updateMatrix()로 행렬에 합성돼야 실제 박스가 union 영역을 따라간다(false면 원점 단위박스로 고정되는 버그).
     const h = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color("#22d3ee"));
     const m = h.material as THREE.LineBasicMaterial;
-    m.transparent = true; m.opacity = 0.9; m.depthTest = false;
+    m.transparent = true;
+    m.opacity = 0.9;
+    m.depthTest = false;
     h.renderOrder = 999;
     h.visible = false;
     return h;
@@ -172,7 +289,9 @@ function SelectionOverlay({
     g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
     const m = new THREE.LineBasicMaterial({ color: "#a78bfa", transparent: true, opacity: 0.9, depthTest: false });
     const ls = new THREE.LineSegments(g, m);
-    ls.renderOrder = 999; ls.frustumCulled = false; ls.visible = false;
+    ls.renderOrder = 999;
+    ls.frustumCulled = false;
+    ls.visible = false;
     return ls;
   }, []);
 
@@ -212,22 +331,30 @@ function SelectionOverlay({
 
     // ① 드래그 미리보기 (드래그 중일 때만)
     const rect = isDraggingRef.current ? dragRectRef.current : null;
-    if (!rect) { preview.visible = false; return; }
+    if (!rect) {
+      preview.visible = false;
+      return;
+    }
     const verts: number[] = [];
     for (const obj of objects) {
       if (obj.locked || !obj.visible || obj.isGroup) continue;
       const b = worldBBox(objects, assets, obj.id);
       if (!b || b.isEmpty()) continue;
       const cs: THREE.Vector3[] = [];
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
       for (let i = 0; i < 8; i++) {
         const v = new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z);
         cs.push(v);
         const p = v.clone().project(camera);
         const sx = (p.x * 0.5 + 0.5) * size.width;
         const sy = (-p.y * 0.5 + 0.5) * size.height;
-        minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
-        minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+        minX = Math.min(minX, sx);
+        maxX = Math.max(maxX, sx);
+        minY = Math.min(minY, sy);
+        maxY = Math.max(maxY, sy);
       }
       if (minX <= rect.x2 && maxX >= rect.x1 && minY <= rect.y2 && maxY >= rect.y1) {
         for (const [a, c] of BOX_EDGE_PAIRS) {
@@ -235,7 +362,10 @@ function SelectionOverlay({
         }
       }
     }
-    if (verts.length === 0) { preview.visible = false; return; }
+    if (verts.length === 0) {
+      preview.visible = false;
+      return;
+    }
     preview.visible = true;
     preview.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(verts), 3));
     preview.geometry.computeBoundingSphere();
@@ -262,6 +392,12 @@ export function EditorCanvas() {
   const dragRectRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [selBox, setSelBox] = useState<SelBox | null>(null);
 
+  // 배치 모드 — 뷰포트에서 바닥(y=0)에 레이캐스트해 고스트를 마우스로 따라다니게 하고, 클릭 위치에 생성.
+  const placeGhostPosRef = useRef(new THREE.Vector3());
+  const placeRaycaster = useRef(new THREE.Raycaster());
+  const groundPlaneRef = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
+  const justPlacedRef = useRef(false); // 배치 직후 onPointerMissed의 선택 해제를 1회 무시
+
   const {
     environment,
     assets,
@@ -274,7 +410,33 @@ export function EditorCanvas() {
     bookmarkSaveRequest,
     bookmarkRecallRequest,
     setCameraBookmark,
+    pendingPlacement,
   } = useSceneStore();
+
+  // 포인터 이벤트 → 바닥 평면(y=0) 교차점(월드 좌표). 씬 오브젝트와 무관하게 항상 계산.
+  const groundPointFromEvent = useCallback((e: { clientX: number; clientY: number }): THREE.Vector3 | null => {
+    const cam = cameraRef.current;
+    const wr = wrapperRef.current;
+    if (!cam || !wr) return null;
+    const rect = wr.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    placeRaycaster.current.setFromCamera(ndc, cam);
+    const pt = new THREE.Vector3();
+    return placeRaycaster.current.ray.intersectPlane(groundPlaneRef.current, pt) ? pt : null;
+  }, []);
+
+  // ESC로 배치 취소
+  useEffect(() => {
+    if (!pendingPlacement) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        useSceneStore.getState().cancelPlacement();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pendingPlacement]);
 
   useEffect(() => {
     if (!focusTarget || !orbitRef.current) return;
@@ -310,7 +472,6 @@ export function EditorCanvas() {
     orbitRef.current.update();
   }, [focusAllRequest, objects]);
 
-
   // Focus Selected (F키 / 더블클릭) — 선택 오브젝트(들)로 orbit pivot 이동 + 거리 맞춤(시점 방향 유지).
   // 라이브 ref로 정확한 월드 bbox를 구해 프레이밍 → 확대 시 줌/패닝이 답답하던 문제 해소(pivot이 대상에 붙음).
   useEffect(() => {
@@ -321,7 +482,10 @@ export function EditorCanvas() {
     const tmp = new THREE.Box3();
     for (const id of ids) {
       const o3 = objectRefsRef.current.get(id);
-      if (o3) { tmp.setFromObject(o3); if (!tmp.isEmpty()) box.union(tmp); }
+      if (o3) {
+        tmp.setFromObject(o3);
+        if (!tmp.isEmpty()) box.union(tmp);
+      }
     }
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3());
@@ -341,12 +505,14 @@ export function EditorCanvas() {
   // .glb 내보내기 — 라이브 Three 객체(refs)를 클론해 GLTFExporter로 export 후 다운로드.
   useEffect(() => {
     if (!exportRequest) return;
-    const ids = exportRequest.ids.length > 0
-      ? exportRequest.ids
-      : useSceneStore.getState().objects.filter((o) => !o.parentId && o.visible).map((o) => o.id);
-    const objs3d = ids
-      .map((id) => objectRefsRef.current.get(id))
-      .filter((o): o is THREE.Object3D => !!o);
+    const ids =
+      exportRequest.ids.length > 0
+        ? exportRequest.ids
+        : useSceneStore
+            .getState()
+            .objects.filter((o) => !o.parentId && o.visible)
+            .map((o) => o.id);
+    const objs3d = ids.map((id) => objectRefsRef.current.get(id)).filter((o): o is THREE.Object3D => !!o);
     if (objs3d.length === 0) return;
     exportObjectsToGlb(objs3d, exportRequest.name).catch(() => {});
   }, [exportRequest]);
@@ -358,15 +524,28 @@ export function EditorCanvas() {
     const { view } = cameraViewRequest;
     // deps에 objects를 넣으면 오브젝트 이동 때마다 카메라가 튀므로 fire 시점에 getState로 읽는다
     const objs = useSceneStore.getState().objects.filter((o) => o.visible && !o.parentId);
-    let cx = 0, cy = 0, cz = 0, spread = 8;
+    let cx = 0,
+      cy = 0,
+      cz = 0,
+      spread = 8;
     if (objs.length > 0) {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      let minX = Infinity,
+        maxX = -Infinity,
+        minY = Infinity,
+        maxY = -Infinity,
+        minZ = Infinity,
+        maxZ = -Infinity;
       for (const o of objs) {
-        minX = Math.min(minX, o.position.x); maxX = Math.max(maxX, o.position.x);
-        minY = Math.min(minY, o.position.y); maxY = Math.max(maxY, o.position.y);
-        minZ = Math.min(minZ, o.position.z); maxZ = Math.max(maxZ, o.position.z);
+        minX = Math.min(minX, o.position.x);
+        maxX = Math.max(maxX, o.position.x);
+        minY = Math.min(minY, o.position.y);
+        maxY = Math.max(maxY, o.position.y);
+        minZ = Math.min(minZ, o.position.z);
+        maxZ = Math.max(maxZ, o.position.z);
       }
-      cx = (minX + maxX) / 2; cy = (minY + maxY) / 2; cz = (minZ + maxZ) / 2;
+      cx = (minX + maxX) / 2;
+      cy = (minY + maxY) / 2;
+      cz = (minZ + maxZ) / 2;
       spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
     }
     const d = spread * 1.4; // 전체 맞춤과 비슷한 프레이밍
@@ -402,6 +581,19 @@ export function EditorCanvas() {
   }, []);
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // 배치 모드: 좌클릭(비-ctrl) = 클릭 위치에 생성. ctrl+좌/우클릭은 카메라 조작으로 통과.
+    if (useSceneStore.getState().pendingPlacement) {
+      if (e.button === 0 && !e.ctrlKey) {
+        const pt = groundPointFromEvent(e);
+        if (pt) {
+          useSceneStore.getState().commitPlacement(pt.x, pt.z);
+          justPlacedRef.current = true;
+        }
+        // 배치 클릭이 OrbitControls 좌드래그 회전으로 새지 않도록 잠깐 비활성화(pointerUp의 resetDrag가 복구)
+        if (orbitRef.current) orbitRef.current.enabled = false;
+      }
+      return;
+    }
     if (e.button !== 0) return;
     // Ctrl+drag → orbit (let OrbitControls handle it)
     // Object/gizmo hit → orbit/transform (let three.js handle it)
@@ -417,6 +609,12 @@ export function EditorCanvas() {
   }, []);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // 배치 모드: 고스트를 바닥 커서 위치로 갱신(선택 박스 로직은 건너뜀)
+    if (useSceneStore.getState().pendingPlacement) {
+      const pt = groundPointFromEvent(e);
+      if (pt) placeGhostPosRef.current.copy(pt);
+      return;
+    }
     if (!dragStartRef.current) return;
     const dx = e.clientX - dragStartRef.current.x;
     const dy = e.clientY - dragStartRef.current.y;
@@ -454,7 +652,10 @@ export function EditorCanvas() {
     };
 
     const cam = cameraRef.current;
-    if (!cam) { resetDrag(); return; }
+    if (!cam) {
+      resetDrag();
+      return;
+    }
     const box = new THREE.Box3();
     const corner = new THREE.Vector3();
 
@@ -465,19 +666,20 @@ export function EditorCanvas() {
 
       // 오브젝트의 월드 바운딩박스를 화면에 투영 → 스크린 AABB
       box.setFromObject(obj3d);
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
       if (!box.isEmpty()) {
         for (let i = 0; i < 8; i++) {
-          corner.set(
-            i & 1 ? box.max.x : box.min.x,
-            i & 2 ? box.max.y : box.min.y,
-            i & 4 ? box.max.z : box.min.z,
-          );
+          corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
           corner.project(cam);
           const sx = (corner.x * 0.5 + 0.5) * wr.width;
           const sy = (-corner.y * 0.5 + 0.5) * wr.height;
-          minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
-          minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+          minX = Math.min(minX, sx);
+          maxX = Math.max(maxX, sx);
+          minY = Math.min(minY, sy);
+          maxY = Math.max(maxY, sy);
         }
       } else {
         // 폴백: bbox가 없으면(빈 오브젝트) 원점 한 점
@@ -506,7 +708,7 @@ export function EditorCanvas() {
     <ObjectRefsContext.Provider value={objectRefsRef}>
       <div
         ref={wrapperRef}
-        style={{ position: "relative", width: "100%", height: "100%" }}
+        style={{ position: "relative", width: "100%", height: "100%", cursor: pendingPlacement ? "crosshair" : undefined }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -518,6 +720,12 @@ export function EditorCanvas() {
           camera={{ position: [9, 7, 13], fov: 60 }}
           gl={{ preserveDrawingBuffer: true, toneMapping: THREE.LinearToneMapping }}
           onPointerMissed={() => {
+            // 배치 직후엔 새로 생성·선택된 오브젝트를 해제하지 않도록 1회 무시
+            if (justPlacedRef.current) {
+              justPlacedRef.current = false;
+              return;
+            }
+            if (useSceneStore.getState().pendingPlacement) return;
             if (!isDraggingRef.current) {
               useSceneStore.getState().selectObject(null);
               useSceneStore.getState().setGroupScope(null); // 빈 곳 클릭 → 그룹 격리 스코프 해제
@@ -557,11 +765,11 @@ export function EditorCanvas() {
           {/* fill 광을 낮춰 방향광 그림자를 더 진하게. ambient/hemisphere가 그림자를 씻어내므로
               fill 기여를 줄인다(ambient는 저장값의 0.35배, hemisphere 0.04). */}
           <hemisphereLight args={["#b9d5ff", "#4a5568", 0.02]} />
-          <ambientLight intensity={environment.lights.ambientIntensity * 0.2} color={environment.lights.ambientColor ?? '#ffffff'} />
+          <ambientLight intensity={environment.lights.ambientIntensity * 0.2} color={environment.lights.ambientColor ?? "#ffffff"} />
           <directionalLight
             position={[environment.lights.directionalPosition.x, environment.lights.directionalPosition.y, environment.lights.directionalPosition.z]}
             intensity={environment.lights.directionalIntensity}
-            color={environment.lights.directionalColor ?? '#ffffff'}
+            color={environment.lights.directionalColor ?? "#ffffff"}
             castShadow
             shadow-mapSize={[2048, 2048]}
             shadow-bias={-0.0004}
@@ -597,12 +805,15 @@ export function EditorCanvas() {
           {/* 선택 오버레이 — 드래그 미리보기 + 선택 묶음 바운더리 (오브젝트 렌더 미변경) */}
           <SelectionOverlay dragRectRef={dragRectRef} isDraggingRef={isDraggingRef} />
 
-          {(environment.boundary ?? 0) > 0 && (
-            <BoundaryGizmo sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} />
-          )}
+          {(environment.boundary ?? 0) > 0 && <BoundaryGizmo sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} />}
           {/* 경계 벽 미리보기 — editor=true라 반투명으로 편집을 덜 가림. 실제 룩은 뷰어에서 확인 */}
           {(environment.boundary ?? 0) > 0 && environment.boundaryWall && (
-            <BoundaryWalls sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} config={environment.boundaryWall} editor />
+            <BoundaryWalls
+              sizeX={environment.boundary!}
+              sizeZ={environment.boundaryZ ?? environment.boundary!}
+              config={environment.boundaryWall}
+              editor
+            />
           )}
 
           {environment.ground?.enabled && (
@@ -631,6 +842,8 @@ export function EditorCanvas() {
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 
+          <PlacementGhost posRef={placeGhostPosRef} />
+
           <PostProcessingEffects preset={environment.postProcessing?.preset ?? "none"} />
 
           <OrbitControls
@@ -654,6 +867,17 @@ export function EditorCanvas() {
             }}
           />
         </Canvas>
+
+        {/* 배치 모드 안내 배너 */}
+        {pendingPlacement && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-primary text-white text-[11px] rounded-xs shadow-floating">
+              <span>클릭해서 배치</span>
+              <span className="opacity-70">·</span>
+              <span className="opacity-90">ESC 취소</span>
+            </div>
+          </div>
+        )}
 
         <GroupScopeIndicator />
 

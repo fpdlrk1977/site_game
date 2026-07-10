@@ -1,23 +1,29 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
+import {
+  Box, Circle, Cylinder, Cone, Hexagon, Square, Folder, Type, Image as ImageIcon, Play,
+  Package, Sparkles, Grid2x2, CircleDot, ChevronDown, ChevronRight,
+  Eye, EyeOff, Lock, Unlock, Pencil, Copy, X, Ungroup,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useSceneStore, isDescendant } from '@/store/sceneStore';
 import type { ObjectNodeSchema } from '@/types/scene';
 
 type DropPos = 'before' | 'after' | 'inside';
 
-const SHAPE_ICONS: Record<string, string> = {
-  box: '⬛', sphere: '⬤', cylinder: '⬭', plane: '▬',
+const SHAPE_ICONS: Record<string, LucideIcon> = {
+  box: Box, sphere: Circle, cylinder: Cylinder, plane: Square, frustum: Cone, loft: Hexagon,
 };
 
-function getIcon(obj: ObjectNodeSchema) {
-  if (obj.clonerClone) return '▹';    // 클로너가 생성한 복제본
-  if (obj.clonerConfig) return '◎';   // 클로너 그룹
-  if (obj.isGroup) return '📁';
-  if (obj.content) return obj.content.type === 'text' ? '𝐓' : obj.content.type === 'image' ? '🖼' : '▶';
-  if (obj.assetId) return '📦';
-  if (obj.particle) return '✨';
-  return SHAPE_ICONS[obj.primitiveShape ?? ''] ?? '○';
+function getIcon(obj: ObjectNodeSchema): LucideIcon {
+  if (obj.clonerClone) return CircleDot;   // 클로너가 생성한 복제본
+  if (obj.clonerConfig) return Grid2x2;     // 클로너 그룹
+  if (obj.isGroup) return Folder;
+  if (obj.content) return obj.content.type === 'text' ? Type : obj.content.type === 'image' ? ImageIcon : Play;
+  if (obj.assetId) return Package;
+  if (obj.particle) return Sparkles;
+  return SHAPE_ICONS[obj.primitiveShape ?? ''] ?? Circle;
 }
 
 function buildFlatList(
@@ -138,20 +144,16 @@ function HierarchyItem({
           >
             <button
               onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-              className="w-4 h-4 flex items-center justify-center text-[9px] text-muted hover:text-foreground transition-colors rounded"
+              className="w-4 h-4 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded"
             >
-              {isExpanded ? '▾' : '▸'}
+              {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </button>
           </span>
         )}
 
         {/* 오브젝트 아이콘 */}
-        <span
-          // style={{ marginLeft: !hasChildren && depth === 0 ? 8 : 0 }}
-          // className={`text-[11px] w-4 text-center shrink-0 ${isSelected ? 'opacity-90' : 'opacity-50'}`}
-          className={`text-[11px] w-4 text-center shrink-0`}
-        >
-          {getIcon(obj)}
+        <span className="w-4 flex items-center justify-center shrink-0 text-muted">
+          {(() => { const I = getIcon(obj); return <I size={13} />; })()}
         </span>
 
         {/* 이름 */}
@@ -181,14 +183,14 @@ function HierarchyItem({
             className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${!obj.visible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             title={obj.visible ? '숨기기' : '표시'}
           >
-            <span className="text-[10px]">{obj.visible ? '👁' : '🙈'}</span>
+            {obj.visible ? <Eye size={13} /> : <EyeOff size={13} />}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setObjectLocked(obj.id, !obj.locked); pushHistory(); }}
             className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${obj.locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             title={obj.locked ? '잠금 해제' : '잠금'}
           >
-            <span className="text-[10px]">{obj.locked ? '🔒' : '🔓'}</span>
+            {obj.locked ? <Lock size={13} /> : <Unlock size={13} />}
           </button>
         </div>
       </div>
@@ -203,7 +205,7 @@ function HierarchyItem({
                 onClick={() => { setMenuOpen(false); setEditing(true); }}
                 className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
               >
-                <span className="text-muted">✏</span> 이름 변경
+                <Pencil size={13} className="text-muted" /> 이름 변경
               </button>
             )}
             {obj.isGroup && (
@@ -211,7 +213,7 @@ function HierarchyItem({
                 onClick={() => { ungroupSelected(); setMenuOpen(false); }}
                 className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
               >
-                <span className="text-muted">⊞</span> 그룹 해제
+                <Ungroup size={13} className="text-muted" /> 그룹 해제
                 <span className="ml-auto text-muted/60 text-[10px]">⌃⇧G</span>
               </button>
             )}
@@ -219,7 +221,7 @@ function HierarchyItem({
               onClick={() => { duplicateSelected(); setMenuOpen(false); }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
-              <span className="text-muted">⎘</span> 복제
+              <Copy size={13} className="text-muted" /> 복제
               <span className="ml-auto text-muted/60 text-[10px]">⌃D</span>
             </button>
             <div className="border-t border-border my-1" />
@@ -227,7 +229,7 @@ function HierarchyItem({
               onClick={() => { deleteSelected(); setMenuOpen(false); }}
               className="w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-background transition-colors flex items-center gap-2"
             >
-              <span>✕</span> 삭제
+              <X size={13} /> 삭제
               <span className="ml-auto text-muted/60 text-[10px]">Del</span>
             </button>
           </div>

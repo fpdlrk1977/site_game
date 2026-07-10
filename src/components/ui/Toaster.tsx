@@ -1,5 +1,6 @@
 'use client';
 
+import { X, Check, Info } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 
 export function Toaster() {
@@ -20,15 +21,15 @@ export function Toaster() {
               : 'bg-surface/90 border border-border/60 text-foreground'
           }`}
         >
-          <span>
-            {t.type === 'error' ? '✕' : t.type === 'success' ? '✓' : 'ℹ'}
+          <span className="shrink-0">
+            {t.type === 'error' ? <X size={15} /> : t.type === 'success' ? <Check size={15} /> : <Info size={15} />}
           </span>
           {t.message}
           <button
             onClick={() => removeToast(t.id)}
-            className="ml-2 opacity-50 hover:opacity-100 transition-opacity text-xs"
+            className="ml-2 opacity-50 hover:opacity-100 transition-opacity"
           >
-            ✕
+            <X size={13} />
           </button>
         </div>
       ))}

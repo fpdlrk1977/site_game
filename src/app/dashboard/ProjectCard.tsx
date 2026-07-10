@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { MoreHorizontal, SquarePen, Pencil, Copy, Share2, Globe, Lock, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { deleteProject, duplicateProject, renameProject, togglePublish } from './actions';
 import { ShareModal } from './ShareModal';
@@ -107,8 +108,8 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
           <img src={project.thumbnail_url} alt={project.name} className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-muted/20 flex items-center justify-center text-3xl opacity-50 group-hover:opacity-70 transition-opacity">
-              🌐
+            <div className="w-16 h-16 rounded-2xl bg-muted/20 flex items-center justify-center text-muted opacity-50 group-hover:opacity-70 transition-opacity">
+              <Globe size={30} />
             </div>
             <div className="absolute inset-0 bg-gradient-to-br from-violet-900/10 to-cyan-900/10" />
           </div>
@@ -168,7 +169,7 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
             onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
             className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all opacity-0 group-hover:opacity-100"
           >
-            ···
+            <MoreHorizontal size={16} />
           </button>
           {menuOpen && (
             <div className="absolute right-0 bottom-full mb-1 w-40 bg-surface border border-border rounded-xs shadow-dropdown overflow-hidden z-10 py-1">
@@ -176,39 +177,39 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
                 href={`/editor/${project.id}`}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
-                <span>✏️</span> 편집하기
+                <SquarePen size={15} className="text-muted" /> 편집하기
               </Link>
               <button
                 onClick={() => { setMenuOpen(false); setRenaming(true); }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
-                <span>✏</span> 이름 변경
+                <Pencil size={15} className="text-muted" /> 이름 변경
               </button>
               <button
                 onClick={handleDuplicate}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
-                <span>📄</span> 복제
+                <Copy size={15} className="text-muted" /> 복제
               </button>
               {project.default_scene_id && (
                 <button
                   onClick={() => { setMenuOpen(false); setSharing(true); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
                 >
-                  <span>🔗</span> 공유하기
+                  <Share2 size={15} className="text-muted" /> 공유하기
                 </button>
               )}
               <button
                 onClick={() => { setMenuOpen(false); setDomainOpen(true); }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
-                <span>🌐</span> 커스텀 도메인
+                <Globe size={15} className="text-muted" /> 커스텀 도메인
               </button>
               <button
                 onClick={() => { setMenuOpen(false); togglePublish(project.id, !project.is_published); }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-background transition-colors"
               >
-                <span>{project.is_published ? '🔒' : '🌐'}</span>
+                <span className="text-muted flex items-center">{project.is_published ? <Lock size={15} /> : <Globe size={15} />}</span>
                 {project.is_published ? '비공개로 전환' : '공개 배포'}
               </button>
               <div className="border-t border-border my-1" />
@@ -216,7 +217,7 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
                 onClick={handleDelete}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-background transition-colors"
               >
-                <span>🗑</span> 삭제
+                <Trash2 size={15} /> 삭제
               </button>
             </div>
           )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { X, Sparkles, CircleCheck, Globe } from 'lucide-react';
 import { setCustomDomain } from './actions';
 import { usePlan } from '@/hooks/usePlan';
 
@@ -67,21 +68,21 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
       <div className="relative bg-surface border border-border rounded-2xl w-full max-w-md shadow-modal overflow-hidden">
         {/* 헤더 */}
         <div className="px-5 py-4 border-b border-border flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xs bg-primary/20 flex items-center justify-center text-base">
-            🌐
+          <div className="w-8 h-8 rounded-xs bg-primary/20 flex items-center justify-center text-primary">
+            <Globe size={16} />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-foreground">커스텀 도메인</h2>
             <p className="text-[11px] text-muted truncate">{projectName}</p>
           </div>
-          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors text-lg leading-none">✕</button>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors"><X size={18} /></button>
         </div>
 
         <div className="px-5 py-5 space-y-4">
           {!canCustomDomain ? (
             /* Pro 플랜 업그레이드 배너 */
             <div className="bg-gradient-to-br from-violet-600/20 to-cyan-600/20 border border-violet-500/30 rounded-xs p-4 text-center space-y-3">
-              <div className="text-2xl">✨</div>
+              <Sparkles size={24} className="mx-auto text-violet-400" />
               <div>
                 <p className="text-foreground font-semibold text-sm">Pro 플랜 전용</p>
                 <p className="text-muted text-xs mt-1 leading-relaxed">
@@ -95,7 +96,7 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
             </div>
           ) : success ? (
             <div className="py-6 text-center">
-              <div className="text-3xl mb-3">✅</div>
+              <CircleCheck size={30} className="mx-auto mb-3 text-emerald-500" />
               <p className="text-foreground font-semibold">저장됐어요</p>
             </div>
           ) : (
