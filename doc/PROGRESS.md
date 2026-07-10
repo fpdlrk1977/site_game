@@ -121,6 +121,16 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **자동차 예시 달성 경로**: 둥근 박스(몸체) + 각뿔대/실린더(바퀴) → 색·재질 → 그룹/프리팹 → motion(spin) 굴리기, 또는 Boolean 빼기로 바퀴 자리 구멍, Merge로 하나의 객체화. "만들고·조합하고·움직이는" 흐름이 코드로 완성됨.
 - **미착수(스코프 밖/후속)**: 유선형 자유곡면(서브디비전 박스모델링) · GLB 대상 Merge/Boolean · 텍스처 UV · loft 원형 단면 옵션 · 대칭(mirror) 편집.
 
+## 최근 완료 (2026-07-10) — 제작 도구 확장 (Export / Cloner / 펜 툴)
+
+인앱 모델링 스코프 완료 후 사용자 신뢰 하에 우선순위대로 4종 추가 구현. **신규 lib 2개**(`exportGlb.ts`·`cloner.ts`), 신규 패널(`PenToolModal.tsx`).
+
+- **①.glb Export**: `src/lib/exportGlb.ts` `exportObjectsToGlb(objects3d, fileName)` — 라이브 Three 객체를 그룹으로 복제 → `GLTFExporter`(binary) → 브라우저 다운로드. 스토어 `requestExport`/`exportRequest`(요청-틱 패턴)로 `EditorCanvas` useEffect 핸들러가 현재 선택/전체를 굽는다. 만든 씬을 .glb로 반출.
+- **②Radial cloner / ③Live parametric cloner (`src/lib/cloner.ts`)**: `DEFAULT_CLONER`·`clonerPlacement(cfg, i)`(linear/radial)·`regenerateCloner(objects, clonerGroupId, cfg)`(clonerClone 자식 제거→소스를 placement(0)로→i=1..count-1 클론 재생성, 그룹은 idMap 서브트리 복제). 스토어 `makeCloner(config?)`·`updateCloner`(파라미터 바꾸면 라이브 재생성)·`arraySelected(count, offset, radial?)`. **Array(1회 복제) vs 라이브 클로너(파라미터 유지·재생성) 구분** — 버튼 라벨 '한 번 복제'/'라이브 클로너'. `ObjectNodeSchema.clonerConfig`/`clonerClone` 태그.
+- **④Extrude/Lathe 펜 툴 (`PenToolModal.tsx` + `primitiveGeometry.ts`)**: 2D로 그려 3D 생성. **돌출(Extrude)**=단면 폐곡선을 두께로 밀어 기둥, **회전체(Lathe)**=축 오른쪽 반쪽 프로파일을 360° 회전(도자기/컵). 스토어 `addProfileObject(shape, profile, extrudeDepth, closed)` → `PrimitiveShape 'extrude'|'lathe'` + `PrimitiveGeom.profile/profileClosed/extrudeDepth`. 팩토리 `makeExtrude`/`makeLathe`. 기능: 첫 점 클릭으로 닫기(포토샵식)·격자 스냅(중앙축 기준)·Catmull-Rom 스무딩·다중 점 드래그 이동·Ctrl+Z 점 취소·Delete 선택점 삭제. 툴바 ✏ + 커맨드팔레트 '펜 툴'로 오픈(`setPenToolOpen`).
+  - **펜 툴 팝업 UX (2026-07-10)**: **헤더 드래그로 이동 + 뒤 overlay 제거**(씬 보며 작업 — 에디터 작업 팝업만 해당, 확인/공유 모달은 overlay 유지). 드래그 중에만 뜨는 투명 캡처 레이어로 마우스 추적, ✕/Esc로만 닫힘(바깥 클릭 닫기 없음). **돌출↔회전체 탭 전환 시 전체 지우기**(`switchMode` — 두 모드 그리기 방식이 달라 이전 점 이어그리기 방지).
+- **검증**: tsc 클린. **브라우저 실동작 확인 완료(사용자 — 펜 툴 그리기·닫기·탭전환·스냅·다중드래그·팝업 드래그 이동 정상)**. Export/Cloner 실동작은 사용자 확인 완료 표기.
+
 ## ✅ 브라우저 실동작 확인 완료 (2026-07-10, 사용자 일괄 검증)
 
 아래 항목 전부 브라우저 실동작 확인됨 — 개별 항목 본문의 "브라우저 확인 필요" 표기는 이 확인으로 해소:

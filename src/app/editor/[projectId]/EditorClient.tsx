@@ -109,7 +109,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       if (e.code === 'KeyW') setTransformMode('translate');
       if (e.code === 'KeyE') setTransformMode('rotate');
       if (e.code === 'KeyR') setTransformMode('scale');
-      if (e.shiftKey && e.code === 'KeyF') { requestFocusAll(); return; }
+      if (e.shiftKey && e.code === 'KeyF') { requestFocusAll(); return; } // 전체 맞춤(모든 오브젝트가 화면에 꽉 차게)
       if (e.code === 'KeyF') requestFocusSelected(); // 선택물로 프레이밍(pivot 이동 + 거리 맞춤)
       if (e.shiftKey && e.code === 'KeyD') { e.preventDefault(); duplicateInPlace(); return; }
       if (e.code === 'Numpad7') { e.preventDefault(); requestCameraView('top'); return; }

@@ -245,7 +245,7 @@ function SectionHeader({
   const collapsible = onToggle !== undefined;
   return (
     <div
-      // onClick={onToggle}
+      onClick={onToggle}
       className={`flex items-center gap-2 px-3 py-3 text-[11px] font-semibold text-muted tracking-wide bg-surface/40 select-none`}
     >
 
@@ -260,9 +260,9 @@ function SectionHeader({
         {title}
         {hint && <InfoHint text={hint} />}
       </span>
-      {/* {collapsible && (
+      {collapsible && (
         <span className="text-muted/40 text-[10px]">{isOpen ? '▾' : '▸'}</span>
-      )} */}
+      )}
     </div>
   );
 }

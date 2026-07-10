@@ -221,6 +221,36 @@ interface Props {
 
 const EMPTY_CLIPS: Record<string, ClipReq> = {};
 
+// 탐색 모드 진입 시 1회 자동 전체 맞춤 — 저장한 공간을 다시 열 때 카메라가 너무 가깝지 않도록
+// 모든 루트 오브젝트가 화면에 들어오는 뷰로 시작(에디터 Shift+F 전체 맞춤과 동일 기준).
+function InitialFit({ objects, orbitRef }: {
+  objects: ObjectNodeSchema[];
+  orbitRef: React.RefObject<OrbitControlsImpl | null>;
+}) {
+  const done = useRef(false);
+  // useFrame 1회 — orbitRef가 준비될 때까지 프레임마다 대기 후 fit(useEffect의 ref 타이밍 취약성 회피).
+  useFrame(() => {
+    if (done.current) return;
+    const orbit = orbitRef.current;
+    if (!orbit) return;
+    done.current = true;
+    const roots = objects.filter((o) => o.visible && o.parentId === null);
+    if (roots.length === 0) return;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const o of roots) {
+      minX = Math.min(minX, o.position.x); maxX = Math.max(maxX, o.position.x);
+      minY = Math.min(minY, o.position.y); maxY = Math.max(maxY, o.position.y);
+      minZ = Math.min(minZ, o.position.z); maxZ = Math.max(maxZ, o.position.z);
+    }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+    const spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
+    orbit.target.set(cx, cy, cz);
+    orbit.object.position.set(cx + spread * 0.8, cy + spread * 0.6, cz + spread * 0.8);
+    orbit.update();
+  });
+  return null;
+}
+
 export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, playFocusId, movementLocked }: Props) {
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
@@ -426,6 +456,9 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           maxDistance={200}
         />
       )}
+
+      {/* 탐색 진입 시 1회 자동 전체 맞춤(너무 가까운 초기 뷰 방지) */}
+      {!playMode && <InitialFit objects={objects} orbitRef={orbitRef} />}
 
       {/* focus_object 액션 — 탐색 모드에서만 (플레이 모드는 orbitRef 없음 → no-op) */}
       {!playMode && <CameraFocus request={focusRequest ?? null} objects={objects} assets={scene.assets ?? []} orbitRef={orbitRef} />}

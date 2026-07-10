@@ -64,6 +64,9 @@ interface SceneState {
   // 펜 툴(2D 프로파일 → 돌출/회전체) 모달 열림 상태.
   penToolOpen: boolean;
   cameraViewRequest: { view: 'top' | 'front' | 'right'; _tick: number } | null;
+  // 씬 로드 카운터 — loadScene마다 증가. 에디터가 '로드 직후 1회 전체 맞춤'을 이 값 변화로 감지
+  // (새 빈 씬에서 첫 오브젝트 추가 시 카메라가 튀지 않도록 objects 변화가 아닌 로드 시점에 묶음).
+  sceneLoadTick: number;
   isModified: boolean;
   // 마지막으로 로드/저장한 시점의 DB scenes.version 값 — 저장 시 낙관적 잠금에 사용.
   // (scene_data 내부의 SCENE_VERSION[JSON 스키마 버전]과는 별개의 행 리비전 카운터)
@@ -323,6 +326,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   exportRequest: null,
   penToolOpen: false,
   cameraViewRequest: null,
+  sceneLoadTick: 0,
   isModified: false,
   savedVersion: 1,
   wireframeMode: false,
@@ -336,7 +340,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   loadScene: (data, savedVersion = 1) => {
     objectCounter = 0;
-    set({
+    set((s) => ({
       projectId: data.projectId,
       sceneId: data.sceneId,
       objects: data.objects,
@@ -348,10 +352,11 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       groupScope: null,
       isModified: false,
       savedVersion,
+      sceneLoadTick: s.sceneLoadTick + 1, // 로드 직후 1회 자동 전체 맞춤 트리거(EditorCanvas InitialFit)
       past: [],
       future: [],
       _prevSnapshot: null,
-    });
+    }));
   },
 
   selectObject: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),

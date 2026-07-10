@@ -76,6 +76,34 @@ function CameraCapture({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.
   return null;
 }
 
+// 씬 로드 직후 1회 자동 전체 맞춤 — 저장한 넓은 공간을 다시 열 때 카메라가 너무 가깝지 않도록
+// 들어오자마자 Shift+F(전체 맞춤) 뷰로 시작. Canvas 내부라 orbitRef 준비 타이밍이 보장되고,
+// sceneLoadTick에 묶어 '로드 시점'에만 fit(새 빈 씬에서 첫 오브젝트 추가 시 카메라 튐 방지).
+function InitialFit({ orbitRef }: { orbitRef: React.RefObject<OrbitControlsImpl | null> }) {
+  const lastTick = useRef<number | null>(null);
+  useFrame(() => {
+    const { sceneLoadTick, objects } = useSceneStore.getState();
+    if (lastTick.current === sceneLoadTick) return; // 이 로드는 이미 처리
+    const orbit = orbitRef.current;
+    if (!orbit) return; // orbitRef 준비 전엔 대기(아직 tick 소비 안 함)
+    lastTick.current = sceneLoadTick;
+    const roots = objects.filter((o) => o.visible && o.parentId === null);
+    if (roots.length === 0) return; // 빈 씬 → fit 안 함
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const o of roots) {
+      minX = Math.min(minX, o.position.x); maxX = Math.max(maxX, o.position.x);
+      minY = Math.min(minY, o.position.y); maxY = Math.max(maxY, o.position.y);
+      minZ = Math.min(minZ, o.position.z); maxZ = Math.max(maxZ, o.position.z);
+    }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+    const spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
+    orbit.target.set(cx, cy, cz);
+    orbit.object.position.set(cx + spread * 0.8, cy + spread * 0.6, cz + spread * 0.8);
+    orbit.update();
+  });
+  return null;
+}
+
 type SelBox = { left: number; top: number; width: number; height: number };
 
 // 그룹 격리 스코프 진입 시 상단 배너 — 사용자가 "그룹 안에서 편집 중"임을 알리고 나가기 제공.
@@ -281,6 +309,7 @@ export function EditorCanvas() {
     orbitRef.current.object.position.set(cx + spread * 0.8, cy + spread * 0.6, cz + spread * 0.8);
     orbitRef.current.update();
   }, [focusAllRequest, objects]);
+
 
   // Focus Selected (F키 / 더블클릭) — 선택 오브젝트(들)로 orbit pivot 이동 + 거리 맞춤(시점 방향 유지).
   // 라이브 ref로 정확한 월드 bbox를 구해 프레이밍 → 확대 시 줌/패닝이 답답하던 문제 해소(pivot이 대상에 붙음).
@@ -497,6 +526,7 @@ export function EditorCanvas() {
           style={{ width: "100%", height: "100%" }}
         >
           <CameraCapture cameraRef={cameraRef} />
+          <InitialFit orbitRef={orbitRef} />
 
           {/* 톤매핑 Neutral 고정 + 씬별 노출 — 저장 색을 최대한 그대로 렌더(뷰어와 동일) */}
           <SceneToneMapping exposure={environment.toneMappingExposure ?? 1} />
