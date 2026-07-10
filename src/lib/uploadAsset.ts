@@ -75,3 +75,33 @@ export async function uploadAudioFile(file: File, projectId: string): Promise<As
 
   return { id: assetId, name: file.name.replace(/\.[a-z0-9]+$/i, ''), dracoUrl: publicUrl, type: 'audio' };
 }
+
+// 이미지 텍스처 업로드 → Storage + assets DB 행 → AssetRefSchema(type:'texture').
+// 재질(map)·ground·boundary 등 표면 이미지가 이 경로를 공유 → 에셋 라이브러리(Textures 탭)에서 재사용 가능.
+// 썸네일은 이미지 자체(thumbnailUrl = 원본 URL).
+export async function uploadImageTexture(file: File, projectId: string): Promise<AssetRefSchema> {
+  const supabase = createBrowserSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('로그인이 필요합니다.');
+
+  const assetId = crypto.randomUUID();
+  const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? 'jpg').toLowerCase();
+  const path = `textures/${projectId}/${assetId}.${ext}`;
+  const mime = file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+  const { error: storageErr } = await supabase.storage
+    .from('assets')
+    .upload(path, file, { contentType: mime, upsert: false });
+  if (storageErr) throw storageErr;
+
+  const { data: { publicUrl } } = supabase.storage.from('assets').getPublicUrl(path);
+  const name = file.name.replace(/\.[a-z0-9]+$/i, '');
+  const { error: dbErr } = await supabase.from('assets').insert({
+    id: assetId, project_id: projectId, owner_id: user.id,
+    name,
+    file_url: publicUrl, draco_url: publicUrl,
+    mime_type: mime, size_bytes: file.size,
+  });
+  if (dbErr) { await supabase.storage.from('assets').remove([path]); throw dbErr; }
+
+  return { id: assetId, name, dracoUrl: publicUrl, type: 'texture', thumbnailUrl: publicUrl };
+}

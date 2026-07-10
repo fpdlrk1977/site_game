@@ -186,6 +186,10 @@ export interface MaterialOverride {
   roughness?: number;
   metalness?: number;
   emissive?: string;
+  // 표면에 입히는 이미지 텍스처(포스터/사진/로고 등). 있으면 색 대신 이미지로 렌더(map).
+  textureUrl?: string;
+  // 타일 반복 횟수(RepeatWrapping). 미설정=1×1(단일). x/y로 가로·세로 반복.
+  textureRepeat?: { x: number; y: number };
 }
 
 export interface ObjectNodeSchema {
@@ -303,9 +307,9 @@ export interface DialogueConfig {
 
 export interface AssetRefSchema {
   id: string;
-  dracoUrl: string; // 파일 URL (오디오는 오디오 파일 URL)
+  dracoUrl: string; // 파일 URL (오디오는 오디오 파일, 텍스처는 이미지 파일 URL)
   name: string;
-  type?: 'model' | 'character' | 'audio';
+  type?: 'model' | 'character' | 'audio' | 'texture';
   thumbnailUrl?: string;
 }
 

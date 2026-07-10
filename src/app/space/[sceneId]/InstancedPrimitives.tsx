@@ -75,6 +75,7 @@ export function getInstancedIds(objects: ObjectNodeSchema[]): Set<string> {
   const map = new Map<string, ObjectNodeSchema[]>();
   for (const obj of objects) {
     if (!obj.visible || obj.content || obj.assetId || !obj.primitiveShape) continue;
+    if (obj.material?.textureUrl) continue; // 텍스처는 오브젝트별 map이라 인스턴싱 제외(단일 재질 배칭 불가)
     if (obj.events.length > 0) continue;
     if (obj.particle) continue;
     if (obj.parentId !== null) continue; // 그룹 자식은 상대 좌표 — instancing 제외
@@ -95,6 +96,7 @@ export function InstancedPrimitives({ objects }: Props) {
     const map = new Map<string, ObjectNodeSchema[]>();
     for (const obj of objects) {
       if (!obj.visible || obj.content || obj.assetId || !obj.primitiveShape) continue;
+      if (obj.material?.textureUrl) continue; // 텍스처는 인스턴싱 제외(getInstancedIds와 동일 규칙)
       if (obj.events.length > 0) continue;
       if (obj.particle) continue;
       if (obj.parentId !== null) continue;

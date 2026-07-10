@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { persistCurrentScene } from '@/lib/saveScene';
 import { tryEmbedTextures } from '@/lib/glbEmbed';
-import { uploadGlbBlob, uploadAudioFile } from '@/lib/uploadAsset';
+import { uploadGlbBlob, uploadAudioFile, uploadImageTexture } from '@/lib/uploadAsset';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
 import type { AssetRefSchema, ContentType, ParticlePreset, LightType } from '@/types/scene';
@@ -20,7 +20,7 @@ const TABS: { id: Tab; label: string; wip?: boolean }[] = [
   { id: 'particle',  label: 'Particle' },
   { id: 'lights',    label: 'Lights' },
   { id: 'materials', label: 'Materials', wip: true },
-  { id: 'textures',  label: 'Textures',  wip: true },
+  { id: 'textures',  label: 'Textures' },
   { id: 'hdr',       label: 'HDR',       wip: true },
   { id: 'audio',     label: 'Audio' },
 ];
@@ -45,7 +45,7 @@ const LIGHT_ITEMS: { type: LightType; label: string; emoji: string }[] = [
 ];
 
 export function AssetBrowser() {
-  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset, removeObjectsByAsset, updateEnvironment } = useSceneStore();
+  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset, removeObjectsByAsset, updateEnvironment, updateObject, pushHistory } = useSceneStore();
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -54,6 +54,50 @@ export function AssetBrowser() {
   const modelInputRef = useRef<HTMLInputElement>(null);
   const characterInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const textureInputRef = useRef<HTMLInputElement>(null);
+
+  // 라이브러리 텍스처를 현재 선택한 프리미티브 오브젝트(들)에 적용.
+  const applyTextureToSelection = (url: string) => {
+    const st = useSceneStore.getState();
+    const targets = st.selectedIds.filter((id) => {
+      const o = st.objects.find((x) => x.id === id);
+      return o?.primitiveShape && !o.content;
+    });
+    if (targets.length === 0) {
+      addToast('먼저 프리미티브(박스·구체 등)를 선택하세요.', 'error');
+      return;
+    }
+    for (const id of targets) {
+      const cur = st.objects.find((o) => o.id === id)?.material;
+      updateObject(id, { material: { ...cur, textureUrl: url } });
+    }
+    pushHistory();
+    addToast(`텍스처 적용 (${targets.length}개)`, 'success');
+  };
+
+  const handleTextureFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = Array.from(e.target.files ?? [])[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/^image\//.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name)) {
+      addToast('이미지 파일(JPG·PNG·WEBP)을 선택해주세요.', 'error');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) { addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error'); return; }
+    if (!projectId) return;
+    setUploading(true);
+    try {
+      const asset = await uploadImageTexture(file, projectId);
+      addAsset(asset);
+      const result = await persistCurrentScene();
+      if (result.status === 'conflict') addToast('텍스처는 업로드됐지만 다른 탭·기기에서 씬이 먼저 저장돼 반영하지 못했어요. 새로고침 후 다시 시도해 주세요.', 'error');
+      else addToast('텍스처 업로드 완료', 'success');
+    } catch (err) {
+      addToast(`텍스처 업로드 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const deleteAsset = async (asset: AssetRefSchema) => {
     if (deletingId) return;
@@ -202,9 +246,10 @@ export function AssetBrowser() {
   };
 
   const currentTab = TABS.find((t) => t.id === tab)!;
-  const modelAssets = assets.filter((a) => a.type !== 'character' && a.type !== 'audio');
+  const modelAssets = assets.filter((a) => a.type !== 'character' && a.type !== 'audio' && a.type !== 'texture');
   const characterAssets = assets.filter((a) => a.type === 'character');
   const audioAssets = assets.filter((a) => a.type === 'audio');
+  const textureAssets = assets.filter((a) => a.type === 'texture');
   const filteredModels = search.trim()
     ? modelAssets.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
     : modelAssets;
@@ -350,10 +395,31 @@ export function AssetBrowser() {
           </>
         )}
 
+        {tab === 'textures' && (
+          <>
+            <input ref={textureInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleTextureFile} />
+            <div className="grid grid-cols-2 gap-2">
+              <UploadButton uploading={uploading} onClick={() => textureInputRef.current?.click()} label="이미지" title="JPG·PNG·WEBP 이미지를 업로드해 재사용할 수 있습니다" />
+              {textureAssets.map((asset) => (
+                <TextureCard key={asset.id} asset={asset}
+                  onApply={() => applyTextureToSelection(asset.dracoUrl)}
+                  onDelete={() => deleteAsset(asset)}
+                  deleting={deletingId === asset.id}
+                />
+              ))}
+            </div>
+            {textureAssets.length === 0 && (
+              <p className="text-[10px] text-muted text-center py-4 leading-relaxed">
+                이미지를 업로드하면<br />프리미티브를 선택하고 클릭해 표면에 입힐 수 있어요.
+              </p>
+            )}
+          </>
+        )}
+
         {currentTab.wip && (
           <div className="flex flex-col items-center justify-center gap-1.5 select-none py-10">
             <span className="text-2xl opacity-20">
-              {tab === 'materials' ? '🎨' : tab === 'textures' ? '🖼' : '🌅'}
+              {tab === 'materials' ? '🎨' : '🌅'}
             </span>
             <p className="text-[11px] text-muted font-medium">{currentTab.label} — 준비 중</p>
           </div>
@@ -408,6 +474,39 @@ function AudioRow({ asset, onDelete, deleting }: { asset: AssetRefSchema; onDele
         onClick={onDelete}
         disabled={deleting}
         className="w-5 h-5 shrink-0 rounded-sm text-muted hover:text-red-500 flex items-center justify-center text-[11px] transition-colors disabled:opacity-40"
+        title="삭제"
+      >
+        {deleting ? '…' : '✕'}
+      </button>
+    </div>
+  );
+}
+
+function TextureCard({ asset, onApply, onDelete, deleting }: {
+  asset: AssetRefSchema;
+  onApply: () => void;
+  onDelete: () => void;
+  deleting?: boolean;
+}) {
+  return (
+    <div className="group relative h-[72px] rounded-xs bg-background border border-border hover:border-border/60 transition-all overflow-hidden">
+      <img src={asset.thumbnailUrl ?? asset.dracoUrl} alt={asset.name} className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 bg-background/70 backdrop-blur-sm">
+        <span className="text-[9px] text-foreground/80 truncate w-full text-center block" title={asset.name}>{asset.name}</span>
+      </div>
+      {/* 클릭 = 선택 오브젝트에 적용 */}
+      <button
+        onClick={onApply}
+        className="absolute inset-0 bg-primary/0 group-hover:bg-primary/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white text-xs font-medium"
+        title="선택한 프리미티브에 텍스처 적용"
+      >
+        적용
+      </button>
+      {/* 삭제 */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        disabled={deleting}
+        className="absolute top-1 right-1 w-5 h-5 rounded-sm bg-background/70 text-muted hover:text-red-500 flex items-center justify-center text-[11px] opacity-0 group-hover:opacity-100 transition-all disabled:opacity-40 z-10"
         title="삭제"
       >
         {deleting ? '…' : '✕'}

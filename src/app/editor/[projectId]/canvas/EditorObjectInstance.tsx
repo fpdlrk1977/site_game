@@ -9,6 +9,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { GlbObject } from './GlbObject';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
+import { PrimitiveMaterial } from '@/components/three/PrimitiveMaterial';
 import { pointerDownOnObjectRef } from './boxSelectState';
 import type { ObjectNodeSchema, LightType } from '@/types/scene';
 
@@ -415,13 +416,15 @@ export function EditorObjectInstance({ object }: Props) {
           castShadow
           receiveShadow
         >
-          <meshStandardMaterial
+          <PrimitiveMaterial
             color={color}
             roughness={roughness}
             metalness={metalness}
             wireframe={wireframeMode}
             emissive={isSelected ? '#4338ca' : hovered ? '#4338ca' : emissive}
             emissiveIntensity={isSelected ? 0.4 : hovered ? 0.2 : (emissive !== '#000000' ? 1 : 0)}
+            textureUrl={object.material?.textureUrl}
+            repeat={object.material?.textureRepeat}
           />
         </mesh>
       )}

@@ -13,6 +13,7 @@ import { DialogueAdvanceContext } from "./DialogueAdvanceContext";
 import { useObjectDialogue, effectiveDialogue } from "./useObjectDialogue";
 import { glbLocalBboxCache } from "@/lib/glbBboxCache";
 import { localCenter } from "@/lib/objectBBox";
+import { PrimitiveMaterial } from "@/components/three/PrimitiveMaterial";
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
 import { createPrimitiveGeometry } from "@/lib/primitiveGeometry";
@@ -849,12 +850,14 @@ export function ViewerObject({
         handleClick();
       }}
     >
-      <meshStandardMaterial
+      <PrimitiveMaterial
         color={color}
         roughness={roughness}
         metalness={metalness}
         emissive={emissiveOn ? color : emissive}
         emissiveIntensity={emissiveOn ? 0.3 : emissive !== "#000000" ? 1 : 0}
+        textureUrl={object.material?.textureUrl}
+        repeat={object.material?.textureRepeat}
       />
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>

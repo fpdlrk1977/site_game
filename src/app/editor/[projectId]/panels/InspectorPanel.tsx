@@ -13,8 +13,9 @@ import { createBrowserSupabase } from '@/lib/supabase';
 import { persistCurrentScene } from '@/lib/saveScene';
 import { buildMergedGlb } from '@/lib/mergeObjects';
 import { buildBooleanGlb, type BooleanOp } from '@/lib/booleanObjects';
-import { uploadGlbBlob } from '@/lib/uploadAsset';
+import { uploadGlbBlob, uploadImageTexture } from '@/lib/uploadAsset';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { TexturePicker } from '@/components/ui/TexturePicker';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { InfoHint } from '@/components/ui/InfoHint';
@@ -1174,7 +1175,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner, addAsset } = useSceneStore();
   const { addToast } = useToast();
   const [merging, setMerging] = useState(false);
 
@@ -1227,6 +1228,36 @@ function InspectorInner() {
       return next;
     });
   const isOpen = (key: string) => !collapsed.has(key);
+
+  // 오브젝트 재질 텍스처 업로드 — 표면에 이미지를 입힌다(map). ground/boundary와 동일 패턴.
+  const [objTexUploading, setObjTexUploading] = useState(false);
+  const objTexInputRef = useRef<HTMLInputElement>(null);
+  // 텍스처 영역 표시 스위치 — 텍스처가 이미 있으면 자동 표시, 없으면 스위치로 열기. 오브젝트 바뀌면 리셋.
+  const [texPanelOpen, setTexPanelOpen] = useState(false);
+  useEffect(() => { setTexPanelOpen(false); }, [selectedId]);
+  const handleObjectTexUpload = async (objId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !projectId) return;
+    if (file.size > 8 * 1024 * 1024) {
+      addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error');
+      return;
+    }
+    setObjTexUploading(true);
+    try {
+      // 에셋 DB에 등록(type:'texture') → Textures 라이브러리에서 재사용 가능 + 스토리지 정리 대상으로 추적됨.
+      const asset = await uploadImageTexture(file, projectId);
+      addAsset(asset);
+      const cur = useSceneStore.getState().objects.find((o) => o.id === objId)?.material;
+      updateObject(objId, { material: { ...cur, textureUrl: asset.dracoUrl } });
+      pushHistory();
+    } catch (err) {
+      addToast('텍스처 업로드 실패', 'error');
+      console.error(err);
+    } finally {
+      setObjTexUploading(false);
+    }
+  };
 
   // Events 추가 폼 상태
   const [showAddEvent, setShowAddEvent] = useState(false);
@@ -2424,6 +2455,58 @@ function InspectorInner() {
                     />
                   </div>
                 </div>
+
+                {/* Texture — 표면에 이미지 매핑(포스터/사진/로고). 프리미티브만(텍스트 콘텐츠 제외) */}
+                {obj.primitiveShape && !obj.content && (() => {
+                  const texActive = texPanelOpen || !!obj.material?.textureUrl;
+                  return (
+                  <div className="pt-2 border-t border-border/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Texture (이미지)</span>
+                      <Toggle value={texActive} onChange={(on) => {
+                        setTexPanelOpen(on);
+                        if (!on) { updateObject(obj.id, { material: { ...obj.material, textureUrl: undefined, textureRepeat: undefined } }); pushHistory(); }
+                      }} />
+                    </div>
+                    <input ref={objTexInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleObjectTexUpload(obj.id, e)} />
+
+                    {texActive && (
+                      <>
+                        {/* 썸네일 그리드 드롭다운 픽커(맨 아래 업로드 포함) */}
+                        <TexturePicker
+                          value={obj.material?.textureUrl ?? ''}
+                          textures={assets.filter((a) => a.type === 'texture').map((a) => ({ id: a.id, name: a.name, url: a.dracoUrl }))}
+                          onChange={(url) => { updateObject(obj.id, { material: { ...obj.material, textureUrl: url || undefined, textureRepeat: url ? obj.material?.textureRepeat : undefined } }); pushHistory(); }}
+                          onUpload={() => objTexInputRef.current?.click()}
+                          uploading={objTexUploading}
+                        />
+
+                        {/* 적용된 텍스처 미리보기 + 타일 반복 */}
+                        {obj.material?.textureUrl && (
+                          <>
+                            <img src={obj.material.textureUrl} alt="texture" className="w-full h-16 object-cover rounded-xs border border-border" />
+                            <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
+                              <input type="checkbox" checked={!!obj.material?.textureRepeat}
+                                onChange={(e) => { updateObject(obj.id, { material: { ...obj.material, textureRepeat: e.target.checked ? { x: 2, y: 2 } : undefined } }); pushHistory(); }} />
+                              타일 반복 (패턴)
+                            </label>
+                            {obj.material?.textureRepeat && (
+                              <div className="flex gap-2">
+                                <LabeledNum label="가로 반복" value={obj.material.textureRepeat.x}
+                                  onChange={(v) => updateObject(obj.id, { material: { ...obj.material, textureRepeat: { x: Math.max(1, v), y: obj.material?.textureRepeat?.y ?? 1 } } })}
+                                  onCommit={pushHistory} min={1} max={20} precision={0} dragStep={1} />
+                                <LabeledNum label="세로 반복" value={obj.material.textureRepeat.y}
+                                  onChange={(v) => updateObject(obj.id, { material: { ...obj.material, textureRepeat: { x: obj.material?.textureRepeat?.x ?? 1, y: Math.max(1, v) } } })}
+                                  onCommit={pushHistory} min={1} max={20} precision={0} dragStep={1} />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  );
+                })()}
               </div>
             )}
           </GroupBox>
