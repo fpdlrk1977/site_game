@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { worldBBox } from '@/lib/objectBBox';
 import { useSceneStore } from '@/store/sceneStore';
+import { useLiveTransformStore } from '@/store/liveTransformStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { persistCurrentScene } from '@/lib/saveScene';
@@ -225,6 +226,45 @@ function XYZRow({
         ))}
       </div>
     </div>
+  );
+}
+
+// ── Transform 입력부 (position/rotation/scale) ─────────────────
+// 라이브 채널을 구독해 기즈모 드래그 '중'에도 수치가 실시간 갱신된다.
+// 이 서브트리만 라이브 값에 구독 → InspectorPanel 전체가 아니라 이 9개 입력만 리렌더(성능 격리).
+function LiveTransformRows({ obj, setPos, setRot, setScl, onCommit }: {
+  obj: ObjectNodeSchema;
+  setPos: (axis: 'x' | 'y' | 'z', v: number) => void;
+  setRot: (axis: 'x' | 'y' | 'z', v: number) => void;
+  setScl: (axis: 'x' | 'y' | 'z', v: number) => void;
+  onCommit: () => void;
+}) {
+  // 드래그 중(live.id === obj.id)이면 라이브 값, 아니면 저장된 obj 값. 다른 오브젝트 조작 중이면 null → 리렌더 안 함.
+  const live = useLiveTransformStore((s) => (s.live && s.live.id === obj.id ? s.live : null));
+  const pos = live?.position ?? obj.position;
+  const rot = live?.rotation ?? obj.rotation;
+  const scl = live?.scale ?? obj.scale;
+  return (
+    <>
+      <XYZRow
+        label="Position"
+        x={pos.x} y={pos.y} z={pos.z}
+        onChangeX={(v) => setPos('x', v)} onChangeY={(v) => setPos('y', v)} onChangeZ={(v) => setPos('z', v)}
+        onCommit={onCommit} dragStep={0.1}
+      />
+      <XYZRow
+        label="Rotation °"
+        x={rot.x} y={rot.y} z={rot.z}
+        onChangeX={(v) => setRot('x', v)} onChangeY={(v) => setRot('y', v)} onChangeZ={(v) => setRot('z', v)}
+        onCommit={onCommit} dragStep={1}
+      />
+      <XYZRow
+        label="Scale"
+        x={scl.x} y={scl.y} z={scl.z}
+        onChangeX={(v) => setScl('x', v)} onChangeY={(v) => setScl('y', v)} onChangeZ={(v) => setScl('z', v)}
+        onCommit={onCommit} dragStep={0.05}
+      />
+    </>
   );
 }
 
@@ -2047,30 +2087,8 @@ function InspectorInner() {
           <SectionHeader title="Transform" hint="위치·회전·크기. 기즈모 회전 중 Shift를 누르면 15°씩 스냅돼요. GLB는 추가 시 밑면이 바닥에 자동 정렬되고, '바닥에 놓기'로 다시 맞출 수 있어요." isOpen={isOpen('transform')} onToggle={() => toggleSection('transform')} />
           {isOpen('transform') && (
             <div className="px-3 pb-4 space-y-1">
-              <XYZRow
-                label="Position"
-                x={obj.position.x} y={obj.position.y} z={obj.position.z}
-                onChangeX={(v) => setPos('x', v)}
-                onChangeY={(v) => setPos('y', v)}
-                onChangeZ={(v) => setPos('z', v)}
-                onCommit={pushHistory} dragStep={0.1}
-              />
-              <XYZRow
-                label="Rotation °"
-                x={obj.rotation.x} y={obj.rotation.y} z={obj.rotation.z}
-                onChangeX={(v) => setRot('x', v)}
-                onChangeY={(v) => setRot('y', v)}
-                onChangeZ={(v) => setRot('z', v)}
-                onCommit={pushHistory} dragStep={1}
-              />
-              <XYZRow
-                label="Scale"
-                x={obj.scale.x} y={obj.scale.y} z={obj.scale.z}
-                onChangeX={(v) => setScl('x', v)}
-                onChangeY={(v) => setScl('y', v)}
-                onChangeZ={(v) => setScl('z', v)}
-                onCommit={pushHistory} dragStep={0.05}
-              />
+              {/* 기즈모 드래그 중 라이브 채널로 실시간 갱신(캔버스 리렌더 없이 이 서브트리만) */}
+              <LiveTransformRows obj={obj} setPos={setPos} setRot={setRot} setScl={setScl} onCommit={pushHistory} />
               {/* 밑면을 바닥에 정렬 — 원점이 발밑이 아니어서 바닥에 파묻히는 경우 교정(모든 루트 타입) */}
               {!obj.parentId && (
                 <button

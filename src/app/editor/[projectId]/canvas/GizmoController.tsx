@@ -6,6 +6,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useSceneStore } from '@/store/sceneStore';
+import { useLiveTransformStore } from '@/store/liveTransformStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { CHARACTER_PREVIEW_ID } from './CharacterPreview';
 import { localCenter, worldBBox } from '@/lib/objectBBox';
@@ -268,10 +269,24 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
             floorMinYRef.current = o && b ? o.position.y - b.min.y : 0;
           }
         }}
-        onChange={() => { if (gizmoDraggingRef.current) applyProxyToTarget(); }}
+        onChange={() => {
+          if (!gizmoDraggingRef.current) return;
+          applyProxyToTarget();
+          // 라이브 채널에 실시간 트랜스폼 게시 → Inspector 수치가 드래그 중 즉시 갱신(캔버스 리렌더 없음).
+          if (!isCharPreview && selectedId) {
+            const p = target.position, r = target.rotation, s = target.scale;
+            useLiveTransformStore.getState().setLive({
+              id: selectedId,
+              position: { x: p.x, y: p.y, z: p.z },
+              rotation: { x: r.x * RAD2DEG, y: r.y * RAD2DEG, z: r.z * RAD2DEG },
+              scale: { x: s.x, y: s.y, z: s.z },
+            });
+          }
+        }}
         onMouseUp={() => {
           gizmoDraggingRef.current = false;
           if (orbitRef.current) orbitRef.current.enabled = true;
+          useLiveTransformStore.getState().setLive(null); // 확정값은 아래 commitTransforms가 메인 스토어에 반영
           const pos = target.position, rot = target.rotation, scl = target.scale;
           if (isCharPreview) {
             updateEnvironment({ playerStartPosition: { x: pos.x, y: Math.max(0, pos.y), z: pos.z } });
