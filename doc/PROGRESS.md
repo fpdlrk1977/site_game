@@ -78,7 +78,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **4종 전부 코드+결정적 테스트 완료. 브라우저 실동작 최종 확인만 남음**(특히 버그 4 더블클릭, 버그 2 중첩그룹 해제, 버그 3 대규모 다중선택 undo). 신규 lib/액션: `motion.ts`(쿼터니언 spin)·`sceneStore.commitTransforms`·`EditorObjectInstance.selectByClick`·`sceneStore.ungroupSelected`(행렬화).
 
 ## 진행 중 (2026-07-09) — 인앱 3D 모델링 (일반인 온보딩 장벽 해소)
-> **스코프 5단계 전부 코드 완료(tsc·로직테스트 통과). 브라우저 실클릭 확인만 남음 — 사용자가 나중에 일괄 검증 예정.**
+> **스코프 5단계 전부 완료 — ✅ 브라우저 실동작 확인 완료(2026-07-10, 사용자). 각뿔대/둥근박스/Merge/Boolean/Loft 정상.**
 
 ### 배경/합의
 - **문제 인식(사용자)**: 일반인은 GLB를 어디서 구하는지 모르고 Blender를 못 씀 → import-only만으론 진입장벽. 간단하게라도 객체를 만들고·조합하고·움직일 수 있어야 함(예: 바퀴 만들고 몸체 만들고 색 입혀 조립해 굴리기).
@@ -120,6 +120,14 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **신규 라이브러리/의존성**: `three-bvh-csg@0.0.16`(Boolean). 신규 lib 4개: `primitiveGeometry.ts`·`mergeObjects.ts`·`booleanObjects.ts`·`uploadAsset.ts`.
 - **자동차 예시 달성 경로**: 둥근 박스(몸체) + 각뿔대/실린더(바퀴) → 색·재질 → 그룹/프리팹 → motion(spin) 굴리기, 또는 Boolean 빼기로 바퀴 자리 구멍, Merge로 하나의 객체화. "만들고·조합하고·움직이는" 흐름이 코드로 완성됨.
 - **미착수(스코프 밖/후속)**: 유선형 자유곡면(서브디비전 박스모델링) · GLB 대상 Merge/Boolean · 텍스처 UV · loft 원형 단면 옵션 · 대칭(mirror) 편집.
+
+## ✅ 브라우저 실동작 확인 완료 (2026-07-10, 사용자 일괄 검증)
+
+아래 항목 전부 브라우저 실동작 확인됨 — 개별 항목 본문의 "브라우저 확인 필요" 표기는 이 확인으로 해소:
+- **Prefab MVP** (만들기·배치·override·Apply·Revert·삭제)
+- **인앱 모델링** (각뿔대·둥근 박스·Merge·Boolean·Loft)
+- **경계 벽**(Boundary Walls) · **프로젝트 복제** · **임베드 E2E**
+- (앞서 확인된) 그룹/변환/undo 버그 4종 · 그룹 스코프 · 기즈모 피벗 통일 · 모션 spin wobble(피벗 보정)
 
 ## 최근 완료 (2026-07-09) — Prefab MVP (원본↔인스턴스 동기화)
 

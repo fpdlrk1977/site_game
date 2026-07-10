@@ -189,6 +189,7 @@ function selectExact(object: ObjectNodeSchema, shiftKey: boolean) {
   store.setGroupScope(object.isGroup ? object.id : (object.parentId ?? null));
   if (shiftKey) store.toggleSelectObject(object.id);
   else store.selectObject(object.id);
+  store.requestFocusSelected(); // 더블클릭 = 그 대상으로 카메라 프레이밍
 }
 
 // 중첩 그룹 클릭 시 최상위 조상 그룹 ID를 반환

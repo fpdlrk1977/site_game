@@ -62,6 +62,8 @@ interface SceneState {
   snapRotate: number;
   focusTarget: { x: number; y: number; z: number; _tick: number } | null;
   focusAllRequest: number | null;
+  // 선택 오브젝트(들)로 카메라 프레이밍 요청(F키/더블클릭). tick 값으로 EditorCanvas가 감지.
+  focusSelectedRequest: number | null;
   cameraViewRequest: { view: 'top' | 'front' | 'right'; _tick: number } | null;
   isModified: boolean;
   // 마지막으로 로드/저장한 시점의 DB scenes.version 값 — 저장 시 낙관적 잠금에 사용.
@@ -96,6 +98,8 @@ interface SceneActions {
   setSnap: (enabled: boolean, translate?: number, rotate?: number) => void;
   requestFocus: () => void;
   requestFocusAll: () => void;
+  /** 선택 오브젝트로 카메라 프레이밍(orbit pivot 이동 + 거리 맞춤). 시점 방향은 유지. */
+  requestFocusSelected: () => void;
   requestCameraView: (view: 'top' | 'front' | 'right') => void;
   duplicateInPlace: () => void;
   requestSaveBookmark: (slot: number) => void;
@@ -309,6 +313,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   selectedIds: [],
   focusTarget: null,
   focusAllRequest: null,
+  focusSelectedRequest: null,
   cameraViewRequest: null,
   isModified: false,
   savedVersion: 1,
@@ -393,6 +398,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   requestFocusAll: () => set({ focusAllRequest: Date.now() }),
+  requestFocusSelected: () => set({ focusSelectedRequest: Date.now() }),
 
   requestCameraView: (view) => set({ cameraViewRequest: { view, _tick: Date.now() } }),
 

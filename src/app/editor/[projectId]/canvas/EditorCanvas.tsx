@@ -238,6 +238,7 @@ export function EditorCanvas() {
     assets,
     focusTarget,
     focusAllRequest,
+    focusSelectedRequest,
     cameraViewRequest,
     objects,
     bookmarkSaveRequest,
@@ -278,6 +279,33 @@ export function EditorCanvas() {
     orbitRef.current.object.position.set(cx + spread * 0.8, cy + spread * 0.6, cz + spread * 0.8);
     orbitRef.current.update();
   }, [focusAllRequest, objects]);
+
+  // Focus Selected (F키 / 더블클릭) — 선택 오브젝트(들)로 orbit pivot 이동 + 거리 맞춤(시점 방향 유지).
+  // 라이브 ref로 정확한 월드 bbox를 구해 프레이밍 → 확대 시 줌/패닝이 답답하던 문제 해소(pivot이 대상에 붙음).
+  useEffect(() => {
+    if (!focusSelectedRequest || !orbitRef.current || !cameraRef.current) return;
+    const ids = useSceneStore.getState().selectedIds;
+    if (ids.length === 0) return;
+    const box = new THREE.Box3().makeEmpty();
+    const tmp = new THREE.Box3();
+    for (const id of ids) {
+      const o3 = objectRefsRef.current.get(id);
+      if (o3) { tmp.setFromObject(o3); if (!tmp.isEmpty()) box.union(tmp); }
+    }
+    if (box.isEmpty()) return;
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const radius = Math.max(0.5 * size.length(), 0.35); // 대상 경계구 반경(최소값으로 과도한 접근 방지)
+    const cam = cameraRef.current as THREE.PerspectiveCamera;
+    const fov = ((cam.fov ?? 60) * Math.PI) / 180;
+    const dist = (radius / Math.sin(fov / 2)) * 1.25; // 여백 포함해 화면에 꽉 차게
+    const dir = new THREE.Vector3().subVectors(cam.position, orbitRef.current.target);
+    if (dir.lengthSq() < 1e-6) dir.set(0.6, 0.5, 0.6);
+    dir.normalize();
+    orbitRef.current.target.copy(center);
+    cam.position.copy(center).addScaledVector(dir, dist);
+    orbitRef.current.update();
+  }, [focusSelectedRequest]);
 
   // Camera view preset (Numpad7=Top, Numpad1=Front, Numpad3=Right)
   // 씬 바운드에 맞춰 중심·거리를 잡아 전체가 자연스럽게 담기게 한다(고정 거리 X).

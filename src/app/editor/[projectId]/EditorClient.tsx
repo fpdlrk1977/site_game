@@ -30,7 +30,7 @@ interface Props {
 export function EditorClient({ projectName, initialScene, initialVersion }: Props) {
   const {
     loadScene, undo, redo, deleteSelected, duplicateSelected, duplicateInPlace,
-    setTransformMode, requestFocus, requestFocusAll, requestCameraView,
+    setTransformMode, requestFocus, requestFocusAll, requestFocusSelected, requestCameraView,
     groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark,
     copyObjectProperties, pasteObjectProperties,
   } = useSceneStore();
@@ -109,7 +109,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       if (e.code === 'KeyE') setTransformMode('rotate');
       if (e.code === 'KeyR') setTransformMode('scale');
       if (e.shiftKey && e.code === 'KeyF') { requestFocusAll(); return; }
-      if (e.code === 'KeyF') requestFocus();
+      if (e.code === 'KeyF') requestFocusSelected(); // 선택물로 프레이밍(pivot 이동 + 거리 맞춤)
       if (e.shiftKey && e.code === 'KeyD') { e.preventDefault(); duplicateInPlace(); return; }
       if (e.code === 'Numpad7') { e.preventDefault(); requestCameraView('top'); return; }
       if (e.code === 'Numpad1') { e.preventDefault(); requestCameraView('front'); return; }
@@ -121,7 +121,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, deleteSelected, duplicateSelected, duplicateInPlace, setTransformMode, requestFocus, requestFocusAll, requestCameraView, groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark, copyObjectProperties, pasteObjectProperties]);
+  }, [undo, redo, deleteSelected, duplicateSelected, duplicateInPlace, setTransformMode, requestFocus, requestFocusAll, requestFocusSelected, requestCameraView, groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark, copyObjectProperties, pasteObjectProperties]);
 
   if (isMobile) {
     return (

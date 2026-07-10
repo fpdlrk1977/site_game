@@ -5,6 +5,7 @@ import { ArrowLeftRight, User } from 'lucide-react';
 import { MathUtils } from 'three';
 import * as THREE from 'three';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
+import { worldBBox } from '@/lib/objectBBox';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
@@ -1413,22 +1414,19 @@ function InspectorInner() {
 
   // GLB 밑면을 바닥(y=0)에 정렬 — 모델 로컬 bbox에 현재 회전·스케일을 적용해
   // 실제 최하단(min.y)을 구하고, position.y를 그만큼 올려 바닥에 앉힌다.
+  // 바닥에 놓기 — 루트 오브젝트(GLB·프리미티브·그룹·콘텐츠 전부) 밑면을 바닥(y=0)에 정렬.
+  // 월드 bbox(모든 타입 지원, 그룹은 자식 재귀)의 min.y 만큼 y를 올린다. GLB는 bbox 캐시가 있어야 정확.
   const glbUrlForSnap = obj?.assetId ? assets.find((a) => a.id === obj.assetId)?.dracoUrl : null;
-  const canSnapToGround = !!glbUrlForSnap && !obj.parentId && glbLocalBboxCache.has(glbUrlForSnap);
+  const glbUnloaded = !!obj?.assetId && (!glbUrlForSnap || !glbLocalBboxCache.has(glbUrlForSnap));
+  const snapBox = obj && !obj.parentId && !glbUnloaded ? worldBBox(objects, assets, obj.id) : null;
+  const canSnapToGround = !!snapBox && !snapBox.isEmpty();
   const snapToGround = () => {
-    if (!glbUrlForSnap) return;
-    const local = glbLocalBboxCache.get(glbUrlForSnap);
-    if (!local) return;
-    const DEG2RAD = Math.PI / 180;
-    // translation 없이 회전(euler)+스케일만 적용한 행렬로 로컬 bbox를 변환 → 오브젝트 좌표계 min.y
-    const m = new THREE.Matrix4().compose(
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Quaternion().setFromEuler(new THREE.Euler(obj.rotation.x * DEG2RAD, obj.rotation.y * DEG2RAD, obj.rotation.z * DEG2RAD)),
-      new THREE.Vector3(obj.scale.x, obj.scale.y, obj.scale.z),
-    );
-    const minY = local.clone().applyMatrix4(m).min.y;
-    // 밑면이 바닥(0)에 오도록: position.y + minY = 0  →  position.y = -minY
-    updateObject(obj.id, { position: { ...obj.position, y: -minY } });
+    if (!obj || obj.parentId) return;
+    const b = worldBBox(objects, assets, obj.id);
+    if (!b || b.isEmpty()) return;
+    const newY = obj.position.y - b.min.y; // 밑면이 y=0에 오도록
+    if (Math.abs(newY - obj.position.y) < 1e-6) return; // 이미 바닥
+    updateObject(obj.id, { position: { ...obj.position, y: newY } });
     pushHistory();
   };
 
@@ -2043,12 +2041,12 @@ function InspectorInner() {
                 onChangeZ={(v) => setScl('z', v)}
                 onCommit={pushHistory} dragStep={0.05}
               />
-              {/* GLB 밑면을 바닥에 정렬 — 모델 원점이 발밑이 아니어서 바닥에 파묻히는 경우 교정 */}
-              {glbUrlForSnap && !obj.parentId && (
+              {/* 밑면을 바닥에 정렬 — 원점이 발밑이 아니어서 바닥에 파묻히는 경우 교정(모든 루트 타입) */}
+              {!obj.parentId && (
                 <button
                   onClick={snapToGround}
                   disabled={!canSnapToGround}
-                  title={canSnapToGround ? '모델 밑면을 바닥(y=0)에 맞춤' : '모델 로딩 후 사용할 수 있습니다'}
+                  title={canSnapToGround ? '오브젝트 밑면을 바닥(y=0)에 맞춤' : (glbUnloaded ? '모델 로딩 후 사용할 수 있습니다' : '바닥에 놓을 수 없습니다')}
                   className="w-full mt-1 py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted disabled:hover:bg-transparent"
                 >
                   ⤓ 바닥에 놓기
