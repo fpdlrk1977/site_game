@@ -1782,18 +1782,27 @@ function InspectorInner() {
             );
           }
           if (newAction === 'play_sound') {
+            const audioAssets = assets.filter((a) => a.type === 'audio');
             return (
-              <>
+              <div className="space-y-1.5">
+                {audioAssets.length > 0 && (
+                  <SelectBox
+                    value={audioAssets.some((a) => a.dracoUrl === newValue) ? newValue : ''}
+                    onChange={setNewValue}
+                    options={audioAssets.map((a) => ({ value: a.dracoUrl, label: `🎵 ${a.name}` }))}
+                    placeholder="업로드한 오디오 선택..."
+                  />
+                )}
                 <input
                   type="text"
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
-                  placeholder="https://... (mp3/wav/ogg)"
+                  placeholder="또는 https://... (mp3/wav/ogg) 직접 입력"
                   className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                   onKeyDown={(e) => e.key === 'Enter' && addEvent()}
                 />
-                <p className="text-muted/50 text-[10px] mt-1">트리거 발동 시 오디오를 재생합니다. ▶ 버튼으로 미리 들을 수 있습니다.</p>
-              </>
+                <p className="text-muted/50 text-[10px]">트리거 발동 시 오디오를 재생합니다. Audio 탭에서 올린 파일을 고르거나 URL을 직접 넣을 수 있어요. ▶ 버튼으로 미리듣기.</p>
+              </div>
             );
           }
           if (newAction === 'go_to_scene') {

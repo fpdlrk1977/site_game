@@ -224,7 +224,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 > 이 노트가 최근 작업 위주라 아래 기획들이 빠져있었음(2026-07-07 재편입). 상세 AC는 `FEATURE_LIST.md`/`ROADMAP.md` 참조.
 
 - **3D 에셋 마켓플레이스** (FEAT-MARKET-01 / P5-03): 에셋 브라우저 "마켓플레이스" 탭 — 카테고리·검색, 무료/유료 구분, **Business 플랜은 자기 에셋 등록·판매**. 별도 스프린트(마켓 DB/결제 구조 설계 필요).
-- **씬 템플릿 라이브러리** (FEAT-TEMPLATE-01 / P3-08): 새 씬 생성 시 빈씬/쇼룸/갤러리/전시장/카페 템플릿 선택 모달. `TemplatePickerModal`.
+- ~~**씬 템플릿 라이브러리** (FEAT-TEMPLATE-01 / P3-08)~~ **[완료]**: 새 씬 생성 시 빈씬/쇼룸/갤러리/광장/카페 5종 템플릿 선택 모달. `SceneSwitcher`의 `TemplatePickerModal` + `src/lib/sceneTemplates.ts`(SCENE_TEMPLATES). `createFromTemplate`로 생성.
 - **실시간 협업** (FEAT-COLLAB-01 / P5-01): 다중 유저 동시 편집(커서·선택 공유, CRDT).
 - **AI 자동 배치** (P5-02).
 - **Material 커스텀 에디터** (P4-03) — 현재 Inspector Material 섹션 주석처리 상태.
@@ -234,7 +234,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 ### 정리/결정 필요
 
 - **오토세이브** 되살리기/제거 결정 (현재 수동 Ctrl+S만, `setAutoSaveAt` lint 경고 원인).
-- **Layers 데드 코드**(`ObjectNodeSchema.layer` — 그룹/트리로 대체됨, 미사용) 살릴지 제거할지.
+- ~~**Layers 데드 코드**~~ **[정리 완료 2026-07-10]**: 스토어의 죽은 machinery(`layers` 상태·`LayerState`·`addLayer`/`toggleLayerVisible`/`toggleLayerLocked`/`setObjectLayer`) 제거 — 어떤 컴포넌트도 안 쓰던 완전 데드코드. `ObjectNodeSchema.layer` 필드는 하위호환 위해 유지(제거 시 마이그레이션·팩토리 대량 수정 필요, 무해).
 
 ### 인프라/비즈니스
 
@@ -267,7 +267,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - `go_to_scene`: **경로의 현재 씬 id를 대상 id로 치환**해 이동 → `/space`·`/embed`·커스텀도메인(경로에 id 포함 시) 모두 대응. 경로에 id 없으면 `/space/{id}` 폴백. (뷰어 통합 리팩터 2026-07-07)
 - `focus_object`: 탐색=OrbitControls 이동, **플레이=팔로우 대신 대상 줌**(2026-07-08, 팝업 닫기/Esc로 복귀+이동 잠금 해제). `reset_camera`: 탐색(orbit) 모드 전용 — 플레이는 캐릭터 팔로우 카메라라 무시됨.
 - 솔리드(비센서) 오브젝트는 area 트리거로 팝업/URL/씬이동은 되나 **애니메이션 재생 안 됨**(activeClip 센서 전용).
-- `interact` 트리거: **플레이 모드 전용 + 루트 오브젝트 전용**(중첩 그룹 자식은 로컬 좌표라 근접 판정 제외). 범위 고정 3m·정면 조건 없음(최근접). 키는 E 고정. **임베드(EmbedClient)는 E키 발동은 되나 프롬프트 UI 미표시**(뷰어 전용). `Is Sensor` 통과는 버그가 아니라 트리거 영역의 정의 — 막고 싶으면 센서 끄기(기본 솔리드).
+- `interact` 트리거: **플레이 모드 전용 + 루트 오브젝트 전용**(중첩 그룹 자식은 로컬 좌표라 근접 판정 제외). 범위 고정 3m·정면 조건 없음(최근접). 키는 E 고정. ~~**임베드는 프롬프트 UI 미표시**~~ **[해소 — ViewerClient 통합]**: E 프롬프트(데스크톱 키캡/모바일 버튼)는 variant 게이팅이 아니라 `playMode`만 체크 → **`defaultMode='play'` 임베드에서 정상 표시**(임베드는 모드 토글이 없어 defaultMode 고정이므로 interact 쓰려면 play로 설정). `Is Sensor` 통과는 버그가 아니라 트리거 영역의 정의 — 막고 싶으면 센서 끄기(기본 솔리드).
 - `move_object`: **그룹 대상은 탐색 모드 전용** — 플레이 모드에선 자식 RigidBody의 props가 안 바뀌어 rapier 동기화 effect가 미발동, 자식 콜라이더가 안 따라감. 플레이에서 움직일 건 개별 오브젝트를 대상으로. 이동한 솔리드 위에 선 캐릭터는 같이 안 실려감(텔레포트라 이동 플랫폼은 아님). ~~임베드는 E2 미지원~~ → **임베드도 전체 액션 지원**(아래 뷰어 통합 참고).
 - `play_sound`: 오디오 URL 직접 입력만(AssetBrowser audio 탭 WIP). area 트리거는 브라우저 자동재생 정책에 막히면 무음(조용히 무시).
 - 인터랙션 힌트 링(2026-07-07 개선): **occlusion 적용** — `depthTest` 기본값(true)으로 앞 오브젝트가 뒤 오브젝트 링을 가림(엑스레이·겹침 문제 해결). 위치는 **GLB bbox 캐시(`glbLocalBboxCache`) 기반 실제 상단**(뷰어의 `GlbViewer`도 캐시 저장)으로 정확해짐, 캐시 없으면 스케일 근사. `InteractionHints`가 매 프레임 높이 갱신(GLB 늦은 로드 대응). 회전 미반영(근사). 그룹 자체엔 링 없음(자식 기준). 에디터 뷰포트엔 안 뜸(뷰어 전용).

@@ -284,9 +284,9 @@ export interface DialogueConfig {
 
 export interface AssetRefSchema {
   id: string;
-  dracoUrl: string;
+  dracoUrl: string; // 파일 URL (오디오는 오디오 파일 URL)
   name: string;
-  type?: 'model' | 'character';
+  type?: 'model' | 'character' | 'audio';
   thumbnailUrl?: string;
 }
 

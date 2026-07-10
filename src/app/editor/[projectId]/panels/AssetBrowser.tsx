@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { persistCurrentScene } from '@/lib/saveScene';
 import { tryEmbedTextures } from '@/lib/glbEmbed';
-import { uploadGlbBlob } from '@/lib/uploadAsset';
+import { uploadGlbBlob, uploadAudioFile } from '@/lib/uploadAsset';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
 import type { AssetRefSchema, ContentType, ParticlePreset, LightType } from '@/types/scene';
@@ -22,7 +22,7 @@ const TABS: { id: Tab; label: string; wip?: boolean }[] = [
   { id: 'materials', label: 'Materials', wip: true },
   { id: 'textures',  label: 'Textures',  wip: true },
   { id: 'hdr',       label: 'HDR',       wip: true },
-  { id: 'audio',     label: 'Audio',     wip: true },
+  { id: 'audio',     label: 'Audio' },
 ];
 
 const CONTENT_ITEMS: { type: ContentType; label: string; emoji: string }[] = [
@@ -53,6 +53,7 @@ export function AssetBrowser() {
   const { addToast } = useToast();
   const modelInputRef = useRef<HTMLInputElement>(null);
   const characterInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   const deleteAsset = async (asset: AssetRefSchema) => {
     if (deletingId) return;
@@ -176,9 +177,34 @@ export function AssetBrowser() {
     await uploadGlb(modelFile, 'character', textureFiles);
   };
 
+  const handleAudioFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = Array.from(e.target.files ?? [])[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/^audio\//.test(file.type) && !/\.(mp3|wav|ogg|m4a|aac)$/i.test(file.name)) {
+      addToast('오디오 파일(mp3·wav·ogg 등)을 선택해주세요.', 'error');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) { addToast('오디오가 너무 큽니다. 최대 20MB까지 지원합니다.', 'error'); return; }
+    if (!projectId) return;
+    setUploading(true);
+    try {
+      const asset = await uploadAudioFile(file, projectId);
+      addAsset(asset);
+      const result = await persistCurrentScene();
+      if (result.status === 'conflict') addToast('오디오는 업로드됐지만 다른 탭·기기에서 씬이 먼저 저장돼 반영하지 못했어요. 새로고침 후 다시 시도해 주세요.', 'error');
+      else addToast('오디오 업로드 완료', 'success');
+    } catch (err) {
+      addToast(`오디오 업로드 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const currentTab = TABS.find((t) => t.id === tab)!;
-  const modelAssets = assets.filter((a) => a.type !== 'character');
+  const modelAssets = assets.filter((a) => a.type !== 'character' && a.type !== 'audio');
   const characterAssets = assets.filter((a) => a.type === 'character');
+  const audioAssets = assets.filter((a) => a.type === 'audio');
   const filteredModels = search.trim()
     ? modelAssets.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
     : modelAssets;
@@ -301,10 +327,33 @@ export function AssetBrowser() {
           </div>
         )}
 
+        {tab === 'audio' && (
+          <>
+            <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac" className="hidden" onChange={handleAudioFile} />
+            <button
+              onClick={() => audioInputRef.current?.click()}
+              disabled={uploading}
+              className="w-full h-10 rounded-xs border-2 border-dashed border-border flex items-center justify-center gap-1.5 text-muted hover:border-primary hover:text-primary transition-all text-[11px] disabled:opacity-40 disabled:cursor-not-allowed mb-2"
+            >
+              {uploading ? <span className="animate-pulse">업로드 중…</span> : <><span className="text-base leading-none">+</span> 오디오 업로드 (mp3·wav·ogg)</>}
+            </button>
+            <div className="space-y-1.5">
+              {audioAssets.map((asset) => (
+                <AudioRow key={asset.id} asset={asset} onDelete={() => deleteAsset(asset)} deleting={deletingId === asset.id} />
+              ))}
+            </div>
+            {audioAssets.length === 0 && (
+              <p className="text-[10px] text-muted text-center py-4 leading-relaxed">
+                오디오를 업로드하면<br />이벤트 <b>소리 재생(play_sound)</b>에서 고를 수 있어요.
+              </p>
+            )}
+          </>
+        )}
+
         {currentTab.wip && (
           <div className="flex flex-col items-center justify-center gap-1.5 select-none py-10">
             <span className="text-2xl opacity-20">
-              {tab === 'materials' ? '🎨' : tab === 'textures' ? '🖼' : tab === 'hdr' ? '🌅' : '🎵'}
+              {tab === 'materials' ? '🎨' : tab === 'textures' ? '🖼' : '🌅'}
             </span>
             <p className="text-[11px] text-muted font-medium">{currentTab.label} — 준비 중</p>
           </div>
@@ -331,6 +380,39 @@ function UploadButton({ uploading, onClick, label = '.glb', title }: { uploading
         </>
       )}
     </button>
+  );
+}
+
+function AudioRow({ asset, onDelete, deleting }: { asset: AssetRefSchema; onDelete: () => void; deleting?: boolean }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const toggle = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio(asset.dracoUrl);
+      audioRef.current.onended = () => setPlaying(false);
+    }
+    if (playing) { audioRef.current.pause(); audioRef.current.currentTime = 0; setPlaying(false); }
+    else { audioRef.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false)); }
+  };
+  return (
+    <div className="flex items-center gap-2 bg-background border border-border rounded-xs px-2 py-1.5">
+      <button
+        onClick={toggle}
+        className="w-6 h-6 shrink-0 rounded-full bg-primary/15 text-primary hover:bg-primary/25 flex items-center justify-center text-[11px] transition-colors"
+        title={playing ? '정지' : '미리듣기'}
+      >
+        {playing ? '■' : '▶'}
+      </button>
+      <span className="flex-1 text-[11px] text-foreground truncate" title={asset.name}>🎵 {asset.name}</span>
+      <button
+        onClick={onDelete}
+        disabled={deleting}
+        className="w-5 h-5 shrink-0 rounded-sm text-muted hover:text-red-500 flex items-center justify-center text-[11px] transition-colors disabled:opacity-40"
+        title="삭제"
+      >
+        {deleting ? '…' : '✕'}
+      </button>
+    </div>
   );
 }
 

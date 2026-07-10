@@ -35,12 +35,6 @@ interface HistoryEntry {
   prefabs?: PrefabSchema[];
 }
 
-export interface LayerState {
-  name: string;
-  visible: boolean;
-  locked: boolean;
-}
-
 interface SceneState {
   projectId: string | null;
   sceneId: string | null;
@@ -49,7 +43,6 @@ interface SceneState {
   environment: EnvSchema;
   // 프리팹 원본 정의 라이브러리(씬 단위). 인스턴스는 objects에 구워진 채로 존재한다.
   prefabs: PrefabSchema[];
-  layers: Record<string, LayerState>;
   selectedId: string | null;
   selectedIds: string[];
   // 그룹 격리(isolation) 스코프 — 더블클릭으로 '진입'한 그룹 id. 설정 시 단일 클릭이 이 그룹 안에서만
@@ -137,10 +130,6 @@ interface SceneActions {
   markSaved: (savedVersion?: number) => void;
   markModified: () => void;
   toggleWireframe: () => void;
-  addLayer: (name: string) => void;
-  toggleLayerVisible: (name: string) => void;
-  toggleLayerLocked: (name: string) => void;
-  setObjectLayer: (id: string, layer: string) => void;
   copyObjectProperties: () => void;
   pasteObjectProperties: () => void;
   batchUpdateObjects: (ids: string[], patch: (obj: ObjectNodeSchema) => Partial<ObjectNodeSchema>) => void;
@@ -309,7 +298,6 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   snapEnabled: false,
   snapTranslate: 0.5,
   snapRotate: 15,
-  layers: { default: { name: 'Default', visible: true, locked: false } },
   selectedIds: [],
   focusTarget: null,
   focusAllRequest: null,
@@ -1076,33 +1064,6 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   markSaved: (savedVersion) => set(savedVersion !== undefined ? { isModified: false, savedVersion } : { isModified: false }),
   markModified: () => set({ isModified: true }),
   toggleWireframe: () => set((s) => ({ wireframeMode: !s.wireframeMode })),
-
-  addLayer: (name) => set((s) => ({
-    layers: { ...s.layers, [name.toLowerCase().replace(/\s+/g, '_')]: { name, visible: true, locked: false } },
-  })),
-
-  toggleLayerVisible: (key) => set((s) => {
-    const layer = s.layers[key];
-    if (!layer) return s;
-    const visible = !layer.visible;
-    const layers = { ...s.layers, [key]: { ...layer, visible } };
-    const objects = s.objects.map((o) => o.layer === key ? { ...o, visible } : o);
-    return { layers, objects, isModified: true };
-  }),
-
-  toggleLayerLocked: (key) => set((s) => {
-    const layer = s.layers[key];
-    if (!layer) return s;
-    const locked = !layer.locked;
-    const layers = { ...s.layers, [key]: { ...layer, locked } };
-    const objects = s.objects.map((o) => o.layer === key ? { ...o, locked } : o);
-    return { layers, objects, isModified: true };
-  }),
-
-  setObjectLayer: (id, layer) => set((s) => ({
-    objects: s.objects.map((o) => o.id === id ? { ...o, layer } : o),
-    isModified: true,
-  })),
 
   copyObjectProperties: () => {
     const { selectedId, objects } = get();
