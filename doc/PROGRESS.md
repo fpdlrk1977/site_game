@@ -121,6 +121,25 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **자동차 예시 달성 경로**: 둥근 박스(몸체) + 각뿔대/실린더(바퀴) → 색·재질 → 그룹/프리팹 → motion(spin) 굴리기, 또는 Boolean 빼기로 바퀴 자리 구멍, Merge로 하나의 객체화. "만들고·조합하고·움직이는" 흐름이 코드로 완성됨.
 - **미착수(스코프 밖/후속)**: 유선형 자유곡면(서브디비전 박스모델링) · GLB 대상 Merge/Boolean · 텍스처 UV · loft 원형 단면 옵션 · 대칭(mirror) 편집.
 
+## 최근 완료 (2026-07-10) — AssetBrowser Materials·HDR 탭 (WIP 해제)
+
+마지막 두 WIP 탭 구현 → **AssetBrowser 4개 탭(Materials/Textures/HDR/Audio) 전부 완료.** 둘 다 `AssetBrowser.tsx` 단독 변경(스키마·렌더 경로 무변경 — 기존 필드 재사용).
+
+- **Materials 탭**: 재질 프리셋 8종(기본·무광·유광·플라스틱·금속·크롬·고무·네온발광) 그리드. 클릭 → **선택한 프리미티브(들)의 `MaterialOverride` 질감(roughness/metalness/emissive)만 교체, 색·텍스처는 유지**. 대상 필터는 텍스처 탭과 동일(`o.primitiveShape && !o.content`, GLB 제외). 네온(`emissive:'SELF'`)은 오브젝트 현재 색으로 자체 발광(emissive≠검정이면 렌더가 자동 glow). `applyMaterialToSelection` + `pushHistory` 1회 undo + 토스트. 프리셋 값은 EditorObjectInstance 기본값(rough 0.5·metal 0.1·emissive #000)에 맞춤 → '기본' 프리셋이 곧 리셋.
+- **HDR 탭**: 환경 프리셋 타일 11개(끄기 + Sunset/Dawn/Night/Forest/Park/City/Factory/Indoor/Lobby/Studio, 무드 그라데이션 스와치+이모지). 클릭 → `environment.hdrPreset` 설정(`applyHdr`), 현재 선택 타일 하이라이트(ring+✓). Environment 패널의 기존 HDR 드롭다운과 **동일 값**을 브라우저블 그리드로 노출(중복 아님, 발견성↑). 'none'=단색/하늘 배경 복귀.
+- 정리: `TABS`에서 materials/hdr의 `wip` 플래그 제거, 미사용 `currentTab`·wip placeholder 블록 삭제.
+- **검증**: tsc 클린 + dev 컴파일(editor 200, 인증 세션, `✓ Compiled`). **실동작 브라우저 확인 필요**(재질 프리셋이 선택 프리미티브에 적용·색 유지·네온 발광, HDR 타일 클릭 시 배경/반사 전환·활성 표시).
+
+## 최근 완료 (2026-07-10) — 조명 L2 (c) 라이트 색(warm/cool)
+
+L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없어(흰색 고정) 노을/밤 같은 색감 무드가 안 나오던 것 → **씬 전역 태양·환경광 색조** 추가. **L2 전 항목 완료.**
+
+- **스키마(`scene.ts`)**: `EnvSchema.lights`에 `directionalColor?`(태양)·`ambientColor?`(환경광) 추가. **둘 다 optional — 미설정 = 흰색('#ffffff'), 기존 씬 100% 하위호환**(기존 published 씬 룩 무변).
+- **렌더**: `ViewerCanvas`·`EditorCanvas`의 `directionalLight`/`ambientLight`에 `color={... ?? '#ffffff'}` 배선(뷰어·에디터 동일 룩). `hemisphereLight`는 fill용이라 무변.
+- **에디터 UI**: Environment→Lights 섹션 Sun Position 아래 **Sun Color / Ambient Color** 2컬럼 컬러픽커(fog color와 동일 패턴 — swatch+hex, `onBlur`=pushHistory 1회 undo).
+- **무드 프리셋 색조화**: `MOOD_PRESETS`에 색 주입 — 노을=따뜻한 주황(`#ff9d5c`), 밤=차가운 블루(`#9db4e8`+ambient `#4a5a80`), 아침=옅은 웜, 한낮/스튜디오/기본=흰색(리셋 시 색 해제). "진짜 색감 무드" 완성.
+- **검증**: tsc 클린 + dev 컴파일(editor·space 200, 인증 세션). **실동작 브라우저 확인 필요**(무드 프리셋 색감·컬러픽커·리셋).
+
 ## 최근 완료 (2026-07-10) — 제작 도구 확장 (Export / Cloner / 펜 툴)
 
 인앱 모델링 스코프 완료 후 사용자 신뢰 하에 우선순위대로 4종 추가 구현. **신규 lib 2개**(`exportGlb.ts`·`cloner.ts`), 신규 패널(`PenToolModal.tsx`).
@@ -270,9 +289,9 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
   - **팝업 Phase 완료** — 후속 후보(미착수): 팝업 안 여러 액션 버튼(CTA), 등장/퇴장 분리 애니메이션, 팝업 열림 시 이벤트 트리거 체이닝.
 - **대화 시스템 고도화 — 대사 종료 액션(버튼)·거리 LOD·1회성 [완료 2026-07-08]**: (1) **대사 종료 시 액션 = 말풍선 안 버튼** — `EventSchema.trigger`에 `dialogue_end` 추가. **자동발동이 아니라**(사용자 피드백: always+이벤트 문제·끝나자마자 넘어가면 당황) 대화 **마지막 문장에 액션 버튼**을 띄우고 **방문자가 누르면** 발동. `DialogueConfig.endButtonLabel`(기본 '확인'). `SpeechBubble` 안 3D Html 버튼(pointerEvents auto + onMouseDown/onTouchStart stopPropagation으로 카메라 드래그 차단 — 플레이 모드는 포인터락 없어 클릭 가능) → `dv.confirm()` → `onEvent(obj,'dialogue_end')` → 기존 `handleObjectEvent` 파이프라인(팝업·씬이동·문열기 등 전 액션). 데스크톱은 E키(근접+끝)로도 확정. auto 대화는 종료 이벤트 있으면 **마지막 문장에서 순환 멈춰 버튼 유지**. (2) **거리 LOD** — `SpeechBubble`을 `<group ref>`로 감싸 useFrame에서 카메라 거리 계산, 12m부터 페이드→20m 넘으면 사실상 숨김(직접 style.opacity, setState 없음, drei `distanceFactor` 원근축소와 병행). (3) **1회성** — `DialogueConfig.once`. `active = wantActive && !dismissed && !(once && seen)`. seen 시점: 버튼 확정(confirm) 또는 (버튼 없는 대화는) 끝까지 보고 근접 해제 시. `dismissed`=버튼 눌러 이번 세션 닫음(근접 풀리면 리셋). 미묘한 자동발동 로직(firedRef 등)은 버튼 방식으로 대체돼 단순화됨. **미완료(대화 남은 것)**: 선택지(분기), 하단 대화창 모드. 에디터: 트리거 '대사 종료 시'(버튼 안내), 대화 섹션 '1회성' 토글 + (종료 이벤트 있을 때) '종료 버튼' 이름 입력. 검증: **tsc 클린 + dev `/test/move-object` 200**. **실동작 브라우저 확인 필요**(근접→대사 끝 버튼 등장→클릭→액션, 멀어지면 페이드, once 재방문 안 뜸 — [[project_e2e_play_mode_testing]] 방식 권장).
 - **경계 벽 2차**: 그라데이션 페이드/one-sided/면별 텍스처/스카이박스 대안/원형·커스텀 모양.
-- **조명 L2 (c)**: 라이트 색(warm/cool) 스키마 — 나머지 L2(톤매핑·바닥스냅·무드프리셋·ContactShadows)는 완료.
+- ~~**조명 L2 (c)**: 라이트 색(warm/cool) 스키마~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]**. L2 전체 완료.
 - ~~**Prefab**: 미착수. 착수 전 override/동기화 규칙 설계 필요.~~ **[MVP 완료 2026-07-09 — 아래 참고]**
-- **AssetBrowser 탭**: Materials/HDR (WIP). ※ **Textures·Audio는 완료**. ground·boundary 텍스처는 여전히 개별 업로드(에셋 등록 아님) — 원하면 uploadImageTexture로 통합 가능.
+- ~~**AssetBrowser 탭**: Materials/HDR (WIP)~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]**. **4개 탭(Materials/Textures/HDR/Audio) 전부 완료.** ground·boundary 텍스처는 여전히 개별 업로드(에셋 등록 아님) — 원하면 uploadImageTexture로 통합 가능.
 
 ### 🗺️ 대형 로드맵 (원본 `ROADMAP.md`/`FEATURE_LIST.md` — 이 핸드오프 요약에 누락됐던 것들)
 
@@ -310,7 +329,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 - **③-a 분위기 프리셋**: 에디터 Environment 패널 'Mood' 섹션 — 아침/한낮/노을/밤/스튜디오 5개 버튼(`MOOD_PRESETS`). 클릭 시 `updateEnvironment`로 **HDR 프리셋 + 라이트(강도/태양위치) + 노출** 묶음 적용(기존 검증된 경로 재사용). **브라우저 확인 완료(2026-07-07)**.
 - **③-b ContactShadows**: 스키마 `contactShadows`, 에디터·뷰어 렌더, Lights 패널 토글. **기본 꺼짐(opt-in)**. **실제 GPU 브라우저에서 렌더 확인 완료(2026-07-07)** — 헤드리스 SwiftShader에선 안 그려졌던 것뿐. opt-in 유지.
-- **미착수(남음)**: (c) 라이트 색(warm/cool) 스키마 — 진짜 색감 무드엔 필요(현재 조명 색 없음).
+- **(c) 라이트 색(warm/cool)** **[완료 2026-07-10]**: 아래 '최근 완료' 참고. → **L2 전 항목 완료.**
 
 ### L2 후속 수정 (2026-07-06, 사용자 피드백)
 

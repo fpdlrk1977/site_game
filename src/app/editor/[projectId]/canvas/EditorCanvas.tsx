@@ -557,10 +557,11 @@ export function EditorCanvas() {
           {/* fill 광을 낮춰 방향광 그림자를 더 진하게. ambient/hemisphere가 그림자를 씻어내므로
               fill 기여를 줄인다(ambient는 저장값의 0.35배, hemisphere 0.04). */}
           <hemisphereLight args={["#b9d5ff", "#4a5568", 0.02]} />
-          <ambientLight intensity={environment.lights.ambientIntensity * 0.2} />
+          <ambientLight intensity={environment.lights.ambientIntensity * 0.2} color={environment.lights.ambientColor ?? '#ffffff'} />
           <directionalLight
             position={[environment.lights.directionalPosition.x, environment.lights.directionalPosition.y, environment.lights.directionalPosition.z]}
             intensity={environment.lights.directionalIntensity}
+            color={environment.lights.directionalColor ?? '#ffffff'}
             castShadow
             shadow-mapSize={[2048, 2048]}
             shadow-bias={-0.0004}

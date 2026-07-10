@@ -9,7 +9,7 @@ import { tryEmbedTextures } from '@/lib/glbEmbed';
 import { uploadGlbBlob, uploadAudioFile, uploadImageTexture } from '@/lib/uploadAsset';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
-import type { AssetRefSchema, ContentType, ParticlePreset, LightType } from '@/types/scene';
+import type { AssetRefSchema, ContentType, ParticlePreset, LightType, HdrPreset, MaterialOverride } from '@/types/scene';
 
 type Tab = 'models' | 'character' | 'content' | 'particle' | 'lights' | 'materials' | 'textures' | 'hdr' | 'audio';
 
@@ -19,10 +19,38 @@ const TABS: { id: Tab; label: string; wip?: boolean }[] = [
   { id: 'content',   label: 'Content' },
   { id: 'particle',  label: 'Particle' },
   { id: 'lights',    label: 'Lights' },
-  { id: 'materials', label: 'Materials', wip: true },
+  { id: 'materials', label: 'Materials' },
   { id: 'textures',  label: 'Textures' },
-  { id: 'hdr',       label: 'HDR',       wip: true },
+  { id: 'hdr',       label: 'HDR' },
   { id: 'audio',     label: 'Audio' },
+];
+
+// 재질 프리셋 — 선택한 프리미티브의 표면 질감(roughness/metalness/발광)을 한 번에 바꾼다. 색은 유지.
+// emissive: '#000000'=발광 없음, 'SELF'=오브젝트 현재 색으로 자체 발광(네온).
+const MATERIAL_PRESETS: { id: string; label: string; mat: Pick<MaterialOverride, 'roughness' | 'metalness' | 'emissive'>; swatch: string }[] = [
+  { id: 'reset',   label: '기본',       mat: { roughness: 0.5,  metalness: 0.1, emissive: '#000000' }, swatch: 'linear-gradient(135deg,#cbd5e1,#94a3b8)' },
+  { id: 'matte',   label: '무광',       mat: { roughness: 0.95, metalness: 0,   emissive: '#000000' }, swatch: 'linear-gradient(135deg,#9aa4b2,#6b7280)' },
+  { id: 'glossy',  label: '유광',       mat: { roughness: 0.1,  metalness: 0,   emissive: '#000000' }, swatch: 'linear-gradient(135deg,#eef4fb 0%,#8b97a8 55%,#dbe3ee 100%)' },
+  { id: 'plastic', label: '플라스틱',   mat: { roughness: 0.4,  metalness: 0,   emissive: '#000000' }, swatch: 'linear-gradient(135deg,#c7d0dc,#7f8a99)' },
+  { id: 'metal',   label: '금속',       mat: { roughness: 0.3,  metalness: 1,   emissive: '#000000' }, swatch: 'linear-gradient(135deg,#eef2f6 0%,#9fa9b6 45%,#5c6470 100%)' },
+  { id: 'chrome',  label: '크롬',       mat: { roughness: 0.04, metalness: 1,   emissive: '#000000' }, swatch: 'linear-gradient(135deg,#ffffff 0%,#8fa0b3 40%,#3f4855 70%,#e6ecf3 100%)' },
+  { id: 'rubber',  label: '고무',       mat: { roughness: 1,    metalness: 0,   emissive: '#000000' }, swatch: 'linear-gradient(135deg,#4b5563,#1f2937)' },
+  { id: 'glow',    label: '네온(발광)', mat: { roughness: 0.5,  metalness: 0,   emissive: 'SELF'    }, swatch: 'linear-gradient(135deg,#fde68a,#f472b6)' },
+];
+
+// HDR 환경(IBL + 배경) 프리셋 타일 — 씬 전역 hdrPreset을 설정. 'none'=끄기(단색/하늘로 복귀).
+const HDR_TILES: { id: HdrPreset; label: string; emoji: string; swatch: string }[] = [
+  { id: 'none',      label: '끄기',    emoji: '⛶',  swatch: 'linear-gradient(135deg,#e5e7eb,#cbd5e1)' },
+  { id: 'sunset',    label: 'Sunset',  emoji: '🌇', swatch: 'linear-gradient(135deg,#ff9d5c,#c2410c)' },
+  { id: 'dawn',      label: 'Dawn',    emoji: '🌅', swatch: 'linear-gradient(135deg,#fbc2eb,#a6c1ee)' },
+  { id: 'night',     label: 'Night',   emoji: '🌙', swatch: 'linear-gradient(135deg,#1e293b,#0f172a)' },
+  { id: 'forest',    label: 'Forest',  emoji: '🌲', swatch: 'linear-gradient(135deg,#4ade80,#166534)' },
+  { id: 'park',      label: 'Park',    emoji: '🌳', swatch: 'linear-gradient(135deg,#bbf7d0,#60a5fa)' },
+  { id: 'city',      label: 'City',    emoji: '🏙', swatch: 'linear-gradient(135deg,#94a3b8,#475569)' },
+  { id: 'warehouse', label: 'Factory', emoji: '🏭', swatch: 'linear-gradient(135deg,#a8a29e,#57534e)' },
+  { id: 'apartment', label: 'Indoor',  emoji: '🛋', swatch: 'linear-gradient(135deg,#fde9c8,#c8a97e)' },
+  { id: 'lobby',     label: 'Lobby',   emoji: '🏛', swatch: 'linear-gradient(135deg,#f1e4cf,#b0a184)' },
+  { id: 'studio',    label: 'Studio',  emoji: '💡', swatch: 'linear-gradient(135deg,#f8fafc,#cbd5e1)' },
 ];
 
 const CONTENT_ITEMS: { type: ContentType; label: string; emoji: string }[] = [
@@ -45,7 +73,7 @@ const LIGHT_ITEMS: { type: LightType; label: string; emoji: string }[] = [
 ];
 
 export function AssetBrowser() {
-  const { projectId, assets, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset, removeObjectsByAsset, updateEnvironment, updateObject, pushHistory } = useSceneStore();
+  const { projectId, assets, environment, addAsset, addAssetObject, addContentObject, addParticleObject, addLightObject, removeAsset, removeObjectsByAsset, updateEnvironment, updateObject, pushHistory } = useSceneStore();
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -73,6 +101,32 @@ export function AssetBrowser() {
     }
     pushHistory();
     addToast(`텍스처 적용 (${targets.length}개)`, 'success');
+  };
+
+  // 재질 프리셋을 선택한 프리미티브(들)에 적용. 색·텍스처는 유지하고 질감만 바꾼다.
+  const applyMaterialToSelection = (preset: typeof MATERIAL_PRESETS[number]) => {
+    const st = useSceneStore.getState();
+    const targets = st.selectedIds.filter((id) => {
+      const o = st.objects.find((x) => x.id === id);
+      return o?.primitiveShape && !o.content;
+    });
+    if (targets.length === 0) {
+      addToast('먼저 프리미티브(박스·구체 등)를 선택하세요.', 'error');
+      return;
+    }
+    for (const id of targets) {
+      const cur = st.objects.find((o) => o.id === id)?.material;
+      const emissive = preset.mat.emissive === 'SELF' ? (cur?.color ?? '#ffffff') : preset.mat.emissive;
+      updateObject(id, { material: { ...cur, roughness: preset.mat.roughness, metalness: preset.mat.metalness, emissive } });
+    }
+    pushHistory();
+    addToast(`${preset.label} 재질 적용 (${targets.length}개)`, 'success');
+  };
+
+  // HDR 환경 프리셋 적용(씬 전역). none이면 끄기(단색/하늘 배경으로 복귀).
+  const applyHdr = (id: HdrPreset) => {
+    updateEnvironment({ hdrPreset: id });
+    pushHistory();
   };
 
   const handleTextureFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -245,7 +299,6 @@ export function AssetBrowser() {
     }
   };
 
-  const currentTab = TABS.find((t) => t.id === tab)!;
   const modelAssets = assets.filter((a) => a.type !== 'character' && a.type !== 'audio' && a.type !== 'texture');
   const characterAssets = assets.filter((a) => a.type === 'character');
   const audioAssets = assets.filter((a) => a.type === 'audio');
@@ -416,13 +469,54 @@ export function AssetBrowser() {
           </>
         )}
 
-        {currentTab.wip && (
-          <div className="flex flex-col items-center justify-center gap-1.5 select-none py-10">
-            <span className="text-2xl opacity-20">
-              {tab === 'materials' ? '🎨' : '🌅'}
-            </span>
-            <p className="text-[11px] text-muted font-medium">{currentTab.label} — 준비 중</p>
-          </div>
+        {tab === 'materials' && (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              {MATERIAL_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() => applyMaterialToSelection(preset)}
+                  className="group relative h-[72px] rounded-xs bg-background border border-border hover:border-primary/60 transition-all overflow-hidden flex flex-col items-center justify-center gap-1.5"
+                  title={`선택한 프리미티브에 '${preset.label}' 재질 적용`}
+                >
+                  <span className="w-8 h-8 rounded-full border border-border/50 shadow-inner" style={{ background: preset.swatch }} />
+                  <span className="text-[9px] text-muted">{preset.label}</span>
+                  <span className="absolute inset-0 bg-primary/0 group-hover:bg-primary/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-white text-[11px] font-medium">
+                    적용
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted text-center py-4 leading-relaxed">
+              프리미티브(박스·구체 등)를 선택하고<br />재질을 클릭하면 질감이 바뀝니다. <b>색은 유지</b>돼요.
+            </p>
+          </>
+        )}
+
+        {tab === 'hdr' && (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              {HDR_TILES.map((tile) => {
+                const active = (environment.hdrPreset ?? 'none') === tile.id;
+                return (
+                  <button
+                    key={tile.id}
+                    onClick={() => applyHdr(tile.id)}
+                    className={`relative h-[72px] rounded-xs overflow-hidden border transition-all flex flex-col items-center justify-center gap-1 ${active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-border/60'}`}
+                    style={{ background: tile.swatch }}
+                    title={`환경(HDR): ${tile.label}`}
+                  >
+                    <span className="text-lg leading-none drop-shadow">{tile.emoji}</span>
+                    <span className="text-[9px] text-white font-medium drop-shadow px-1 py-0.5 rounded-sm bg-black/25">{tile.label}</span>
+                    {active && <span className="absolute top-1 right-1 text-[10px] text-white bg-primary rounded-full w-4 h-4 flex items-center justify-center">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-muted text-center py-4 leading-relaxed">
+              HDR 환경은 씬 전체의 <b>배경·반사·조명</b>을 바꿉니다.<br />세부 조정은 Environment 패널에서.
+            </p>
+          </>
         )}
       </div>
     </div>

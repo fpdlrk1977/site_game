@@ -437,17 +437,17 @@ function GlbClipPicker({ url, value, onChange }: { url: string; value: string; o
 const MOOD_PRESETS: { id: string; label: string; emoji: string; env: Partial<EnvSchema> }[] = [
   // 기본값 복귀 — HDR/라이트/노출을 DEFAULT_ENVIRONMENT 상태로 되돌린다(무드 해제).
   { id: 'default', label: '기본', emoji: '↺', env: { hdrPreset: 'none', toneMappingExposure: 1,
-    lights: { ambientIntensity: 0.6, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 } } } },
+    lights: { ambientIntensity: 0.6, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 }, directionalColor: '#ffffff', ambientColor: '#ffffff' } } },
   { id: 'morning', label: '아침', emoji: '🌅', env: { hdrPreset: 'dawn', toneMappingExposure: 1.05,
-    lights: { ambientIntensity: 0.55, directionalIntensity: 1.0, directionalPosition: { x: 8, y: 5, z: 6 } } } },
+    lights: { ambientIntensity: 0.55, directionalIntensity: 1.0, directionalPosition: { x: 8, y: 5, z: 6 }, directionalColor: '#ffe4c4', ambientColor: '#dfe8ff' } } },
   { id: 'noon', label: '한낮', emoji: '☀️', env: { hdrPreset: 'park', toneMappingExposure: 1.0,
-    lights: { ambientIntensity: 0.6, directionalIntensity: 1.5, directionalPosition: { x: 4, y: 12, z: 4 } } } },
+    lights: { ambientIntensity: 0.6, directionalIntensity: 1.5, directionalPosition: { x: 4, y: 12, z: 4 }, directionalColor: '#fffaf0', ambientColor: '#ffffff' } } },
   { id: 'sunset', label: '노을', emoji: '🌇', env: { hdrPreset: 'sunset', toneMappingExposure: 0.95,
-    lights: { ambientIntensity: 0.5, directionalIntensity: 1.0, directionalPosition: { x: 10, y: 3, z: 2 } } } },
+    lights: { ambientIntensity: 0.5, directionalIntensity: 1.0, directionalPosition: { x: 10, y: 3, z: 2 }, directionalColor: '#ff9d5c', ambientColor: '#ffcfa8' } } },
   { id: 'night', label: '밤', emoji: '🌙', env: { hdrPreset: 'night', toneMappingExposure: 0.85,
-    lights: { ambientIntensity: 0.3, directionalIntensity: 0.4, directionalPosition: { x: 3, y: 8, z: 5 } } } },
+    lights: { ambientIntensity: 0.3, directionalIntensity: 0.4, directionalPosition: { x: 3, y: 8, z: 5 }, directionalColor: '#9db4e8', ambientColor: '#4a5a80' } } },
   { id: 'studio', label: '스튜디오', emoji: '💡', env: { hdrPreset: 'studio', toneMappingExposure: 1.0,
-    lights: { ambientIntensity: 0.7, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 } } } },
+    lights: { ambientIntensity: 0.7, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 }, directionalColor: '#ffffff', ambientColor: '#ffffff' } } },
 ];
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
@@ -792,6 +792,33 @@ function EnvironmentPanel() {
             onChangeZ={(v) => updateEnvironment({ lights: { ...env.lights, directionalPosition: { ...env.lights.directionalPosition, z: v } } })}
             onCommit={pushHistory} dragStep={0.5}
           />
+          {/* 라이트 색(warm/cool) — 태양·환경광 색조. 미설정=흰색. 노을은 따뜻하게, 밤은 차갑게 등 무드 연출. */}
+          <div className="flex gap-2 pt-1">
+            <div className="flex-1">
+              <span className="text-[10px] text-muted/50 font-semibold">Sun Color</span>
+              <div className="px-2 flex items-center border border-border rounded-xs mt-0.5">
+                <input type="color" value={env.lights.directionalColor ?? '#ffffff'}
+                  onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalColor: e.target.value } })}
+                  onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
+                <input type="text" value={env.lights.directionalColor ?? '#ffffff'}
+                  onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalColor: e.target.value } })}
+                  onBlur={pushHistory}
+                  className="flex-1 w-full px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <span className="text-[10px] text-muted/50 font-semibold">Ambient Color</span>
+              <div className="px-2 flex items-center border border-border rounded-xs mt-0.5">
+                <input type="color" value={env.lights.ambientColor ?? '#ffffff'}
+                  onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientColor: e.target.value } })}
+                  onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
+                <input type="text" value={env.lights.ambientColor ?? '#ffffff'}
+                  onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientColor: e.target.value } })}
+                  onBlur={pushHistory}
+                  className="flex-1 w-full px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+              </div>
+            </div>
+          </div>
           {/* 노출(Exposure) — NeutralToneMapping의 밝기. 1=기본. 씬 전체 톤 조절 */}
           <div className="pt-1">
             <LabeledNum

@@ -25,8 +25,12 @@ export interface EnvSchema {
   fog: { enabled: boolean; color: string; near: number; far: number };
   lights: {
     ambientIntensity: number;
+    // 환경광(ambient) 색. 미설정 = 흰색('#ffffff', 기존 동작). 차가운 그림자 톤 등에 사용.
+    ambientColor?: string;
     directionalPosition: Vector3;
     directionalIntensity: number;
+    // 방향광(태양) 색. 미설정 = 흰색('#ffffff', 기존 동작). warm/cool 무드의 핵심.
+    directionalColor?: string;
   };
   playerCharacterId?: string;
   playerCharacterScale?: number;
