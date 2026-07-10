@@ -25,7 +25,7 @@ const SHAPES: { shape: PrimitiveShape; label: string; icon: LucideIcon }[] = [
 
 const SNAP_STEPS = [0.25, 0.5, 1, 2];
 
-type Menu = 'align' | 'snap' | 'bookmark' | null;
+type Menu = 'align' | 'snap' | 'bookmark' | 'shapes' | null;
 
 export function ViewportFloatingToolbar() {
   const {
@@ -36,6 +36,9 @@ export function ViewportFloatingToolbar() {
   } = useSceneStore();
 
   const [openMenu, setOpenMenu] = useState<Menu>(null);
+  // 스플릿 버튼: 아이콘은 마지막에 고른 도형(기본 박스), 클릭 시 바로 그 도형 배치. 화살표는 목록 열기.
+  const [selectedShape, setSelectedShape] = useState<PrimitiveShape>('box');
+  const selectedShapeDef = SHAPES.find((s) => s.shape === selectedShape) ?? SHAPES[0];
   const rootRef = useRef<HTMLDivElement>(null);
   const canAlign = selectedIds.length >= 2;
 
@@ -135,18 +138,44 @@ export function ViewportFloatingToolbar() {
 
         {SEP}
 
-        {/* 도형 추가 */}
+        {/* 도형 추가 — 스플릿 버튼: 좌측 화살표=목록 열기 / 아이콘=선택된 도형 즉시 배치(기본 박스) */}
         <div className="flex items-center gap-0">
-          {SHAPES.map(({ shape, label, icon: Icon }) => (
-            <Tooltip key={shape} content={`${label} 추가 (클릭 후 위치 지정)`}>
+          <div className="relative flex items-center">
+            {/* 아이콘: 현재 선택된 도형을 바로 추가 */}
+            <Tooltip content={`${selectedShapeDef.label} 추가 (클릭 후 위치 지정)`}>
               <button
-                onClick={() => beginPlacement({ kind: 'shape', shape })}
-                className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
+                onClick={() => beginPlacement({ kind: 'shape', shape: selectedShape })}
+                className="w-7 h-7 rounded-l-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
               >
-                <Icon size={14} />
+                <selectedShapeDef.icon size={14} />
               </button>
             </Tooltip>
-          ))}
+            {/* 화살표: 드롭다운 열기 (다른 드롭다운과 동일하게 우측) */}
+            <button
+              onClick={() => setOpenMenu(openMenu === 'shapes' ? null : 'shapes')}
+              title="도형 선택"
+              className={`h-7 w-4 rounded-r-xs flex items-center justify-center transition-all ${
+                openMenu === 'shapes' ? 'bg-primary text-white' : 'text-muted hover:text-foreground hover:bg-background'
+              }`}
+            >
+              <ChevronDown size={11} className={openMenu === 'shapes' ? 'rotate-180 transition-transform' : 'transition-transform'} />
+            </button>
+            {openMenu === 'shapes' && (
+              <div className="absolute top-full left-0 mt-2 bg-surface border border-border rounded-xs shadow-dropdown z-50 p-1 min-w-[130px]">
+                {SHAPES.map(({ shape, label, icon: Icon }) => (
+                  <button
+                    key={shape}
+                    onClick={() => { setSelectedShape(shape); beginPlacement({ kind: 'shape', shape }); setOpenMenu(null); }}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-xs text-[11px] transition-colors ${
+                      shape === selectedShape ? 'bg-primary/15 text-foreground' : 'text-foreground hover:bg-background'
+                    }`}
+                  >
+                    <Icon size={14} className="text-muted" /> {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <Tooltip content="펜 툴 — 2D 그려서 3D 만들기 (돌출·회전체)">
             <button
               onClick={() => setPenToolOpen(true)}
@@ -181,9 +210,8 @@ export function ViewportFloatingToolbar() {
           </button>
         </Tooltip>
 
+        {/* 이전/다음(Undo/Redo) 버튼 숨김 — 주석 처리 (단축키 Ctrl+Z / Ctrl+Y 는 유지)
         {SEP}
-
-        {/* Undo / Redo */}
         <div className="flex items-center bg-background/50 rounded-xs p-0.5 gap-0.5">
           <Tooltip content="실행 취소 (Ctrl+Z)">
             <button
@@ -202,10 +230,10 @@ export function ViewportFloatingToolbar() {
             </button>
           </Tooltip>
         </div>
+        */}
 
+        {/* 카메라 북마크 버튼 숨김 — 주석 처리
         {SEP}
-
-        {/* 카메라 북마크 — 드롭다운 (아이콘 + 화살표) */}
         <div className="relative">
           <Tooltip content="카메라 북마크">
             <button
@@ -248,6 +276,7 @@ export function ViewportFloatingToolbar() {
             </div>
           )}
         </div>
+        */}
 
         {SEP}
 

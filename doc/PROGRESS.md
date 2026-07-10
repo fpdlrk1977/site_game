@@ -129,6 +129,18 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **오브젝트/에셋 배치 모드**: add 버튼(도형·GLB·콘텐츠·파티클·라이트) 클릭 시 즉시 중앙 생성하지 않고 **뷰포트에서 클릭한 위치에 생성**. 스토어 `pendingPlacement` state + `beginPlacement`/`commitPlacement`/`cancelPlacement`. add* 5종에 `placeAt?:{x,z}` 옵션 파라미터(단일 히스토리 유지, y는 타입별 기본/바닥스냅 유지). `EditorCanvas`: 바닥(y=0) 평면 레이캐스트로 **단순 반투명 박스+바닥 링 고스트가 마우스 따라다님**(`PlacementGhost`, useFrame), 좌클릭=생성(**한 번 배치 후 종료**), **ESC 취소**, 상단 안내 배너 + crosshair 커서. 배치 클릭이 OrbitControls 좌드래그·선택박스·onPointerMissed 해제와 안 겹치게 게이트(`justPlacedRef`·orbit 일시 비활성). 호출부: 툴바 도형 + AssetBrowser 4탭. 검증: tsc 클린 + editor 200.
 - **툴바 드롭다운화**(`ViewportFloatingToolbar`): 펼쳐져 있던 **스냅**(켜기 토글 + 0.25/0.5/1/2)과 **카메라 북마크**(1~5, 저장/이동)를 각각 **아이콘+ChevronDown 드롭다운**으로 접음(정렬 드롭다운과 동일 `openMenu` 패턴·바깥클릭 닫기). 북마크는 Shift+클릭 대신 슬롯별 이동/저장 버튼 명시. 도형 아이콘도 lucide(Box/Circle/Cylinder/Cone/Hexagon/Square)·펜=PenTool·복셀=Boxes. 검증: tsc 클린.
 
+### 후속 3종 (2026-07-10) — 트리 잠금 캐스케이드 · 라이트 아이콘 · 도형 드롭다운
+- **그룹 잠금 시 하위 요소도 잠금**: `sceneStore.setObjectLocked`가 대상이 그룹이면 자손 전체를 재귀 수집해 함께 locked 토글(선택 해제도 자손 포함). 단일 undo(_prevSnapshot) 유지.
+- **트리 라이트 아이콘 종류별**: `HierarchyPanel.getIcon`에 라이트 분기 추가(point=Lightbulb / spot=Flashlight / directional=Sun). 기존엔 라이트가 분기 없어 Circle로 떴음.
+- **툴바 도형 추가 드롭다운**: 박스~평면 6개 버튼 나열 → `Shapes` 아이콘+ChevronDown 드롭다운 1개로(각 항목 아이콘+라벨, 클릭 시 `beginPlacement`+닫기). 펜/복셀은 기존 버튼 유지. `Menu`에 'shapes' 추가.
+- 검증: tsc 클린 + editor 200.
+
+### 후속 4종 (2026-07-11) — 툴바 정리 + 잠금 UX
+- **잠긴 그룹 하위 자물쇠 disabled**: `HierarchyPanel`이 각 행의 조상 체인을 확인(`lockedByAncestor`)해, 잠긴 조상이 있으면 그 행의 자물쇠 토글을 **disabled**(개별 해제 불가, "상위 그룹에서 잠금 해제" 안내). 그룹 잠금 캐스케이드(자손 locked=true)와 짝을 이룸.
+- **툴바 Undo/Redo·카메라 북마크 버튼 주석 처리**(`ViewportFloatingToolbar`): 두 블록을 `{/* ... */}`로 감싸 숨김(중첩 라벨 주석 제거 후 래핑). 관련 import·store 값은 복원 편의로 유지(미사용 경고만, noUnusedLocals off라 빌드 무해). 단축키 Ctrl+Z/Y는 유지.
+- **도형 추가 = 스플릿 버튼**: `[아이콘][▾]` (아이콘 좌·화살표 우, 다른 드롭다운과 통일). **아이콘=마지막 선택 도형(기본 박스) 즉시 배치**(`beginPlacement`), **화살표=목록 열기**. 목록에서 도형 고르면 `selectedShape` 갱신 + 즉시 배치. `Shapes` 아이콘 import 제거.
+- 검증: tsc 클린 + editor 200 + ✓ Compiled.
+
 ## 최근 완료 (2026-07-10) — 경계 벽 2차 + move_object 그룹 플레이 모드
 
 ### 경계 벽 2차 (원형 제외 — 그라데이션·one-sided·면별 텍스처·스카이박스)

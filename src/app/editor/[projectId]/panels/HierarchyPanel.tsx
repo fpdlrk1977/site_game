@@ -5,6 +5,7 @@ import {
   Box, Circle, Cylinder, Cone, Hexagon, Square, Folder, Type, Image as ImageIcon, Play,
   Package, Sparkles, Grid2x2, CircleDot, ChevronDown, ChevronRight,
   Eye, EyeOff, Lock, Unlock, Pencil, Copy, X, Ungroup,
+  Lightbulb, Flashlight, Sun,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSceneStore, isDescendant } from '@/store/sceneStore';
@@ -20,6 +21,7 @@ function getIcon(obj: ObjectNodeSchema): LucideIcon {
   if (obj.clonerClone) return CircleDot;   // 클로너가 생성한 복제본
   if (obj.clonerConfig) return Grid2x2;     // 클로너 그룹
   if (obj.isGroup) return Folder;
+  if (obj.light) return obj.light.type === 'point' ? Lightbulb : obj.light.type === 'spot' ? Flashlight : Sun;
   if (obj.content) return obj.content.type === 'text' ? Type : obj.content.type === 'image' ? ImageIcon : Play;
   if (obj.assetId) return Package;
   if (obj.particle) return Sparkles;
@@ -63,12 +65,24 @@ function HierarchyItem({
   dragEnabled, isDragging, dropPos, onDragStartItem, onDragOverItem, onDropItem, onDragEndItem,
 }: ItemProps) {
   const { selectedId, selectedIds, updateObject, setObjectLocked, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected } = useSceneStore();
+  const objects = useSceneStore((s) => s.objects);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
   const inputRef = useRef<HTMLInputElement>(null);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(obj.id) : selectedId === obj.id;
   const hasChildren = obj.isGroup;
+  // 조상(부모 체인) 중 잠긴 게 있으면 이 행의 잠금은 조상에서 내려온 것 → 개별 해제 불가(버튼 disabled).
+  const lockedByAncestor = useMemo(() => {
+    let pid = obj.parentId;
+    while (pid) {
+      const p = objects.find((o) => o.id === pid);
+      if (!p) break;
+      if (p.locked) return true;
+      pid = p.parentId;
+    }
+    return false;
+  }, [objects, obj.parentId]);
 
   useEffect(() => {
     if (editing) inputRef.current?.select();
@@ -186,9 +200,14 @@ function HierarchyItem({
             {obj.visible ? <Eye size={13} /> : <EyeOff size={13} />}
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); setObjectLocked(obj.id, !obj.locked); pushHistory(); }}
-            className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${obj.locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-            title={obj.locked ? '잠금 해제' : '잠금'}
+            onClick={(e) => { e.stopPropagation(); if (lockedByAncestor) return; setObjectLocked(obj.id, !obj.locked); pushHistory(); }}
+            disabled={lockedByAncestor}
+            className={`w-5 h-5 flex items-center justify-center transition-colors rounded ${
+              lockedByAncestor
+                ? 'text-muted/40 opacity-100 cursor-not-allowed'
+                : `text-muted hover:text-foreground ${obj.locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`
+            }`}
+            title={lockedByAncestor ? '상위 그룹이 잠겨 있어요 (그룹에서 잠금 해제)' : obj.locked ? '잠금 해제' : '잠금'}
           >
             {obj.locked ? <Lock size={13} /> : <Unlock size={13} />}
           </button>

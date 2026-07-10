@@ -685,12 +685,21 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   // updateObject와 동일하게 _prevSnapshot만 세팅 → 호출부의 pushHistory()가 커밋(undo 1회).
   setObjectLocked: (id, locked) => {
     const { objects, environment, _prevSnapshot, selectedId, selectedIds } = get();
-    const nextIds = locked ? selectedIds.filter((x) => x !== id) : selectedIds;
+    // 그룹을 잠그면(풀면) 하위 요소도 함께 잠금(해제) — 재귀로 자손 전체 수집.
+    const ids = new Set<string>([id]);
+    const target = objects.find((o) => o.id === id);
+    if (target?.isGroup) {
+      const collect = (pid: string) => {
+        for (const o of objects) if (o.parentId === pid) { ids.add(o.id); if (o.isGroup) collect(o.id); }
+      };
+      collect(id);
+    }
+    const nextIds = locked ? selectedIds.filter((x) => !ids.has(x)) : selectedIds;
     set({
       _prevSnapshot: _prevSnapshot ?? { objects, environment },
-      objects: objects.map((o) => (o.id === id ? { ...o, locked } : o)),
+      objects: objects.map((o) => (ids.has(o.id) ? { ...o, locked } : o)),
       selectedIds: nextIds,
-      selectedId: locked && selectedId === id ? (nextIds[nextIds.length - 1] ?? null) : selectedId,
+      selectedId: locked && selectedId && ids.has(selectedId) ? (nextIds[nextIds.length - 1] ?? null) : selectedId,
       isModified: true,
     });
   },
