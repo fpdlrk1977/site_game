@@ -121,6 +121,21 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **자동차 예시 달성 경로**: 둥근 박스(몸체) + 각뿔대/실린더(바퀴) → 색·재질 → 그룹/프리팹 → motion(spin) 굴리기, 또는 Boolean 빼기로 바퀴 자리 구멍, Merge로 하나의 객체화. "만들고·조합하고·움직이는" 흐름이 코드로 완성됨.
 - **미착수(스코프 밖/후속)**: 유선형 자유곡면(서브디비전 박스모델링) · GLB 대상 Merge/Boolean · 텍스처 UV · loft 원형 단면 옵션 · 대칭(mirror) 편집.
 
+## 최근 완료 (2026-07-11) — 기능 갭 A그룹 4종 (Visibility 옵션·실측 Size·Frame 비율·Grid 평면)
+
+사용자 기획서(11개 기능) 대조 후 "A그룹(저비용·고효과)" 우선 구현.
+- **#9 per-object Visibility 렌더 옵션**(프리미티브): `ObjectNodeSchema.render?{flatShading,doubleSided,castShadow,receiveShadow}` 추가. `PrimitiveMaterial`에 `flatShading`(key에 포함해 런타임 전환 시 재마운트)·`side` prop → 에디터(`EditorObjectInstance`)·뷰어(`ViewerObject`) 프리미티브 mesh 배선(castShadow/receiveShadow도). Inspector Visibility 섹션에 토글 4종(프리미티브 전용). 미설정=스무스·앞면·그림자 생성+수신(기존 동작).
+- **#6 실측 Size(m) 필드**: Transform 섹션에 `크기(m)` XYZRow — `localBBox × scale`로 표시, 입력 시 `scale = size/localSize` 역산. box/구체는 size=scale, 돌출/로프트는 실측 반영(localBBox 캐시 활용). (놓쳤던 `⤓ 바닥에 놓기` 글리프도 `ArrowDownToLine`로 교체.)
+- **#1 Frame 고정 화면 비율**: `EnvSchema.frameAspect?`(width/height, 미설정=자유). **게시 뷰어**(`ViewerClient`)가 설정 시 캔버스를 그 비율로 레터박스(`maxWidth: 100vh*ar`, `maxHeight: 100vw/ar`로 가운데 정렬+배경 여백). 에디터 Environment 패널에 Frame 섹션(자유/16:9/4:3/1:1/9:16/3:4). 에디터 캔버스는 미변경(오버레이/좌표계 안전).
+- **#4a Grid 평면 전환**: 스토어 전환 상태 `gridPlane('xz'|'xy'|'yz')`+`cycleGridPlane`(씬 저장 X). `EditorCanvas` drei `<Grid>`에 회전 적용(바닥/벽). 툴바에 격자 순환 버튼(`Grid3x3` + XZ/XY/YZ 라벨).
+- 검증: tsc 클린 + editor 200. **실동작 브라우저 확인 필요**(셰이딩/양면/그림자 토글, Size 입력 역산, 게시 뷰어 레터박스, 격자 평면 전환).
+- **B그룹 진행 중** — 아래 참고. 남음: #3 Effects+FogExp2+SSAO(N8AO 설치 필요) · #7 Subdivision(패키지 설치 필요) · #2b 에디터 실시간 물리 프리뷰. 대형(C): #5 글로벌 재질/색 에셋 · #8b 레이어 재질/AI.
+
+### B그룹 (2026-07-11, 무설치분) — #8a MeshPhysicalMaterial · #4b 오브젝트 스냅
+- **#8a MeshPhysicalMaterial**: `MaterialOverride`에 `clearcoat`/`sheen`/`transmission`/`ior` 추가. `PrimitiveMaterial`이 셋 중 하나라도 >0이면 **`meshPhysicalMaterial`로 전환**(key로 std↔physical 재마운트), 전부 0이면 기존 `meshStandardMaterial`. 에디터·뷰어 프리미티브 배선. Inspector Material 섹션에 '물리 재질(고급)' 슬라이더(clearcoat/sheen/transmission + transmission>0일 때 IOR). transmission은 유리처럼 투명(transparent+thickness).
+- **#4b 오브젝트 스냅(자석)**: 스토어 토글 `objectSnap`(그리드 스냅과 독립, 기본 OFF) + 툴바 스냅 드롭다운에 토글. `SingleGizmo` translate에서 **루트 오브젝트** 이동 시, 드래그 시작 시 스냅샷한 다른 루트들의 월드 bbox와 비교해 **각 축의 min/center/max를 임계 0.2m 내 최근접에 흡착**(`localBBox×matrixWorld`로 가이드박스 오염 없는 정밀 bbox 사용). 토글 OFF면 완전 무영향(격리). 중첩/캐릭터 프리뷰 제외. 가이드 라인 시각화는 미포함(MVP).
+- 검증: tsc 클린 + editor 200 + ✓ Compiled. **실동작 브라우저 확인 필요**(물리 재질 clearcoat/sheen/유리, 오브젝트 스냅 흡착).
+
 ## 최근 완료 (2026-07-10) — 에디터 UX 3종 (아이콘 lucide화 · 배치 모드 · 툴바 드롭다운)
 
 사용자 요청 3건. 컨펌 후 진행(단순 반투명 고스트 · 한 번 배치 후 종료 · 이모지 전부 lucide).

@@ -5,13 +5,13 @@ import {
   ArrowLeftRight, User, ChevronDown, ChevronRight, RotateCcw, Combine, Download, X, Pencil, Play,
   Sunrise, Sun, Sunset, Moon, Lightbulb, Flashlight, Flame, Wind, Sparkles, Snowflake,
   Sprout, Mountain, Waves, Gem, Droplet, Palette, Music,
-  SlidersHorizontal, AlignCenter, Component, Grid2x2, CircleDot,
+  SlidersHorizontal, AlignCenter, Component, Grid2x2, CircleDot, ArrowDownToLine,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MathUtils } from 'three';
 import * as THREE from 'three';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
-import { worldBBox } from '@/lib/objectBBox';
+import { worldBBox, localBBox } from '@/lib/objectBBox';
 import { useSceneStore } from '@/store/sceneStore';
 import { useLiveTransformStore } from '@/store/liveTransformStore';
 import { useToast } from '@/hooks/useToast';
@@ -1277,6 +1277,26 @@ function EnvironmentPanel() {
         </div>
       </GroupBox>
 
+      {/* Frame — 게시 뷰어 고정 화면 비율 */}
+      <GroupBox>
+        <SectionHeader title="Frame" hint="게시된 뷰어의 고정 화면 비율. '자유'는 브라우저를 꽉 채우고, 비율을 정하면 그 틀로 레터박스(가운데 정렬 + 배경 여백)해요. 에디터엔 미반영 — 게시/공유 화면에 적용됩니다." />
+        <div className="px-3 pb-4">
+          <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">화면 비율</span>
+          <SelectBox
+            value={String(env.frameAspect && env.frameAspect > 0 ? env.frameAspect : 0)}
+            onChange={(v) => { const n = Number(v); updateEnvironment({ frameAspect: n > 0 ? n : undefined }); pushHistory(); }}
+            options={[
+              { value: '0', label: '자유 (브라우저 채움)' },
+              { value: String(16 / 9), label: '16:9 (가로 와이드)' },
+              { value: String(4 / 3), label: '4:3 (가로)' },
+              { value: '1', label: '1:1 (정사각)' },
+              { value: String(9 / 16), label: '9:16 (세로 모바일)' },
+              { value: String(3 / 4), label: '3:4 (세로)' },
+            ]}
+          />
+        </div>
+      </GroupBox>
+
       {/* 씬 메모 */}
       <GroupBox>
         <SectionHeader title="씬 메모" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
@@ -2250,15 +2270,38 @@ function InspectorInner() {
             <div className="px-3 pb-4 space-y-1">
               {/* 기즈모 드래그 중 라이브 채널로 실시간 갱신(캔버스 리렌더 없이 이 서브트리만) */}
               <LiveTransformRows obj={obj} setPos={setPos} setRot={setRot} setScl={setScl} onCommit={pushHistory} />
+              {/* 실측 크기(m) — 지오메트리 로컬 bbox × 스케일. 입력 시 역산해 스케일을 맞춘다.
+                  단, 로컬 크기가 1인 모양(박스·구체·원기둥·각뿔대 등)은 크기=스케일이라 중복 → 숨김.
+                  로컬 크기가 1이 아닌 모양(평면·돌출·로프트)에서만 표시해 '실측'이 의미 있게 한다. */}
+              {obj.primitiveShape && !obj.content && !obj.assetId && (() => {
+                const lb = localBBox(objects, assets, obj.id);
+                const ls = lb && !lb.isEmpty() ? lb.getSize(new THREE.Vector3()) : new THREE.Vector3(1, 1, 1);
+                const nonUnit = Math.abs(ls.x - 1) > 0.01 || Math.abs(ls.y - 1) > 0.01 || Math.abs(ls.z - 1) > 0.01;
+                if (!nonUnit) return null; // 박스류(크기=스케일)는 숨김
+                const setSize = (axis: 'x' | 'y' | 'z', v: number) => setScl(axis, Math.max(0.001, v) / (ls[axis] || 1));
+                return (
+                  <XYZRow
+                    label="크기 (m)"
+                    x={+(ls.x * obj.scale.x).toFixed(3)}
+                    y={+(ls.y * obj.scale.y).toFixed(3)}
+                    z={+(ls.z * obj.scale.z).toFixed(3)}
+                    onChangeX={(v) => setSize('x', v)}
+                    onChangeY={(v) => setSize('y', v)}
+                    onChangeZ={(v) => setSize('z', v)}
+                    onCommit={pushHistory}
+                    dragStep={0.1}
+                  />
+                );
+              })()}
               {/* 밑면을 바닥에 정렬 — 원점이 발밑이 아니어서 바닥에 파묻히는 경우 교정(모든 루트 타입) */}
               {!obj.parentId && (
                 <button
                   onClick={snapToGround}
                   disabled={!canSnapToGround}
                   title={canSnapToGround ? '오브젝트 밑면을 바닥(y=0)에 맞춤' : (glbUnloaded ? '모델 로딩 후 사용할 수 있습니다' : '바닥에 놓을 수 없습니다')}
-                  className="w-full mt-1 py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted disabled:hover:bg-transparent"
+                  className="w-full mt-1 py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted disabled:hover:bg-transparent inline-flex items-center justify-center gap-1.5"
                 >
-                  ⤓ 바닥에 놓기
+                  <ArrowDownToLine size={13} /> 바닥에 놓기
                 </button>
               )}
             </div>
@@ -2586,6 +2629,28 @@ function InspectorInner() {
                   </div>
                 </div>
 
+                {/* 물리 재질(MeshPhysicalMaterial) — 클리어코트/시인/투과. 하나라도 올리면 physical 재질로 렌더(프리미티브만) */}
+                {obj.primitiveShape && !obj.content && (
+                  <div className="pt-2 border-t border-border/50 space-y-1.5">
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">물리 재질 (고급)</span>
+                    <LabeledNum label="Clearcoat (코팅 광택)" value={obj.material?.clearcoat ?? 0}
+                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, clearcoat: v } })} onCommit={pushHistory}
+                      min={0} max={1} precision={2} dragStep={0.02} />
+                    <LabeledNum label="Sheen (천 광택)" value={obj.material?.sheen ?? 0}
+                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, sheen: v } })} onCommit={pushHistory}
+                      min={0} max={1} precision={2} dragStep={0.02} />
+                    <LabeledNum label="Transmission (투과/유리)" value={obj.material?.transmission ?? 0}
+                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, transmission: v } })} onCommit={pushHistory}
+                      min={0} max={1} precision={2} dragStep={0.02} />
+                    {(obj.material?.transmission ?? 0) > 0 && (
+                      <LabeledNum label="IOR (굴절률)" value={obj.material?.ior ?? 1.5}
+                        onChange={(v) => updateObject(obj.id, { material: { ...obj.material, ior: v } })} onCommit={pushHistory}
+                        min={1} max={2.4} precision={2} dragStep={0.02} />
+                    )}
+                    <p className="text-[10px] text-muted/50">투과(Transmission)를 올리면 유리처럼 투명해져요. 셋 다 0이면 기본(standard) 재질입니다.</p>
+                  </div>
+                )}
+
                 {/* Texture — 표면에 이미지 매핑(포스터/사진/로고). 프리미티브만(텍스트 콘텐츠 제외) */}
                 {obj.primitiveShape && !obj.content && (() => {
                   const texActive = texPanelOpen || !!obj.material?.textureUrl;
@@ -2700,7 +2765,7 @@ function InspectorInner() {
 
         {/* Visibility */}
         <GroupBox>
-        <SectionHeader title="Visibility" hint="표시/숨김·잠금. 숨김은 뷰어에도 반영되고, 잠금은 뷰포트에서 선택·이동을 막아요(계층 리스트에선 선택 가능)." isOpen={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
+        <SectionHeader title="Visibility" hint="표시/숨김·잠금 + (프리미티브) 셰이딩·양면·그림자 옵션. 숨김은 뷰어에도 반영되고, 잠금은 뷰포트에서 선택·이동을 막아요(계층 리스트에선 선택 가능)." isOpen={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
         {isOpen('visibility') && (
           <div className="px-3 pb-4 space-y-2">
             {(['visible', 'locked'] as const).map((key) => (
@@ -2712,6 +2777,25 @@ function InspectorInner() {
                 />
               </label>
             ))}
+            {/* 렌더 옵션 — 프리미티브 전용(GLB는 모델 자체 재질, 콘텐츠/라이트/파티클 제외) */}
+            {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && (
+              <div className="pt-2 mt-1 border-t border-border/60 space-y-2">
+                {([
+                  { k: 'flatShading', label: 'Flat Shading (각진 면)', def: false },
+                  { k: 'doubleSided', label: 'Double-sided (양면)', def: false },
+                  { k: 'castShadow', label: 'Cast Shadow (그림자 생성)', def: true },
+                  { k: 'receiveShadow', label: 'Receive Shadow (그림자 수신)', def: true },
+                ] as const).map(({ k, label, def }) => (
+                  <label key={k} className="flex items-center justify-between cursor-pointer">
+                    <span className="text-[10px] font-semibold text-muted/50">{label}</span>
+                    <Toggle
+                      value={obj.render?.[k] ?? def}
+                      onChange={(v) => { updateObject(obj.id, { render: { ...obj.render, [k]: v } }); pushHistory(); }}
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

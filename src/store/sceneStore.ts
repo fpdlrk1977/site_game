@@ -64,6 +64,7 @@ interface SceneState {
   snapEnabled: boolean;
   snapTranslate: number;
   snapRotate: number;
+  objectSnap: boolean; // 오브젝트 스냅(자석) — 이동 시 다른 오브젝트의 bbox 모서리/중심에 정렬. 그리드 스냅과 독립.
   focusTarget: { x: number; y: number; z: number; _tick: number } | null;
   focusAllRequest: number | null;
   // 선택 오브젝트(들)로 카메라 프레이밍 요청(F키/더블클릭). tick 값으로 EditorCanvas가 감지.
@@ -82,6 +83,7 @@ interface SceneState {
   // (scene_data 내부의 SCENE_VERSION[JSON 스키마 버전]과는 별개의 행 리비전 카운터)
   savedVersion: number;
   wireframeMode: boolean;
+  gridPlane: 'xz' | 'xy' | 'yz'; // 에디터 기준 격자 평면(바닥/벽). 전환용 뷰 상태(씬에 저장 안 함)
   past: HistoryEntry[];
   future: HistoryEntry[];
   cameraBookmarks: Record<number, { position: [number, number, number]; target: [number, number, number] }>;
@@ -165,6 +167,8 @@ interface SceneActions {
   markSaved: (savedVersion?: number) => void;
   markModified: () => void;
   toggleWireframe: () => void;
+  cycleGridPlane: () => void;
+  toggleObjectSnap: () => void;
   copyObjectProperties: () => void;
   pasteObjectProperties: () => void;
   batchUpdateObjects: (ids: string[], patch: (obj: ObjectNodeSchema) => Partial<ObjectNodeSchema>) => void;
@@ -335,6 +339,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   snapEnabled: false,
   snapTranslate: 0.5,
   snapRotate: 15,
+  objectSnap: false,
   selectedIds: [],
   focusTarget: null,
   focusAllRequest: null,
@@ -347,6 +352,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   isModified: false,
   savedVersion: 1,
   wireframeMode: false,
+  gridPlane: 'xz',
   past: [],
   future: [],
   cameraBookmarks: {},
@@ -1208,6 +1214,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   markSaved: (savedVersion) => set(savedVersion !== undefined ? { isModified: false, savedVersion } : { isModified: false }),
   markModified: () => set({ isModified: true }),
   toggleWireframe: () => set((s) => ({ wireframeMode: !s.wireframeMode })),
+  cycleGridPlane: () => set((s) => ({ gridPlane: s.gridPlane === 'xz' ? 'xy' : s.gridPlane === 'xy' ? 'yz' : 'xz' })),
+  toggleObjectSnap: () => set((s) => ({ objectSnap: !s.objectSnap })),
 
   copyObjectProperties: () => {
     const { selectedId, objects } = get();

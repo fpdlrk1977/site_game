@@ -56,6 +56,9 @@ export interface EnvSchema {
   //   미설정 = 3. 오브젝트가 자체 interactRange를 가지면 그 값이 우선한다.
   interactRange?: number;
   notes?: string;
+  // 게시 뷰어의 고정 화면 비율(width/height). 미설정/0 = 자유(브라우저 채움). 예: 16/9≈1.778, 1(정사각), 9/16≈0.5625.
+  //   설정 시 뷰어가 이 비율의 프레임으로 레터박스(가운데 정렬 + 배경 여백)한다.
+  frameAspect?: number;
   postProcessing?: { preset: PostProcessPreset };
   // 렌더러 노출(밝기) — LinearToneMapping의 toneMappingExposure. 미설정 = 1(기본).
   // 톤매핑은 코드에서 Linear로 고정 — 저장 색을 최대한 그대로 렌더(측정상 none과 동일 정확도).
@@ -202,6 +205,11 @@ export interface MaterialOverride {
   textureUrl?: string;
   // 타일 반복 횟수(RepeatWrapping). 미설정=1×1(단일). x/y로 가로·세로 반복.
   textureRepeat?: { x: number; y: number };
+  // 물리 재질(MeshPhysicalMaterial) — 하나라도 >0이면 프리미티브가 physical 재질로 렌더. 전부 0/미설정이면 standard.
+  clearcoat?: number;     // 0~1 투명 코팅 광택(자동차 도장·니스)
+  sheen?: number;         // 0~1 천/벨벳 가장자리 광택
+  transmission?: number;  // 0~1 투과(유리·물). 투명해짐
+  ior?: number;           // 굴절률(transmission용, 기본 1.5)
 }
 
 export interface ObjectNodeSchema {
@@ -212,6 +220,13 @@ export interface ObjectNodeSchema {
   // 프리미티브 확장 지오메트리 파라미터(둥근 박스 cornerRadius·각뿔대 topScale 등).
   geom?: PrimitiveGeom;
   material?: MaterialOverride;
+  // 시각 렌더 옵션(프리미티브/콘텐츠). 미설정 = 스무스 셰이딩·앞면만·그림자 생성+수신(기존 동작).
+  render?: {
+    flatShading?: boolean;   // true=각진 폴리곤(Flat), 미설정=부드러운(Smooth)
+    doubleSided?: boolean;   // true=양면(DoubleSide), 미설정=앞면만(FrontSide)
+    castShadow?: boolean;    // 미설정=true (그림자 생성)
+    receiveShadow?: boolean; // 미설정=true (그림자 수신)
+  };
   parentId: string | null;
   layer: string;
   position: Vector3;

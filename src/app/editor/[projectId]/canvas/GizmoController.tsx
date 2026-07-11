@@ -9,7 +9,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useLiveTransformStore } from '@/store/liveTransformStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { CHARACTER_PREVIEW_ID } from './CharacterPreview';
-import { localCenter, worldBBox } from '@/lib/objectBBox';
+import { localCenter, worldBBox, localBBox } from '@/lib/objectBBox';
 
 const RAD2DEG = 180 / Math.PI;
 const DEG2RAD = Math.PI / 180;
@@ -21,6 +21,8 @@ const _s = new THREE.Vector3();
 const _lp = new THREE.Vector3();
 const _lq = new THREE.Quaternion();
 const _ls = new THREE.Vector3();
+const _snapBox = new THREE.Box3();
+const OBJECT_SNAP_THRESHOLD = 0.2; // 월드 거리(m) — 이 안쪽이면 다른 오브젝트 모서리/중심에 흡착
 
 interface Props {
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
@@ -181,7 +183,7 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
 }
 
 function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
-  const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate,
+  const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate, objectSnap,
     objects, assets, commitTransforms, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
   // 기즈모는 "형상 중심에 놓인 프록시"에 붙는다 → 위젯이 원점(하단)이 아니라 중심에 뜨고,
@@ -190,6 +192,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   if (proxyRef.current === null) proxyRef.current = new THREE.Object3D();
   const cLocalRef = useRef(new THREE.Vector3()); // 선택 오브젝트의 로컬 형상 중심
   const floorMinYRef = useRef(0);
+  const snapTargetsRef = useRef<THREE.Box3[]>([]); // 오브젝트 스냅 대상(다른 루트 오브젝트 월드 bbox, 드래그 시작 시 스냅샷)
 
   const isCharPreview = selectedId === CHARACTER_PREVIEW_ID;
   const selectedObject = isCharPreview ? null : objects.find((o) => o.id === selectedId);
@@ -247,6 +250,34 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
     target.position.copy(_lp);
     target.quaternion.copy(_lq);
     target.scale.copy(_ls);
+    // 오브젝트 스냅(자석) — 이동 시, 다른 루트 오브젝트의 bbox 모서리/중심에 축별로 흡착.
+    // 루트 오브젝트 전용(중첩은 로컬좌표라 제외). 토글 OFF면 완전 무영향.
+    if (objectSnap && effectiveMode === 'translate' && !isCharPreview && selectedObject && !selectedObject.parentId) {
+      applyObjectSnap();
+    }
+  };
+
+  // 드래그 중인 오브젝트의 월드 bbox(정밀, 가이드박스 오염 없는 스키마 기반)를 계산해
+  // 각 축의 min/center/max를 스냅 대상들의 min/center/max와 비교, 임계값 내 최근접에 흡착.
+  const applyObjectSnap = () => {
+    const lb = localBBox(objects, assets, selectedId!);
+    if (!lb || lb.isEmpty() || snapTargetsRef.current.length === 0) return;
+    target!.updateWorldMatrix(true, false);
+    _snapBox.copy(lb).applyMatrix4(target!.matrixWorld); // 후보 위치의 월드 bbox
+    (['x', 'y', 'z'] as const).forEach((axis) => {
+      const feats = [_snapBox.min[axis], (_snapBox.min[axis] + _snapBox.max[axis]) / 2, _snapBox.max[axis]];
+      let best: number | null = null;
+      let bestDist = OBJECT_SNAP_THRESHOLD;
+      for (const tb of snapTargetsRef.current) {
+        const tf = [tb.min[axis], (tb.min[axis] + tb.max[axis]) / 2, tb.max[axis]];
+        for (const f of feats) for (const t of tf) {
+          const d = Math.abs(f - t);
+          if (d < bestDist) { bestDist = d; best = t - f; }
+        }
+      }
+      if (best !== null) target!.position[axis] += best;
+    });
+    if (!skipYClamp) target!.position.y = Math.max(floorMinYRef.current, target!.position.y);
   };
 
   return (
@@ -267,6 +298,17 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
             const o = st.objects.find((x) => x.id === selectedId);
             const b = worldBBox(st.objects, st.assets, selectedId!);
             floorMinYRef.current = o && b ? o.position.y - b.min.y : 0;
+          }
+          // 오브젝트 스냅 대상 스냅샷 — 다른 루트 오브젝트들의 월드 bbox(드래그 중 고정).
+          if (objectSnap && effectiveMode === 'translate' && !isCharPreview) {
+            const st = useSceneStore.getState();
+            const boxes: THREE.Box3[] = [];
+            for (const o of st.objects) {
+              if (o.id === selectedId || o.parentId || !o.visible || o.isGroup) continue;
+              const b = worldBBox(st.objects, st.assets, o.id);
+              if (b && !b.isEmpty()) boxes.push(b.clone());
+            }
+            snapTargetsRef.current = boxes;
           }
         }}
         onChange={() => {

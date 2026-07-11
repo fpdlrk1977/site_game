@@ -283,9 +283,26 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   const interactTargetHasE = !!interactTargetObj?.events.some((e) => e.trigger === 'interact')
     || interactTargetDlg?.show === 'interact';
 
+  // 고정 화면 비율(frameAspect) — 설정 시 캔버스를 그 비율로 레터박스(가운데 정렬 + 배경 여백).
+  const frameAspect = scene.environment.frameAspect && scene.environment.frameAspect > 0 ? scene.environment.frameAspect : null;
+  const viewerCanvasEl = (
+    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} />
+  );
+
   return (
     <div className="w-screen h-screen relative overflow-hidden bg-canvas">
-      <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} />
+      {frameAspect ? (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div
+            className="relative"
+            style={{ width: '100%', height: '100%', maxWidth: `calc(100vh * ${frameAspect})`, maxHeight: `calc(100vw / ${frameAspect})` }}
+          >
+            {viewerCanvasEl}
+          </div>
+        </div>
+      ) : (
+        viewerCanvasEl
+      )}
 
       {/* 상단 오버레이 — 독립 URL(/space)에서만 풀 UI */}
       {variant === 'standalone' && (

@@ -834,12 +834,16 @@ export function ViewerObject({
   const roughness = object.material?.roughness ?? 0.5;
   const metalness = object.material?.metalness ?? 0.1;
   const emissive = object.material?.emissive ?? "#000000";
+  const rdFlat = object.render?.flatShading ?? false;
+  const rdSide = object.render?.doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+  const rdCast = object.render?.castShadow ?? true;
+  const rdReceive = object.render?.receiveShadow ?? true;
 
   const primMesh = (
     <mesh
       geometry={primGeom ?? undefined}
-      castShadow
-      receiveShadow
+      castShadow={rdCast}
+      receiveShadow={rdReceive}
       onPointerOver={(e) => {
         e.stopPropagation();
         handlePointerOver();
@@ -858,6 +862,12 @@ export function ViewerObject({
         emissiveIntensity={emissiveOn ? 0.3 : emissive !== "#000000" ? 1 : 0}
         textureUrl={object.material?.textureUrl}
         repeat={object.material?.textureRepeat}
+        flatShading={rdFlat}
+        side={rdSide}
+        clearcoat={object.material?.clearcoat}
+        sheen={object.material?.sheen}
+        transmission={object.material?.transmission}
+        ior={object.material?.ior}
       />
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>

@@ -435,7 +435,11 @@ export function EditorCanvas() {
     bookmarkRecallRequest,
     setCameraBookmark,
     pendingPlacement,
+    gridPlane,
   } = useSceneStore();
+  // 기준 격자 평면 — 바닥(XZ)/벽(XY·YZ). 시각 참조용 회전만.
+  const gridRot: [number, number, number] = gridPlane === 'xy' ? [Math.PI / 2, 0, 0] : gridPlane === 'yz' ? [0, 0, Math.PI / 2] : [0, 0, 0];
+  const gridPos: [number, number, number] = gridPlane === 'xy' ? [0, 0, -0.001] : gridPlane === 'yz' ? [-0.001, 0, 0] : [0, -0.001, 0];
 
   // 포인터 이벤트 → 바닥 평면(y=0) 교차점(월드 좌표). 씬 오브젝트와 무관하게 항상 계산.
   const groundPointFromEvent = useCallback((e: { clientX: number; clientY: number }): THREE.Vector3 | null => {
@@ -837,7 +841,8 @@ export function EditorCanvas() {
           />
 
           <Grid
-            position={[0, -0.001, 0]}
+            position={gridPos}
+            rotation={gridRot}
             args={[50, 50]}
             cellSize={1}
             cellThickness={0.5}

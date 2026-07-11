@@ -5,7 +5,7 @@ import {
   Move, RotateCcw, Maximize2, Globe, Crosshair,
   Magnet, Box, Layers, Undo2, Redo2, AlignCenter, Camera,
   Circle, Cylinder, Cone, Hexagon, Square, PenTool, Boxes,
-  ChevronDown, Save,
+  ChevronDown, Save, Grid3x3,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
@@ -31,6 +31,7 @@ export function ViewportFloatingToolbar() {
   const {
     transformMode, transformSpace, snapEnabled, snapTranslate, wireframeMode,
     selectedIds, cameraBookmarks,
+    gridPlane, cycleGridPlane, objectSnap, toggleObjectSnap,
     setTransformMode, setTransformSpace, setSnap, toggleWireframe,
     beginPlacement, undo, redo, alignSelected, requestSaveBookmark, requestRecallBookmark, setPenToolOpen, setVoxelToolOpen,
   } = useSceneStore();
@@ -132,6 +133,16 @@ export function ViewportFloatingToolbar() {
                   </button>
                 ))}
               </div>
+              {/* 오브젝트 스냅(자석) — 그리드 스냅과 독립 */}
+              <button
+                onClick={toggleObjectSnap}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-xs text-[11px] transition-all mt-2 ${
+                  objectSnap ? 'bg-primary/15 text-primary' : 'text-muted hover:bg-background'
+                }`}
+              >
+                <Magnet size={13} /> 오브젝트 스냅 {objectSnap ? '켜짐' : '꺼짐'}
+              </button>
+              <p className="text-[9px] text-muted/50 px-1 mt-1 leading-snug">이동 시 다른 오브젝트의 모서리·중심에 자석처럼 붙어요.</p>
             </div>
           )}
         </div>
@@ -207,6 +218,17 @@ export function ViewportFloatingToolbar() {
             }`}
           >
             {wireframeMode ? <Layers size={13} /> : <Box size={13} />}
+          </button>
+        </Tooltip>
+
+        {/* 기준 격자 평면 순환 (바닥 XZ → 벽 XY → 벽 YZ) */}
+        <Tooltip content={`격자 평면: ${gridPlane.toUpperCase()} (클릭해 전환)`}>
+          <button
+            onClick={cycleGridPlane}
+            className="h-7 pl-1.5 pr-1.5 rounded-xs flex items-center gap-1 text-muted hover:text-foreground hover:bg-background transition-all"
+          >
+            <Grid3x3 size={13} />
+            <span className="text-[9px] font-mono font-semibold">{gridPlane.toUpperCase()}</span>
           </button>
         </Tooltip>
 

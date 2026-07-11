@@ -306,6 +306,11 @@ export function EditorObjectInstance({ object }: Props) {
   const roughness = object.material?.roughness ?? 0.5;
   const metalness = object.material?.metalness ?? 0.1;
   const emissive = object.material?.emissive ?? '#000000';
+  // 렌더 옵션(셰이딩/양면/그림자) — 미설정 = 스무스·앞면·그림자 생성+수신
+  const rdFlat = object.render?.flatShading ?? false;
+  const rdSide = object.render?.doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+  const rdCast = object.render?.castShadow ?? true;
+  const rdReceive = object.render?.receiveShadow ?? true;
 
   // 프리미티브 지오메트리(둥근 박스·각뿔대 등 확장 파라미터 반영). 파라미터 바뀌면 재생성·이전 것 dispose.
   const primGeom = useMemo(
@@ -452,8 +457,8 @@ export function EditorObjectInstance({ object }: Props) {
           onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}
-          castShadow
-          receiveShadow
+          castShadow={rdCast}
+          receiveShadow={rdReceive}
         >
           <PrimitiveMaterial
             color={color}
@@ -464,6 +469,12 @@ export function EditorObjectInstance({ object }: Props) {
             emissiveIntensity={isSelected ? 0.4 : hovered ? 0.2 : (emissive !== '#000000' ? 1 : 0)}
             textureUrl={object.material?.textureUrl}
             repeat={object.material?.textureRepeat}
+            flatShading={rdFlat}
+            side={rdSide}
+            clearcoat={object.material?.clearcoat}
+            sheen={object.material?.sheen}
+            transmission={object.material?.transmission}
+            ior={object.material?.ior}
           />
         </mesh>
       )}
