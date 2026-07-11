@@ -3,7 +3,8 @@
 import { useRef, useLayoutEffect, useMemo, useEffect, useState, Suspense } from 'react';
 import * as THREE from 'three';
 import { Text3D, Center } from '@react-three/drei';
-import { createPrimitiveGeometry } from '@/lib/primitiveGeometry';
+import { createPrimitiveGeometry, primitiveGeomKey } from '@/lib/primitiveGeometry';
+import { primLocalBboxCache } from '@/lib/primBboxCache';
 import { useShallow } from 'zustand/react/shallow';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
@@ -329,6 +330,22 @@ export function EditorObjectInstance({ object }: Props) {
       center: [(b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2] as [number, number, number],
     };
   }, [primGeom]);
+
+  // 프리미티브/콘텐츠의 실제 로컬 bbox를 캐시 → objectBBox.localBBox가 읽어 드래그 아웃라인·정렬·바닥
+  // 스냅이 실제 크기를 쓴다(예전엔 단위 큐브 가정). GLB/라이트/파티클은 제외(각자 경로).
+  useEffect(() => {
+    if (object.assetId || object.light || object.particle) return;
+    const key = primitiveGeomKey(object.primitiveShape, object.geom);
+    const [sx, sy, sz] = bbox.size;
+    const [cx, cy, cz] = bbox.center;
+    primLocalBboxCache.set(
+      key,
+      new THREE.Box3(
+        new THREE.Vector3(cx - sx / 2, cy - sy / 2, cz - sz / 2),
+        new THREE.Vector3(cx + sx / 2, cy + sy / 2, cz + sz / 2),
+      ),
+    );
+  }, [bbox, object.primitiveShape, object.geom, object.assetId, object.light, object.particle]);
 
   const handleClick = (shiftKey: boolean) => selectByClick(object, shiftKey);
 

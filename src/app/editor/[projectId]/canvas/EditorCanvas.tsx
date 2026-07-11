@@ -257,15 +257,23 @@ const BOX_EDGE_PAIRS: [number, number][] = [
   [3, 7], // z
 ];
 
+// SelectionOverlay 미리보기용 재사용 임시 벡터 (매 프레임 할당 방지)
+const _ovCamPos = new THREE.Vector3();
+const _ovCamDir = new THREE.Vector3();
+const _ovFp = new THREE.Vector3();
+const _ovProj = new THREE.Vector3();
+
 // 선택 오버레이 (Canvas 내부, 별도 레이어) — 오브젝트 렌더는 건드리지 않는다.
 //  ① 드래그 미리보기: 드래그 중 박스에 '닿는' 오브젝트들에 연보라 와이어프레임(닿기 선택과 일치)
 //  ② 선택 바운더리: 2개 이상 선택 시 전체를 감싸는 청록 바운딩 박스(무엇이 선택됐는지 한눈에)
 function SelectionOverlay({
   dragRectRef,
   isDraggingRef,
+  dragCanvasRectRef,
 }: {
   dragRectRef: React.MutableRefObject<{ x1: number; y1: number; x2: number; y2: number } | null>;
   isDraggingRef: React.MutableRefObject<boolean>;
+  dragCanvasRectRef: React.MutableRefObject<DOMRect | null>;
 }) {
   const selectedIds = useSceneStore((s) => s.selectedIds);
   const { camera, size } = useThree();
@@ -335,12 +343,20 @@ function SelectionOverlay({
       preview.visible = false;
       return;
     }
+    // 선택 판정(handlePointerUp)과 동일 소스: 드래그 시작 시 캐시한 캔버스 rect. 미스면 R3F size 폴백.
+    const cr = dragCanvasRectRef.current;
+    const projW = cr?.width ?? size.width;
+    const projH = cr?.height ?? size.height;
+    // 카메라 뒤 코너는 project()가 폭주 → 선택 판정과 동일하게 걸러내 미리보기도 일치시킨다.
+    const camPos = camera.getWorldPosition(_ovCamPos);
+    const camDir = camera.getWorldDirection(_ovCamDir);
     const verts: number[] = [];
     for (const obj of objects) {
       if (obj.locked || !obj.visible || obj.isGroup) continue;
       const b = worldBBox(objects, assets, obj.id);
       if (!b || b.isEmpty()) continue;
       const cs: THREE.Vector3[] = [];
+      let anyBehind = false;
       let minX = Infinity,
         minY = Infinity,
         maxX = -Infinity,
@@ -348,14 +364,16 @@ function SelectionOverlay({
       for (let i = 0; i < 8; i++) {
         const v = new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z);
         cs.push(v);
-        const p = v.clone().project(camera);
-        const sx = (p.x * 0.5 + 0.5) * size.width;
-        const sy = (-p.y * 0.5 + 0.5) * size.height;
+        if (_ovFp.copy(v).sub(camPos).dot(camDir) <= 0.05) { anyBehind = true; break; }
+        const p = _ovProj.copy(v).project(camera);
+        const sx = (p.x * 0.5 + 0.5) * projW;
+        const sy = (-p.y * 0.5 + 0.5) * projH;
         minX = Math.min(minX, sx);
         maxX = Math.max(maxX, sx);
         minY = Math.min(minY, sy);
         maxY = Math.max(maxY, sy);
       }
+      if (anyBehind) continue; // 카메라 뒤 걸침 → 미리보기 제외(선택도 중심점 폴백이라 아웃라인 생략)
       if (minX <= rect.x2 && maxX >= rect.x1 && minY <= rect.y2 && maxY >= rect.y1) {
         for (const [a, c] of BOX_EDGE_PAIRS) {
           verts.push(cs[a].x, cs[a].y, cs[a].z, cs[c].x, cs[c].y, cs[c].z);
@@ -390,6 +408,9 @@ export function EditorCanvas() {
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
   const dragRectRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  // 드래그 시작 시점의 캔버스(렌더 서피스) rect를 캐시 — 드래그 사각형·선택 판정·미리보기가 모두
+  //   같은 좌표 소스를 쓰게 해 화면 배율(브라우저 줌·DPR)에서 좌표가 어긋나던 문제를 없앤다.
+  const dragCanvasRectRef = useRef<DOMRect | null>(null);
   const [selBox, setSelBox] = useState<SelBox | null>(null);
 
   // 배치 모드 — 뷰포트에서 바닥(y=0)에 레이캐스트해 고스트를 마우스로 따라다니게 하고, 클릭 위치에 생성.
@@ -604,6 +625,8 @@ export function EditorCanvas() {
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     isDraggingRef.current = false;
     dragRectRef.current = null;
+    // 캔버스(카메라가 실제 투영하는 렌더 서피스) rect를 드래그 시작 시 1회 캐시.
+    dragCanvasRectRef.current = (wrapperRef.current?.querySelector('canvas') ?? wrapperRef.current)?.getBoundingClientRect() ?? null;
     // Disable orbit immediately so it doesn't jitter before the 6px threshold kicks in
     if (orbitRef.current) orbitRef.current.enabled = false;
   }, []);
@@ -624,7 +647,7 @@ export function EditorCanvas() {
       isDraggingRef.current = true;
     }
 
-    const wr = wrapperRef.current!.getBoundingClientRect();
+    const wr = dragCanvasRectRef.current ?? wrapperRef.current!.getBoundingClientRect();
     const x1 = Math.min(dragStartRef.current.x, e.clientX) - wr.left;
     const y1 = Math.min(dragStartRef.current.y, e.clientY) - wr.top;
     const x2 = Math.max(dragStartRef.current.x, e.clientX) - wr.left;
@@ -640,7 +663,7 @@ export function EditorCanvas() {
     }
 
     const { x1, y1, x2, y2 } = dragRectRef.current;
-    const wr = wrapperRef.current.getBoundingClientRect();
+    const wr = dragCanvasRectRef.current ?? wrapperRef.current.getBoundingClientRect();
     const { objects, selectObjects } = useSceneStore.getState();
     const matchingIds: string[] = [];
 
@@ -657,39 +680,59 @@ export function EditorCanvas() {
       return;
     }
     const box = new THREE.Box3();
-    const corner = new THREE.Vector3();
+    const _corner = new THREE.Vector3();
+    const _proj = new THREE.Vector3();
+    const _center = new THREE.Vector3();
+    const _fp = new THREE.Vector3();
+    // 카메라 '뒤'에 있는 점은 project()가 원근분할 부호 반전으로 좌표가 폭주(±수만 px)해
+    // 스크린 AABB가 화면 전체를 덮어 아무 드래그나 다 걸리는 오선택을 만든다 → 카메라 앞 여부를 먼저 판정.
+    const camPos = cam.getWorldPosition(new THREE.Vector3());
+    const camDir = cam.getWorldDirection(new THREE.Vector3());
+    const inFront = (p: THREE.Vector3) => _fp.copy(p).sub(camPos).dot(camDir) > 0.05;
+    const project = (p: THREE.Vector3) => {
+      _proj.copy(p).project(cam);
+      return { sx: (_proj.x * 0.5 + 0.5) * wr.width, sy: (-_proj.y * 0.5 + 0.5) * wr.height };
+    };
 
     for (const obj of objects) {
       if (obj.locked || !obj.visible || obj.isGroup) continue;
       const obj3d = objectRefsRef.current.get(obj.id);
       if (!obj3d) continue;
 
-      // 오브젝트의 월드 바운딩박스를 화면에 투영 → 스크린 AABB
       box.setFromObject(obj3d);
-      let minX = Infinity,
-        minY = Infinity,
-        maxX = -Infinity,
-        maxY = -Infinity;
+      let selected = false;
+
       if (!box.isEmpty()) {
+        // 8 코너가 모두 카메라 앞이면 스크린 AABB로 '닿기 선택'(피그마식) 판정.
+        // 하나라도 카메라 뒤면 AABB를 신뢰할 수 없으므로(폭주) 중심점 폴백으로 판정.
+        let anyBehind = false;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (let i = 0; i < 8; i++) {
-          corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
-          corner.project(cam);
-          const sx = (corner.x * 0.5 + 0.5) * wr.width;
-          const sy = (-corner.y * 0.5 + 0.5) * wr.height;
-          minX = Math.min(minX, sx);
-          maxX = Math.max(maxX, sx);
-          minY = Math.min(minY, sy);
-          maxY = Math.max(maxY, sy);
+          _corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+          if (!inFront(_corner)) { anyBehind = true; break; }
+          const { sx, sy } = project(_corner);
+          minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
+          minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+        }
+        if (!anyBehind) {
+          selected = minX <= x2 && maxX >= x1 && minY <= y2 && maxY >= y1;
+        } else {
+          box.getCenter(_center);
+          if (inFront(_center)) {
+            const { sx, sy } = project(_center);
+            selected = sx >= x1 && sx <= x2 && sy >= y1 && sy <= y2;
+          }
         }
       } else {
-        // 폴백: bbox가 없으면(빈 오브젝트) 원점 한 점
-        corner.setFromMatrixPosition(obj3d.matrixWorld).project(cam);
-        minX = maxX = (corner.x * 0.5 + 0.5) * wr.width;
-        minY = maxY = (-corner.y * 0.5 + 0.5) * wr.height;
+        // 빈 bbox(라이트 등) → 원점 한 점(카메라 앞일 때만)
+        obj3d.getWorldPosition(_center);
+        if (inFront(_center)) {
+          const { sx, sy } = project(_center);
+          selected = sx >= x1 && sx <= x2 && sy >= y1 && sy <= y2;
+        }
       }
 
-      // 스크린 AABB가 드래그 사각형과 '겹치기만 해도' 선택(닿기 선택). AABB∩AABB 교차 판정.
-      if (minX <= x2 && maxX >= x1 && minY <= y2 && maxY >= y1) {
+      if (selected) {
         const rootId = getRootId(obj);
         if (!matchingIds.includes(rootId)) matchingIds.push(rootId);
       }
@@ -803,7 +846,7 @@ export function EditorCanvas() {
             ))}
 
           {/* 선택 오버레이 — 드래그 미리보기 + 선택 묶음 바운더리 (오브젝트 렌더 미변경) */}
-          <SelectionOverlay dragRectRef={dragRectRef} isDraggingRef={isDraggingRef} />
+          <SelectionOverlay dragRectRef={dragRectRef} isDraggingRef={isDraggingRef} dragCanvasRectRef={dragCanvasRectRef} />
 
           {(environment.boundary ?? 0) > 0 && <BoundaryGizmo sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} />}
           {/* 경계 벽 미리보기 — editor=true라 반투명으로 편집을 덜 가림. 실제 룩은 뷰어에서 확인 */}

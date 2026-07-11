@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { ObjectNodeSchema, AssetRefSchema } from '@/types/scene';
 import { glbLocalBboxCache } from './glbBboxCache';
+import { primLocalBboxCache } from './primBboxCache';
+import { primitiveGeomKey } from './primitiveGeometry';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -61,7 +63,10 @@ export function localBBox(objects: ObjectNodeSchema[], assets: AssetRefSchema[],
     return new THREE.Box3(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5));
   }
 
-  // 프리미티브/콘텐츠 — 중심 원점 단위
+  // 프리미티브/콘텐츠 — 렌더 시 캐시된 실제 지오메트리 bbox(EditorObjectInstance가 저장).
+  // 돌출/로프트/평면처럼 한 축이 얇은 형상의 실제 크기 반영. 미캐시(첫 프레임)면 단위 큐브로 폴백.
+  const cached = primLocalBboxCache.get(primitiveGeomKey(o.primitiveShape, o.geom));
+  if (cached && !cached.isEmpty()) return cached.clone();
   return new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5));
 }
 

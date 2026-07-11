@@ -135,6 +135,12 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **툴바 도형 추가 드롭다운**: 박스~평면 6개 버튼 나열 → `Shapes` 아이콘+ChevronDown 드롭다운 1개로(각 항목 아이콘+라벨, 클릭 시 `beginPlacement`+닫기). 펜/복셀은 기존 버튼 유지. `Menu`에 'shapes' 추가.
 - 검증: tsc 클린 + editor 200.
 
+### 후속 (2026-07-11) — 도형추가 스플릿 버튼 · 프리미티브 bbox 정확화 · 박스선택 오선택 수정
+- **도형추가 스플릿 버튼**: `ViewportFloatingToolbar` 도형 드롭다운을 `[아이콘][▾]`로 분리 — 아이콘=마지막 선택 도형(기본 박스) **즉시 배치**, 화살표=목록 열기. 목록 선택 시 `selectedShape` 갱신+즉시 배치. 화살표는 다른 드롭다운과 통일해 **우측**.
+- **선택/호버 가이드 + 콜라이더 오버레이 실측 bbox화**(`EditorObjectInstance`): 고정 `1.05³`/`1.02` 단위 박스 → `primGeom` 실측 bbox 기준(여백 ×1.04/×1.02). 돌출/로프트/평면처럼 얇은 형상 가이드 과대 표시 수정. box/구체는 bbox=1이라 무변화.
+- **`localBBox` 프리미티브 실측화 (bbox 캐시)**: `objectBBox.localBBox`가 프리미티브를 단위 큐브로 반환하던 것 → **`primLocalBboxCache`**(신규, GLB `glbLocalBboxCache`와 동일 패턴, `primitiveGeomKey` 키)를 `EditorObjectInstance`가 렌더 시 채우고 localBBox가 읽음. 드래그 미리보기·정렬·바닥스냅이 실제 크기 반영. **캐시는 에디터에서만 채워짐 → 뷰어/플레이는 단위 큐브 폴백(무변화)**, box/구체도 무변화.
+- **🔴 박스 선택 오선택 수정 (카메라 뒤 꼭짓점 폭주)**: 확대(줌인) 시 드래그 영역 밖 오브젝트가 같이 선택되던 버그. **원인**: 줌인으로 카메라 **뒤로 넘어간 오브젝트**의 bbox 꼭짓점을 `project()`하면 원근분할 부호 반전으로 스크린 좌표가 ±수만 px로 폭주 → 스크린 AABB가 화면 전체를 덮어 아무 드래그나 다 걸림(사용자 콘솔 로그로 `screenAABB x[-52996~31029]` 확인). **수정**(`EditorCanvas` handlePointerUp + SelectionOverlay): 8꼭짓점을 투영 전에 **카메라 앞 여부(`dot(p−camPos, camDir)>0.05`) 판정** → 모두 앞이면 기존 AABB '닿기 선택'(피그마식 유지), 하나라도 뒤면 AABB 불신 → **중심점이 카메라 앞+드래그 영역 안일 때만** 선택. 미리보기도 동일 게이트. 겸사겸사 드래그 사각형·선택·미리보기의 좌표 소스를 **캔버스 엘리먼트 rect로 통일**(`dragCanvasRectRef`, 드래그 시작 시 1회 캐시 — DPR/배율 대비 정확성). 검증: tsc 클린 + editor 200 + **사용자 콘솔 로그로 원인 확정**.
+
 ### 후속 4종 (2026-07-11) — 툴바 정리 + 잠금 UX
 - **잠긴 그룹 하위 자물쇠 disabled**: `HierarchyPanel`이 각 행의 조상 체인을 확인(`lockedByAncestor`)해, 잠긴 조상이 있으면 그 행의 자물쇠 토글을 **disabled**(개별 해제 불가, "상위 그룹에서 잠금 해제" 안내). 그룹 잠금 캐스케이드(자손 locked=true)와 짝을 이룸.
 - **툴바 Undo/Redo·카메라 북마크 버튼 주석 처리**(`ViewportFloatingToolbar`): 두 블록을 `{/* ... */}`로 감싸 숨김(중첩 라벨 주석 제거 후 래핑). 관련 import·store 값은 복원 편의로 유지(미사용 경고만, noUnusedLocals off라 빌드 무해). 단축키 Ctrl+Z/Y는 유지.
