@@ -577,7 +577,7 @@ export function ViewerObject({
   const isPrimitive = !object.assetId && !object.content && !object.light && !object.particle;
   const primGeom = useMemo(
     () => (isPrimitive ? createPrimitiveGeometry(object.primitiveShape, object.geom) : null),
-    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profile?.length],
+    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profile?.length, object.geom?.subdivisions],
   );
   useEffect(() => () => primGeom?.dispose(), [primGeom]);
 

@@ -30,7 +30,19 @@ export interface EnvSchema {
     // skybox 스타일일 때 감쌀 360° 파노라마(equirectangular) 이미지 URL.
     skyboxUrl?: string;
   };
-  fog: { enabled: boolean; color: string; near: number; far: number };
+  // fog: near/far = linear 안개(기본). mode:'exp'면 지수 안개(FogExp2, density 사용) — 균일한 깊이감.
+  fog: { enabled: boolean; color: string; near: number; far: number; mode?: 'linear' | 'exp'; density?: number };
+  // 개별 포스트 이펙트(프리셋과 별개). 하나라도 0이 아니면 프리셋 대신 이 조합으로 렌더.
+  //   ssao=화면공간 앰비언트 오클루전(N8AO). 값 0/미설정 = 그 효과 끔.
+  effects?: {
+    ssao?: number;       // 0~1 AO 강도
+    bloom?: number;      // 0~ 빛번짐
+    vignette?: number;   // 0~1 가장자리 어둡게
+    brightness?: number; // -0.5~0.5
+    contrast?: number;   // -0.5~0.5
+    saturation?: number; // -1~1 (0=원본)
+    dof?: number;        // 0~1 피사계심도(초점 흐림)
+  };
   lights: {
     ambientIntensity: number;
     // 환경광(ambient) 색. 미설정 = 흰색('#ffffff', 기존 동작). 차가운 그림자 톤 등에 사용.
@@ -158,6 +170,8 @@ export interface PrimitiveGeom {
   profileClosed?: boolean;
   // extrude: 돌출 두께(정규화 전 로컬 단위). 기본 0.5.
   extrudeDepth?: number;
+  // 표면 세분화(Loop Subdivision) 레벨 — 0=원본, 1~3=면을 쪼개 부드러운 유기적 곡면으로. 성능상 3까지.
+  subdivisions?: number;
 }
 
 export type ContentType = 'text' | 'image' | 'video';
@@ -219,6 +233,8 @@ export interface ObjectNodeSchema {
   primitiveShape?: PrimitiveShape;
   // 프리미티브 확장 지오메트리 파라미터(둥근 박스 cornerRadius·각뿔대 topScale 등).
   geom?: PrimitiveGeom;
+  // 재질: materialId가 있으면 씬 materialAssets에서 참조(공유), 없으면 아래 인라인 material 사용(공존).
+  materialId?: string;
   material?: MaterialOverride;
   // 시각 렌더 옵션(프리미티브/콘텐츠). 미설정 = 스무스 셰이딩·앞면만·그림자 생성+수신(기존 동작).
   render?: {
@@ -349,6 +365,24 @@ export interface ProjectSceneSchema {
   objects: ObjectNodeSchema[];
   // 프리팹 원본 정의 라이브러리(씬 단위·MVP). 미설정 = 프리팹 없음(하위호환).
   prefabs?: PrefabSchema[];
+  // 공용 재질 에셋 라이브러리 — 여러 오브젝트가 id로 공유. 미설정 = 없음(하위호환, 기존 인라인 재질 유지).
+  materialAssets?: MaterialAsset[];
+  // 공용 색 팔레트 — 컬러 픽커에서 재사용할 저장된 색 스와치.
+  colorAssets?: ColorAsset[];
+}
+
+// 공용 재질 에셋 — 이름 붙인 재질을 라이브러리에 저장, 오브젝트가 materialId로 참조(원본 수정 시 일괄 반영).
+export interface MaterialAsset {
+  id: string;
+  name: string;
+  material: MaterialOverride;
+}
+
+// 공용 색 스와치 — 저장된 색을 여러 곳에서 재사용.
+export interface ColorAsset {
+  id: string;
+  name: string;
+  color: string;
 }
 
 export const DEFAULT_PHYSICS: PhysicsSchema = {
@@ -402,6 +436,8 @@ export function normalizeSceneData(
       assets: Array.isArray(raw.assets) ? (raw.assets as AssetRefSchema[]) : [],
       objects: raw.objects as ObjectNodeSchema[],
       prefabs: Array.isArray(raw.prefabs) ? (raw.prefabs as PrefabSchema[]) : [],
+      materialAssets: Array.isArray(raw.materialAssets) ? (raw.materialAssets as MaterialAsset[]) : undefined,
+      colorAssets: Array.isArray(raw.colorAssets) ? (raw.colorAssets as ColorAsset[]) : undefined,
     };
   }
   return makeEmptySceneData(projectId, sceneId);

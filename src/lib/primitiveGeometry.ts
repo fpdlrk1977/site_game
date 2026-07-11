@@ -2,6 +2,7 @@
 // (기존엔 각 렌더 경로에 <boxGeometry> 등이 인라인 중복돼 있었음 → 확장 파라미터를 한 곳에서 처리)
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { LoopSubdivision } from 'three-subdivide';
 import type { PrimitiveShape, PrimitiveGeom } from '@/types/scene';
 
 // 지오메트리를 원점 중심 + 최대 변 1로 정규화(프리미티브 단위 박스 관례에 맞춤 → bbox/바닥스냅/기즈모 일관).
@@ -66,7 +67,22 @@ function makeLoft(sections: number[] | undefined): THREE.BufferGeometry {
 }
 
 // 프리미티브 오브젝트의 지오메트리를 생성. 기본 크기는 기존 인라인 값과 동일(단위 박스·r0.5 구 등).
+// subdivisions>0이면 Loop Subdivision으로 면을 쪼개 부드러운 유기적 곡면으로 만든다(블렌더 Subdivision Surface).
 export function createPrimitiveGeometry(
+  shape: PrimitiveShape | undefined,
+  geom?: PrimitiveGeom,
+): THREE.BufferGeometry {
+  const base = buildBaseGeometry(shape, geom);
+  const level = Math.max(0, Math.min(3, Math.round(geom?.subdivisions ?? 0)));
+  if (level > 0) {
+    const subdivided = LoopSubdivision.modify(base, level, { split: true, uvSmooth: false });
+    base.dispose();
+    return subdivided;
+  }
+  return base;
+}
+
+function buildBaseGeometry(
   shape: PrimitiveShape | undefined,
   geom?: PrimitiveGeom,
 ): THREE.BufferGeometry {
@@ -109,5 +125,5 @@ export function profileSig(geom?: PrimitiveGeom): string {
 }
 
 export function primitiveGeomKey(shape: PrimitiveShape | undefined, geom?: PrimitiveGeom): string {
-  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${profileSig(geom)}`;
+  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}`;
 }

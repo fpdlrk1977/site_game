@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Text3D, Center } from '@react-three/drei';
 import { createPrimitiveGeometry, primitiveGeomKey } from '@/lib/primitiveGeometry';
 import { primLocalBboxCache } from '@/lib/primBboxCache';
+import { effectiveMaterial } from '@/lib/effectiveMaterial';
 import { useShallow } from 'zustand/react/shallow';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
@@ -263,6 +264,7 @@ export function EditorObjectInstance({ object }: Props) {
   const selectedId = useSceneStore((s) => s.selectedId);
   const selectedIds = useSceneStore((s) => s.selectedIds);
   const assets = useSceneStore((s) => s.assets);
+  const materialAssets = useSceneStore((s) => s.materialAssets);
   const wireframeMode = useSceneStore((s) => s.wireframeMode);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
   const [hovered, setHovered] = useState(false);
@@ -302,10 +304,12 @@ export function EditorObjectInstance({ object }: Props) {
   if (object.light) return <LightObjectInstance object={object} />;
 
   const assetRef = object.assetId ? assets.find((a) => a.id === object.assetId) : null;
-  const color = object.material?.color ?? '#a78bfa';
-  const roughness = object.material?.roughness ?? 0.5;
-  const metalness = object.material?.metalness ?? 0.1;
-  const emissive = object.material?.emissive ?? '#000000';
+  // 재질 리졸브(공존형) — materialId 참조가 있으면 공용 에셋 재질, 없으면 인라인.
+  const mat = effectiveMaterial(object, materialAssets);
+  const color = mat?.color ?? '#a78bfa';
+  const roughness = mat?.roughness ?? 0.5;
+  const metalness = mat?.metalness ?? 0.1;
+  const emissive = mat?.emissive ?? '#000000';
   // 렌더 옵션(셰이딩/양면/그림자) — 미설정 = 스무스·앞면·그림자 생성+수신
   const rdFlat = object.render?.flatShading ?? false;
   const rdSide = object.render?.doubleSided ? THREE.DoubleSide : THREE.FrontSide;
@@ -315,7 +319,7 @@ export function EditorObjectInstance({ object }: Props) {
   // 프리미티브 지오메트리(둥근 박스·각뿔대 등 확장 파라미터 반영). 파라미터 바뀌면 재생성·이전 것 dispose.
   const primGeom = useMemo(
     () => createPrimitiveGeometry(object.primitiveShape, object.geom),
-    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profile?.length],
+    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profile?.length, object.geom?.subdivisions],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
 
@@ -467,14 +471,14 @@ export function EditorObjectInstance({ object }: Props) {
             wireframe={wireframeMode}
             emissive={isSelected ? '#4338ca' : hovered ? '#4338ca' : emissive}
             emissiveIntensity={isSelected ? 0.4 : hovered ? 0.2 : (emissive !== '#000000' ? 1 : 0)}
-            textureUrl={object.material?.textureUrl}
-            repeat={object.material?.textureRepeat}
+            textureUrl={mat?.textureUrl}
+            repeat={mat?.textureRepeat}
             flatShading={rdFlat}
             side={rdSide}
-            clearcoat={object.material?.clearcoat}
-            sheen={object.material?.sheen}
-            transmission={object.material?.transmission}
-            ior={object.material?.ior}
+            clearcoat={mat?.clearcoat}
+            sheen={mat?.sheen}
+            transmission={mat?.transmission}
+            ior={mat?.ior}
           />
         </mesh>
       )}

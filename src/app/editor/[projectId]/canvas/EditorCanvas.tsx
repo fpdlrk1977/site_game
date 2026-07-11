@@ -903,7 +903,7 @@ export function EditorCanvas() {
 
           <PlacementGhost posRef={placeGhostPosRef} />
 
-          <PostProcessingEffects preset={environment.postProcessing?.preset ?? "none"} />
+          <PostProcessingEffects preset={environment.postProcessing?.preset ?? "none"} effects={environment.effects} />
 
           <OrbitControls
             ref={orbitRef}

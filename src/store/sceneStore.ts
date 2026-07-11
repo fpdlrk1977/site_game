@@ -12,6 +12,9 @@ import {
   ProjectSceneSchema,
   PrefabSchema,
   PrefabOverrideGroup,
+  MaterialAsset,
+  ColorAsset,
+  MaterialOverride,
   DEFAULT_ENVIRONMENT,
   DEFAULT_PHYSICS,
   PrimitiveShape,
@@ -44,6 +47,8 @@ interface HistoryEntry {
   environment: EnvSchema;
   // 프리팹 정의도 함께 스냅샷(프리팹 관련 액션만 채움). 미설정 = 이 액션은 prefabs를 안 바꿈 → undo 시 현재값 유지.
   prefabs?: PrefabSchema[];
+  // 재질 에셋 스냅샷(재질 에셋 액션만 채움). 미설정 = 안 바꿈.
+  materialAssets?: MaterialAsset[];
 }
 
 interface SceneState {
@@ -54,6 +59,9 @@ interface SceneState {
   environment: EnvSchema;
   // 프리팹 원본 정의 라이브러리(씬 단위). 인스턴스는 objects에 구워진 채로 존재한다.
   prefabs: PrefabSchema[];
+  // 공용 재질/색 에셋 라이브러리(씬 단위). 오브젝트가 materialId로 참조(공존형).
+  materialAssets: MaterialAsset[];
+  colorAssets: ColorAsset[];
   selectedId: string | null;
   selectedIds: string[];
   // 그룹 격리(isolation) 스코프 — 더블클릭으로 '진입'한 그룹 id. 설정 시 단일 클릭이 이 그룹 안에서만
@@ -160,6 +168,16 @@ interface SceneActions {
   deletePrefab: (prefabId: string) => void;
   /** 프리팹 이름 변경 */
   renamePrefab: (prefabId: string, name: string) => void;
+  // ── 공용 재질 에셋(공존형) ──
+  addMaterialAsset: (name: string, material: MaterialOverride) => string; // 새 id 반환
+  updateMaterialAsset: (id: string, material: MaterialOverride) => void;  // 원본 편집 → 참조 오브젝트 전부 반영
+  renameMaterialAsset: (id: string, name: string) => void;
+  removeMaterialAsset: (id: string) => void;                              // 참조 오브젝트는 인라인으로 detach 후 삭제
+  assignMaterialAsset: (objectIds: string[], materialId: string) => void; // 오브젝트에 에셋 연결
+  detachMaterial: (objectId: string) => void;                            // 연결 끊기(현재 재질을 인라인으로 복사)
+  // ── 공용 색 에셋 ──
+  addColorAsset: (name: string, color: string) => void;
+  removeColorAsset: (id: string) => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -332,6 +350,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   assets: [],
   environment: DEFAULT_ENVIRONMENT,
   prefabs: [],
+  materialAssets: [],
+  colorAssets: [],
   selectedId: null,
   groupScope: null,
   transformMode: 'translate',
@@ -371,6 +391,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       assets: data.assets ?? [],
       environment: data.environment,
       prefabs: data.prefabs ?? [],
+      materialAssets: data.materialAssets ?? [],
+      colorAssets: data.colorAssets ?? [],
       selectedId: null,
       selectedIds: [],
       groupScope: null,
@@ -1165,6 +1187,82 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
+  // ── 공용 재질 에셋(공존형) ──
+  addMaterialAsset: (name, material) => {
+    const { objects, environment, materialAssets, past } = get();
+    const id = MathUtils.generateUUID();
+    set({
+      materialAssets: [...materialAssets, { id, name: name.trim() || `재질 ${materialAssets.length + 1}`, material: { ...material } }],
+      isModified: true,
+      ...withHistory({ objects, environment, materialAssets }, past),
+    });
+    return id;
+  },
+  updateMaterialAsset: (id, material) => {
+    const { objects, environment, materialAssets, _prevSnapshot } = get();
+    if (!materialAssets.some((m) => m.id === id)) return;
+    // 드래그 슬라이더 대응 — _prevSnapshot 패턴(연속 편집을 1회 undo로). pushHistory가 확정.
+    set({
+      _prevSnapshot: _prevSnapshot ?? { objects, environment, materialAssets },
+      materialAssets: materialAssets.map((m) => (m.id === id ? { ...m, material: { ...material } } : m)),
+      isModified: true,
+    });
+  },
+  renameMaterialAsset: (id, name) => {
+    const { objects, environment, materialAssets, past } = get();
+    const t = name.trim();
+    if (!t || !materialAssets.some((m) => m.id === id)) return;
+    set({
+      materialAssets: materialAssets.map((m) => (m.id === id ? { ...m, name: t } : m)),
+      isModified: true,
+      ...withHistory({ objects, environment, materialAssets }, past),
+    });
+  },
+  removeMaterialAsset: (id) => {
+    const { objects, environment, materialAssets, past } = get();
+    const asset = materialAssets.find((m) => m.id === id);
+    if (!asset) return;
+    // 참조 오브젝트는 인라인으로 detach(에셋 재질 복사) 후 참조 해제 → 유령 참조 방지.
+    const nextObjects = objects.map((o) =>
+      o.materialId === id ? { ...o, materialId: undefined, material: { ...asset.material } } : o,
+    );
+    set({
+      objects: nextObjects,
+      materialAssets: materialAssets.filter((m) => m.id !== id),
+      isModified: true,
+      ...withHistory({ objects, environment, materialAssets }, past),
+    });
+  },
+  assignMaterialAsset: (objectIds, materialId) => {
+    const { objects, environment, materialAssets, past } = get();
+    if (!materialAssets.some((m) => m.id === materialId)) return;
+    const idset = new Set(objectIds);
+    set({
+      objects: objects.map((o) => (idset.has(o.id) ? { ...o, materialId } : o)),
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+  detachMaterial: (objectId) => {
+    const { objects, environment, materialAssets, past } = get();
+    const o = objects.find((x) => x.id === objectId);
+    if (!o || !o.materialId) return;
+    const asset = materialAssets.find((m) => m.id === o.materialId);
+    set({
+      objects: objects.map((x) => (x.id === objectId ? { ...x, materialId: undefined, material: { ...(asset?.material ?? x.material) } } : x)),
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+  addColorAsset: (name, color) => {
+    const { colorAssets } = get();
+    set({ colorAssets: [...colorAssets, { id: MathUtils.generateUUID(), name: name.trim() || color, color }], isModified: true });
+  },
+  removeColorAsset: (id) => {
+    const { colorAssets } = get();
+    set({ colorAssets: colorAssets.filter((c) => c.id !== id), isModified: true });
+  },
+
   updateEnvironment: (patch) => {
     const { environment, objects, _prevSnapshot } = get();
     set({
@@ -1181,30 +1279,32 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   undo: () => {
-    const { past, objects, environment, prefabs, future } = get();
+    const { past, objects, environment, prefabs, materialAssets, future } = get();
     if (past.length === 0) return;
     const prev = past[past.length - 1];
     set({
       objects: prev.objects,
       environment: prev.environment,
-      // 스냅샷에 prefabs가 있으면 복원(프리팹 액션), 없으면 현재값 유지(그 액션은 prefabs 미변경).
+      // 스냅샷에 있으면 복원(그 액션이 변경한 것), 없으면 현재값 유지.
       prefabs: prev.prefabs ?? prefabs,
+      materialAssets: prev.materialAssets ?? materialAssets,
       past: past.slice(0, -1),
-      future: [{ objects, environment, prefabs }, ...future],
+      future: [{ objects, environment, prefabs, materialAssets }, ...future],
       isModified: true,
       _prevSnapshot: null,
     });
   },
 
   redo: () => {
-    const { past, objects, environment, prefabs, future } = get();
+    const { past, objects, environment, prefabs, materialAssets, future } = get();
     if (future.length === 0) return;
     const next = future[0];
     set({
       objects: next.objects,
       environment: next.environment,
       prefabs: next.prefabs ?? prefabs,
-      past: pushPast(past, { objects, environment, prefabs }),
+      materialAssets: next.materialAssets ?? materialAssets,
+      past: pushPast(past, { objects, environment, prefabs, materialAssets }),
       future: future.slice(1),
       isModified: true,
       _prevSnapshot: null,

@@ -145,14 +145,19 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   }, []);
 
   // 오버라이드를 씬 데이터에 반영해 렌더 (모든 뷰어 경로가 object.visible을 존중하므로 이걸로 충분)
+  //   + 공용 재질 에셋(materialId) 리졸브 → ViewerObject는 object.material만 읽으므로 여기서 미리 주입.
   const effectiveScene = useMemo(() => {
-    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0) return scene;
+    const matAssets = scene.materialAssets;
+    const hasMatRefs = !!matAssets && matAssets.length > 0 && scene.objects.some((o) => o.materialId);
+    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0 && !hasMatRefs) return scene;
     return {
       ...scene,
       objects: scene.objects.map((o) => {
         const vis = o.id in visOverride ? visOverride[o.id] : o.visible;
         const pos = posOverride[o.id] ?? o.position;
-        return vis === o.visible && pos === o.position ? o : { ...o, visible: vis, position: pos };
+        const resolvedMat = hasMatRefs && o.materialId ? matAssets!.find((m) => m.id === o.materialId)?.material : undefined;
+        if (vis === o.visible && pos === o.position && !resolvedMat) return o;
+        return { ...o, visible: vis, position: pos, ...(resolvedMat ? { material: resolvedMat } : {}) };
       }),
     };
   }, [scene, visOverride, posOverride]);

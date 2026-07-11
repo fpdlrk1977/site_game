@@ -763,26 +763,49 @@ function EnvironmentPanel() {
                   />
                 </div>
               </div>
-              <div className='flex gap-2'>
-                <div className='mt-2'>
-                  <LabeledNum
-                    label="Near"
-                    value={env.fog.near}
-                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, near: Math.min(v, env.fog.far) } })}
-                    onCommit={pushHistory}
-                    min={1} max={200} precision={0} dragStep={1}
-                  />
-                </div>
-                <div className='mt-2'>
-                  <LabeledNum
-                    label="Far"
-                    value={env.fog.far}
-                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, far: Math.max(v, env.fog.near) } })}
-                    onCommit={pushHistory}
-                    min={10} max={500} precision={0} dragStep={2}
-                  />
-                </div>
+              <div className="mt-2">
+                <span className="text-[10px] text-muted/50 font-semibold block mb-1">방식</span>
+                <SelectBox
+                  value={env.fog.mode ?? 'linear'}
+                  onChange={(v) => { updateEnvironment({ fog: { ...env.fog, mode: v as 'linear' | 'exp' } }); pushHistory(); }}
+                  options={[
+                    { value: 'linear', label: 'Linear (Near~Far 구간)' },
+                    { value: 'exp', label: 'Exp (밀도 — 균일 깊이감)' },
+                  ]}
+                />
               </div>
+              {(env.fog.mode ?? 'linear') === 'exp' ? (
+                <div className='mt-2'>
+                  <LabeledNum
+                    label="Density (밀도)"
+                    value={env.fog.density ?? 0.02}
+                    onChange={(v) => updateEnvironment({ fog: { ...env.fog, density: v } })}
+                    onCommit={pushHistory}
+                    min={0} max={0.3} precision={3} dragStep={0.002}
+                  />
+                </div>
+              ) : (
+                <div className='flex gap-2'>
+                  <div className='mt-2'>
+                    <LabeledNum
+                      label="Near"
+                      value={env.fog.near}
+                      onChange={(v) => updateEnvironment({ fog: { ...env.fog, near: Math.min(v, env.fog.far) } })}
+                      onCommit={pushHistory}
+                      min={1} max={200} precision={0} dragStep={1}
+                    />
+                  </div>
+                  <div className='mt-2'>
+                    <LabeledNum
+                      label="Far"
+                      value={env.fog.far}
+                      onChange={(v) => updateEnvironment({ fog: { ...env.fog, far: Math.max(v, env.fog.near) } })}
+                      onCommit={pushHistory}
+                      min={10} max={500} precision={0} dragStep={2}
+                    />
+                  </div>
+                </div>
+              )}
         </div>}
       </GroupBox>
       
@@ -1264,16 +1287,44 @@ function EnvironmentPanel() {
 
       {/* Post Processing */}
       <GroupBox>
-        <SectionHeader title="Post Processing" />
-        <div className="px-3 pb-4">
-          <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">Preset</span>
-          <SelectBox
-            value={env.postProcessing?.preset ?? 'none'}
-            onChange={(v) => { updateEnvironment({ postProcessing: { preset: v as PostProcessPreset } }); pushHistory(); }}
-            options={([
-              ['none', 'None'], ['cinematic', 'Cinematic'], ['dreamy', 'Dreamy'], ['vintage', 'Vintage'], ['sharp', 'Sharp'],
-            ] as [PostProcessPreset, string][]).map(([value, label]) => ({ value, label }))}
-          />
+        <SectionHeader title="Post Processing" hint="화면 전체 필터. 프리셋 또는 개별 효과. 개별 효과(SSAO/블룸/비네트 등)를 하나라도 올리면 프리셋 대신 그 조합으로 렌더돼요. SSAO=구석 음영(묵직함)." />
+        <div className="px-3 pb-4 space-y-2">
+          <div>
+            <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">Preset</span>
+            <SelectBox
+              value={env.postProcessing?.preset ?? 'none'}
+              onChange={(v) => { updateEnvironment({ postProcessing: { preset: v as PostProcessPreset } }); pushHistory(); }}
+              options={([
+                ['none', 'None'], ['cinematic', 'Cinematic'], ['dreamy', 'Dreamy'], ['vintage', 'Vintage'], ['sharp', 'Sharp'],
+              ] as [PostProcessPreset, string][]).map(([value, label]) => ({ value, label }))}
+            />
+          </div>
+          {/* 개별 효과 (고급) — 하나라도 0이 아니면 프리셋 대신 이 조합으로 렌더 */}
+          {(() => {
+            const fx = env.effects ?? {};
+            const setFx = (k: keyof NonNullable<EnvSchema['effects']>, v: number) =>
+              updateEnvironment({ effects: { ...fx, [k]: v } });
+            const rows: { k: keyof NonNullable<EnvSchema['effects']>; label: string; min: number; max: number; step: number; def: number }[] = [
+              { k: 'ssao',       label: 'SSAO (구석 음영)',   min: 0, max: 1, step: 0.02, def: 0 },
+              { k: 'bloom',      label: 'Bloom (빛번짐)',      min: 0, max: 3, step: 0.05, def: 0 },
+              { k: 'dof',        label: 'DoF (초점 흐림)',     min: 0, max: 1, step: 0.02, def: 0 },
+              { k: 'vignette',   label: 'Vignette (가장자리)', min: 0, max: 1, step: 0.02, def: 0 },
+              { k: 'brightness', label: 'Brightness (밝기)',  min: -0.5, max: 0.5, step: 0.01, def: 0 },
+              { k: 'contrast',   label: 'Contrast (대비)',    min: -0.5, max: 0.5, step: 0.01, def: 0 },
+              { k: 'saturation', label: 'Saturation (채도)',  min: -1, max: 1, step: 0.02, def: 0 },
+            ];
+            return (
+              <div className="pt-2 border-t border-border/60 space-y-1.5">
+                <span className="text-[10px] font-semibold text-muted/60 tracking-wide block">개별 효과 (고급)</span>
+                {rows.map(({ k, label, min, max, step, def }) => (
+                  <LabeledNum key={k} label={label} value={fx[k] ?? def}
+                    onChange={(v) => setFx(k, v)} onCommit={pushHistory}
+                    min={min} max={max} precision={2} dragStep={step} />
+                ))}
+                <p className="text-[10px] text-muted/50">모두 0이면 위 Preset이 적용됩니다.</p>
+              </div>
+            );
+          })()}
         </div>
       </GroupBox>
 
@@ -1325,7 +1376,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner, addAsset } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner, addAsset, materialAssets, addMaterialAsset, updateMaterialAsset, detachMaterial } = useSceneStore();
   const { addToast } = useToast();
   const [merging, setMerging] = useState(false);
 
@@ -2308,6 +2359,19 @@ function InspectorInner() {
           )}
         </GroupBox>
 
+        {/* Subdivision — 표면 세분화(부드러운 유기적 곡면). 모든 프리미티브 */}
+        {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && (
+          <GroupBox>
+            <SectionHeader title="Subdivision" hint="표면을 쪼개 부드러운 유기적 곡면으로 만들어요(블렌더 Subdivision Surface). 레벨↑ = 더 둥글지만 면이 급증해 무거워져요(최대 3)." />
+            <div className="px-3 pb-4">
+              <LabeledNum label="레벨 (0 = 원본)" value={obj.geom?.subdivisions ?? 0}
+                onChange={(v) => updateObject(obj.id, { geom: { ...obj.geom, subdivisions: Math.round(v) } })} onCommit={pushHistory}
+                min={0} max={3} precision={0} dragStep={1} />
+              <p className="text-[10px] text-muted/50 mt-1">각진 박스도 레벨을 올리면 둥글둥글해져요. 성능상 3까지.</p>
+            </div>
+          </GroupBox>
+        )}
+
         {/* Geometry — 프리미티브 확장 파라미터(둥근 박스·각뿔대·로프트) */}
         {(obj.primitiveShape === 'box' || obj.primitiveShape === 'frustum' || obj.primitiveShape === 'loft') && (
           <GroupBox>
@@ -2564,8 +2628,18 @@ function InspectorInner() {
         {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && (
           <GroupBox>
             <SectionHeader title="Material" hint="색상·자체발광·거칠기·금속성. 프리미티브(박스/구체/원기둥 등)와 텍스트 콘텐츠에 적용돼요." isOpen={isOpen('material')} onToggle={() => toggleSection('material')} />
-            {isOpen('material') && (
+            {isOpen('material') && (() => {
+              const matRef = obj.materialId ? (materialAssets.find((m) => m.id === obj.materialId) ?? null) : null;
+              return (
               <div className="px-3 pb-4 space-y-2">
+                {matRef && (
+                  <div className="rounded-xs bg-primary/10 border border-primary/30 p-2 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[11px] text-primary"><Palette size={13} /> 재질 에셋 <b className="font-semibold">{matRef.name}</b></div>
+                    <p className="text-[10px] text-muted/60 leading-snug">공유 재질이에요 — 편집은 Materials 탭에서 하면 이 재질을 쓰는 모든 오브젝트에 반영돼요. 이 오브젝트만 따로 바꾸려면 연결을 끊으세요.</p>
+                    <button onClick={() => detachMaterial(obj.id)} className="w-full py-1 rounded-xs border border-border text-muted hover:text-foreground hover:border-primary/50 text-[10px] transition-all">연결 끊기 (독립 재질로)</button>
+                  </div>
+                )}
+                {!matRef && (<>
                 <div className='flex gap-2'>
                   <div className='flex-1'>
                     <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Color</span>
@@ -2702,8 +2776,18 @@ function InspectorInner() {
                   </div>
                   );
                 })()}
+                </>)}
+                {!matRef && (
+                  <button
+                    onClick={() => { const id = addMaterialAsset(obj.name || '재질', obj.material ?? {}); useSceneStore.getState().assignMaterialAsset([obj.id], id); }}
+                    className="w-full py-1.5 rounded-xs border border-border text-muted hover:text-primary hover:border-primary/50 text-[11px] transition-all"
+                  >
+                    이 재질을 에셋으로 저장 (공유)
+                  </button>
+                )}
               </div>
-            )}
+              );
+            })()}
           </GroupBox>
         )}
 

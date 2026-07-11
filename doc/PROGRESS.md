@@ -135,6 +135,29 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **#8a MeshPhysicalMaterial**: `MaterialOverride`에 `clearcoat`/`sheen`/`transmission`/`ior` 추가. `PrimitiveMaterial`이 셋 중 하나라도 >0이면 **`meshPhysicalMaterial`로 전환**(key로 std↔physical 재마운트), 전부 0이면 기존 `meshStandardMaterial`. 에디터·뷰어 프리미티브 배선. Inspector Material 섹션에 '물리 재질(고급)' 슬라이더(clearcoat/sheen/transmission + transmission>0일 때 IOR). transmission은 유리처럼 투명(transparent+thickness).
 - **#4b 오브젝트 스냅(자석)**: 스토어 토글 `objectSnap`(그리드 스냅과 독립, 기본 OFF) + 툴바 스냅 드롭다운에 토글. `SingleGizmo` translate에서 **루트 오브젝트** 이동 시, 드래그 시작 시 스냅샷한 다른 루트들의 월드 bbox와 비교해 **각 축의 min/center/max를 임계 0.2m 내 최근접에 흡착**(`localBBox×matrixWorld`로 가이드박스 오염 없는 정밀 bbox 사용). 토글 OFF면 완전 무영향(격리). 중첩/캐릭터 프리뷰 제외. 가이드 라인 시각화는 미포함(MVP).
 - 검증: tsc 클린 + editor 200 + ✓ Compiled. **실동작 브라우저 확인 필요**(물리 재질 clearcoat/sheen/유리, 오브젝트 스냅 흡착).
+  - **#8a 투과 보강(2026-07-11)**: 표준 `meshPhysicalMaterial transmission`이 뒤가 안 비치던 원인 = **metalness**(유리는 비금속). three r185 렌더리스트 소스 확인 결과 `transparent` 플래그는 무관(transmission이 먼저 transmissive 리스트로 분류)이었음 → 내가 넣었던 `transparent` 제거 + **transmission>0이면 metalness 0 강제**. drei `MeshTransmissionMaterial`(무거움)로 잠깐 갔다가, 성능 위해 내장 physical로 되돌림.
+
+### B그룹 (2026-07-11, 설치분) — #3 Effects/FogExp2/SSAO · #7 Subdivision
+- **#3 개별 포스트이펙트 + SSAO + FogExp2**: `@react-three/postprocessing`가 이미 N8AO/SSAO/DoF/BrightnessContrast/HueSaturation 제공 → **무설치**. 스키마 `EnvSchema.effects{ssao,bloom,vignette,brightness,contrast,saturation,dof}` + `fog.mode('linear'|'exp')`/`fog.density`. `PostProcessingEffects` 재작성 — 개별 효과 하나라도 활성이면 프리셋 대신 그 조합(활성 효과만 배열로 EffectComposer에 전달, N8AO=SSAO), 아니면 기존 프리셋. `ViewerCanvas` fog가 mode='exp'면 `<fogExp2 density>`. 에디터: Post Processing 섹션에 '개별 효과(고급)' 슬라이더 7종, Fog 섹션에 방식(linear/exp)+density. (에디터/뷰어 둘 다 effects 전달.)
+- **#7 Subdivision Modifier**: **`three-subdivide` 설치**(`LoopSubdivision`). `PrimitiveGeom.subdivisions?(0~3)` + `createPrimitiveGeometry`가 base 지오메트리 생성 후 level>0이면 `LoopSubdivision.modify(base, level, {split, uvSmooth:false})`로 세분화(각진 박스→둥근 유기 곡면). `primitiveGeomKey`·primGeom useMemo deps에 subdivisions 포함. Inspector에 'Subdivision' 섹션(모든 프리미티브, 레벨 0~3 슬라이더).
+- 검증: tsc 클린 + editor 200 + ✓ Compiled(three-subdivide 로드 정상). **실동작 브라우저 확인 필요**(SSAO 구석음영·개별효과·지수안개, subdivision 레벨↑ 곡면화).
+- **B그룹 남음**: #2b 에디터 실시간 물리 프리뷰 — **선택/보류**(에디터에서 Rapier 구동은 편집 중 오브젝트가 떨어져 기즈모/좌표와 충돌 → 리스크. 이미 플레이 모드가 있어 우선순위 낮음).
+
+### C그룹 Phase 1 (2026-07-11) — #5 글로벌 재질 에셋 (공존형)
+"재질을 라이브러리에 한 번 만들어 여러 오브젝트가 id로 공유, 원본 수정 시 일괄 반영"(피그마 색 스타일 개념). 기존 인라인 재질과 **공존** — materialId 있으면 참조, 없으면 기존 인라인(하위호환 100%).
+- **스키마**: `MaterialAsset{id,name,material}`·`ColorAsset{id,name,color}` + `ProjectSceneSchema.materialAssets?/colorAssets?` + `ObjectNodeSchema.materialId?`.
+- **리졸버** `src/lib/effectiveMaterial.ts`: `effectiveMaterial(object, materialAssets)` — materialId 참조 유효하면 에셋 재질, 아니면 인라인(에셋 삭제 시 인라인 폴백).
+- **스토어**: `materialAssets`/`colorAssets` state(loadScene·persist·normalizeSceneData·**undo 스냅샷**에 포함) + 액션 `addMaterialAsset`(id 반환)·`updateMaterialAsset`(원본 편집=전 인스턴스 반영, _prevSnapshot 패턴)·`renameMaterialAsset`·`removeMaterialAsset`(참조 오브젝트는 인라인으로 detach 후 삭제 — 유령참조 방지)·`assignMaterialAsset`·`detachMaterial` + color add/remove.
+- **렌더 배선**: 에디터 `EditorObjectInstance`가 `effectiveMaterial`로 색/거칠기/금속/발광/텍스처/물리속성 읽음. 뷰어는 `ViewerClient.effectiveScene`에서 materialId→에셋 재질을 object.material에 미리 주입(ViewerObject 무변경).
+- **UI**: Inspector Material — 참조 중이면 **배너(에셋 이름)+"연결 끊기(detach)"**(슬라이더 숨김), 인라인이면 기존 편집+**"이 재질을 에셋으로 저장(공유)"** 버튼. AssetBrowser Materials 탭 상단에 **저장된 재질 라이브러리**(색 스와치 편집=공유 반영·이름 변경·"적용"(선택 프리미티브에 연결)·삭제).
+- 검증: tsc 클린 + editor 200 + ✓ Compiled. **실동작 브라우저 확인 필요**(에셋 저장→여러 오브젝트 적용→라이브러리서 색 변경 시 일괄 반영→연결 끊기).
+
+### C그룹 Phase 2 (2026-07-11) — 색 팔레트 · 라이브러리 전 속성 편집 · 복제
+- **색 팔레트(ColorAsset)**: AssetBrowser Materials 탭 하단에 색 스와치 그리드 + "현재 색 저장"(선택 프리미티브 색) + 클릭 적용(선택 프리미티브 material.color, 참조 재질 제외) + 삭제. 스토어 `addColorAsset`/`removeColorAsset`.
+- **라이브러리 재질 전 속성 편집**: Materials 탭 저장된 재질에 펼침(`SlidersHorizontal`) 토글 → 거칠기/금속성/코팅광택/투과 range 슬라이더 + 자체발광 색 → `updateMaterialAsset`(공유 반영). 기존엔 색만 편집 가능했음.
+- **프로젝트 복제 리맵**: `remapSceneData`가 scene_data를 통째 JSON 딥클론하므로 **materialAssets·object.materialId가 이미 보존**됨(내부 UUID·씬 스코프라 충돌 없음) → **별도 작업 불필요**로 확인됨(PROGRESS 이전 우려 정정).
+- 검증: tsc 클린 + editor 200 + ✓ Compiled. **실동작 브라우저 확인 필요**(색 저장/적용, 라이브러리 슬라이더로 공유 재질 속성 편집→일괄 반영).
+- **#5 재질/색 에셋 전체 완료**(Phase 1+2). 남은 대형: #8b 레이어 재질/AI 텍스처(별개 스프린트).
 
 ## 최근 완료 (2026-07-10) — 에디터 UX 3종 (아이콘 lucide화 · 배치 모드 · 툴바 드롭다운)
 

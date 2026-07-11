@@ -14,6 +14,7 @@ import {
   Package, PersonStanding, Music, Play, Square, X, Check, Plus, Type, Image as ImageIcon, Video,
   Flame, Wind, Sparkles, Snowflake, Lightbulb, Flashlight, Sun,
   Ban, Sunset, Sunrise, Moon, TreePine, Trees, Building2, Factory, Sofa, Landmark,
+  SlidersHorizontal,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -79,7 +80,10 @@ const LIGHT_ITEMS: { type: LightType; label: string; icon: LucideIcon }[] = [
 ];
 
 export function AssetBrowser() {
-  const { projectId, assets, environment, addAsset, beginPlacement, removeAsset, removeObjectsByAsset, updateEnvironment, updateObject, pushHistory } = useSceneStore();
+  const { projectId, assets, environment, addAsset, beginPlacement, removeAsset, removeObjectsByAsset, updateEnvironment, updateObject, pushHistory,
+    materialAssets, assignMaterialAsset, updateMaterialAsset, renameMaterialAsset, removeMaterialAsset,
+    colorAssets, addColorAsset, removeColorAsset } = useSceneStore();
+  const [expandedMat, setExpandedMat] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -127,6 +131,42 @@ export function AssetBrowser() {
     }
     pushHistory();
     addToast(`${preset.label} 재질 적용 (${targets.length}개)`, 'success');
+  };
+
+  // 저장된 공용 재질 에셋을 선택한 프리미티브(들)에 연결(materialId 참조). 원본 수정 시 전부 반영.
+  const applyMaterialAssetToSelection = (materialId: string) => {
+    const st = useSceneStore.getState();
+    const targets = st.selectedIds.filter((id) => {
+      const o = st.objects.find((x) => x.id === id);
+      return o?.primitiveShape && !o.content;
+    });
+    if (targets.length === 0) { addToast('먼저 프리미티브를 선택하세요.', 'error'); return; }
+    assignMaterialAsset(targets, materialId);
+    addToast(`공유 재질 연결 (${targets.length}개)`, 'success');
+  };
+
+  // 저장된 색을 선택 프리미티브들의 재질 색에 적용(인라인). 참조 재질이면 무시(연결 끊고 써야).
+  const applyColorToSelection = (color: string) => {
+    const st = useSceneStore.getState();
+    const targets = st.selectedIds.filter((id) => {
+      const o = st.objects.find((x) => x.id === id);
+      return o?.primitiveShape && !o.content && !o.materialId;
+    });
+    if (targets.length === 0) { addToast('먼저 프리미티브(공유 재질 아닌)를 선택하세요.', 'error'); return; }
+    for (const id of targets) {
+      const cur = st.objects.find((o) => o.id === id)?.material;
+      updateObject(id, { material: { ...cur, color } });
+    }
+    pushHistory();
+    addToast(`색 적용 (${targets.length}개)`, 'success');
+  };
+  // 선택 프리미티브의 현재 색을 팔레트에 저장.
+  const saveSelectedColor = () => {
+    const st = useSceneStore.getState();
+    const sel = st.selectedIds.map((id) => st.objects.find((o) => o.id === id)).find((o) => o?.primitiveShape && !o.content);
+    const color = sel?.material?.color ?? '#a78bfa';
+    addColorAsset(color, color);
+    addToast('색 저장됨', 'success');
   };
 
   // HDR 환경 프리셋 적용(씬 전역). none이면 끄기(단색/하늘 배경으로 복귀).
@@ -477,6 +517,62 @@ export function AssetBrowser() {
 
         {tab === 'materials' && (
           <>
+            {/* 저장된 공용 재질 (materialAssets) — 여러 오브젝트가 공유, 원본 수정 시 일괄 반영 */}
+            {materialAssets.length > 0 && (
+              <div className="mb-3">
+                <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1.5">저장된 재질 (공유)</span>
+                <div className="space-y-1.5">
+                  {materialAssets.map((m) => {
+                    const expanded = expandedMat === m.id;
+                    const setM = (patch: Partial<typeof m.material>) => updateMaterialAsset(m.id, { ...m.material, ...patch });
+                    return (
+                    <div key={m.id} className="bg-background border border-border rounded-xs">
+                      <div className="flex items-center gap-1.5 px-1.5 py-1">
+                        <input type="color" value={m.material.color ?? '#a78bfa'}
+                          onChange={(e) => setM({ color: e.target.value })} onBlur={pushHistory}
+                          title="색 편집(공유 반영)" className="w-6 h-6 shrink-0 rounded cursor-pointer border border-border" />
+                        <input value={m.name} onChange={(e) => renameMaterialAsset(m.id, e.target.value)}
+                          className="flex-1 min-w-0 bg-transparent text-[11px] text-foreground focus:outline-none" />
+                        <button onClick={() => setExpandedMat(expanded ? null : m.id)}
+                          title="속성 편집" className={`shrink-0 w-5 h-5 rounded-sm flex items-center justify-center transition-colors ${expanded ? 'text-primary' : 'text-muted hover:text-foreground'}`}><SlidersHorizontal size={12} /></button>
+                        <button onClick={() => applyMaterialAssetToSelection(m.id)}
+                          title="선택한 프리미티브에 연결" className="shrink-0 px-1.5 py-0.5 rounded-xs bg-primary/15 text-primary hover:bg-primary/25 text-[10px] transition-colors">적용</button>
+                        <button onClick={() => { if (confirm(`'${m.name}' 재질을 삭제할까요?\n이 재질을 쓰던 오브젝트는 독립 재질로 바뀝니다.`)) removeMaterialAsset(m.id); }}
+                          title="삭제" className="shrink-0 w-5 h-5 rounded-sm text-muted hover:text-red-500 flex items-center justify-center transition-colors"><X size={12} /></button>
+                      </div>
+                      {expanded && (
+                        <div className="px-2 pb-2 pt-0.5 space-y-1.5 border-t border-border/60">
+                          {([
+                            { k: 'roughness', label: '거칠기', def: 0.5 },
+                            { k: 'metalness', label: '금속성', def: 0.1 },
+                            { k: 'clearcoat', label: '코팅광택', def: 0 },
+                            { k: 'transmission', label: '투과(유리)', def: 0 },
+                          ] as const).map(({ k, label, def }) => (
+                            <label key={k} className="flex items-center gap-2 text-[10px] text-muted">
+                              <span className="w-14 shrink-0">{label}</span>
+                              <input type="range" min={0} max={1} step={0.02} value={m.material[k] ?? def}
+                                onChange={(e) => setM({ [k]: parseFloat(e.target.value) })}
+                                onMouseUp={pushHistory} onTouchEnd={pushHistory}
+                                className="flex-1 accent-primary" />
+                              <span className="w-7 text-right font-mono">{(m.material[k] ?? def).toFixed(2)}</span>
+                            </label>
+                          ))}
+                          <label className="flex items-center gap-2 text-[10px] text-muted">
+                            <span className="w-14 shrink-0">자체발광</span>
+                            <input type="color" value={m.material.emissive ?? '#000000'}
+                              onChange={(e) => setM({ emissive: e.target.value })} onBlur={pushHistory}
+                              className="w-6 h-6 rounded cursor-pointer border border-border" />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[9px] text-muted/50 mt-1.5 leading-snug">속성을 바꾸면 이 재질을 쓰는 모든 오브젝트에 반영돼요. (오브젝트 인스펙터의 "이 재질을 에셋으로 저장"으로 추가)</p>
+              </div>
+            )}
+            <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1.5">질감 프리셋 (복사 적용)</span>
             <div className="grid grid-cols-2 gap-2">
               {MATERIAL_PRESETS.map((preset) => (
                 <button
@@ -493,9 +589,32 @@ export function AssetBrowser() {
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-muted text-center py-4 leading-relaxed">
-              프리미티브(박스·구체 등)를 선택하고<br />재질을 클릭하면 질감이 바뀝니다. <b>색은 유지</b>돼요.
+            <p className="text-[10px] text-muted text-center py-3 leading-relaxed">
+              프리미티브를 선택하고 재질을 클릭하면 질감이 바뀝니다. <b>색은 유지</b>돼요.
             </p>
+
+            {/* 색 팔레트 (ColorAsset) — 저장한 색을 재사용 */}
+            <div className="pt-2 border-t border-border/60">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-semibold text-muted/60 tracking-wide">색 팔레트</span>
+                <button onClick={saveSelectedColor} title="선택 오브젝트의 현재 색을 저장"
+                  className="flex items-center gap-1 text-[10px] text-muted hover:text-primary transition-colors"><Plus size={11} /> 현재 색 저장</button>
+              </div>
+              {colorAssets.length === 0 ? (
+                <p className="text-[10px] text-muted/50 leading-snug">자주 쓰는 색을 저장해 두고 클릭 한 번으로 적용하세요.</p>
+              ) : (
+                <div className="grid grid-cols-8 gap-1.5">
+                  {colorAssets.map((c) => (
+                    <div key={c.id} className="group relative aspect-square">
+                      <button onClick={() => applyColorToSelection(c.color)} title={`${c.name} 적용`}
+                        className="w-full h-full rounded-xs border border-border/60 hover:ring-2 hover:ring-primary transition-all" style={{ background: c.color }} />
+                      <button onClick={() => removeColorAsset(c.id)} title="삭제"
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-background border border-border text-muted hover:text-red-500 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all"><X size={9} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
 
