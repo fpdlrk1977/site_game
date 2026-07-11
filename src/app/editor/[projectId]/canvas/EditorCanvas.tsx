@@ -327,7 +327,7 @@ function SelectionOverlay({
       }
       if (!box.isEmpty()) {
         bounds.visible = true;
-        (bounds.material as THREE.LineBasicMaterial).color.set(selectedIds.length >= 2 ? "#22d3ee" : "#7c3aed");
+        (bounds.material as THREE.LineBasicMaterial).color.set(selectedIds.length >= 2 ? "#22d3ee" : "#3a82ed");
         bounds.box.copy(box);
         bounds.updateMatrixWorld(true);
       } else {
@@ -364,7 +364,10 @@ function SelectionOverlay({
       for (let i = 0; i < 8; i++) {
         const v = new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z);
         cs.push(v);
-        if (_ovFp.copy(v).sub(camPos).dot(camDir) <= 0.05) { anyBehind = true; break; }
+        if (_ovFp.copy(v).sub(camPos).dot(camDir) <= 0.05) {
+          anyBehind = true;
+          break;
+        }
         const p = _ovProj.copy(v).project(camera);
         const sx = (p.x * 0.5 + 0.5) * projW;
         const sy = (-p.y * 0.5 + 0.5) * projH;
@@ -626,7 +629,7 @@ export function EditorCanvas() {
     isDraggingRef.current = false;
     dragRectRef.current = null;
     // 캔버스(카메라가 실제 투영하는 렌더 서피스) rect를 드래그 시작 시 1회 캐시.
-    dragCanvasRectRef.current = (wrapperRef.current?.querySelector('canvas') ?? wrapperRef.current)?.getBoundingClientRect() ?? null;
+    dragCanvasRectRef.current = (wrapperRef.current?.querySelector("canvas") ?? wrapperRef.current)?.getBoundingClientRect() ?? null;
     // Disable orbit immediately so it doesn't jitter before the 6px threshold kicks in
     if (orbitRef.current) orbitRef.current.enabled = false;
   }, []);
@@ -706,13 +709,21 @@ export function EditorCanvas() {
         // 8 코너가 모두 카메라 앞이면 스크린 AABB로 '닿기 선택'(피그마식) 판정.
         // 하나라도 카메라 뒤면 AABB를 신뢰할 수 없으므로(폭주) 중심점 폴백으로 판정.
         let anyBehind = false;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
         for (let i = 0; i < 8; i++) {
           _corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
-          if (!inFront(_corner)) { anyBehind = true; break; }
+          if (!inFront(_corner)) {
+            anyBehind = true;
+            break;
+          }
           const { sx, sy } = project(_corner);
-          minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
-          minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+          minX = Math.min(minX, sx);
+          maxX = Math.max(maxX, sx);
+          minY = Math.min(minY, sy);
+          maxY = Math.max(maxY, sy);
         }
         if (!anyBehind) {
           selected = minX <= x2 && maxX >= x1 && minY <= y2 && maxY >= y1;

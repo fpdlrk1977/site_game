@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import { useRef, useEffect, useMemo, Suspense } from 'react';
-import { useGLTF } from '@react-three/drei';
-import { SkeletonUtils } from 'three-stdlib';
-import * as THREE from 'three';
-import { normalizeGlbMaterials } from '@/lib/glbMaterials';
-import { useSceneStore, CHARACTER_PREVIEW_ID } from '@/store/sceneStore';
-import { useObjectRefs } from './ObjectRefsContext';
-import { pointerDownOnObjectRef } from './boxSelectState';
+import { useRef, useEffect, useMemo, Suspense } from "react";
+import { useGLTF } from "@react-three/drei";
+import { SkeletonUtils } from "three-stdlib";
+import * as THREE from "three";
+import { normalizeGlbMaterials } from "@/lib/glbMaterials";
+import { useSceneStore, CHARACTER_PREVIEW_ID } from "@/store/sceneStore";
+import { useObjectRefs } from "./ObjectRefsContext";
+import { pointerDownOnObjectRef } from "./boxSelectState";
 
 // 기존 import 경로 호환을 위한 re-export (원본은 sceneStore가 소유)
-export { CHARACTER_PREVIEW_ID } from '@/store/sceneStore';
+export { CHARACTER_PREVIEW_ID } from "@/store/sceneStore";
 
 function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -32,7 +32,9 @@ function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
   // objectRefsRef에 등록 — GizmoController가 이 그룹을 찾을 수 있게
   useEffect(() => {
     if (groupRef.current) refsMap.current.set(CHARACTER_PREVIEW_ID, groupRef.current);
-    return () => { refsMap.current.delete(CHARACTER_PREVIEW_ID); };
+    return () => {
+      refsMap.current.delete(CHARACTER_PREVIEW_ID);
+    };
   }, [refsMap]);
 
   // 스폰 위치 반영 (EditorObjectInstance와 동일한 imperative 패턴)
@@ -51,7 +53,7 @@ function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
       mats.forEach((mat) => {
         const m = mat as THREE.MeshStandardMaterial;
         if (m.emissive !== undefined) {
-          m.emissive.set(isSelected ? '#3730a3' : '#000000');
+          m.emissive.set(isSelected ? "#3730a3" : "#000000");
           m.emissiveIntensity = isSelected ? 0.4 : 0;
         }
       });
@@ -74,9 +76,7 @@ function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
           pointerDownOnObjectRef.current = true;
         }}
       />
-      {isSelected && (
-        <box3Helper args={[bbox, new THREE.Color('#7c3aed')]} />
-      )}
+      {isSelected && <box3Helper args={[bbox, new THREE.Color("#cfcfcf")]} />}
     </group>
   );
 }
