@@ -25,7 +25,7 @@ import { TexturePicker } from '@/components/ui/TexturePicker';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { InfoHint } from '@/components/ui/InfoHint';
-import type { ObjectNodeSchema, ColliderType, EventSchema, EventCondition, GameVariable, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, EventCondition, GameVariable, HudElement, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
 
 // 프리팹 override 그룹 → 한글 라벨
 const OVERRIDE_LABELS: Record<PrefabOverrideGroup, string> = {
@@ -344,6 +344,8 @@ const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
   approach_exit: 'Approach Out',
   dialogue_end: '대사 종료 시',
   variable_changed: '변수 변경 시 (조건)',
+  scene_start: '시작 시 (로드)',
+  on_timer: '타이머 (반복)',
 };
 const ACTION_LABELS: Record<string, string> = {
   open_url: 'URL 열기',
@@ -363,10 +365,15 @@ const ACTION_LABELS: Record<string, string> = {
   toggle_collision: '통과 토글',
   play_sound: '사운드 재생',
   set_variable: '변수 변경 (점수 등)',
+  spawn_object: '오브젝트 생성(스폰)',
+  despawn_object: '오브젝트 제거(디스폰)',
+  game_win: '게임 승리',
+  game_lose: '게임 오버',
+  run_script: '스크립트 실행',
 };
 
 // value가 대상 objectId인 액션들 (에디터에서 오브젝트 선택 드롭다운 표시)
-const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object', 'focus_object', 'set_passable', 'set_solid', 'toggle_collision']);
+const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object', 'focus_object', 'set_passable', 'set_solid', 'toggle_collision', 'despawn_object']);
 
 // ── GLB 애니메이션 클립 선택기 ─────────────────────────────────
 // three-stdlib GLTFLoader가 이 GLB의 animations를 파싱 못하는 문제 우회:
@@ -460,7 +467,7 @@ const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 function EnvironmentPanel() {
-  const { environment, updateEnvironment, pushHistory, assets, projectId, variables, addVariable, updateVariable, removeVariable } = useSceneStore();
+  const { environment, updateEnvironment, pushHistory, assets, projectId, variables, addVariable, updateVariable, removeVariable, hudElements, addHudElement, updateHudElement, removeHudElement } = useSceneStore();
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(true);
   const [moodSel, setMoodSel] = useState(''); // 마지막으로 적용한 Mood(표시용) — env에 저장되진 않음
@@ -1413,6 +1420,86 @@ function EnvironmentPanel() {
         </div>
       </GroupBox>
 
+      {/* HUD 위젯 — 변수를 텍스트/체력바/목숨으로 화면 표시. GAME_LOGIC.md Phase 2 */}
+      <GroupBox>
+        <SectionHeader title="HUD (화면 표시)" hint="게임 변수를 화면 구석에 텍스트·체력바·목숨 아이콘으로 표시합니다. 각 위젯을 변수에 연결하고 종류·위치·색을 정하세요. (변수의 '화면 HUD에 표시' 간단 텍스트와 별개로, 더 꾸민 위젯)" />
+        <div className="px-3 pb-4 space-y-2">
+          {variables.length === 0 && (
+            <p className="text-muted text-[10px]">먼저 위에서 <b>게임 변수</b>를 만들어야 HUD에 연결할 수 있어요.</p>
+          )}
+          {hudElements.map((el) => (
+            <div key={el.id} className="bg-surface border border-border rounded-xs p-2 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <SelectBox
+                  value={el.variable || variables[0]?.name || ''}
+                  onChange={(name) => { updateHudElement(el.id, { variable: name }); pushHistory(); }}
+                  options={variables.length ? variables.map((v) => ({ value: v.name, label: v.name })) : [{ value: '', label: '(변수 없음)' }]}
+                />
+                <button onClick={() => removeHudElement(el.id)} title="위젯 삭제" className="p-1 rounded-xs text-muted/60 hover:text-red-500 hover:bg-red-500/10 transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <SelectBox
+                  value={el.kind}
+                  onChange={(k) => { updateHudElement(el.id, { kind: k as HudElement['kind'] }); pushHistory(); }}
+                  options={[{ value: 'text', label: '텍스트' }, { value: 'bar', label: '체력바' }, { value: 'lives', label: '목숨(아이콘)' }]}
+                />
+                <SelectBox
+                  value={el.position}
+                  onChange={(p) => { updateHudElement(el.id, { position: p as HudElement['position'] }); pushHistory(); }}
+                  options={[
+                    { value: 'top-left', label: '↖ 좌상' }, { value: 'top-center', label: '↑ 상단' }, { value: 'top-right', label: '↗ 우상' },
+                    { value: 'bottom-left', label: '↙ 좌하' }, { value: 'bottom-center', label: '↓ 하단' }, { value: 'bottom-right', label: '↘ 우하' },
+                  ]}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 items-center">
+                <input
+                  value={el.label ?? ''}
+                  onChange={(e) => updateHudElement(el.id, { label: e.target.value || undefined })}
+                  onBlur={pushHistory}
+                  placeholder="라벨(선택)"
+                  className="bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                {(el.kind === 'bar' || el.kind === 'lives') && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted/60 shrink-0">최대</span>
+                    <input
+                      type="number" min={1}
+                      value={el.max ?? (el.kind === 'bar' ? 100 : 3)}
+                      onChange={(e) => updateHudElement(el.id, { max: Number(e.target.value) })}
+                      onBlur={pushHistory}
+                      className="w-full bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+              {(el.kind === 'bar' || el.kind === 'lives') && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted/60">색</span>
+                  <input type="color" value={el.color ?? '#ef4444'} onChange={(e) => updateHudElement(el.id, { color: e.target.value })} onBlur={pushHistory} className="w-8 h-6 rounded border border-border bg-transparent cursor-pointer" />
+                  {el.kind === 'lives' && (
+                    <SelectBox
+                      value={el.icon ?? 'heart'}
+                      onChange={(ic) => { updateHudElement(el.id, { icon: ic as HudElement['icon'] }); pushHistory(); }}
+                      options={[{ value: 'heart', label: '하트' }, { value: 'star', label: '별' }, { value: 'circle', label: '원' }]}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={addHudElement}
+            disabled={variables.length === 0}
+            className="w-full py-1.5 rounded-xs border border-dashed border-border text-[11px] text-muted hover:text-foreground hover:border-primary/50 transition-colors disabled:opacity-40"
+          >
+            + HUD 위젯 추가
+          </button>
+        </div>
+      </GroupBox>
+
       {/* 씬 메모 */}
       <GroupBox>
         <SectionHeader title="씬 메모" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
@@ -1534,6 +1621,8 @@ function InspectorInner() {
   const [newPopup, setNewPopup] = useState<PopupConfig | undefined>(undefined);
   // 조건 게이트(옵셔널) — undefined면 조건 없음(항상 발동). GAME_LOGIC.md Phase 1.
   const [newCondition, setNewCondition] = useState<EventCondition | undefined>(undefined);
+  // on_timer 트리거 설정(Phase 2). everySec 간격 반복, once면 그 시간 뒤 1회.
+  const [newTimer, setNewTimer] = useState<{ everySec: number; once?: boolean }>({ everySec: 3 });
   // null이면 신규 추가, 값이 있으면 그 이벤트를 수정 중
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -1807,15 +1896,17 @@ function InspectorInner() {
   };
 
   const addEvent = () => {
-    // show_popup(빈 내용 허용)·reset_camera(값 불필요)·variable_changed(값 불필요)를 제외하면 값 필요
-    if (!newValue.trim() && newAction !== 'show_popup' && newAction !== 'reset_camera') return;
+    // 값 없이도 되는 액션: 팝업(빈 내용)·카메라초기화·승패(기본 메시지)·디스폰(자기 자신)
+    const valueOptional = new Set(['show_popup', 'reset_camera', 'game_win', 'game_lose', 'despawn_object']);
+    if (!newValue.trim() && !valueOptional.has(newAction)) return;
     const popupToSave = newAction === 'show_popup' ? cleanPopup(newPopup) : undefined;
     const condToSave = newCondition && newCondition.variable ? newCondition : undefined;
+    const timerToSave = newTrigger === 'on_timer' ? { everySec: Math.max(0.1, newTimer.everySec), ...(newTimer.once ? { once: true } : {}) } : undefined;
     if (editingId) {
       // 기존 이벤트 수정
       updateObject(obj.id, {
         events: obj.events.map((e) =>
-          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim(), popup: popupToSave, condition: condToSave } : e,
+          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim(), popup: popupToSave, condition: condToSave, timer: timerToSave } : e,
         ),
       });
     } else {
@@ -1826,6 +1917,7 @@ function InspectorInner() {
         value: newValue.trim(),
         ...(popupToSave ? { popup: popupToSave } : {}),
         ...(condToSave ? { condition: condToSave } : {}),
+        ...(timerToSave ? { timer: timerToSave } : {}),
       };
       updateObject(obj.id, { events: [...obj.events, ev] });
     }
@@ -1833,6 +1925,7 @@ function InspectorInner() {
     setNewValue('');
     setNewPopup(undefined);
     setNewCondition(undefined);
+    setNewTimer({ everySec: 3 });
     setEditingId(null);
     setShowAddEvent(false);
   };
@@ -1844,6 +1937,7 @@ function InspectorInner() {
     setNewValue(ev.value);
     setNewPopup(ev.popup);
     setNewCondition(ev.condition);
+    setNewTimer(ev.timer ?? { everySec: 3 });
     setShowAddEvent(true);
   };
 
@@ -1852,6 +1946,7 @@ function InspectorInner() {
     setNewValue('');
     setNewPopup(undefined);
     setNewCondition(undefined);
+    setNewTimer({ everySec: 3 });
     setEditingId(null);
   };
 
@@ -1894,6 +1989,8 @@ function InspectorInner() {
               { value: 'approach_exit', label: 'Approach Out' },
               { value: 'dialogue_end', label: '대사 종료 시' },
               { value: 'variable_changed', label: '변수 변경 시 (조건)' },
+              { value: 'scene_start', label: '시작 시 (로드)' },
+              { value: 'on_timer', label: '타이머 (반복)' },
             ]}
           />
         </div>
@@ -1919,6 +2016,11 @@ function InspectorInner() {
               { value: 'animate_object', label: '오브젝트 애니메이션' },
               { value: 'play_sound', label: '사운드 재생' },
               { value: 'set_variable', label: '변수 변경 (점수 등)' },
+              { value: 'spawn_object', label: '오브젝트 생성(스폰)' },
+              { value: 'despawn_object', label: '오브젝트 제거(디스폰)' },
+              { value: 'game_win', label: '게임 승리' },
+              { value: 'game_lose', label: '게임 오버' },
+              { value: 'run_script', label: '스크립트 실행 (고급)' },
               { value: 'emit_event', label: '이벤트 발송' },
             ]}
           />
@@ -1965,6 +2067,32 @@ function InspectorInner() {
         </p>
       )}
 
+      {newTrigger === 'scene_start' && (
+        <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
+          뷰어가 <b>로드될 때 1회</b> 자동 발동합니다(게임 재시작 시에도). 초기화·인트로 팝업·배경음 시작·타이머 시작에 쓰세요.
+        </p>
+      )}
+
+      {newTrigger === 'on_timer' && (
+        <div className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5 space-y-1.5">
+          <p><b>일정 간격마다</b> 자동 발동합니다(주기적 스폰·카운트다운 등). 게임 오버되면 멈춥니다.</p>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0">간격</span>
+            <input
+              type="number" min={0.1} step={0.1}
+              value={newTimer.everySec}
+              onChange={(e) => setNewTimer((t) => ({ ...t, everySec: Number(e.target.value) }))}
+              className="w-16 bg-background border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <span className="shrink-0">초</span>
+            <label className="flex items-center gap-1 cursor-pointer ml-auto">
+              <input type="checkbox" checked={!!newTimer.once} onChange={(e) => setNewTimer((t) => ({ ...t, once: e.target.checked }))} />
+              <span>1회만</span>
+            </label>
+          </div>
+        </div>
+      )}
+
       <div>
         <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">
           {newAction === 'open_url' ? 'URL'
@@ -1976,6 +2104,9 @@ function InspectorInner() {
             : newAction === 'move_object' ? '대상 오브젝트 + 이동량'
             : newAction === 'play_sound' ? '오디오 URL'
             : newAction === 'set_variable' ? '변경할 변수'
+            : newAction === 'spawn_object' ? '생성할 템플릿 오브젝트'
+            : newAction === 'game_win' || newAction === 'game_lose' ? '표시할 메시지 (선택)'
+            : newAction === 'run_script' ? '자바스크립트 코드'
             : OBJECT_TARGET_ACTIONS.has(newAction) ? '대상 오브젝트'
             : '팝업 내용'}
         </span>
@@ -2028,6 +2159,51 @@ function InspectorInner() {
                   )}
                 </div>
                 <p className="text-muted/60 text-[10px]">예: 동전 먹으면 점수 +1 → <b>score</b> · <b>더하기</b> · <b>1</b></p>
+              </div>
+            );
+          }
+          if (newAction === 'spawn_object') {
+            // value = "템플릿id|dx,dy,dz"
+            const [tid = '', offStr = ''] = newValue.split('|');
+            const [ox = '', oy = '', oz = ''] = offStr.split(',');
+            const spawnTargets = objects.filter((o) => !o.isGroup);
+            const inputCls = 'w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary';
+            const setSpawn = (id: string, x: string, y: string, z: string) => setNewValue(`${id}|${x || 0},${y || 0},${z || 0}`);
+            if (spawnTargets.length === 0) {
+              return <p className="text-muted text-[10px] bg-surface border border-amber-500/40 rounded-xs px-2 py-1.5">생성할 오브젝트(템플릿)가 없어요. 먼저 오브젝트를 하나 만들어 두세요(원본은 숨겨두고 템플릿으로 씀).</p>;
+            }
+            return (
+              <div className="space-y-1.5">
+                <SelectBox
+                  value={tid || spawnTargets[0].id}
+                  onChange={(id) => setSpawn(id, ox, oy, oz)}
+                  options={spawnTargets.map((o) => ({ value: o.id, label: o.name }))}
+                />
+                <div>
+                  <span className="text-[10px] text-muted/50 block mb-0.5">위치 오프셋 (원본 기준 X, Y, Z)</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    <input type="number" step={0.5} value={ox} onChange={(e) => setSpawn(tid || spawnTargets[0].id, e.target.value, oy, oz)} placeholder="X" className={inputCls} />
+                    <input type="number" step={0.5} value={oy} onChange={(e) => setSpawn(tid || spawnTargets[0].id, ox, e.target.value, oz)} placeholder="Y" className={inputCls} />
+                    <input type="number" step={0.5} value={oz} onChange={(e) => setSpawn(tid || spawnTargets[0].id, ox, oy, e.target.value)} placeholder="Z" className={inputCls} />
+                  </div>
+                </div>
+                <p className="text-muted/60 text-[10px]">선택 오브젝트의 <b>복사본</b>을 생성합니다. 원본을 숨겨(Visibility) 템플릿으로 쓰면 좋아요. (그룹·자식은 미지원 — 단일 오브젝트 권장)</p>
+              </div>
+            );
+          }
+          if (newAction === 'run_script') {
+            return (
+              <div className="space-y-1">
+                <textarea
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  rows={5}
+                  placeholder={"api.add('score', 1);\nif (api.get('score') >= 10) api.win('클리어!');"}
+                  className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] font-mono placeholder-muted/50 focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+                />
+                <p className="text-muted/60 text-[10px] leading-relaxed">
+                  사용: <b>api.get/set/add</b>(변수) · <b>api.show/hide</b>(id) · <b>api.despawn</b>(id) · <b>api.popup</b>(내용) · <b>api.sound</b>(url) · <b>api.win/lose</b>(메시지) · <b>self</b>(이 오브젝트). 제작자 자신의 코드가 뷰어에서 실행됩니다.
+                </p>
               </div>
             );
           }
@@ -2268,6 +2444,8 @@ function InspectorInner() {
                 placeholder={newAction === 'open_url' ? 'https://...'
                   : newAction === 'emit_event' ? 'my_event_name'
                   : newAction === 'play_animation' ? 'Armature|Walk'
+                  : newAction === 'game_win' ? '예: 클리어! (비우면 기본 메시지)'
+                  : newAction === 'game_lose' ? '예: 게임 오버 (비우면 기본 메시지)'
                   : '텍스트 또는 이미지/영상/YouTube URL'}
                 className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                 onKeyDown={(e) => e.key === 'Enter' && addEvent()}

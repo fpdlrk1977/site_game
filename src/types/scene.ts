@@ -94,7 +94,9 @@ export interface EventSchema {
   //   "대사 끝나면 팝업/문 열기/씬 이동" 같은 대화→액션 연결. 세션당 1회(대화 세션 리셋 시 재발동 가능).
   // variable_changed: 게임 변수가 바뀔 때마다 재평가돼, condition(조건)이 false→true로 전환되는 순간 1회 발동.
   //   "점수>=10이 되면 문 열림" 같은 반응형 규칙. 오브젝트 위치/근접 무관(순수 상태 규칙). GAME_LOGIC.md 참조.
-  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit' | 'dialogue_end' | 'variable_changed';
+  // scene_start: 뷰어(플레이/탐색) 로드 시 1회 발동. 초기화·인트로 팝업·타이머/사운드 시작에 사용(Phase 2).
+  // on_timer: timer.everySec 간격으로 반복 발동(once면 그 시간 뒤 1회). 카운트다운·주기적 스폰에 사용(Phase 2).
+  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit' | 'dialogue_end' | 'variable_changed' | 'scene_start' | 'on_timer';
   action:
     | 'open_url'
     | 'show_popup'
@@ -112,7 +114,12 @@ export interface EventSchema {
     | 'set_solid'      // value = 대상 objectId (콜라이더 복구 → 다시 막힘, 문 닫기)
     | 'toggle_collision' // value = 대상 objectId (통과 가능/막힘 토글)
     | 'play_sound'     // value = 오디오 URL (mp3 등)
-    | 'set_variable';  // value = "변수명|연산|값"  연산: set/add/sub/mul/toggle (GAME_LOGIC.md)
+    | 'set_variable'   // value = "변수명|연산|값"  연산: set/add/sub/mul/toggle (GAME_LOGIC.md)
+    | 'spawn_object'   // value = "템플릿objectId|dx,dy,dz"  (템플릿을 복제 생성, Phase 2)
+    | 'despawn_object' // value = 대상 objectId (빈 값이면 자기 자신 제거, Phase 2)
+    | 'game_win'       // value = 표시할 메시지(선택) — 승리 화면 (Phase 2)
+    | 'game_lose'      // value = 표시할 메시지(선택) — 패배/게임오버 화면 (Phase 2)
+    | 'run_script';    // value = 자바스크립트 코드 — 커스텀 로직(api 제공) (Phase 3)
   // go_to_scene: 이동할 대상 sceneId. show/hide/toggle/focus_object: 대상 objectId.
   // reset_camera: value 없음. animate_object: "objectId|clipName".
   // move_object: "objectId|dx,dy,dz|durationSec" — 오프셋은 누적이 아니라 항상 원래 위치 기준.
@@ -125,6 +132,8 @@ export interface EventSchema {
   // 조건 게이트(옵셔널) — 있으면 이 조건이 참일 때만 액션 실행(GAME_LOGIC.md Phase 1).
   //   variable_changed 트리거는 이 조건이 false→true로 바뀌는 순간 발동한다.
   condition?: EventCondition;
+  // on_timer 트리거 설정(Phase 2). everySec 간격 반복, once면 그 시간 뒤 1회만.
+  timer?: { everySec: number; once?: boolean };
 }
 
 // 이벤트 조건 게이트 — 게임 변수 하나와 비교. (다중 조건 AND/OR는 후속)
@@ -384,6 +393,20 @@ export interface ProjectSceneSchema {
   colorAssets?: ColorAsset[];
   // 게임 변수(상태) 정의 — 뷰어 런타임에서 initial로 초기화. 미설정 = 없음(하위호환). GAME_LOGIC.md 참조.
   variables?: GameVariable[];
+  // HUD 위젯 — 변수를 텍스트/체력바/목숨 아이콘으로 화면에 표시(Phase 2). 미설정 = 변수의 showInHud 간단 텍스트만.
+  hudElements?: HudElement[];
+}
+
+// HUD 위젯 — 게임 변수 하나를 화면에 시각화. (GAME_LOGIC.md Phase 2)
+export interface HudElement {
+  id: string;
+  variable: string;                 // 바인딩할 GameVariable.name
+  kind: 'text' | 'bar' | 'lives';   // text=이름+값 / bar=체력바(값/max) / lives=아이콘 N개
+  label?: string;                   // 표시 라벨(미설정=변수명)
+  position: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+  color?: string;                   // bar 채움색 / text·lives 강조색
+  max?: number;                     // bar/lives 최대값(기본 100/bar, 3/lives)
+  icon?: 'heart' | 'star' | 'circle'; // lives 아이콘 종류(기본 heart)
 }
 
 // 게임 변수(상태) 정의 — name이 참조 키(고유). 런타임 값은 뷰어 로컬(저장 안 함), 씬엔 initial만 저장.
@@ -463,6 +486,7 @@ export function normalizeSceneData(
       materialAssets: Array.isArray(raw.materialAssets) ? (raw.materialAssets as MaterialAsset[]) : undefined,
       colorAssets: Array.isArray(raw.colorAssets) ? (raw.colorAssets as ColorAsset[]) : undefined,
       variables: Array.isArray(raw.variables) ? (raw.variables as GameVariable[]) : undefined,
+      hudElements: Array.isArray(raw.hudElements) ? (raw.hudElements as HudElement[]) : undefined,
     };
   }
   return makeEmptySceneData(projectId, sceneId);

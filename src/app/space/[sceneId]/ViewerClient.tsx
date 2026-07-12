@@ -7,7 +7,8 @@ import { MobileControls } from './MobileControls';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { effectiveDialogue } from './useObjectDialogue';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, Vector3 } from '@/types/scene';
+import { Heart, Star, Circle, RotateCcw } from 'lucide-react';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3 } from '@/types/scene';
 
 // 이 액션들이 (플레이 모드에서) 발동되면 상호작용이 끝날 때까지(팝업 닫기/Esc) 캐릭터 이동을 잠근다.
 // 새로 "발동 중엔 못 움직이게" 하고 싶은 액션이 생기면 여기에 추가만 하면 자동 적용된다.
@@ -15,6 +16,63 @@ const MOVEMENT_LOCKING_ACTIONS: ReadonlySet<EventSchema['action']> = new Set<Eve
   'show_popup',
   'focus_object',
 ]);
+
+// HUD 위젯(Phase 2) — 게임 변수를 텍스트/체력바/목숨 아이콘으로 화면 구석에 표시.
+const HUD_POS_CLS: Record<HudElement['position'], string> = {
+  'top-left': 'top-3 left-3 items-start',
+  'top-center': 'top-3 left-1/2 -translate-x-1/2 items-center',
+  'top-right': 'top-3 right-3 items-end',
+  'bottom-left': 'bottom-3 left-3 items-start',
+  'bottom-center': 'bottom-3 left-1/2 -translate-x-1/2 items-center',
+  'bottom-right': 'bottom-3 right-3 items-end',
+};
+function HudWidget({ el, value }: { el: HudElement; value: number | boolean | undefined }) {
+  const label = el.label || el.variable;
+  const color = el.color || '#ef4444';
+  const num = typeof value === 'number' ? value : 0;
+  if (el.kind === 'bar') {
+    const max = el.max && el.max > 0 ? el.max : 100;
+    const pct = Math.max(0, Math.min(1, num / max)) * 100;
+    return (
+      <div className="w-40 bg-black/45 backdrop-blur-sm rounded-md px-2 py-1.5">
+        <div className="flex justify-between text-white text-[11px] font-semibold mb-0.5"><span>{label}</span><span className="tabular-nums">{num}/{max}</span></div>
+        <div className="h-2.5 rounded-full bg-black/50 overflow-hidden"><div className="h-full rounded-full transition-all duration-200" style={{ width: `${pct}%`, background: color }} /></div>
+      </div>
+    );
+  }
+  if (el.kind === 'lives') {
+    const max = el.max && el.max > 0 ? el.max : 3;
+    const Icon = el.icon === 'star' ? Star : el.icon === 'circle' ? Circle : Heart;
+    return (
+      <div className="flex items-center gap-1 bg-black/45 backdrop-blur-sm rounded-full px-2.5 py-1">
+        {label && <span className="text-white text-[11px] font-semibold mr-1">{label}</span>}
+        {Array.from({ length: max }).map((_, i) => (
+          <Icon key={i} size={15} style={{ color }} fill={i < num ? color : 'transparent'} opacity={i < num ? 1 : 0.3} />
+        ))}
+      </div>
+    );
+  }
+  // text
+  return (
+    <div className="px-3 py-1 rounded-full bg-black/55 backdrop-blur-sm text-white text-sm font-semibold tabular-nums">
+      {label}: {String(value ?? 0)}
+    </div>
+  );
+}
+function HudWidgets({ elements, vars }: { elements: HudElement[]; vars: Record<string, number | boolean> }) {
+  const positions = Array.from(new Set(elements.map((e) => e.position)));
+  return (
+    <>
+      {positions.map((pos) => (
+        <div key={pos} className={`absolute z-20 pointer-events-none flex flex-col gap-1.5 ${HUD_POS_CLS[pos]}`}>
+          {elements.filter((e) => e.position === pos).map((el) => (
+            <HudWidget key={el.id} el={el} value={vars[el.variable]} />
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
 
 const ViewerCanvas = dynamic(
   () => import('./ViewerCanvas').then((m) => m.ViewerCanvas),
@@ -150,34 +208,78 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   const [hudVars, setHudVars] = useState<Record<string, number | boolean>>({});
   const watcherState = useRef<Record<string, boolean>>({}); // eventId → 직전 조건 평가값
   const evalDepth = useRef(0); // variable_changed 반응형 재진입 가드
-  // 씬 로드/변수 정의 변경 시 initial로 초기화(런타임 값은 저장하지 않음).
+  // Phase 2 — 런타임 스폰/디스폰·승패·재시작 상태
+  const [spawned, setSpawned] = useState<ObjectNodeSchema[]>([]);          // spawn_object로 생성된 오브젝트
+  const [despawnedIds, setDespawnedIds] = useState<Set<string>>(new Set()); // despawn_object로 제거된 id
+  const [gameResult, setGameResult] = useState<{ kind: 'win' | 'lose'; message: string } | null>(null);
+  const [runNonce, setRunNonce] = useState(0); // 재시작 시 bump → 변수/타이머/scene_start 초기화
+  // 씬 로드/변수 정의 변경/재시작 시 initial로 초기화(런타임 값은 저장하지 않음).
   useEffect(() => {
     const init: Record<string, number | boolean> = {};
     for (const v of scene.variables ?? []) init[v.name] = v.initial;
     varsRef.current = init;
     watcherState.current = {};
     setHudVars(init);
-  }, [scene.variables]);
+  }, [scene.variables, runNonce]);
 
   // 오버라이드를 씬 데이터에 반영해 렌더 (모든 뷰어 경로가 object.visible을 존중하므로 이걸로 충분)
   //   + 공용 재질 에셋(materialId) 리졸브 → ViewerObject는 object.material만 읽으므로 여기서 미리 주입.
+  //   + 런타임 스폰 오브젝트 병합 + 디스폰 필터(Phase 2).
   const effectiveScene = useMemo(() => {
     const matAssets = scene.materialAssets;
     const hasMatRefs = !!matAssets && matAssets.length > 0 && scene.objects.some((o) => o.materialId);
-    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0 && !hasMatRefs) return scene;
+    const hasSpawn = spawned.length > 0 || despawnedIds.size > 0;
+    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0 && !hasMatRefs && !hasSpawn) return scene;
+    const all = spawned.length > 0 ? [...scene.objects, ...spawned] : scene.objects;
     return {
       ...scene,
-      objects: scene.objects.map((o) => {
-        const vis = o.id in visOverride ? visOverride[o.id] : o.visible;
-        const pos = posOverride[o.id] ?? o.position;
-        const resolvedMat = hasMatRefs && o.materialId ? matAssets!.find((m) => m.id === o.materialId)?.material : undefined;
-        if (vis === o.visible && pos === o.position && !resolvedMat) return o;
-        return { ...o, visible: vis, position: pos, ...(resolvedMat ? { material: resolvedMat } : {}) };
-      }),
+      objects: all
+        .filter((o) => !despawnedIds.has(o.id))
+        .map((o) => {
+          const vis = o.id in visOverride ? visOverride[o.id] : o.visible;
+          const pos = posOverride[o.id] ?? o.position;
+          const resolvedMat = hasMatRefs && o.materialId ? matAssets!.find((m) => m.id === o.materialId)?.material : undefined;
+          if (vis === o.visible && pos === o.position && !resolvedMat) return o;
+          return { ...o, visible: vis, position: pos, ...(resolvedMat ? { material: resolvedMat } : {}) };
+        }),
     };
-  }, [scene, visOverride, posOverride]);
+  }, [scene, visOverride, posOverride, spawned, despawnedIds]);
   // move_object로 이동 중인 오브젝트 id 집합 — PlayCanvas가 그룹을 kinematic 강체로 라우팅(콜라이더 동반).
   const movedIds = useMemo(() => new Set(Object.keys(posOverride)), [posOverride]);
+
+  // 타이머/scene_start가 게임오버 후에도 발동하지 않도록 최신 결과를 ref로 보관(Phase 2).
+  const gameResultRef = useRef<typeof gameResult>(null);
+  gameResultRef.current = gameResult;
+
+  // scene_start — 뷰어 로드/재시작 시 1회 발동. 원본 오브젝트만(스폰 클론 제외 → 무한 스폰 방지).
+  useEffect(() => {
+    for (const o of scene.objects) {
+      for (const ev of o.events) {
+        if (ev.trigger === 'scene_start' && (!ev.condition || evalCondition(ev.condition))) runEventAction(o, ev, 'scene_start');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, runNonce]);
+
+  // on_timer — everySec 간격 반복(once면 그 시간 뒤 1회). 원본 오브젝트만. 게임오버 시 발동 중지.
+  useEffect(() => {
+    const ids: number[] = [];
+    for (const o of scene.objects) {
+      for (const ev of o.events) {
+        if (ev.trigger === 'on_timer' && ev.timer && ev.timer.everySec > 0) {
+          const ms = ev.timer.everySec * 1000;
+          const fire = () => {
+            if (gameResultRef.current) return;
+            if (!ev.condition || evalCondition(ev.condition)) runEventAction(o, ev, 'on_timer');
+          };
+          ids.push(ev.timer.once ? window.setTimeout(fire, ms) : window.setInterval(fire, ms));
+        }
+      }
+    }
+    return () => { ids.forEach((id) => { window.clearInterval(id); window.clearTimeout(id); }); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, runNonce]);
+
   const [isTouch, setIsTouch] = useState(false);
   const supabase = useState(() => createBrowserSupabase())[0];
   const mobileInputRef = useRef({ fwd: 0, strafe: 0, jump: false });
@@ -263,6 +365,45 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     evaluateWatchers();
   }
 
+  // 게임 재시작 — 변수 initial 복구 + 스폰/오버라이드/결과 초기화 + scene_start·타이머 재실행(Phase 2).
+  function restartGame() {
+    setSpawned([]);
+    setDespawnedIds(new Set());
+    setVisOverride({});
+    setPassOverride({});
+    setPosOverride({});
+    posCurrent.current = {};
+    moveAnims.current.clear();
+    setGameResult(null);
+    setInteractionLock(false);
+    setRunNonce((n) => n + 1);
+  }
+
+  // 커스텀 스크립트 실행(Phase 3) — 제작자가 작성한 JS. api로 안전한 헬퍼만 노출(window 직접 노출 안 함).
+  //   주의: 제작자 자신의 코드가 뷰어에서 실행됨(자기 사이트에 스크립트 넣는 것과 동일 수준). 진짜 샌드박스는 후속.
+  function runScript(code: string, self: ObjectNodeSchema) {
+    const api = {
+      get: (name: string) => varsRef.current[name],
+      set: (name: string, val: number | boolean) => { if (name in varsRef.current) { varsRef.current[name] = val; onVarsChanged(); } },
+      add: (name: string, delta: number) => { const c = varsRef.current[name]; if (typeof c === 'number') { varsRef.current[name] = c + Number(delta); onVarsChanged(); } },
+      show: (id: string) => setVisOverride((v) => ({ ...v, [id]: true })),
+      hide: (id: string) => setVisOverride((v) => ({ ...v, [id]: false })),
+      despawn: (id?: string) => setDespawnedIds((s) => { const n = new Set(s); n.add(id ?? self.id); return n; }),
+      popup: (content: string, title?: string) => setPopup({ title: title ?? self.name, content }),
+      sound: (url: string) => playSound(url),
+      win: (msg?: string) => setGameResult({ kind: 'win', message: msg ?? '승리!' }),
+      lose: (msg?: string) => setGameResult({ kind: 'lose', message: msg ?? '게임 오버' }),
+      log: (...args: unknown[]) => console.log('[script]', ...args),
+    };
+    try {
+      // eslint-disable-next-line no-new-func
+      const fn = new Function('api', 'self', code);
+      fn(api, self);
+    } catch (e) {
+      console.warn('[run_script] 실행 오류:', e);
+    }
+  }
+
   // 단일 이벤트의 액션 실행(조건 게이트 통과 후 호출). variable_changed 워처도 이 함수를 재사용.
   function runEventAction(obj: ObjectNodeSchema, ev: EventSchema, trigger: EventSchema['trigger']) {
       if (ev.action === 'open_url' && ev.value) {
@@ -337,6 +478,35 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         const [vname, op, amount] = ev.value.split('|');
         applyVarOp(vname, op ?? 'set', amount ?? '');
         onVarsChanged();
+      } else if (ev.action === 'spawn_object' && ev.value) {
+        // value = "템플릿objectId|dx,dy,dz" — 템플릿을 복제 생성(원본 위치 + 오프셋). Phase 2.
+        const [templateId, offStr] = ev.value.split('|');
+        const tmpl = scene.objects.find((o) => o.id === templateId);
+        if (tmpl) {
+          const [dx, dy, dz] = (offStr ?? '').split(',').map((s) => parseFloat(s));
+          const clone: ObjectNodeSchema = {
+            ...(structuredClone(tmpl) as ObjectNodeSchema),
+            id: (crypto.randomUUID?.() ?? `spawn_${Date.now()}_${Math.random().toString(36).slice(2)}`),
+            visible: true,
+            parentId: null,
+            position: {
+              x: tmpl.position.x + (Number.isFinite(dx) ? dx : 0),
+              y: tmpl.position.y + (Number.isFinite(dy) ? dy : 0),
+              z: tmpl.position.z + (Number.isFinite(dz) ? dz : 0),
+            },
+          };
+          setSpawned((s) => [...s, clone]);
+        }
+      } else if (ev.action === 'despawn_object') {
+        // value = 대상 objectId (빈 값이면 자기 자신). Phase 2.
+        const target = ev.value || obj.id;
+        setDespawnedIds((s) => { const n = new Set(s); n.add(target); return n; });
+      } else if (ev.action === 'game_win') {
+        setGameResult({ kind: 'win', message: ev.value?.trim() || '승리!' });
+      } else if (ev.action === 'game_lose') {
+        setGameResult({ kind: 'lose', message: ev.value?.trim() || '게임 오버' });
+      } else if (ev.action === 'run_script' && ev.value) {
+        runScript(ev.value, obj); // Phase 3 — 커스텀 JS(api 제공)
       } else if (ev.action === 'emit_event') {
         // Event Bridge — 임베드(iframe)일 때만 부모 페이지로 커스텀 이벤트 전송
         if (onBridge && window.parent !== window) {
@@ -399,6 +569,29 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
               {v.name}: {String(hudVars[v.name] ?? v.initial)}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* HUD 위젯 — 체력바·목숨 등 (Phase 2) */}
+      {(scene.hudElements ?? []).length > 0 && (
+        <HudWidgets elements={scene.hudElements ?? []} vars={hudVars} />
+      )}
+
+      {/* 승리/패배 화면 (Phase 2) */}
+      {gameResult && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-[popupBackdrop_0.25s_ease-out]">
+          <div className="text-center px-8 py-10 rounded-2xl bg-surface border border-border shadow-2xl animate-[popupScale_0.25s_ease-out] max-w-[90vw]">
+            <p className={`text-4xl font-black mb-2 ${gameResult.kind === 'win' ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {gameResult.kind === 'win' ? '🎉' : '💀'}
+            </p>
+            <p className="text-2xl font-bold text-foreground mb-6 whitespace-pre-line">{gameResult.message}</p>
+            <button
+              onClick={restartGame}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-primary hover:bg-primary/80 text-white font-semibold transition-colors"
+            >
+              <RotateCcw size={16} /> 다시 시작
+            </button>
+          </div>
         </div>
       )}
 

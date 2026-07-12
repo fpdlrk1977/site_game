@@ -51,6 +51,19 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 최근 완료 (2026-07-12) — 🎮 게임 로직 Phase 2 (타이머·스폰·HUD·승패) + Phase 3 (커스텀 스크립트)
+
+> 기준 문서 **`doc/GAME_LOGIC.md`** 갱신(Phase 2 완료·Phase 3 run_script 완료·비주얼 노드 에디터 분석/보류·HUD 커스터마이즈 분석). 전부 **tsc 클린 + editor/space 컴파일 200**, **브라우저 실동작 검증 대기**.
+
+- **HUD 커스터마이즈(사용자 요청 — 스코어/체력바를 사용자가 만들기)**: 가능하며 구현함. **위젯 바인딩 모델** — `HudElement{variable(연결),kind:text|bar|lives,position(6구석),label,color,max,icon}` + `scene.hudElements[]`. 에디터 Environment **'HUD (화면 표시)' 섹션**(위젯 추가→변수 연결→종류/위치/색/최대/아이콘). 뷰어 `HudWidgets`가 실시간 렌더(체력바=값/max 게이지, 목숨=하트/별/원 N개, 텍스트). 변수의 간단 `showInHud` 텍스트와 별개(공존).
+- **Phase 2 — 타이머**: 트리거 `scene_start`(로드/재시작 시 1회)·`on_timer`(`timer.everySec` 간격 반복, once=1회). `ViewerClient`가 setInterval/Timeout 구동, 게임오버 시 정지, 재시작 시 재설정. 에디터 on_timer에 간격/1회 입력.
+- **Phase 2 — 스폰/디스폰**: 액션 `spawn_object`(템플릿 복제 생성, value=`"템플릿id|dx,dy,dz"`, `spawned[]`→effectiveScene 병합)·`despawn_object`(value=대상, 빈 값=자기, `despawnedIds` Set 필터). 제약: 단일 오브젝트만(그룹·자식 미지원), 스폰 클론은 timer/scene_start 미대상(무한 스폰 방지). 에디터: 템플릿 SelectBox+오프셋 XYZ.
+- **Phase 2 — 승리/패배**: 액션 `game_win`/`game_lose`(value=메시지 선택). 뷰어 결과 오버레이(🎉/💀+메시지+**다시 시작**). `restartGame()`=변수 initial 복구+스폰/오버라이드(vis/pass/pos)/결과 초기화+scene_start·타이머 재실행(`runNonce` bump).
+- **Phase 3 — 커스텀 스크립트**: 액션 `run_script`(value=JS). `new Function('api','self',code)` 실행, **안전 api만 노출**(get/set/add·show/hide·despawn·popup·sound·win/lose·log, self) — window 직접 노출 안 함, try/catch 격리. 에디터: textarea+api 안내. **보안**: 제작자 자신 코드 실행(자기 사이트 script 수준) — 진짜 샌드박스는 후속(타인코드/마켓 배포 시 필수).
+- **Phase 3 — 비주얼 노드 에디터**: 분석 후 **별도 스프린트 보류**. 이미 Events가 경량 비주얼 스크립팅이라 노드 에디터는 표현 레이어(대형 UI, `@xyflow/react` 필요). 먼저 Phase 2 후속(다중조건·if/else·랜덤)으로 표현력↑ 후 착수 권장. 설계 메모는 GAME_LOGIC.md.
+- 스키마: `scene.ts`(트리거 2·액션 5·`HudElement`·`EventSchema.timer` 추가+normalize). 스토어: `hudElements` state+CRUD+저장/undo. 배선: `saveScene`·복제(JSON 딥클론 자동 보존).
+- **미구현(Phase 2 후속)**: 랜덤(set_variable 범위)·다중조건(AND/OR)·if/else 분기·세이브/로드·리더보드. 검증: **브라우저 실동작 대기**(타이머·스폰·체력바·승패/재시작·스크립트).
+
 ## 최근 완료 (2026-07-12) — 🎮 게임 로직 레이어 Phase 1 (변수 + 조건) + 킥 넉백
 
 > **방향 전환**: 사용자가 "실질적인 게임/인터랙티브 홈페이지를 만드는 플랫폼"을 원함 → 3D 뷰어를 **게임 메이커**로 확장 시작. 설계 기준 문서 **`doc/GAME_LOGIC.md`** 신설(범용·장르비의존 철학, Phase 1~3 로드맵, 구현 위치·결정 로그). 이어서 작업할 땐 **GAME_LOGIC.md가 기준**.

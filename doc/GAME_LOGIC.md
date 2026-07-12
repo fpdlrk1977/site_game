@@ -96,20 +96,34 @@ interface EventCondition {
 
 ---
 
-## Phase 2 — 게임 요소 (후속)
+## HUD 커스터마이즈 분석 (사용자 질문 — 스코어/체력바를 사용자가 만들 수 있나?) ✅ 가능·구현됨
 
-- **타이머**: N초마다 / 카운트다운(액션 `wait`·트리거 `on_timer`).
-- **스폰/디스폰**: 프리팹·오브젝트 런타임 생성·제거(적·아이템).
-- **랜덤**: set_variable에 random 범위.
-- **HUD 고도화**: 바(체력바)·아이콘·위치/스타일.
-- **승리/패배 상태**: game_over/win 액션 → 결과 화면.
-- **다중 조건**(AND/OR), 조건 분기(if/else).
+**결론: 가능하고 Phase 2에서 구현함.** 방식은 "자유 배치 캔버스"가 아니라 **위젯 바인딩** 모델(노코드 도구 표준: 위젯을 변수에 연결).
+- 스키마 `HudElement{id, variable(바인딩), kind:text|bar|lives, label, position(6구석), color, max, icon}` + `ProjectSceneSchema.hudElements[]`.
+- 사용자는 에디터에서 **위젯 추가 → 변수 연결 → 종류(텍스트/체력바/목숨)·위치·색·최대값 선택**. 뷰어가 실시간 값으로 렌더.
+- **후속 여지**(원하면 확장): 자유 좌표 드래그 배치, 커스텀 이미지 아이콘/프레임, 폰트·크기, 조건부 표시(값 0일 때 숨김), 게이지 애니메이션, 미니맵·타이머 위젯 프리셋.
 
-## Phase 3 — 고급 (후속)
+## Phase 2 — 게임 요소 ✅ 구현 완료 (2026-07-12, tsc·컴파일 클린 / 브라우저 검증 대기)
 
-- **커스텀 스크립트(JS) 이스케이프 해치**: 노코드로 안 되는 로직을 샌드박스 JS 블록으로(파워유저).
-- **비주얼 노드 에디터**(Blueprint식) — 규칙을 노드로 시각적 연결.
-- 세이브/로드(진행 저장), 리더보드 등.
+- **타이머**(트리거 `scene_start`·`on_timer`): scene_start=로드/재시작 시 1회, on_timer=`timer.everySec` 간격 반복(once면 1회). ViewerClient가 setInterval/setTimeout로 구동, 게임오버 시 정지, 재시작 시 재설정.
+- **스폰/디스폰**(액션 `spawn_object`·`despawn_object`): spawn=템플릿 오브젝트 복제 생성(원본 위치+오프셋, `spawned[]` state→effectiveScene 병합), despawn=`despawnedIds` Set으로 필터 제거(빈 값=자기 자신). **제약**: 단일 오브젝트만(그룹·자식 미지원), 스폰 클론은 timer/scene_start 대상 제외(무한 스폰 방지).
+- **HUD 고도화**: 위 'HUD 커스터마이즈' 참조(text/bar/lives 위젯).
+- **승리/패배**(액션 `game_win`·`game_lose`): 결과 오버레이(🎉/💀 + 메시지 + '다시 시작' 버튼). `restartGame()`=변수 initial 복구+스폰/오버라이드/결과 초기화+scene_start·타이머 재실행(`runNonce` bump).
+- **미구현(후속)**: 랜덤(set_variable random 범위), 다중 조건(AND/OR)·if/else 분기, 세이브/로드(진행 저장), 리더보드.
+- **구현 위치**: `scene.ts`(트리거·액션·HudElement·EventSchema.timer), `sceneStore.ts`(hudElements CRUD+undo), `ViewerClient.tsx`(scene_start/on_timer effect, spawn/despawn/win/lose 브랜치, restartGame, HudWidgets 렌더, 결과 오버레이), `InspectorPanel.tsx`(HUD 섹션, 트리거/액션/타이머/스폰/승패 UI).
+
+## Phase 3 — 고급
+
+### 커스텀 스크립트(JS) ✅ 구현 완료 (2026-07-12)
+- 액션 `run_script` — value=JS 코드. `new Function('api','self', code)`로 실행, **안전 헬퍼 api만 노출**(window 직접 노출 X): `api.get/set/add`(변수)·`show/hide`(id)·`despawn`(id)·`popup`(내용)·`sound`(url)·`win/lose`(메시지)·`log`, `self`(이 오브젝트). try/catch로 오류 격리.
+- **보안 주의(문서화)**: 제작자 자신의 코드가 뷰어에서 실행됨(= 자기 웹사이트에 `<script>` 넣는 것과 동일 신뢰수준). **진짜 샌드박스(iframe/worker 격리)는 후속** — 타인 코드를 실행하거나 마켓 배포 시 필수. 현재는 단일 제작자 시나리오라 허용.
+- 구현: `ViewerClient.runScript`. 에디터: run_script 액션 = textarea + api 사용법 안내.
+
+### 비주얼 노드 에디터 (Blueprint식) — 🔬 분석 결과 **별도 스프린트로 보류 권장** (미구현)
+- **현황**: 이미 Events(trigger→condition→action)가 **경량 비주얼 스크립팅**(규칙 리스트). 노드 에디터는 이걸 **그래프 UI로 재표현**하는 것 — 기능이 아니라 **표현/UX 레이어**.
+- **규모**: 드래그 노드·와이어·포트·줌/팬·자동 레이아웃 = **대형 UI 프로젝트**(수 주). 그래프 라이브러리 `@xyflow/react`(React Flow) 설치 필요. 데이터모델은 현 Events를 노드 그래프로 매핑(대체로 1:1)하면 되나, 노드 간 연결(한 액션 완료→다음)·분기 등 **실행 모델 확장**도 수반.
+- **권장 순서**: (1) 먼저 Phase 2 후속(다중 조건·if/else·랜덤)으로 **로직 표현력**부터 키우고, (2) 사용자 수요 확인 후 노드 에디터를 **전용 스프린트**로. 지금 당장은 Events 리스트 UI로 충분히 게임 제작 가능.
+- **착수 시 설계 메모**: 노드 종류 = 트리거노드/조건노드/액션노드/변수노드. 캔버스는 오브젝트별이 아니라 **씬 전역 로직 그래프**(오브젝트 참조는 노드 속성)로 가는 게 확장성 좋음. 기존 per-object events와의 공존/이관 정책 필요.
 
 ## 홈페이지(인터랙티브 웹) 관점
 
