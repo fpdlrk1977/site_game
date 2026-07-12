@@ -109,8 +109,13 @@ interface EventCondition {
 - **스폰/디스폰**(액션 `spawn_object`·`despawn_object`): spawn=템플릿 오브젝트 복제 생성(원본 위치+오프셋, `spawned[]` state→effectiveScene 병합), despawn=`despawnedIds` Set으로 필터 제거(빈 값=자기 자신). **제약**: 단일 오브젝트만(그룹·자식 미지원), 스폰 클론은 timer/scene_start 대상 제외(무한 스폰 방지).
 - **HUD 고도화**: 위 'HUD 커스터마이즈' 참조(text/bar/lives 위젯).
 - **승리/패배**(액션 `game_win`·`game_lose`): 결과 오버레이(🎉/💀 + 메시지 + '다시 시작' 버튼). `restartGame()`=변수 initial 복구+스폰/오버라이드/결과 초기화+scene_start·타이머 재실행(`runNonce` bump).
-- **미구현(후속)**: 랜덤(set_variable random 범위), 다중 조건(AND/OR)·if/else 분기, 세이브/로드(진행 저장), 리더보드.
 - **구현 위치**: `scene.ts`(트리거·액션·HudElement·EventSchema.timer), `sceneStore.ts`(hudElements CRUD+undo), `ViewerClient.tsx`(scene_start/on_timer effect, spawn/despawn/win/lose 브랜치, restartGame, HudWidgets 렌더, 결과 오버레이), `InspectorPanel.tsx`(HUD 섹션, 트리거/액션/타이머/스폰/승패 UI).
+
+### Phase 2 후속 ✅ 구현 완료 (2026-07-12) — 다중조건·if/else·랜덤
+- **다중 조건 (AND/OR)**: `EventSchema.conditions?: EventCondition[]` + `conditionLogic?: 'and'|'or'`. 런타임 `evalGate(ev)` = conditions[] 우선(AND=every·OR=some), 없으면 레거시 `condition` 폴백. 에디터: 조건 여러 개 추가 + AND(전부)/OR(하나) 토글. 저장 시 conditions로 통일(레거시 condition 비움), 로드 시 레거시는 배열로 승격.
+- **if/else 분기**: `EventSchema.elseAction?`/`elseValue?` — 조건이 **거짓**이면 대신 실행. 런타임 `runElseAction`(합성 이벤트). variable_changed는 then=false→true 엣지, **else=true→false 엣지**. 모든 트리거(click/area/interact/scene_start/on_timer/variable_changed) 지원. 에디터: 조건 있을 때 "아니면(else) 액션" — 간단 입력 액션만(팝업/스폰/스크립트 복합입력 제외, `ELSE_ACTION_OPTIONS`).
+- **랜덤**: `set_variable` 연산에 `random` 추가 — value=`"변수명|random|min,max"` → [min,max] 정수 랜덤(주사위 등). 에디터: 연산 '랜덤 🎲' + min~max 두 입력.
+- **미구현(후속)**: 세이브/로드(진행 저장)·리더보드·조건에서 변수↔변수 비교(현재는 변수↔상수)·중첩 분기.
 
 ## Phase 3 — 고급
 

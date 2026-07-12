@@ -255,7 +255,9 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   useEffect(() => {
     for (const o of scene.objects) {
       for (const ev of o.events) {
-        if (ev.trigger === 'scene_start' && (!ev.condition || evalCondition(ev.condition))) runEventAction(o, ev, 'scene_start');
+        if (ev.trigger !== 'scene_start') continue;
+        if (evalGate(ev)) runEventAction(o, ev, 'scene_start');
+        else if (ev.elseAction) runElseAction(o, ev, 'scene_start');
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -270,7 +272,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
           const ms = ev.timer.everySec * 1000;
           const fire = () => {
             if (gameResultRef.current) return;
-            if (!ev.condition || evalCondition(ev.condition)) runEventAction(o, ev, 'on_timer');
+            if (evalGate(ev)) runEventAction(o, ev, 'on_timer');
+            else if (ev.elseAction) runElseAction(o, ev, 'on_timer');
           };
           ids.push(ev.timer.once ? window.setTimeout(fire, ms) : window.setInterval(fire, ms));
         }
@@ -324,12 +327,26 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       default: return false;
     }
   }
+  // 이벤트 조건 게이트 — conditions[](다중, AND/OR) 우선, 없으면 condition(단일 레거시). 조건 없으면 true.
+  function evalGate(ev: EventSchema): boolean {
+    const list = ev.conditions && ev.conditions.length > 0 ? ev.conditions : (ev.condition ? [ev.condition] : []);
+    if (list.length === 0) return true;
+    return (ev.conditionLogic ?? 'and') === 'or' ? list.some(evalCondition) : list.every(evalCondition);
+  }
   function applyVarOp(name: string, op: string, amountRaw: string) {
     const cur = varsRef.current[name];
     if (cur === undefined) return; // 정의되지 않은 변수는 무시
     if (typeof cur === 'boolean') {
       if (op === 'toggle') varsRef.current[name] = !cur;
       else if (op === 'set') varsRef.current[name] = amountRaw === 'true' || amountRaw === '1';
+      return;
+    }
+    if (op === 'random') {
+      // amountRaw = "min,max" — [min,max] 정수 랜덤(주사위 등)
+      const [lo, hi] = amountRaw.split(',').map(Number);
+      const min = Number.isFinite(lo) ? lo : 0;
+      const max = Number.isFinite(hi) ? hi : min;
+      varsRef.current[name] = Math.floor(Math.min(min, max) + Math.random() * (Math.abs(max - min) + 1));
       return;
     }
     const amt = Number(amountRaw);
@@ -342,7 +359,13 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       default: break; // toggle은 숫자에 무의미
     }
   }
-  // 변수 변경 후: HUD 갱신 + variable_changed 워처 재평가(false→true 엣지에서만 발동, 재진입 가드).
+  // else 분기용 — 조건 거짓일 때 대신 실행할 액션을 합성 이벤트로 돌린다.
+  function runElseAction(obj: ObjectNodeSchema, ev: EventSchema, trigger: EventSchema['trigger']) {
+    if (!ev.elseAction) return;
+    runEventAction(obj, { ...ev, action: ev.elseAction, value: ev.elseValue ?? '' }, trigger);
+  }
+  // 변수 변경 후: HUD 갱신 + variable_changed 워처 재평가(엣지에서만 발동, 재진입 가드).
+  //   then=false→true 엣지 / elseAction=true→false 엣지.
   function evaluateWatchers() {
     if (evalDepth.current > 16) return;
     evalDepth.current += 1;
@@ -350,10 +373,11 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       for (const o of effectiveScene.objects) {
         for (const ev of o.events) {
           if (ev.trigger !== 'variable_changed') continue;
-          const pass = ev.condition ? evalCondition(ev.condition) : true;
+          const pass = evalGate(ev);
           const prev = watcherState.current[ev.id] ?? false;
           watcherState.current[ev.id] = pass;
           if (pass && !prev) runEventAction(o, ev, 'variable_changed');
+          else if (!pass && prev && ev.elseAction) runElseAction(o, ev, 'variable_changed');
         }
       }
     } finally {
@@ -522,13 +546,16 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     if (trigger === 'interact') { trackEvent('interact', obj.id, obj.name); setDialogueNonce((n) => n + 1); }
 
     const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
-    // 조건 게이트 — condition이 있으면 참일 때만 발동(GAME_LOGIC.md Phase 1).
-    const firedEvents = matchingEvents.filter((ev) => !ev.condition || evalCondition(ev.condition));
-    for (const ev of firedEvents) runEventAction(obj, ev, trigger);
+    // 조건 게이트 — 다중조건(AND/OR) 통과 시 액션, 거짓이고 elseAction 있으면 else 분기(GAME_LOGIC.md).
+    const lockActions: EventSchema['action'][] = [];
+    for (const ev of matchingEvents) {
+      if (evalGate(ev)) { runEventAction(obj, ev, trigger); lockActions.push(ev.action); }
+      else if (ev.elseAction) { runElseAction(obj, ev, trigger); lockActions.push(ev.elseAction); }
+    }
 
     // 이동 잠금 — 플레이 모드에서 이동을 막는 액션(팝업·포커스 등)이 하나라도 발동되면 상호작용 잠금.
     // 해제는 endInteraction()(팝업 닫기/Esc). 중앙 목록 MOVEMENT_LOCKING_ACTIONS로 확장 관리.
-    if (playMode && firedEvents.some((e) => MOVEMENT_LOCKING_ACTIONS.has(e.action))) {
+    if (playMode && lockActions.some((a) => MOVEMENT_LOCKING_ACTIONS.has(a))) {
       setInteractionLock(true);
     }
   };

@@ -83,6 +83,32 @@ export interface EnvSchema {
   defaultPopup?: Pick<PopupConfig, 'position' | 'width' | 'height' | 'bg' | 'anim'>;
 }
 
+// 이벤트 트리거·액션 — elseAction 등에서 재사용하려고 명명 타입으로 추출.
+export type EventTrigger = 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit' | 'dialogue_end' | 'variable_changed' | 'scene_start' | 'on_timer';
+export type EventAction =
+  | 'open_url'
+  | 'show_popup'
+  | 'emit_event'
+  | 'play_animation'
+  | 'go_to_scene'
+  | 'show_object'
+  | 'hide_object'
+  | 'toggle_object'
+  | 'focus_object'
+  | 'reset_camera'
+  | 'animate_object'
+  | 'move_object'
+  | 'set_passable'
+  | 'set_solid'
+  | 'toggle_collision'
+  | 'play_sound'
+  | 'set_variable'
+  | 'spawn_object'
+  | 'despawn_object'
+  | 'game_win'
+  | 'game_lose'
+  | 'run_script';
+
 export interface EventSchema {
   id: string;
   // interact: 플레이 모드에서 캐릭터가 근접(기본 3m)했을 때 E키(모바일=액션 버튼)로 발동.
@@ -96,30 +122,11 @@ export interface EventSchema {
   //   "점수>=10이 되면 문 열림" 같은 반응형 규칙. 오브젝트 위치/근접 무관(순수 상태 규칙). GAME_LOGIC.md 참조.
   // scene_start: 뷰어(플레이/탐색) 로드 시 1회 발동. 초기화·인트로 팝업·타이머/사운드 시작에 사용(Phase 2).
   // on_timer: timer.everySec 간격으로 반복 발동(once면 그 시간 뒤 1회). 카운트다운·주기적 스폰에 사용(Phase 2).
-  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit' | 'dialogue_end' | 'variable_changed' | 'scene_start' | 'on_timer';
-  action:
-    | 'open_url'
-    | 'show_popup'
-    | 'emit_event'
-    | 'play_animation'
-    | 'go_to_scene'
-    | 'show_object'    // value = 대상 objectId (표시)
-    | 'hide_object'    // value = 대상 objectId (숨김)
-    | 'toggle_object'  // value = 대상 objectId (표시/숨김 토글)
-    | 'focus_object'   // value = 대상 objectId (카메라를 그 오브젝트로 이동/포커스, 탐색 모드)
-    | 'reset_camera'   // value 불필요 (카메라를 초기 시점으로 복귀, 탐색 모드)
-    | 'animate_object' // value = "대상objectId|클립이름" (대상 GLB의 애니메이션 재생)
-    | 'move_object'    // value = "대상objectId|dx,dy,dz|초" (원래 저장 위치 기준 오프셋으로 부드럽게 이동)
-    | 'set_passable'   // value = 대상 objectId (플레이 모드 콜라이더 제거 → 통과 가능, 문 열기)
-    | 'set_solid'      // value = 대상 objectId (콜라이더 복구 → 다시 막힘, 문 닫기)
-    | 'toggle_collision' // value = 대상 objectId (통과 가능/막힘 토글)
-    | 'play_sound'     // value = 오디오 URL (mp3 등)
-    | 'set_variable'   // value = "변수명|연산|값"  연산: set/add/sub/mul/toggle (GAME_LOGIC.md)
-    | 'spawn_object'   // value = "템플릿objectId|dx,dy,dz"  (템플릿을 복제 생성, Phase 2)
-    | 'despawn_object' // value = 대상 objectId (빈 값이면 자기 자신 제거, Phase 2)
-    | 'game_win'       // value = 표시할 메시지(선택) — 승리 화면 (Phase 2)
-    | 'game_lose'      // value = 표시할 메시지(선택) — 패배/게임오버 화면 (Phase 2)
-    | 'run_script';    // value = 자바스크립트 코드 — 커스텀 로직(api 제공) (Phase 3)
+  trigger: EventTrigger;
+  // 액션 종류. value 의미: open_url=URL / show_object 등=objectId / animate_object="objectId|clip" /
+  //   move_object="objectId|dx,dy,dz|초" / play_sound=오디오URL / set_variable="변수명|연산|값"(연산 set/add/sub/mul/toggle/random) /
+  //   spawn_object="템플릿id|dx,dy,dz" / despawn_object=objectId(빈값=자기) / game_win·game_lose=메시지(선택) / run_script=JS코드.
+  action: EventAction;
   // go_to_scene: 이동할 대상 sceneId. show/hide/toggle/focus_object: 대상 objectId.
   // reset_camera: value 없음. animate_object: "objectId|clipName".
   // move_object: "objectId|dx,dy,dz|durationSec" — 오프셋은 누적이 아니라 항상 원래 위치 기준.
@@ -129,9 +136,16 @@ export interface EventSchema {
   eventPayload?: Record<string, unknown>;
   // show_popup 전용 표시 설정(옵셔널·하위호환). 없으면 기존 RichContent 자동판별 팝업.
   popup?: PopupConfig;
-  // 조건 게이트(옵셔널) — 있으면 이 조건이 참일 때만 액션 실행(GAME_LOGIC.md Phase 1).
-  //   variable_changed 트리거는 이 조건이 false→true로 바뀌는 순간 발동한다.
+  // 조건 게이트(옵셔널) — 있으면 참일 때만 액션 실행(GAME_LOGIC.md).
+  //   (레거시) 단일 조건. 신규는 conditions[]+conditionLogic 사용. 런타임은 둘 다 지원(conditions 우선).
   condition?: EventCondition;
+  // 다중 조건(Phase 2 후속). AND=전부 참, OR=하나라도 참. 비면 condition(단일)로 폴백.
+  conditions?: EventCondition[];
+  conditionLogic?: 'and' | 'or';
+  // if/else 분기(Phase 2 후속) — 조건이 '거짓'일 때 대신 실행할 액션. 조건 없으면 무의미.
+  //   variable_changed: 조건 true→false 전환에서 elseAction 발동(then은 false→true).
+  elseAction?: EventAction;
+  elseValue?: string;
   // on_timer 트리거 설정(Phase 2). everySec 간격 반복, once면 그 시간 뒤 1회만.
   timer?: { everySec: number; once?: boolean };
 }

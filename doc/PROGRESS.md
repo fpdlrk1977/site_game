@@ -60,7 +60,8 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **Phase 2 — 스폰/디스폰**: 액션 `spawn_object`(템플릿 복제 생성, value=`"템플릿id|dx,dy,dz"`, `spawned[]`→effectiveScene 병합)·`despawn_object`(value=대상, 빈 값=자기, `despawnedIds` Set 필터). 제약: 단일 오브젝트만(그룹·자식 미지원), 스폰 클론은 timer/scene_start 미대상(무한 스폰 방지). 에디터: 템플릿 SelectBox+오프셋 XYZ.
 - **Phase 2 — 승리/패배**: 액션 `game_win`/`game_lose`(value=메시지 선택). 뷰어 결과 오버레이(🎉/💀+메시지+**다시 시작**). `restartGame()`=변수 initial 복구+스폰/오버라이드(vis/pass/pos)/결과 초기화+scene_start·타이머 재실행(`runNonce` bump).
 - **Phase 3 — 커스텀 스크립트**: 액션 `run_script`(value=JS). `new Function('api','self',code)` 실행, **안전 api만 노출**(get/set/add·show/hide·despawn·popup·sound·win/lose·log, self) — window 직접 노출 안 함, try/catch 격리. 에디터: textarea+api 안내. **보안**: 제작자 자신 코드 실행(자기 사이트 script 수준) — 진짜 샌드박스는 후속(타인코드/마켓 배포 시 필수).
-- **Phase 3 — 비주얼 노드 에디터**: 분석 후 **별도 스프린트 보류**. 이미 Events가 경량 비주얼 스크립팅이라 노드 에디터는 표현 레이어(대형 UI, `@xyflow/react` 필요). 먼저 Phase 2 후속(다중조건·if/else·랜덤)으로 표현력↑ 후 착수 권장. 설계 메모는 GAME_LOGIC.md.
+- **Phase 2 후속(다중조건·if/else·랜덤) ✅ 완료**: (1) **다중조건 AND/OR** — `conditions[]`+`conditionLogic`, 런타임 `evalGate`(every/some), 레거시 단일 condition 폴백·승격. (2) **if/else** — `elseAction`/`elseValue`, 조건 거짓 시 대신 실행(`runElseAction`), variable_changed는 true→false 엣지. (3) **랜덤** — set_variable `random` 연산(`"var|random|min,max"` 정수). 에디터: 조건 다중추가+AND/OR 토글·else 액션(간단입력 `ELSE_ACTION_OPTIONS`)·랜덤 min~max. trigger/action을 `EventTrigger`/`EventAction` 명명타입으로 추출(elseAction 재사용). tsc·컴파일 200.
+- **Phase 3 — 비주얼 노드 에디터**: 분석 후 **별도 스프린트 보류**. 이미 Events가 경량 비주얼 스크립팅이라 노드 에디터는 표현 레이어(대형 UI, `@xyflow/react` 필요). 설계 메모는 GAME_LOGIC.md. → **이제 Phase 2 후속 완료했으니 다음은 노드 에디터 or 세이브/로드 등 선택.**
 - 스키마: `scene.ts`(트리거 2·액션 5·`HudElement`·`EventSchema.timer` 추가+normalize). 스토어: `hudElements` state+CRUD+저장/undo. 배선: `saveScene`·복제(JSON 딥클론 자동 보존).
 - **미구현(Phase 2 후속)**: 랜덤(set_variable 범위)·다중조건(AND/OR)·if/else 분기·세이브/로드·리더보드. 검증: **브라우저 실동작 대기**(타이머·스폰·체력바·승패/재시작·스크립트).
 

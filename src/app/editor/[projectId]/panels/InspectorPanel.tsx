@@ -25,7 +25,7 @@ import { TexturePicker } from '@/components/ui/TexturePicker';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { InfoHint } from '@/components/ui/InfoHint';
-import type { ObjectNodeSchema, ColliderType, EventSchema, EventCondition, GameVariable, HudElement, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, EventCondition, EventAction, GameVariable, HudElement, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
 
 // 프리팹 override 그룹 → 한글 라벨
 const OVERRIDE_LABELS: Record<PrefabOverrideGroup, string> = {
@@ -374,6 +374,12 @@ const ACTION_LABELS: Record<string, string> = {
 
 // value가 대상 objectId인 액션들 (에디터에서 오브젝트 선택 드롭다운 표시)
 const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object', 'focus_object', 'set_passable', 'set_solid', 'toggle_collision', 'despawn_object']);
+
+// else 분기에서 고를 수 있는 액션(간단 입력만 지원 — 팝업/스폰/스크립트 등 복합 입력은 제외).
+const ELSE_ACTION_OPTIONS: { value: string; label: string }[] = [
+  'show_object', 'hide_object', 'toggle_object', 'set_passable', 'set_solid', 'set_variable',
+  'play_sound', 'go_to_scene', 'open_url', 'focus_object', 'reset_camera', 'despawn_object', 'game_win', 'game_lose',
+].map((a) => ({ value: a, label: ACTION_LABELS[a] ?? a }));
 
 // ── GLB 애니메이션 클립 선택기 ─────────────────────────────────
 // three-stdlib GLTFLoader가 이 GLB의 animations를 파싱 못하는 문제 우회:
@@ -1619,8 +1625,11 @@ function InspectorInner() {
   const [newValue, setNewValue] = useState('');
   // show_popup 팝업 설정(모드/크기/색). undefined=auto(기존 동작).
   const [newPopup, setNewPopup] = useState<PopupConfig | undefined>(undefined);
-  // 조건 게이트(옵셔널) — undefined면 조건 없음(항상 발동). GAME_LOGIC.md Phase 1.
-  const [newCondition, setNewCondition] = useState<EventCondition | undefined>(undefined);
+  // 조건 게이트(옵셔널) — 빈 배열이면 조건 없음(항상 발동). 다중 조건 AND/OR. GAME_LOGIC.md.
+  const [newConditions, setNewConditions] = useState<EventCondition[]>([]);
+  const [newLogic, setNewLogic] = useState<'and' | 'or'>('and');
+  // if/else 분기(Phase 2 후속) — 조건 거짓일 때 대신 실행할 액션. undefined=없음.
+  const [newElse, setNewElse] = useState<{ action: EventAction; value: string } | undefined>(undefined);
   // on_timer 트리거 설정(Phase 2). everySec 간격 반복, once면 그 시간 뒤 1회.
   const [newTimer, setNewTimer] = useState<{ everySec: number; once?: boolean }>({ everySec: 3 });
   // null이면 신규 추가, 값이 있으면 그 이벤트를 수정 중
@@ -1900,13 +1909,21 @@ function InspectorInner() {
     const valueOptional = new Set(['show_popup', 'reset_camera', 'game_win', 'game_lose', 'despawn_object']);
     if (!newValue.trim() && !valueOptional.has(newAction)) return;
     const popupToSave = newAction === 'show_popup' ? cleanPopup(newPopup) : undefined;
-    const condToSave = newCondition && newCondition.variable ? newCondition : undefined;
+    const conds = newConditions.filter((c) => c.variable);
     const timerToSave = newTrigger === 'on_timer' ? { everySec: Math.max(0.1, newTimer.everySec), ...(newTimer.once ? { once: true } : {}) } : undefined;
+    // 다중조건/else는 조건이 있을 때만 의미. 저장 시 레거시 단일 condition은 비운다(conditions로 통일).
+    const gate = {
+      condition: undefined as EventCondition | undefined,
+      conditions: conds.length > 0 ? conds : undefined,
+      conditionLogic: conds.length > 1 ? newLogic : undefined,
+      elseAction: conds.length > 0 && newElse ? newElse.action : undefined,
+      elseValue: conds.length > 0 && newElse ? newElse.value.trim() : undefined,
+    };
     if (editingId) {
       // 기존 이벤트 수정
       updateObject(obj.id, {
         events: obj.events.map((e) =>
-          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim(), popup: popupToSave, condition: condToSave, timer: timerToSave } : e,
+          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim(), popup: popupToSave, timer: timerToSave, ...gate } : e,
         ),
       });
     } else {
@@ -1916,15 +1933,19 @@ function InspectorInner() {
         action: newAction,
         value: newValue.trim(),
         ...(popupToSave ? { popup: popupToSave } : {}),
-        ...(condToSave ? { condition: condToSave } : {}),
         ...(timerToSave ? { timer: timerToSave } : {}),
+        ...(gate.conditions ? { conditions: gate.conditions } : {}),
+        ...(gate.conditionLogic ? { conditionLogic: gate.conditionLogic } : {}),
+        ...(gate.elseAction ? { elseAction: gate.elseAction, elseValue: gate.elseValue } : {}),
       };
       updateObject(obj.id, { events: [...obj.events, ev] });
     }
     pushHistory();
     setNewValue('');
     setNewPopup(undefined);
-    setNewCondition(undefined);
+    setNewConditions([]);
+    setNewLogic('and');
+    setNewElse(undefined);
     setNewTimer({ everySec: 3 });
     setEditingId(null);
     setShowAddEvent(false);
@@ -1936,7 +1957,10 @@ function InspectorInner() {
     setNewAction(ev.action);
     setNewValue(ev.value);
     setNewPopup(ev.popup);
-    setNewCondition(ev.condition);
+    // conditions[](신규) 우선, 없으면 레거시 단일 condition을 배열로 승격.
+    setNewConditions(ev.conditions && ev.conditions.length ? ev.conditions : (ev.condition ? [ev.condition] : []));
+    setNewLogic(ev.conditionLogic ?? 'and');
+    setNewElse(ev.elseAction ? { action: ev.elseAction, value: ev.elseValue ?? '' } : undefined);
     setNewTimer(ev.timer ?? { everySec: 3 });
     setShowAddEvent(true);
   };
@@ -1945,7 +1969,9 @@ function InspectorInner() {
     setShowAddEvent(false);
     setNewValue('');
     setNewPopup(undefined);
-    setNewCondition(undefined);
+    setNewConditions([]);
+    setNewLogic('and');
+    setNewElse(undefined);
     setNewTimer({ everySec: 3 });
     setEditingId(null);
   };
@@ -2135,13 +2161,24 @@ function InspectorInner() {
                 <div className="grid grid-cols-2 gap-1.5">
                   <SelectBox
                     value={op}
-                    onChange={(o) => setSV(vn || variables[0].name, o, amt)}
+                    onChange={(o) => setSV(vn || variables[0].name, o, o === 'random' ? '1,6' : amt)}
                     options={isBool
                       ? [{ value: 'set', label: '설정 =' }, { value: 'toggle', label: '토글(반전)' }]
-                      : [{ value: 'add', label: '더하기 +' }, { value: 'sub', label: '빼기 −' }, { value: 'set', label: '설정 =' }, { value: 'mul', label: '곱하기 ×' }]}
+                      : [{ value: 'add', label: '더하기 +' }, { value: 'sub', label: '빼기 −' }, { value: 'set', label: '설정 =' }, { value: 'mul', label: '곱하기 ×' }, { value: 'random', label: '랜덤 🎲' }]}
                   />
                   {op === 'toggle' ? (
                     <div className="text-[10px] text-muted/60 flex items-center px-1">값 불필요</div>
+                  ) : op === 'random' ? (
+                    (() => {
+                      const [lo = '1', hi = '6'] = amt.split(',');
+                      return (
+                        <div className="flex items-center gap-1">
+                          <input type="number" value={lo} onChange={(e) => setSV(vn || variables[0].name, op, `${e.target.value},${hi}`)} placeholder="min" className={inputCls} />
+                          <span className="text-[10px] text-muted/60">~</span>
+                          <input type="number" value={hi} onChange={(e) => setSV(vn || variables[0].name, op, `${lo},${e.target.value}`)} placeholder="max" className={inputCls} />
+                        </div>
+                      );
+                    })()
                   ) : isBool ? (
                     <SelectBox
                       value={amt === 'true' ? 'true' : 'false'}
@@ -2158,7 +2195,7 @@ function InspectorInner() {
                     />
                   )}
                 </div>
-                <p className="text-muted/60 text-[10px]">예: 동전 먹으면 점수 +1 → <b>score</b> · <b>더하기</b> · <b>1</b></p>
+                <p className="text-muted/60 text-[10px]">예: 점수 +1 → <b>더하기·1</b> / 주사위 → <b>랜덤·1~6</b> (정수 랜덤)</p>
               </div>
             );
           }
@@ -2458,60 +2495,101 @@ function InspectorInner() {
         })()}
       </div>
 
-      {/* 조건 게이트 — 이 변수 조건이 참일 때만 액션 실행. variable_changed 트리거는 필수. GAME_LOGIC.md */}
-      <div className="border-t border-border/60 pt-2">
-        {newCondition ? (
+      {/* 조건 게이트 (다중 AND/OR) + else 분기 — GAME_LOGIC.md */}
+      <div className="border-t border-border/60 pt-2 space-y-2">
+        {newConditions.length > 0 ? (
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted/50 font-semibold tracking-wide">조건 — 참일 때만 발동</span>
-              <button onClick={() => setNewCondition(undefined)} className="text-[10px] text-muted/60 hover:text-foreground">조건 제거</button>
+              {newConditions.length > 1 && (
+                <div className="flex items-center gap-0.5">
+                  <button onClick={() => setNewLogic('and')} className={`px-1.5 py-0.5 rounded text-[10px] ${newLogic === 'and' ? 'bg-primary text-white' : 'text-muted/60 hover:text-foreground'}`}>AND(전부)</button>
+                  <button onClick={() => setNewLogic('or')} className={`px-1.5 py-0.5 rounded text-[10px] ${newLogic === 'or' ? 'bg-primary text-white' : 'text-muted/60 hover:text-foreground'}`}>OR(하나)</button>
+                </div>
+              )}
             </div>
             {variables.length === 0 ? (
               <p className="text-muted text-[10px] bg-surface border border-amber-500/40 rounded-xs px-2 py-1.5">
                 먼저 게임 변수를 만드세요(빈 곳 클릭 → Environment → 게임 변수).
               </p>
-            ) : (() => {
-              const c = newCondition;
+            ) : newConditions.map((c, i) => {
               const selVar = variables.find((v) => v.name === c.variable) ?? variables[0];
               const isBool = selVar.type === 'boolean';
               const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+              const upd = (patch: Partial<EventCondition>) => setNewConditions((cs) => cs.map((x, j) => (j === i ? { ...x, ...patch } : x)));
               return (
-                <>
-                  <SelectBox
-                    value={c.variable || variables[0].name}
-                    onChange={(name) => setNewCondition({ ...c, variable: name })}
-                    options={variables.map((v) => ({ value: v.name, label: `${v.name} (${v.type === 'boolean' ? '참/거짓' : '숫자'})` }))}
-                  />
-                  <div className="grid grid-cols-2 gap-1.5">
+                <div key={i} className="flex items-start gap-1">
+                  <div className="flex-1 space-y-1">
                     <SelectBox
-                      value={c.op}
-                      onChange={(op) => setNewCondition({ ...c, op: op as EventCondition['op'] })}
-                      options={isBool
-                        ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }]
-                        : [{ value: '>=', label: '이상 ≥' }, { value: '>', label: '초과 >' }, { value: '==', label: '같음 ==' }, { value: '<=', label: '이하 ≤' }, { value: '<', label: '미만 <' }, { value: '!=', label: '다름 !=' }]}
+                      value={c.variable || variables[0].name}
+                      onChange={(name) => upd({ variable: name })}
+                      options={variables.map((v) => ({ value: v.name, label: `${v.name} (${v.type === 'boolean' ? '참/거짓' : '숫자'})` }))}
                     />
-                    {isBool ? (
+                    <div className="grid grid-cols-2 gap-1">
                       <SelectBox
-                        value={c.value === true ? 'true' : 'false'}
-                        onChange={(v) => setNewCondition({ ...c, value: v === 'true' })}
-                        options={[{ value: 'true', label: '참(true)' }, { value: 'false', label: '거짓(false)' }]}
+                        value={c.op}
+                        onChange={(op) => upd({ op: op as EventCondition['op'] })}
+                        options={isBool
+                          ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }]
+                          : [{ value: '>=', label: '이상 ≥' }, { value: '>', label: '초과 >' }, { value: '==', label: '같음 ==' }, { value: '<=', label: '이하 ≤' }, { value: '<', label: '미만 <' }, { value: '!=', label: '다름 !=' }]}
                       />
-                    ) : (
-                      <input
-                        type="number"
-                        value={typeof c.value === 'number' ? c.value : 0}
-                        onChange={(e) => setNewCondition({ ...c, value: Number(e.target.value) })}
-                        className={inputCls}
-                      />
-                    )}
+                      {isBool ? (
+                        <SelectBox
+                          value={c.value === true ? 'true' : 'false'}
+                          onChange={(v) => upd({ value: v === 'true' })}
+                          options={[{ value: 'true', label: '참(true)' }, { value: 'false', label: '거짓(false)' }]}
+                        />
+                      ) : (
+                        <input type="number" value={typeof c.value === 'number' ? c.value : 0} onChange={(e) => upd({ value: Number(e.target.value) })} className={inputCls} />
+                      )}
+                    </div>
                   </div>
-                </>
+                  <button onClick={() => setNewConditions((cs) => cs.filter((_, j) => j !== i))} title="조건 삭제" className="p-1 mt-0.5 rounded text-muted/50 hover:text-red-500 hover:bg-red-500/10"><X size={12} /></button>
+                </div>
               );
-            })()}
+            })}
+            {variables.length > 0 && (
+              <button
+                onClick={() => setNewConditions((cs) => [...cs, { variable: variables[0]?.name ?? '', op: '>=', value: 0 }])}
+                className="text-[10px] text-primary hover:underline"
+              >
+                + 조건 하나 더
+              </button>
+            )}
+
+            {/* else 분기 — 조건 거짓일 때 대신 실행할 액션 */}
+            <div className="pt-1 border-t border-border/40">
+              {newElse ? (
+                <div className="bg-surface border border-border rounded-xs p-2 space-y-1.5 mt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted/50 font-semibold tracking-wide">아니면(else) 실행</span>
+                    <button onClick={() => setNewElse(undefined)} className="text-[10px] text-muted/60 hover:text-foreground">제거</button>
+                  </div>
+                  <SelectBox
+                    value={newElse.action}
+                    onChange={(a) => setNewElse({ action: a as EventAction, value: '' })}
+                    options={ELSE_ACTION_OPTIONS}
+                  />
+                  {(() => {
+                    const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+                    if (OBJECT_TARGET_ACTIONS.has(newElse.action)) {
+                      return <SelectBox value={newElse.value} onChange={(v) => setNewElse({ ...newElse, value: v })} options={objects.map((o) => ({ value: o.id, label: o.id === obj?.id ? `${o.name} (이 오브젝트)` : o.name }))} placeholder="대상 오브젝트..." />;
+                    }
+                    if (newElse.action === 'game_win' || newElse.action === 'game_lose' || newElse.action === 'reset_camera') {
+                      return newElse.action === 'reset_camera' ? <p className="text-[10px] text-muted/60">값 불필요</p> : <input value={newElse.value} onChange={(e) => setNewElse({ ...newElse, value: e.target.value })} placeholder="메시지(선택)" className={inputCls} />;
+                    }
+                    return <input value={newElse.value} onChange={(e) => setNewElse({ ...newElse, value: e.target.value })} placeholder={newElse.action === 'set_variable' ? 'score|add|1' : newElse.action === 'open_url' ? 'https://...' : '값'} className={inputCls} />;
+                  })()}
+                  <p className="text-[10px] text-muted/50">조건이 <b>거짓</b>이면 이 액션을 대신 실행합니다(예: 참이면 문 열기 / 아니면 &quot;열쇠 필요&quot; 팝업).</p>
+                </div>
+              ) : (
+                <button onClick={() => setNewElse({ action: 'show_object', value: '' })} className="text-[10px] text-muted/60 hover:text-primary mt-1">+ 아니면(else) 액션</button>
+              )}
+            </div>
           </div>
         ) : (
           <button
-            onClick={() => setNewCondition({ variable: variables[0]?.name ?? '', op: '>=', value: 0 })}
+            onClick={() => setNewConditions([{ variable: variables[0]?.name ?? '', op: '>=', value: 0 }])}
             disabled={variables.length === 0}
             className="text-[10px] text-primary hover:underline disabled:text-muted/40 disabled:no-underline"
           >
