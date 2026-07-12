@@ -34,22 +34,10 @@ import { SubdivisionSection } from './inspector/SubdivisionSection';
 import { GeometrySection } from './inspector/GeometrySection';
 import { ClonerSection } from './inspector/ClonerSection';
 import { ArraySection } from './inspector/ArraySection';
+import { PrefabSection } from './inspector/PrefabSection';
+import { TransformSection } from './inspector/TransformSection';
 import type { ObjectNodeSchema, EventSchema, EventCondition, EventAction, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
 
-// 프리팹 override 그룹 → 한글 라벨
-const OVERRIDE_LABELS: Record<PrefabOverrideGroup, string> = {
-  transform: '위치/회전/크기',
-  material: '재질',
-  events: '이벤트',
-  motion: '모션',
-  physics: '물리',
-  content: '콘텐츠',
-  light: '조명',
-  particle: '파티클',
-  name: '이름',
-  visibility: '표시',
-  dialogue: '대화',
-};
 import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterPreview';
 
 // ── 트리거/액션 라벨 ───────────────────────────────────────────
@@ -424,32 +412,6 @@ function InspectorInner() {
     );
   }
 
-  // 그룹 자식의 position은 부모 기준 로컬 좌표라 음수 y가 정상 — 최상위 오브젝트만 바닥(y=0) 클램프
-  // (GizmoController의 skipYClamp와 동일한 규칙)
-  const setPos = (axis: 'x' | 'y' | 'z', v: number) =>
-    updateObject(obj.id, { position: { ...obj.position, [axis]: axis === 'y' && !obj.parentId ? Math.max(0, v) : v } });
-  const setRot = (axis: 'x' | 'y' | 'z', v: number) =>
-    updateObject(obj.id, { rotation: { ...obj.rotation, [axis]: v } });
-  const setScl = (axis: 'x' | 'y' | 'z', v: number) =>
-    updateObject(obj.id, { scale: { ...obj.scale, [axis]: v } });
-
-  // GLB 밑면을 바닥(y=0)에 정렬 — 모델 로컬 bbox에 현재 회전·스케일을 적용해
-  // 실제 최하단(min.y)을 구하고, position.y를 그만큼 올려 바닥에 앉힌다.
-  // 바닥에 놓기 — 루트 오브젝트(GLB·프리미티브·그룹·콘텐츠 전부) 밑면을 바닥(y=0)에 정렬.
-  // 월드 bbox(모든 타입 지원, 그룹은 자식 재귀)의 min.y 만큼 y를 올린다. GLB는 bbox 캐시가 있어야 정확.
-  const glbUrlForSnap = obj?.assetId ? assets.find((a) => a.id === obj.assetId)?.dracoUrl : null;
-  const glbUnloaded = !!obj?.assetId && (!glbUrlForSnap || !glbLocalBboxCache.has(glbUrlForSnap));
-  const snapBox = obj && !obj.parentId && !glbUnloaded ? worldBBox(objects, assets, obj.id) : null;
-  const canSnapToGround = !!snapBox && !snapBox.isEmpty();
-  const snapToGround = () => {
-    if (!obj || obj.parentId) return;
-    const b = worldBBox(objects, assets, obj.id);
-    if (!b || b.isEmpty()) return;
-    const newY = obj.position.y - b.min.y; // 밑면이 y=0에 오도록
-    if (Math.abs(newY - obj.position.y) < 1e-6) return; // 이미 바닥
-    updateObject(obj.id, { position: { ...obj.position, y: newY } });
-    pushHistory();
-  };
 
   // 팝업 설정을 저장 형태로 정리 — auto(기본)이고 스타일도 없으면 undefined로 떨궈 스키마를 깨끗하게 유지.
   const cleanPopup = (p: PopupConfig | undefined): PopupConfig | undefined => {
@@ -1250,136 +1212,11 @@ function InspectorInner() {
           </button>
         </div>
 
-        {/* Prefab — 원본 정의화 / 인스턴스 동기화 */}
-        {(() => {
-          const prefabDef = obj.prefabId ? prefabs.find((p) => p.id === obj.prefabId) : undefined;
-          const isInstance = !!obj.prefabInstanceId && !!prefabDef;
-          const canCreate = !isInstance && !obj.parentId; // 루트 오브젝트/그룹만 프리팹화
-          if (!isInstance && !canCreate) return null;
-
-          const instanceRoot = isInstance
-            ? objects.find((o) => o.prefabInstanceId === obj.prefabInstanceId && o.prefabNodeKey === prefabDef!.rootKey)
-            : undefined;
-          const overrides = isInstance
-            ? [...new Set(
-                objects
-                  .filter((o) => o.prefabInstanceId === obj.prefabInstanceId)
-                  .flatMap((o) => o.prefabOverrides ?? []),
-              )]
-            : [];
-          const instanceCount = prefabDef
-            ? new Set(objects.filter((o) => o.prefabId === prefabDef.id).map((o) => o.prefabInstanceId)).size
-            : 0;
-
-          return (
-            <GroupBox>
-              <SectionHeader title="Prefab" icon={<Component size={12} />} hint="여러 오브젝트를 재사용 가능한 원본으로 묶어요. 원본을 고치면 모든 인스턴스가 함께 바뀌고(동기화), 인스턴스별로 값을 바꾸면 그 항목만 원본을 안 따릅니다(override)." />
-              <div className="px-3 pb-4 space-y-2">
-                {!isInstance && canCreate && (
-                  <>
-                    <button
-                      onClick={() => { createPrefab(); addToast('프리팹으로 만들었어요', 'success'); }}
-                      className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
-                    >
-<span className="inline-flex items-center gap-1.5"><Component size={13} /> 프리팹으로 만들기</span>
-                    </button>
-                    <p className="text-[10px] text-muted/50">이 오브젝트{obj.isGroup ? '(그룹)' : ''}를 원본으로 등록합니다. 이후 복제한 인스턴스는 원본 수정 시 함께 바뀌어요.</p>
-                  </>
-                )}
-                {isInstance && instanceRoot && (
-                  <>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-primary font-semibold flex-1 truncate flex items-center gap-1.5"><Component size={12} className="shrink-0" /> {prefabDef!.name}</span>
-                      <span className="text-[10px] text-muted shrink-0">인스턴스 {instanceCount}개</span>
-                    </div>
-                    {overrides.length > 0 ? (
-                      <div className="space-y-1.5">
-                        <p className="text-[10px] text-muted">이 인스턴스에서 원본과 다른 항목:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {overrides.map((g) => (
-                            <button
-                              key={g}
-                              onClick={() => { revertInstance(instanceRoot.id, g); addToast(`'${OVERRIDE_LABELS[g]}' 원본으로 되돌림`, 'success'); }}
-                              title="클릭하면 이 항목만 원본으로 되돌립니다"
-                              className="px-1.5 py-0.5 rounded-xs bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] hover:bg-amber-500/25 transition-colors cursor-pointer inline-flex items-center gap-1"
-                            >
-                              {OVERRIDE_LABELS[g]} <X size={10} />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-muted/50">원본과 동일한 인스턴스입니다.</p>
-                    )}
-                    <div className="grid grid-cols-2 gap-1 pt-0.5">
-                      <button
-                        onClick={() => { applyInstanceToPrefab(instanceRoot.id); addToast('원본에 반영했어요 (다른 인스턴스도 갱신)', 'success'); }}
-                        title="이 인스턴스의 현재 상태를 원본에 반영 → 다른 인스턴스도 갱신됩니다(각자 override는 유지)"
-                        className="py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
-                      >
-                        원본에 반영
-                      </button>
-                      <button
-                        onClick={() => { revertInstance(instanceRoot.id); addToast('원본으로 되돌렸어요', 'success'); }}
-                        disabled={overrides.length === 0}
-                        title="이 인스턴스의 모든 override를 버리고 원본 값으로 되돌립니다"
-                        className="py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary text-[11px] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        원본으로 되돌리기
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-muted/50">위치/회전/크기는 항상 인스턴스별로 유지돼요(동기화 대상 아님).</p>
-                  </>
-                )}
-              </div>
-            </GroupBox>
-          );
-        })()}
+        {/* Prefab — 원본 정의화 / 인스턴스 동기화 (조건 불충족 시 자체 null) */}
+        <PrefabSection obj={obj} />
 
         {/* Transform */}
-        <GroupBox>
-          <SectionHeader title="Transform" hint="위치·회전·크기. 기즈모 회전 중 Shift를 누르면 15°씩 스냅돼요. GLB는 추가 시 밑면이 바닥에 자동 정렬되고, '바닥에 놓기'로 다시 맞출 수 있어요." isOpen={isOpen('transform')} onToggle={() => toggleSection('transform')} />
-          {isOpen('transform') && (
-            <div className="px-3 pb-4 space-y-1">
-              {/* 기즈모 드래그 중 라이브 채널로 실시간 갱신(캔버스 리렌더 없이 이 서브트리만) */}
-              <LiveTransformRows obj={obj} setPos={setPos} setRot={setRot} setScl={setScl} onCommit={pushHistory} />
-              {/* 실측 크기(m) — 지오메트리 로컬 bbox × 스케일. 입력 시 역산해 스케일을 맞춘다.
-                  단, 로컬 크기가 1인 모양(박스·구체·원기둥·각뿔대 등)은 크기=스케일이라 중복 → 숨김.
-                  로컬 크기가 1이 아닌 모양(평면·돌출·로프트)에서만 표시해 '실측'이 의미 있게 한다. */}
-              {obj.primitiveShape && !obj.content && !obj.assetId && (() => {
-                const lb = localBBox(objects, assets, obj.id);
-                const ls = lb && !lb.isEmpty() ? lb.getSize(new THREE.Vector3()) : new THREE.Vector3(1, 1, 1);
-                const nonUnit = Math.abs(ls.x - 1) > 0.01 || Math.abs(ls.y - 1) > 0.01 || Math.abs(ls.z - 1) > 0.01;
-                if (!nonUnit) return null; // 박스류(크기=스케일)는 숨김
-                const setSize = (axis: 'x' | 'y' | 'z', v: number) => setScl(axis, Math.max(0.001, v) / (ls[axis] || 1));
-                return (
-                  <XYZRow
-                    label="크기 (m)"
-                    x={+(ls.x * obj.scale.x).toFixed(3)}
-                    y={+(ls.y * obj.scale.y).toFixed(3)}
-                    z={+(ls.z * obj.scale.z).toFixed(3)}
-                    onChangeX={(v) => setSize('x', v)}
-                    onChangeY={(v) => setSize('y', v)}
-                    onChangeZ={(v) => setSize('z', v)}
-                    onCommit={pushHistory}
-                    dragStep={0.1}
-                  />
-                );
-              })()}
-              {/* 밑면을 바닥에 정렬 — 원점이 발밑이 아니어서 바닥에 파묻히는 경우 교정(모든 루트 타입) */}
-              {!obj.parentId && (
-                <button
-                  onClick={snapToGround}
-                  disabled={!canSnapToGround}
-                  title={canSnapToGround ? '오브젝트 밑면을 바닥(y=0)에 맞춤' : (glbUnloaded ? '모델 로딩 후 사용할 수 있습니다' : '바닥에 놓을 수 없습니다')}
-                  className="w-full mt-1 py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted disabled:hover:bg-transparent inline-flex items-center justify-center gap-1.5"
-                >
-                  <ArrowDownToLine size={13} /> 바닥에 놓기
-                </button>
-              )}
-            </div>
-          )}
-        </GroupBox>
+        <TransformSection obj={obj} open={isOpen('transform')} onToggle={() => toggleSection('transform')} />
 
         {/* Subdivision — 표면 세분화. 모든 프리미티브 */}
         {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && <SubdivisionSection obj={obj} />}
