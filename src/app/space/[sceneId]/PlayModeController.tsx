@@ -233,6 +233,28 @@ export function PlayModeController({
         const id = activeInteractRef.current;
         if (id) onInteractRef.current?.(id);
       }
+      // 킥(F): 앞쪽 근처 dynamic 물체를 앞·위로 강하게 날린다(질량 무관 일정 속도).
+      if (e.code === 'KeyF' && !e.repeat) {
+        const rb = playerRef.current;
+        if (rb) {
+          const p = rb.translation();
+          const az = azimuthRef.current;
+          const fx = -Math.sin(az), fz = -Math.cos(az); // 캐릭터 전방(XZ)
+          const RANGE = 2.8, LAUNCH = 9, LAUNCH_UP = 5; // 목표 속도(m/s)
+          world.forEachRigidBody((body) => {
+            if (!body.isDynamic()) return;
+            const bp = body.translation();
+            const dx = bp.x - p.x, dz = bp.z - p.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist > RANGE || dist < 1e-3) return;
+            const nx = dx / dist, nz = dz / dist;
+            if (nx * fx + nz * fz < 0.2) return; // 앞쪽(전방 ~78° 콘) 안의 것만
+            const m = body.mass() || 1;
+            // 질량 무관하게 일정 속도로 날리도록 impulse = 목표속도 × 질량
+            body.applyImpulse({ x: nx * LAUNCH * m, y: LAUNCH_UP * m, z: nz * LAUNCH * m }, true);
+          });
+        }
+      }
     };
     const up = (e: KeyboardEvent) => {
       if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.current.w = false;

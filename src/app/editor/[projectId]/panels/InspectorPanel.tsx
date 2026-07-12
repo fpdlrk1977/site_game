@@ -3042,6 +3042,27 @@ function InspectorInner() {
                   onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, isSensor: v } }); pushHistory(); }}
                 />
               </label>
+              {/* Dynamic — mass>0이면 플레이 모드에서 중력으로 떨어지고 튕긴다(fixed=정적 벽). 센서는 트리거라 제외. */}
+              {!obj.physics.isSensor && (
+                <>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <p className="text-[10px] font-semibold text-muted/50">Dynamic <span className="font-normal text-muted/60">(중력 낙하·튕김)</span></p>
+                    <Toggle
+                      value={obj.physics.mass > 0}
+                      onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, mass: v ? (obj.physics.mass > 0 ? obj.physics.mass : 1) : 0 } }); pushHistory(); }}
+                    />
+                  </label>
+                  {obj.physics.mass > 0 && (
+                    <LabeledNum
+                      label="Mass (질량)"
+                      value={obj.physics.mass}
+                      onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, mass: Math.max(0.01, v) } })}
+                      onCommit={pushHistory}
+                      min={0.01} max={100} precision={2} dragStep={0.1}
+                    />
+                  )}
+                </>
+              )}
               <div className='flex gap-2'>
                 <div>
                   <LabeledNum
