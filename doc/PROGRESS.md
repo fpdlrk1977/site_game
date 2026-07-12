@@ -57,8 +57,12 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 - **1단계 완료 — 공용 UI 프리미티브 추출** → `panels/inspector/ui.tsx`(294줄): `fmt·evalMath·NumInput·LabeledNum·XYZRow·LiveTransformRows·SectionHeader·Toggle·GroupBox`. InspectorPanel·EnvironmentPanel이 import. (주의: 원본 GroupBox가 className을 받고도 무시하던 동작까지 그대로 보존.)
 - **2단계 완료 — EnvironmentPanel 분리** → `panels/inspector/EnvironmentPanel.tsx`(1,085줄): MOOD_PRESETS + 함수 통째 이동(자체 완결). InspectorPanel은 import만. 미사용 lucide import 정리.
-- **결과**: InspectorPanel.tsx **3,855 → 2,493줄**(−35%). tsc 클린 + editor 컴파일 200(SSR 정상). HMR "full reload"는 컴포넌트 이동 시 정상.
-- **남음**: 3단계 EventsSection(가장 크고 상태 많음) · 4단계 나머지 섹션(Transform/Material/Physics/Motion/Array/Prefab/Geometry 등). **순수 리팩터라 브라우저에서 인스펙터·Environment 패널이 이전과 동일하게 보이고 동작하는지 확인 후 이어서 진행 권장**.
+- **3단계 완료 — 공용 GlbClipPicker 분리** → `panels/inspector/GlbClipPicker.tsx`(78줄): 이벤트(play_animation/animate_object)·Animation(defaultClip) 공용. parseGlbAnimationNames·캐시 포함.
+- **4단계 진행 — 섹션 컴포넌트화** (사용자 브라우저 확인: Motion/Environment 정상). **패턴 확립**: 부모가 guard(`{cond && <XSection obj={obj} open={isOpen('x')} onToggle={()=>toggleSection('x')}/>}`)만 유지, 섹션은 `<GroupBox>` 반환 + 스토어 직접 select + 접힘은 open/onToggle prop.
+  - 추출 완료 섹션: **Motion·Physics·Light·Content·Particle·Visibility**(각 자체 파일). GlbClipPicker(공용)도 별도.
+  - 패턴 주의점(전부 tsc가 잡음): ①섹션 끝 `</GroupBox>)}`가 한 줄이면 추출 범위에 `</GroupBox>` 포함해야(off-by-one 주의) ②`obj.light`/`obj.content` 등 부모 guard 좁히기가 사라지므로 컴포넌트 상단에 `if (!obj.X) return null;` ③섹션에서 쓰는 lucide 아이콘 개별 import.
+- **결과(현재)**: InspectorPanel.tsx **3,855 → 2,021줄(−48%)**. 신규 파일 9개(ui 294·Environment 1085·GlbClipPicker 78·Motion 78·Physics 98·Light 131·Content 71·Particle 67·Visibility 50). InspectorPanel 미사용 import 정리. tsc 클린 + editor 컴파일 200(SSR 정상).
+- **남음(4단계 계속)**: 저위험 — **Geometry·Subdivision**(자체완결) · Array/Cloner·Prefab·Boolean·Merge·정렬·일괄편집(대부분 obj+store). 중위험 — **Transform**(setPos/Size·localBBox 의존) · **Material**(texPanelOpen/handleObjectTexUpload 텍스처 업로드 헬퍼 의존 — 함께 이동 필요). 고난도 — **EventsSection**(상태·핸들러·600줄 form·preview·list가 InspectorInner 곳곳 분산 — 전용 신중 패스). **순수 리팩터라 브라우저 확인하며 진행 중.**
 
 ## 최근 완료 (2026-07-12) — 🎮 게임 로직 Phase 2 (타이머·스폰·HUD·승패) + Phase 3 (커스텀 스크립트)
 

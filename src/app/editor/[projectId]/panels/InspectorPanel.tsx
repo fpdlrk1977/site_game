@@ -3,11 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Combine, Download, X, Pencil, Play,
-  Sun, Lightbulb, Flashlight, Flame, Wind, Sparkles, Snowflake,
   Palette, Music,
   SlidersHorizontal, AlignCenter, Component, Grid2x2, CircleDot, ArrowDownToLine,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { MathUtils } from 'three';
 import * as THREE from 'three';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
@@ -25,7 +23,14 @@ import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { LabeledNum, XYZRow, LiveTransformRows, SectionHeader, Toggle, GroupBox } from './inspector/ui';
 import { EnvironmentPanel } from './inspector/EnvironmentPanel';
-import type { ObjectNodeSchema, ColliderType, EventSchema, EventCondition, EventAction, GameVariable, HudElement, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
+import { GlbClipPicker } from './inspector/GlbClipPicker';
+import { MotionSection } from './inspector/MotionSection';
+import { PhysicsSection } from './inspector/PhysicsSection';
+import { LightSection } from './inspector/LightSection';
+import { ContentSection } from './inspector/ContentSection';
+import { ParticleSection } from './inspector/ParticleSection';
+import { VisibilitySection } from './inspector/VisibilitySection';
+import type { ObjectNodeSchema, EventSchema, EventCondition, EventAction, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
 
 // 프리팹 override 그룹 → 한글 라벨
 const OVERRIDE_LABELS: Record<PrefabOverrideGroup, string> = {
@@ -92,76 +97,6 @@ const ELSE_ACTION_OPTIONS: { value: string; label: string }[] = [
   'play_sound', 'go_to_scene', 'open_url', 'focus_object', 'reset_camera', 'despawn_object', 'game_win', 'game_lose',
 ].map((a) => ({ value: a, label: ACTION_LABELS[a] ?? a }));
 
-// ── GLB 애니메이션 클립 선택기 ─────────────────────────────────
-// three-stdlib GLTFLoader가 이 GLB의 animations를 파싱 못하는 문제 우회:
-// GLB 바이너리의 JSON 청크를 직접 읽어 animation 이름만 추출
-async function parseGlbAnimationNames(url: string): Promise<string[]> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const buffer = await res.arrayBuffer();
-  const view = new DataView(buffer);
-  if (view.getUint32(0, true) !== 0x46546c67) throw new Error('Not a GLB');
-  const jsonChunkLen = view.getUint32(12, true);
-  const jsonStr = new TextDecoder().decode(new Uint8Array(buffer, 20, jsonChunkLen));
-  const gltf = JSON.parse(jsonStr) as { animations?: { name: string }[] };
-  return (gltf.animations ?? []).map((a) => a.name);
-}
-
-// URL별 클립 목록 캐시 — 같은 GLB(수십 MB)를 피커 열 때마다 다시 받지 않는다.
-// 실패한 Promise는 캐시에서 제거해 재시도 가능하게 유지.
-const clipNamesCache = new Map<string, Promise<string[]>>();
-function getGlbAnimationNames(url: string): Promise<string[]> {
-  let p = clipNamesCache.get(url);
-  if (!p) {
-    p = parseGlbAnimationNames(url);
-    p.catch(() => clipNamesCache.delete(url));
-    clipNamesCache.set(url, p);
-  }
-  return p;
-}
-
-function GlbClipPicker({ url, value, onChange }: { url: string; value: string; onChange: (v: string) => void }) {
-  const [clips, setClips] = useState<string[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setClips(null);
-    setLoadError(null);
-    getGlbAnimationNames(url)
-      .then((names) => { if (!cancelled) setClips(names); })
-      .catch((err) => { if (!cancelled) { setLoadError(String(err)); setClips([]); } });
-    return () => { cancelled = true; };
-  }, [url]);
-
-  if (clips === null) {
-    return (
-      <div className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-muted/50">
-        클립 목록 로딩 중…
-      </div>
-    );
-  }
-  if (loadError || clips.length === 0) {
-    return (
-      <>
-        <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
-          placeholder="clip name"
-          className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary" />
-        {loadError
-          ? <p className="text-danger text-[10px] mt-1">로드 실패: {loadError.slice(0, 80)}</p>
-          : <p className="text-muted/50 text-[10px] mt-1">이 GLB에 애니메이션 클립이 없습니다.</p>}
-      </>
-    );
-  }
-  return (
-    <SelectBox
-      value={value}
-      options={clips.map((n) => ({ value: n, label: n }))}
-      onChange={onChange}
-      placeholder="클립 선택"
-    />
-  );
-}
 
 
 // ── 메인 ───────────────────────────────────────────────────────
@@ -172,7 +107,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner, addAsset, materialAssets, addMaterialAsset, updateMaterialAsset, detachMaterial, variables } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner, addAsset, materialAssets, addMaterialAsset, detachMaterial, variables } = useSceneStore();
   const { addToast } = useToast();
   const [merging, setMerging] = useState(false);
 
@@ -1656,63 +1591,7 @@ function InspectorInner() {
         )}
 
         {/* Content (content 오브젝트만) */}
-        {obj.content && (
-          <GroupBox>
-            <SectionHeader title="Content" hint="텍스트·이미지·영상 콘텐츠. URL을 넣으면 이미지/유튜브 등 리치 콘텐츠로 표시돼요." isOpen={isOpen('content')} onToggle={() => toggleSection('content')} />
-            {isOpen('content') && <div className="px-3 pb-4 space-y-1">
-              {obj.content.type === 'text' && (
-                <>
-                  <div>
-                    {/* <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">텍스트</span> */}
-                    <textarea
-                      value={obj.content.text ?? ''}
-                      onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, text: e.target.value } })}
-                      onBlur={pushHistory}
-                      rows={2}
-                      className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                    />
-                  </div>
-                  <div className='flex gap-2'>
-                    <div>
-                      <LabeledNum
-                        label="Size"
-                        value={obj.content.fontSize ?? 0.5}
-                        onChange={(v) => updateObject(obj.id, { content: { ...obj.content!, fontSize: v } })}
-                        onCommit={pushHistory}
-                        min={0.1} max={3} precision={1} dragStep={0.05}
-                      />
-                    </div>
-                    <div>
-                      <LabeledNum
-                        label="Thickness"
-                        value={obj.content.depth ?? 0.1}
-                        onChange={(v) => updateObject(obj.id, { content: { ...obj.content!, depth: v } })}
-                        onCommit={pushHistory}
-                        min={0} max={1} precision={2} dragStep={0.01}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {(obj.content.type === 'image' || obj.content.type === 'video') && (
-                <div>
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">
-                    {obj.content.type === 'image' ? '이미지 URL' : '동영상 URL'}
-                  </span>
-                  <input
-                    type="text"
-                    value={obj.content.url ?? ''}
-                    onChange={(e) => updateObject(obj.id, { content: { ...obj.content!, url: e.target.value } })}
-                    onBlur={pushHistory}
-                    placeholder={obj.content.type === 'image' ? 'https://example.com/img.jpg' : 'https://www.youtube.com/...'}
-                    className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              )}
-            </div>}
-          </GroupBox>
-        )}
+        {obj.content && <ContentSection obj={obj} open={isOpen('content')} onToggle={() => toggleSection('content')} />}
 
         {/* Material (프리미티브 + 텍스트 콘텐츠 오브젝트) — 그룹/GLB/파티클/이미지·영상 콘텐츠는 제외 */}
         {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && (
@@ -1882,370 +1761,19 @@ function InspectorInner() {
         )}
 
         {/* Particle (파티클 이미터만) */}
-        {obj.particle && (
-          <GroupBox>
-            <SectionHeader title="Particle" hint="눈·불꽃 같은 파티클 프리셋. 분위기 연출용이에요." isOpen={isOpen('particle')} onToggle={() => toggleSection('particle')} />
-            {isOpen('particle') && <div className="px-3 pb-4 space-y-2">
-              <div>
-                <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Preset</span>
-                <SelectBox
-                  value={obj.particle.preset}
-                  onChange={(v) => { updateObject(obj.id, { particle: { ...obj.particle!, preset: v as ParticlePreset } }); pushHistory(); }}
-                  options={[
-                    { value: 'fire', label: '불꽃 (Fire)', icon: <Flame size={14} /> },
-                    { value: 'dust', label: '먼지 (Dust)', icon: <Wind size={14} /> },
-                    { value: 'light', label: '빛 파티클 (Light)', icon: <Sparkles size={14} /> },
-                    { value: 'snow', label: '눈 (Snow)', icon: <Snowflake size={14} /> },
-                  ]}
-                />
-              </div>
-              <div>
-                <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">색상 오버라이드</span>
-                <div className="px-2 flex items-center border border-border rounded-xs">
-                  <input type="color"
-                    value={obj.particle.color ?? '#ffffff'}
-                    onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="w-5 h-5 cursor-pointer"
-                  />
-                  <input type="text"
-                    value={obj.particle.color ?? '#ffffff'}
-                    onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    placeholder="프리셋 기본값"
-                    className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              </div>
-              {([
-                { key: 'count', label: '파티클 수', min: 10, max: 500, precision: 0, dragStep: 2, fallback: 80 },
-                { key: 'speed', label: '속도',       min: 0.1, max: 5,   precision: 1, dragStep: 0.05, fallback: 0.8 },
-                { key: 'spread', label: '확산 범위', min: 0.1, max: 5,   precision: 1, dragStep: 0.05, fallback: 1 },
-                { key: 'size',  label: '크기',       min: 0.01, max: 0.5, precision: 2, dragStep: 0.005, fallback: 0.08 },
-              ] as const).map(({ key, label, min, max, precision, dragStep, fallback }) => (
-                <LabeledNum key={key}
-                  label={label}
-                  value={(obj.particle![key] as number | undefined) ?? fallback}
-                  onChange={(v) => updateObject(obj.id, { particle: { ...obj.particle!, [key]: v } })}
-                  onCommit={pushHistory}
-                  min={min} max={max} precision={precision} dragStep={dragStep}
-                />
-              ))}
-            </div>}
-          </GroupBox>
-        )}
-
-        
+        {obj.particle && <ParticleSection obj={obj} open={isOpen('particle')} onToggle={() => toggleSection('particle')} />}
 
         {/* Visibility */}
-        <GroupBox>
-        <SectionHeader title="Visibility" hint="표시/숨김·잠금 + (프리미티브) 셰이딩·양면·그림자 옵션. 숨김은 뷰어에도 반영되고, 잠금은 뷰포트에서 선택·이동을 막아요(계층 리스트에선 선택 가능)." isOpen={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
-        {isOpen('visibility') && (
-          <div className="px-3 pb-4 space-y-2">
-            {(['visible', 'locked'] as const).map((key) => (
-              <label key={key} className="flex items-center justify-between cursor-pointer">
-                <span className="text-[10px] font-semibold text-muted/50 capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
-                <Toggle
-                  value={obj[key]}
-                  onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }}
-                />
-              </label>
-            ))}
-            {/* 렌더 옵션 — 프리미티브 전용(GLB는 모델 자체 재질, 콘텐츠/라이트/파티클 제외) */}
-            {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && (
-              <div className="pt-2 mt-1 border-t border-border/60 space-y-2">
-                {([
-                  { k: 'flatShading', label: 'Flat Shading (각진 면)', def: false },
-                  { k: 'doubleSided', label: 'Double-sided (양면)', def: false },
-                  { k: 'castShadow', label: 'Cast Shadow (그림자 생성)', def: true },
-                  { k: 'receiveShadow', label: 'Receive Shadow (그림자 수신)', def: true },
-                ] as const).map(({ k, label, def }) => (
-                  <label key={k} className="flex items-center justify-between cursor-pointer">
-                    <span className="text-[10px] font-semibold text-muted/50">{label}</span>
-                    <Toggle
-                      value={obj.render?.[k] ?? def}
-                      onChange={(v) => { updateObject(obj.id, { render: { ...obj.render, [k]: v } }); pushHistory(); }}
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        </GroupBox>
+        <VisibilitySection obj={obj} open={isOpen('visibility')} onToggle={() => toggleSection('visibility')} />
 
         {/* Light */}
-        {obj.light && (
-          <GroupBox>
-            <SectionHeader title="Light" hint="포인트/스팟/방향 광원. 색·강도·거리·감쇠 등을 조절해요." isOpen={isOpen('light')} onToggle={() => toggleSection('light')} />
-            {isOpen('light') && (
-              <div className="px-3 pb-4 space-y-2">
-                {/* Type */}
-                <div>
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Type</span>
-                  <SelectBox
-                    value={obj.light.type}
-                    onChange={(v) => { updateObject(obj.id, { light: { ...obj.light!, type: v as 'point' | 'spot' | 'directional' } }); pushHistory(); }}
-                    options={[
-                      { value: 'point', label: 'Point Light', icon: <Lightbulb size={14} /> },
-                      { value: 'spot', label: 'Spot Light', icon: <Flashlight size={14} /> },
-                      { value: 'directional', label: 'Directional Light', icon: <Sun size={14} /> },
-                    ]}
-                  />
-                </div>
-                {/* Color */}
-                <div className="">
-                  <span className="text-[10px] font-semibold text-muted/50">Color</span>
-                  {/* <div className="flex items-center gap-2">
-                    <input type="color" value={obj.light.color}
-                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent" />
-                    <span className="text-[10px]  text-muted">{obj.light.color}</span>
-                  </div> */}
+        {obj.light && <LightSection obj={obj} open={isOpen('light')} onToggle={() => toggleSection('light')} />}
 
-                  <div className="px-2 flex items-center border border-border rounded-xs">
-                    <input
-                      type="color"
-                      value={obj.light.color}
-                    onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="w-5 h-5 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={obj.light.color}
-                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
+        {/* Physics — 그룹·라이트 제외 */}
+        {!obj.light && !obj.isGroup && <PhysicsSection obj={obj} open={isOpen('physics')} onToggle={() => toggleSection('physics')} />}
 
-                </div>
-                {/* Intensity */}
-                <div>
-                  <LabeledNum
-                    label="Intensity"
-                    value={obj.light.intensity}
-                    onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, intensity: v } })}
-                    onCommit={pushHistory}
-                    min={0} max={10} precision={1} dragStep={0.05}
-                  />
-                </div>
-                {/* Distance (point, spot) */}
-                {obj.light.type !== 'directional' && (
-                  <div>
-                    <LabeledNum
-                      label="Distance"
-                      value={obj.light.distance ?? 20}
-                      onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, distance: v } })}
-                      onCommit={pushHistory}
-                      min={1} max={100} precision={0} dragStep={1}
-                    />
-                  </div>
-                )}
-                {/* Decay (point, spot) */}
-                {obj.light.type !== 'directional' && (
-                  <div>
-                    <LabeledNum
-                      label="Decay"
-                      value={obj.light.decay ?? 2}
-                      onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, decay: v } })}
-                      onCommit={pushHistory}
-                      min={0} max={3} precision={1} dragStep={0.02}
-                    />
-                  </div>
-                )}
-                {/* Angle + Penumbra (spot only) */}
-                {obj.light.type === 'spot' && (
-                  <>
-                    <div>
-                      <LabeledNum
-                        label="Angle (°)"
-                        value={Math.round((obj.light.angle ?? Math.PI / 6) * 180 / Math.PI)}
-                        onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, angle: v * Math.PI / 180 } })}
-                        onCommit={pushHistory}
-                        min={5} max={89} precision={0} dragStep={1}
-                      />
-                    </div>
-                    <div>
-                      <LabeledNum
-                        label="Penumbra"
-                        value={obj.light.penumbra ?? 0.1}
-                        onChange={(v) => updateObject(obj.id, { light: { ...obj.light!, penumbra: v } })}
-                        onCommit={pushHistory}
-                        min={0} max={1} precision={2} dragStep={0.005}
-                      />
-                    </div>
-                  </>
-                )}
-                {/* Cast Shadow */}
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[10px] font-semibold text-muted/50">Cast Shadow</span>
-                  <Toggle
-                    value={obj.light.castShadow ?? false}
-                    onChange={(v) => { updateObject(obj.id, { light: { ...obj.light!, castShadow: v } }); pushHistory(); }}
-                  />
-                </label>
-              </div>
-            )}
-          </GroupBox>
-        )}
-
-        {/* Physics — 그룹 제외(그룹 자체 physics는 플레이에서 무시됨, 자식별로 처리) */}
-        {!obj.light && !obj.isGroup && (
-        <GroupBox>
-          <div className="relative">
-          <SectionHeader title="Physics" hint="플레이 모드 충돌. 켜면 캐릭터가 부딪혀요. Is Sensor를 켜면 통과 가능한 투명 트리거 영역이 되어 area 이벤트에 씁니다." isOpen={isOpen('physics')} onToggle={() => toggleSection('physics')} />
-          {isOpen('physics') &&<label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
-            {/* <span className="text-[10px] font-semibold text-muted/50">Enable Physics</span> */}
-            <Toggle
-              value={obj.physics.enabled}
-              onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, enabled: v } }); pushHistory(); }}
-            />
-          </label>
-          }
-          {isOpen('physics') && obj.physics.enabled && (
-            <div className='px-3 pb-3 space-y-1'>
-              <div>
-                <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Collider Type</span>
-                <SelectBox
-                  value={obj.physics.colliderType}
-                  onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, colliderType: v as ColliderType } }); pushHistory(); }}
-                  options={[
-                    { value: 'box', label: 'Box (Cuboid)' },
-                    { value: 'sphere', label: 'Sphere (Ball)' },
-                    { value: 'capsule', label: 'Capsule' },
-                    { value: 'hull', label: 'Convex Hull' },
-                    { value: 'trimesh', label: 'Trimesh (정확/느림)' },
-                  ]}
-                />
-              </div>
-              <label className="flex items-center justify-between cursor-pointer">
-                <div>
-                  <p className="text-[10px] font-semibold text-muted/50">Is Sensor  <span className="text-[10px] font-normal text-muted/60 mt-0.5">(Area 진입 시 이벤트 발생)</span></p>
-                  
-                </div>
-                <Toggle
-                  value={obj.physics.isSensor}
-                  onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, isSensor: v } }); pushHistory(); }}
-                />
-              </label>
-              {/* Dynamic — mass>0이면 플레이 모드에서 중력으로 떨어지고 튕긴다(fixed=정적 벽). 센서는 트리거라 제외. */}
-              {!obj.physics.isSensor && (
-                <>
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <p className="text-[10px] font-semibold text-muted/50">Dynamic <span className="font-normal text-muted/60">(중력 낙하·튕김)</span></p>
-                    <Toggle
-                      value={obj.physics.mass > 0}
-                      onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, mass: v ? (obj.physics.mass > 0 ? obj.physics.mass : 1) : 0 } }); pushHistory(); }}
-                    />
-                  </label>
-                  {obj.physics.mass > 0 && (
-                    <LabeledNum
-                      label="Mass (질량)"
-                      value={obj.physics.mass}
-                      onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, mass: Math.max(0.01, v) } })}
-                      onCommit={pushHistory}
-                      min={0.01} max={100} precision={2} dragStep={0.1}
-                    />
-                  )}
-                </>
-              )}
-              <div className='flex gap-2'>
-                <div>
-                  <LabeledNum
-                    label="Friction"
-                    value={obj.physics.friction}
-                    onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, friction: v } })}
-                    onCommit={pushHistory}
-                    min={0} max={1} precision={2} dragStep={0.005}
-                  />
-                </div>
-                <div>
-                  <LabeledNum
-                    label="Restitution"
-                    value={obj.physics.restitution}
-                    onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, restitution: v } })}
-                    onCommit={pushHistory}
-                    min={0} max={1} precision={2} dragStep={0.005}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        
-        </div>
-
-          </GroupBox>)}
-
-        {/* Motion — 앰비언트 애니메이션 (라이트 제외: GLB·프리미티브·콘텐츠·그룹) */}
-        {!obj.light && (
-          <GroupBox>
-          <SectionHeader title="Motion" hint="뷰어에서 항상 실행되는 앰비언트 애니메이션. 둥실/회전/펄스/궤도/유동(정해진 영역 안을 열기구처럼 자유 이동). 기본은 시각 전용이고, '콜라이더 동반'을 켜면 플레이 모드에서 실제 이동 장애물이 돼요." />
-          <div className="px-3 pb-4 space-y-2">
-            {(() => {
-              const m = obj.motion;
-              const type = m?.type ?? 'none';
-              const setM = (patch: Partial<NonNullable<ObjectNodeSchema['motion']>>) =>
-                updateObject(obj.id, { motion: { ...(obj.motion ?? { type: 'float' }), ...patch } });
-              return (
-                <>
-                  <SelectBox
-                    value={type}
-                    onChange={(v) => {
-                      if (v === 'none') updateObject(obj.id, { motion: undefined });
-                      else setM({ type: v as NonNullable<ObjectNodeSchema['motion']>['type'] });
-                      pushHistory();
-                    }}
-                    options={[
-                      { value: 'none', label: '없음' },
-                      { value: 'float', label: '둥실 (위아래)' },
-                      { value: 'spin', label: '회전 (제자리)' },
-                      { value: 'pulse', label: '펄스 (커졌다 작아짐)' },
-                      { value: 'orbit', label: '궤도 (원)' },
-                      { value: 'wander', label: '유동 (영역 내 자유·열기구)' },
-                    ]}
-                  />
-                  {type !== 'none' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <LabeledNum label="속도" value={m?.speed ?? 1} onChange={(v) => setM({ speed: v })} onCommit={pushHistory} min={0.1} max={5} precision={2} dragStep={0.1} />
-                      {(type === 'float' || type === 'pulse') && (
-                        <LabeledNum label="진폭" value={m?.amplitude ?? (type === 'float' ? 0.5 : 0.2)} onChange={(v) => setM({ amplitude: v })} onCommit={pushHistory} min={0} max={5} precision={2} dragStep={0.05} />
-                      )}
-                      {(type === 'orbit' || type === 'wander') && (
-                        <LabeledNum label="반경" value={m?.radius ?? (type === 'orbit' ? 2 : 3)} onChange={(v) => setM({ radius: v })} onCommit={pushHistory} min={0.5} max={50} precision={1} dragStep={0.5} />
-                      )}
-                      {type === 'spin' && (
-                        <div>
-                          <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">회전축</span>
-                          <SelectBox
-                            value={m?.axis ?? 'y'}
-                            onChange={(v) => { setM({ axis: v as 'x' | 'y' | 'z' }); pushHistory(); }}
-                            options={[{ value: 'y', label: 'Y (세로)' }, { value: 'x', label: 'X (앞뒤)' }, { value: 'z', label: 'Z (좌우)' }]}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {type !== 'none' && type !== 'pulse' && (
-                    <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
-                      <Toggle value={m?.collider === true} onChange={(v) => { setM({ collider: v }); pushHistory(); }} />
-                      <span>{obj.isGroup ? '플레이 모드에서 그룹 전체가 이동 장애물' : '플레이 모드에서 콜라이더도 이동(진짜 장애물)'}</span>
-                    </label>
-                  )}
-                  {type !== 'none' && (
-                    <p className="text-[10px] text-muted/50">
-                      에디터엔 정적, 실제 움직임은 뷰어에서 확인. <b>콜라이더 동반 OFF = 통과 가능한 장식</b>, ON = 플레이 중 부딪히는 이동 장애물(캐릭터가 올라타 실려가진 않음).
-                    </p>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-          </GroupBox>
-        )}
+        {/* Motion — 앰비언트 애니메이션 (라이트 제외) */}
+        {!obj.light && <MotionSection obj={obj} />}
 
         {/* Animation — GLB 내장 클립을 트리거 없이 자동 재생(idle/앰비언트). GLB 오브젝트 전용 */}
         {!obj.isGroup && obj.assetId && (() => {
