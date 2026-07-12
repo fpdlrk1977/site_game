@@ -59,10 +59,10 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **2단계 완료 — EnvironmentPanel 분리** → `panels/inspector/EnvironmentPanel.tsx`(1,085줄): MOOD_PRESETS + 함수 통째 이동(자체 완결). InspectorPanel은 import만. 미사용 lucide import 정리.
 - **3단계 완료 — 공용 GlbClipPicker 분리** → `panels/inspector/GlbClipPicker.tsx`(78줄): 이벤트(play_animation/animate_object)·Animation(defaultClip) 공용. parseGlbAnimationNames·캐시 포함.
 - **4단계 진행 — 섹션 컴포넌트화** (사용자 브라우저 확인: Motion/Environment 정상). **패턴 확립**: 부모가 guard(`{cond && <XSection obj={obj} open={isOpen('x')} onToggle={()=>toggleSection('x')}/>}`)만 유지, 섹션은 `<GroupBox>` 반환 + 스토어 직접 select + 접힘은 open/onToggle prop.
-  - 추출 완료 섹션: **Motion·Physics·Light·Content·Particle·Visibility**(각 자체 파일). GlbClipPicker(공용)도 별도.
+  - 추출 완료 섹션: **Motion·Physics·Light·Content·Particle·Visibility·Subdivision·Geometry·Cloner·Array**(각 자체 파일). GlbClipPicker(공용)도 별도. Array는 자체 로컬 상태(개수/간격/모드/반경/축)도 함께 이동.
   - 패턴 주의점(전부 tsc가 잡음): ①섹션 끝 `</GroupBox>)}`가 한 줄이면 추출 범위에 `</GroupBox>` 포함해야(off-by-one 주의) ②`obj.light`/`obj.content` 등 부모 guard 좁히기가 사라지므로 컴포넌트 상단에 `if (!obj.X) return null;` ③섹션에서 쓰는 lucide 아이콘 개별 import.
-- **결과(현재)**: InspectorPanel.tsx **3,855 → 2,021줄(−48%)**. 신규 파일 9개(ui 294·Environment 1085·GlbClipPicker 78·Motion 78·Physics 98·Light 131·Content 71·Particle 67·Visibility 50). InspectorPanel 미사용 import 정리. tsc 클린 + editor 컴파일 200(SSR 정상).
-- **남음(4단계 계속)**: 저위험 — **Geometry·Subdivision**(자체완결) · Array/Cloner·Prefab·Boolean·Merge·정렬·일괄편집(대부분 obj+store). 중위험 — **Transform**(setPos/Size·localBBox 의존) · **Material**(texPanelOpen/handleObjectTexUpload 텍스처 업로드 헬퍼 의존 — 함께 이동 필요). 고난도 — **EventsSection**(상태·핸들러·600줄 form·preview·list가 InspectorInner 곳곳 분산 — 전용 신중 패스). **순수 리팩터라 브라우저 확인하며 진행 중.**
+- **결과(현재)**: InspectorPanel.tsx **3,855 → 1,824줄(−53%)**. 신규 파일 13개(ui·Environment·GlbClipPicker·Motion·Physics·Light·Content·Particle·Visibility·Subdivision·Geometry·Cloner·Array). InspectorPanel 미사용 import·이동한 array 상태 정리. tsc 클린 + editor 컴파일 200(SSR 정상).
+- **남음(4단계 계속)**: 중위험 — **Prefab(단일 인스턴스)**(store 액션 다수 obj+store) · **Transform**(setPos/Size·localBBox 의존) · **Material**(texPanelOpen/handleObjectTexUpload 텍스처 업로드 헬퍼 의존 — 함께 이동) · **다중선택 패널**(일괄편집/Merge/Boolean/정렬/Prefab라이브러리 — async handleMerge/handleBoolean 동반). 고난도 — **EventsSection**(상태·핸들러·600줄 form·preview·list가 InspectorInner 곳곳 분산 — 전용 신중 패스). **순수 리팩터라 브라우저 확인하며 진행 중.**
 
 ## 최근 완료 (2026-07-12) — 🎮 게임 로직 Phase 2 (타이머·스폰·HUD·승패) + Phase 3 (커스텀 스크립트)
 
