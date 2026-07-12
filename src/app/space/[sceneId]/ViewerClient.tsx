@@ -7,7 +7,7 @@ import { MobileControls } from './MobileControls';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { effectiveDialogue } from './useObjectDialogue';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, Vector3 } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, Vector3 } from '@/types/scene';
 
 // 이 액션들이 (플레이 모드에서) 발동되면 상호작용이 끝날 때까지(팝업 닫기/Esc) 캐릭터 이동을 잠근다.
 // 새로 "발동 중엔 못 움직이게" 하고 싶은 액션이 생기면 여기에 추가만 하면 자동 적용된다.
@@ -144,6 +144,21 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     };
   }, []);
 
+  // ── 게임 변수(상태) 런타임 — GAME_LOGIC.md Phase 1 ──
+  // varsRef: 권위값(동기 읽기/쓰기). hudVars: 화면 HUD 재렌더용 미러. watcherState: variable_changed 엣지 감지.
+  const varsRef = useRef<Record<string, number | boolean>>({});
+  const [hudVars, setHudVars] = useState<Record<string, number | boolean>>({});
+  const watcherState = useRef<Record<string, boolean>>({}); // eventId → 직전 조건 평가값
+  const evalDepth = useRef(0); // variable_changed 반응형 재진입 가드
+  // 씬 로드/변수 정의 변경 시 initial로 초기화(런타임 값은 저장하지 않음).
+  useEffect(() => {
+    const init: Record<string, number | boolean> = {};
+    for (const v of scene.variables ?? []) init[v.name] = v.initial;
+    varsRef.current = init;
+    watcherState.current = {};
+    setHudVars(init);
+  }, [scene.variables]);
+
   // 오버라이드를 씬 데이터에 반영해 렌더 (모든 뷰어 경로가 object.visible을 존중하므로 이걸로 충분)
   //   + 공용 재질 에셋(materialId) 리졸브 → ViewerObject는 object.material만 읽으므로 여기서 미리 주입.
   const effectiveScene = useMemo(() => {
@@ -192,14 +207,64 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     });
   };
 
-  const handleObjectEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => {
-    if (trigger === 'click') trackEvent('click', obj.id, obj.name);
-    if (trigger === 'area_enter') trackEvent('area_enter', obj.id, obj.name);
-    if (trigger === 'area_exit') trackEvent('area_exit', obj.id, obj.name);
-    if (trigger === 'interact') { trackEvent('interact', obj.id, obj.name); setDialogueNonce((n) => n + 1); }
+  // ── 게임 변수 조건/연산 (GAME_LOGIC.md Phase 1) ──
+  function evalCondition(cond: EventCondition): boolean {
+    const cur = varsRef.current[cond.variable];
+    if (cur === undefined) return false; // 미정의 변수 조건은 거짓
+    const target = cond.value;
+    switch (cond.op) {
+      case '==': return cur === target;
+      case '!=': return cur !== target;
+      case '>': return Number(cur) > Number(target);
+      case '>=': return Number(cur) >= Number(target);
+      case '<': return Number(cur) < Number(target);
+      case '<=': return Number(cur) <= Number(target);
+      default: return false;
+    }
+  }
+  function applyVarOp(name: string, op: string, amountRaw: string) {
+    const cur = varsRef.current[name];
+    if (cur === undefined) return; // 정의되지 않은 변수는 무시
+    if (typeof cur === 'boolean') {
+      if (op === 'toggle') varsRef.current[name] = !cur;
+      else if (op === 'set') varsRef.current[name] = amountRaw === 'true' || amountRaw === '1';
+      return;
+    }
+    const amt = Number(amountRaw);
+    const a = Number.isFinite(amt) ? amt : 0;
+    switch (op) {
+      case 'set': varsRef.current[name] = a; break;
+      case 'add': varsRef.current[name] = cur + a; break;
+      case 'sub': varsRef.current[name] = cur - a; break;
+      case 'mul': varsRef.current[name] = cur * a; break;
+      default: break; // toggle은 숫자에 무의미
+    }
+  }
+  // 변수 변경 후: HUD 갱신 + variable_changed 워처 재평가(false→true 엣지에서만 발동, 재진입 가드).
+  function evaluateWatchers() {
+    if (evalDepth.current > 16) return;
+    evalDepth.current += 1;
+    try {
+      for (const o of effectiveScene.objects) {
+        for (const ev of o.events) {
+          if (ev.trigger !== 'variable_changed') continue;
+          const pass = ev.condition ? evalCondition(ev.condition) : true;
+          const prev = watcherState.current[ev.id] ?? false;
+          watcherState.current[ev.id] = pass;
+          if (pass && !prev) runEventAction(o, ev, 'variable_changed');
+        }
+      }
+    } finally {
+      evalDepth.current -= 1;
+    }
+  }
+  function onVarsChanged() {
+    setHudVars({ ...varsRef.current });
+    evaluateWatchers();
+  }
 
-    const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
-    for (const ev of matchingEvents) {
+  // 단일 이벤트의 액션 실행(조건 게이트 통과 후 호출). variable_changed 워처도 이 함수를 재사용.
+  function runEventAction(obj: ObjectNodeSchema, ev: EventSchema, trigger: EventSchema['trigger']) {
       if (ev.action === 'open_url' && ev.value) {
         // area_enter는 사용자 제스처가 아닌 물리 콜백이라 브라우저가 window.open을
         // 차단할 수 있다 — 차단되면 링크가 담긴 팝업으로 폴백
@@ -267,16 +332,33 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         setPassOverride((p) => ({ ...p, [ev.value]: !p[ev.value] }));
       } else if (ev.action === 'play_sound' && ev.value) {
         playSound(ev.value);
+      } else if (ev.action === 'set_variable' && ev.value) {
+        // value = "변수명|연산|값"  (연산: set/add/sub/mul/toggle)
+        const [vname, op, amount] = ev.value.split('|');
+        applyVarOp(vname, op ?? 'set', amount ?? '');
+        onVarsChanged();
       } else if (ev.action === 'emit_event') {
         // Event Bridge — 임베드(iframe)일 때만 부모 페이지로 커스텀 이벤트 전송
         if (onBridge && window.parent !== window) {
           onBridge({ type: 'park3d:event', sceneId: scene.sceneId, objectId: obj.id, objectName: obj.name, trigger, value: ev.value });
         }
       }
-    }
+  }
+
+  const handleObjectEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => {
+    if (trigger === 'click') trackEvent('click', obj.id, obj.name);
+    if (trigger === 'area_enter') trackEvent('area_enter', obj.id, obj.name);
+    if (trigger === 'area_exit') trackEvent('area_exit', obj.id, obj.name);
+    if (trigger === 'interact') { trackEvent('interact', obj.id, obj.name); setDialogueNonce((n) => n + 1); }
+
+    const matchingEvents = obj.events.filter((e) => e.trigger === trigger);
+    // 조건 게이트 — condition이 있으면 참일 때만 발동(GAME_LOGIC.md Phase 1).
+    const firedEvents = matchingEvents.filter((ev) => !ev.condition || evalCondition(ev.condition));
+    for (const ev of firedEvents) runEventAction(obj, ev, trigger);
+
     // 이동 잠금 — 플레이 모드에서 이동을 막는 액션(팝업·포커스 등)이 하나라도 발동되면 상호작용 잠금.
     // 해제는 endInteraction()(팝업 닫기/Esc). 중앙 목록 MOVEMENT_LOCKING_ACTIONS로 확장 관리.
-    if (playMode && matchingEvents.some((e) => MOVEMENT_LOCKING_ACTIONS.has(e.action))) {
+    if (playMode && firedEvents.some((e) => MOVEMENT_LOCKING_ACTIONS.has(e.action))) {
       setInteractionLock(true);
     }
   };
@@ -307,6 +389,17 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         </div>
       ) : (
         viewerCanvasEl
+      )}
+
+      {/* 게임 변수 HUD — showInHud인 변수의 현재값 표시 (탐색/플레이·임베드 공통). GAME_LOGIC.md */}
+      {(scene.variables ?? []).some((v) => v.showInHud) && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center gap-1">
+          {(scene.variables ?? []).filter((v) => v.showInHud).map((v) => (
+            <div key={v.id} className="px-3 py-1 rounded-full bg-black/55 backdrop-blur-sm text-white text-sm font-semibold tabular-nums">
+              {v.name}: {String(hudVars[v.name] ?? v.initial)}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* 상단 오버레이 — 독립 URL(/space)에서만 풀 UI */}

@@ -92,7 +92,9 @@ export interface EventSchema {
   //   "다가가면 NPC가 손 흔들기/사운드" 같은 근접 자동 연출. area(임의 볼륨 진입)와 달리 오브젝트 중심 반경.
   // dialogue_end: 이 오브젝트의 대화(말풍선)가 마지막 문장까지 재생되면 자동 발동(플레이 모드 전용).
   //   "대사 끝나면 팝업/문 열기/씬 이동" 같은 대화→액션 연결. 세션당 1회(대화 세션 리셋 시 재발동 가능).
-  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit' | 'dialogue_end';
+  // variable_changed: 게임 변수가 바뀔 때마다 재평가돼, condition(조건)이 false→true로 전환되는 순간 1회 발동.
+  //   "점수>=10이 되면 문 열림" 같은 반응형 규칙. 오브젝트 위치/근접 무관(순수 상태 규칙). GAME_LOGIC.md 참조.
+  trigger: 'click' | 'hover_enter' | 'hover_exit' | 'area_enter' | 'area_exit' | 'interact' | 'approach_enter' | 'approach_exit' | 'dialogue_end' | 'variable_changed';
   action:
     | 'open_url'
     | 'show_popup'
@@ -109,7 +111,8 @@ export interface EventSchema {
     | 'set_passable'   // value = 대상 objectId (플레이 모드 콜라이더 제거 → 통과 가능, 문 열기)
     | 'set_solid'      // value = 대상 objectId (콜라이더 복구 → 다시 막힘, 문 닫기)
     | 'toggle_collision' // value = 대상 objectId (통과 가능/막힘 토글)
-    | 'play_sound';    // value = 오디오 URL (mp3 등)
+    | 'play_sound'     // value = 오디오 URL (mp3 등)
+    | 'set_variable';  // value = "변수명|연산|값"  연산: set/add/sub/mul/toggle (GAME_LOGIC.md)
   // go_to_scene: 이동할 대상 sceneId. show/hide/toggle/focus_object: 대상 objectId.
   // reset_camera: value 없음. animate_object: "objectId|clipName".
   // move_object: "objectId|dx,dy,dz|durationSec" — 오프셋은 누적이 아니라 항상 원래 위치 기준.
@@ -119,6 +122,16 @@ export interface EventSchema {
   eventPayload?: Record<string, unknown>;
   // show_popup 전용 표시 설정(옵셔널·하위호환). 없으면 기존 RichContent 자동판별 팝업.
   popup?: PopupConfig;
+  // 조건 게이트(옵셔널) — 있으면 이 조건이 참일 때만 액션 실행(GAME_LOGIC.md Phase 1).
+  //   variable_changed 트리거는 이 조건이 false→true로 바뀌는 순간 발동한다.
+  condition?: EventCondition;
+}
+
+// 이벤트 조건 게이트 — 게임 변수 하나와 비교. (다중 조건 AND/OR는 후속)
+export interface EventCondition {
+  variable: string; // GameVariable.name
+  op: '==' | '!=' | '>' | '>=' | '<' | '<=';
+  value: number | boolean;
 }
 
 // show_popup 팝업의 표시 방식/스타일 (Phase 1).
@@ -369,6 +382,17 @@ export interface ProjectSceneSchema {
   materialAssets?: MaterialAsset[];
   // 공용 색 팔레트 — 컬러 픽커에서 재사용할 저장된 색 스와치.
   colorAssets?: ColorAsset[];
+  // 게임 변수(상태) 정의 — 뷰어 런타임에서 initial로 초기화. 미설정 = 없음(하위호환). GAME_LOGIC.md 참조.
+  variables?: GameVariable[];
+}
+
+// 게임 변수(상태) 정의 — name이 참조 키(고유). 런타임 값은 뷰어 로컬(저장 안 함), 씬엔 initial만 저장.
+export interface GameVariable {
+  id: string;
+  name: string;               // 참조 키 (예: 'score') — 조건/액션에서 이 이름으로 참조
+  type: 'number' | 'boolean'; // string은 후속
+  initial: number | boolean;
+  showInHud?: boolean;        // 뷰어 화면 HUD에 "이름: 값" 표시 여부
 }
 
 // 공용 재질 에셋 — 이름 붙인 재질을 라이브러리에 저장, 오브젝트가 materialId로 참조(원본 수정 시 일괄 반영).
@@ -438,6 +462,7 @@ export function normalizeSceneData(
       prefabs: Array.isArray(raw.prefabs) ? (raw.prefabs as PrefabSchema[]) : [],
       materialAssets: Array.isArray(raw.materialAssets) ? (raw.materialAssets as MaterialAsset[]) : undefined,
       colorAssets: Array.isArray(raw.colorAssets) ? (raw.colorAssets as ColorAsset[]) : undefined,
+      variables: Array.isArray(raw.variables) ? (raw.variables as GameVariable[]) : undefined,
     };
   }
   return makeEmptySceneData(projectId, sceneId);

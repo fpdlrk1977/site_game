@@ -14,6 +14,7 @@ import {
   PrefabOverrideGroup,
   MaterialAsset,
   ColorAsset,
+  GameVariable,
   MaterialOverride,
   DEFAULT_ENVIRONMENT,
   DEFAULT_PHYSICS,
@@ -49,6 +50,8 @@ interface HistoryEntry {
   prefabs?: PrefabSchema[];
   // 재질 에셋 스냅샷(재질 에셋 액션만 채움). 미설정 = 안 바꿈.
   materialAssets?: MaterialAsset[];
+  // 게임 변수 스냅샷(변수 액션만 채움). 미설정 = 안 바꿈.
+  variables?: GameVariable[];
 }
 
 interface SceneState {
@@ -62,6 +65,8 @@ interface SceneState {
   // 공용 재질/색 에셋 라이브러리(씬 단위). 오브젝트가 materialId로 참조(공존형).
   materialAssets: MaterialAsset[];
   colorAssets: ColorAsset[];
+  // 게임 변수(상태) 정의(씬 단위). 런타임 값은 뷰어 로컬, 여기엔 정의(name/type/initial)만.
+  variables: GameVariable[];
   selectedId: string | null;
   selectedIds: string[];
   // 그룹 격리(isolation) 스코프 — 더블클릭으로 '진입'한 그룹 id. 설정 시 단일 클릭이 이 그룹 안에서만
@@ -178,6 +183,10 @@ interface SceneActions {
   // ── 공용 색 에셋 ──
   addColorAsset: (name: string, color: string) => void;
   removeColorAsset: (id: string) => void;
+  // ── 게임 변수(상태) ──
+  addVariable: () => void;
+  updateVariable: (id: string, patch: Partial<GameVariable>) => void;
+  removeVariable: (id: string) => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -352,6 +361,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   prefabs: [],
   materialAssets: [],
   colorAssets: [],
+  variables: [],
   selectedId: null,
   groupScope: null,
   transformMode: 'translate',
@@ -393,6 +403,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       prefabs: data.prefabs ?? [],
       materialAssets: data.materialAssets ?? [],
       colorAssets: data.colorAssets ?? [],
+      variables: data.variables ?? [],
       selectedId: null,
       selectedIds: [],
       groupScope: null,
@@ -1263,6 +1274,41 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({ colorAssets: colorAssets.filter((c) => c.id !== id), isModified: true });
   },
 
+  // ── 게임 변수(상태) ── (GAME_LOGIC.md Phase 1)
+  addVariable: () => {
+    const { variables, objects, environment, past } = get();
+    // 고유한 기본 이름(var1, var2 …) 생성
+    let n = variables.length + 1;
+    const taken = new Set(variables.map((v) => v.name));
+    let name = `var${n}`;
+    while (taken.has(name)) { n += 1; name = `var${n}`; }
+    const v: GameVariable = { id: MathUtils.generateUUID(), name, type: 'number', initial: 0, showInHud: true };
+    set({ variables: [...variables, v], isModified: true, ...withHistory({ objects, environment, variables }, past) });
+  },
+  updateVariable: (id, patch) => {
+    const { variables, objects, environment, _prevSnapshot } = get();
+    if (!variables.some((v) => v.id === id)) return;
+    // 이름 변경 시 공백 제거(참조 키라 안정적으로). type 변경 시 initial을 타입에 맞게 보정.
+    set({
+      _prevSnapshot: _prevSnapshot ?? { objects, environment, variables },
+      variables: variables.map((v) => {
+        if (v.id !== id) return v;
+        const next = { ...v, ...patch };
+        if (patch.name !== undefined) next.name = patch.name.replace(/\s+/g, '');
+        if (patch.type !== undefined && patch.type !== v.type) {
+          next.initial = patch.type === 'boolean' ? false : 0;
+        }
+        return next;
+      }),
+      isModified: true,
+    });
+  },
+  removeVariable: (id) => {
+    const { variables, objects, environment, past } = get();
+    if (!variables.some((v) => v.id === id)) return;
+    set({ variables: variables.filter((v) => v.id !== id), isModified: true, ...withHistory({ objects, environment, variables }, past) });
+  },
+
   updateEnvironment: (patch) => {
     const { environment, objects, _prevSnapshot } = get();
     set({
@@ -1279,7 +1325,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   undo: () => {
-    const { past, objects, environment, prefabs, materialAssets, future } = get();
+    const { past, objects, environment, prefabs, materialAssets, variables, future } = get();
     if (past.length === 0) return;
     const prev = past[past.length - 1];
     set({
@@ -1288,15 +1334,16 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       // 스냅샷에 있으면 복원(그 액션이 변경한 것), 없으면 현재값 유지.
       prefabs: prev.prefabs ?? prefabs,
       materialAssets: prev.materialAssets ?? materialAssets,
+      variables: prev.variables ?? variables,
       past: past.slice(0, -1),
-      future: [{ objects, environment, prefabs, materialAssets }, ...future],
+      future: [{ objects, environment, prefabs, materialAssets, variables }, ...future],
       isModified: true,
       _prevSnapshot: null,
     });
   },
 
   redo: () => {
-    const { past, objects, environment, prefabs, materialAssets, future } = get();
+    const { past, objects, environment, prefabs, materialAssets, variables, future } = get();
     if (future.length === 0) return;
     const next = future[0];
     set({
@@ -1304,7 +1351,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       environment: next.environment,
       prefabs: next.prefabs ?? prefabs,
       materialAssets: next.materialAssets ?? materialAssets,
-      past: pushPast(past, { objects, environment, prefabs, materialAssets }),
+      variables: next.variables ?? variables,
+      past: pushPast(past, { objects, environment, prefabs, materialAssets, variables }),
       future: future.slice(1),
       isModified: true,
       _prevSnapshot: null,

@@ -5,7 +5,7 @@ import {
   ArrowLeftRight, User, ChevronDown, ChevronRight, RotateCcw, Combine, Download, X, Pencil, Play,
   Sunrise, Sun, Sunset, Moon, Lightbulb, Flashlight, Flame, Wind, Sparkles, Snowflake,
   Sprout, Mountain, Waves, Gem, Droplet, Palette, Music,
-  SlidersHorizontal, AlignCenter, Component, Grid2x2, CircleDot, ArrowDownToLine,
+  SlidersHorizontal, AlignCenter, Component, Grid2x2, CircleDot, ArrowDownToLine, Trash2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MathUtils } from 'three';
@@ -25,7 +25,7 @@ import { TexturePicker } from '@/components/ui/TexturePicker';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { InfoHint } from '@/components/ui/InfoHint';
-import type { ObjectNodeSchema, ColliderType, EventSchema, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
+import type { ObjectNodeSchema, ColliderType, EventSchema, EventCondition, GameVariable, ParticlePreset, PostProcessPreset, HdrPreset, GroundPreset, EnvSchema, DialogueConfig, PopupConfig, PrefabOverrideGroup } from '@/types/scene';
 
 // 프리팹 override 그룹 → 한글 라벨
 const OVERRIDE_LABELS: Record<PrefabOverrideGroup, string> = {
@@ -343,6 +343,7 @@ const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
   approach_enter: 'Approach In (근접)',
   approach_exit: 'Approach Out',
   dialogue_end: '대사 종료 시',
+  variable_changed: '변수 변경 시 (조건)',
 };
 const ACTION_LABELS: Record<string, string> = {
   open_url: 'URL 열기',
@@ -361,6 +362,7 @@ const ACTION_LABELS: Record<string, string> = {
   set_solid: '통과 불가(문 닫기)',
   toggle_collision: '통과 토글',
   play_sound: '사운드 재생',
+  set_variable: '변수 변경 (점수 등)',
 };
 
 // value가 대상 objectId인 액션들 (에디터에서 오브젝트 선택 드롭다운 표시)
@@ -458,7 +460,7 @@ const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 function EnvironmentPanel() {
-  const { environment, updateEnvironment, pushHistory, assets, projectId } = useSceneStore();
+  const { environment, updateEnvironment, pushHistory, assets, projectId, variables, addVariable, updateVariable, removeVariable } = useSceneStore();
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(true);
   const [moodSel, setMoodSel] = useState(''); // 마지막으로 적용한 Mood(표시용) — env에 저장되진 않음
@@ -1348,6 +1350,69 @@ function EnvironmentPanel() {
         </div>
       </GroupBox>
 
+      {/* 게임 변수 — 점수·체력 등 상태. GAME_LOGIC.md Phase 1 */}
+      <GroupBox>
+        <SectionHeader title="게임 변수" hint="점수·체력·아이템 보유 같은 게임 상태값. 이벤트의 '변수 변경' 액션으로 값을 바꾸고, 이벤트 '조건'으로 값에 따라 발동을 걸 수 있어요. '변수 변경 시' 트리거로 '점수 10이 되면 문 열기' 같은 반응형 규칙도 가능. HUD를 켜면 뷰어 화면에 값이 표시됩니다." />
+        <div className="px-3 pb-4 space-y-2">
+          {variables.length === 0 && (
+            <p className="text-muted text-[10px]">아직 변수가 없어요. 아래 버튼으로 추가하세요 (예: <b>score</b>, <b>health</b>).</p>
+          )}
+          {variables.map((v) => (
+            <div key={v.id} className="bg-surface border border-border rounded-xs p-2 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={v.name}
+                  onChange={(e) => updateVariable(v.id, { name: e.target.value })}
+                  onBlur={pushHistory}
+                  placeholder="변수명 (예: score)"
+                  className="flex-1 bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <button
+                  onClick={() => removeVariable(v.id)}
+                  title="변수 삭제"
+                  className="p-1 rounded-xs text-muted/60 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <SelectBox
+                  value={v.type}
+                  onChange={(t) => { updateVariable(v.id, { type: t as GameVariable['type'] }); pushHistory(); }}
+                  options={[{ value: 'number', label: '숫자' }, { value: 'boolean', label: '참/거짓' }]}
+                />
+                {v.type === 'boolean' ? (
+                  <SelectBox
+                    value={v.initial === true ? 'true' : 'false'}
+                    onChange={(b) => { updateVariable(v.id, { initial: b === 'true' }); pushHistory(); }}
+                    options={[{ value: 'false', label: '초기: 거짓' }, { value: 'true', label: '초기: 참' }]}
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    value={typeof v.initial === 'number' ? v.initial : 0}
+                    onChange={(e) => updateVariable(v.id, { initial: Number(e.target.value) })}
+                    onBlur={pushHistory}
+                    placeholder="초기값"
+                    className="w-full bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                )}
+              </div>
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-[10px] text-muted/60">화면 HUD에 표시</span>
+                <Toggle value={v.showInHud ?? false} onChange={(on) => { updateVariable(v.id, { showInHud: on }); pushHistory(); }} />
+              </label>
+            </div>
+          ))}
+          <button
+            onClick={addVariable}
+            className="w-full py-1.5 rounded-xs border border-dashed border-border text-[11px] text-muted hover:text-foreground hover:border-primary/50 transition-colors"
+          >
+            + 변수 추가
+          </button>
+        </div>
+      </GroupBox>
+
       {/* 씬 메모 */}
       <GroupBox>
         <SectionHeader title="씬 메모" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
@@ -1376,7 +1441,7 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner, addAsset, materialAssets, addMaterialAsset, updateMaterialAsset, detachMaterial } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, sceneId, environment, prefabs, updateObject, pushHistory, alignSelected, batchUpdateObjects, arraySelected, mergeIntoAsset, createPrefab, instantiatePrefab, applyInstanceToPrefab, revertInstance, deletePrefab, requestExport, makeCloner, updateCloner, addAsset, materialAssets, addMaterialAsset, updateMaterialAsset, detachMaterial, variables } = useSceneStore();
   const { addToast } = useToast();
   const [merging, setMerging] = useState(false);
 
@@ -1467,6 +1532,8 @@ function InspectorInner() {
   const [newValue, setNewValue] = useState('');
   // show_popup 팝업 설정(모드/크기/색). undefined=auto(기존 동작).
   const [newPopup, setNewPopup] = useState<PopupConfig | undefined>(undefined);
+  // 조건 게이트(옵셔널) — undefined면 조건 없음(항상 발동). GAME_LOGIC.md Phase 1.
+  const [newCondition, setNewCondition] = useState<EventCondition | undefined>(undefined);
   // null이면 신규 추가, 값이 있으면 그 이벤트를 수정 중
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -1740,14 +1807,15 @@ function InspectorInner() {
   };
 
   const addEvent = () => {
-    // show_popup(빈 내용 허용)·reset_camera(값 불필요)를 제외하면 값이 있어야 추가 가능
+    // show_popup(빈 내용 허용)·reset_camera(값 불필요)·variable_changed(값 불필요)를 제외하면 값 필요
     if (!newValue.trim() && newAction !== 'show_popup' && newAction !== 'reset_camera') return;
     const popupToSave = newAction === 'show_popup' ? cleanPopup(newPopup) : undefined;
+    const condToSave = newCondition && newCondition.variable ? newCondition : undefined;
     if (editingId) {
       // 기존 이벤트 수정
       updateObject(obj.id, {
         events: obj.events.map((e) =>
-          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim(), popup: popupToSave } : e,
+          e.id === editingId ? { ...e, trigger: newTrigger, action: newAction, value: newValue.trim(), popup: popupToSave, condition: condToSave } : e,
         ),
       });
     } else {
@@ -1757,12 +1825,14 @@ function InspectorInner() {
         action: newAction,
         value: newValue.trim(),
         ...(popupToSave ? { popup: popupToSave } : {}),
+        ...(condToSave ? { condition: condToSave } : {}),
       };
       updateObject(obj.id, { events: [...obj.events, ev] });
     }
     pushHistory();
     setNewValue('');
     setNewPopup(undefined);
+    setNewCondition(undefined);
     setEditingId(null);
     setShowAddEvent(false);
   };
@@ -1773,6 +1843,7 @@ function InspectorInner() {
     setNewAction(ev.action);
     setNewValue(ev.value);
     setNewPopup(ev.popup);
+    setNewCondition(ev.condition);
     setShowAddEvent(true);
   };
 
@@ -1780,6 +1851,7 @@ function InspectorInner() {
     setShowAddEvent(false);
     setNewValue('');
     setNewPopup(undefined);
+    setNewCondition(undefined);
     setEditingId(null);
   };
 
@@ -1821,6 +1893,7 @@ function InspectorInner() {
               { value: 'approach_enter', label: 'Approach In (근접)' },
               { value: 'approach_exit', label: 'Approach Out' },
               { value: 'dialogue_end', label: '대사 종료 시' },
+              { value: 'variable_changed', label: '변수 변경 시 (조건)' },
             ]}
           />
         </div>
@@ -1845,6 +1918,7 @@ function InspectorInner() {
               { value: 'play_animation', label: '애니메이션 재생' },
               { value: 'animate_object', label: '오브젝트 애니메이션' },
               { value: 'play_sound', label: '사운드 재생' },
+              { value: 'set_variable', label: '변수 변경 (점수 등)' },
               { value: 'emit_event', label: '이벤트 발송' },
             ]}
           />
@@ -1883,6 +1957,14 @@ function InspectorInner() {
         </p>
       )}
 
+      {newTrigger === 'variable_changed' && (
+        <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
+          게임 <b>변수가 바뀔 때마다</b> 아래 <b>조건</b>을 검사해, 조건이 <b>거짓→참</b>이 되는 순간 1회 발동합니다
+          (예: &quot;점수 ≥ 10이 되면 문 열기&quot;). 오브젝트 위치·근접과 무관한 순수 상태 규칙이에요.
+          아래 <b>조건</b>을 꼭 설정하세요. 변수는 Environment(빈 곳 클릭) → <b>게임 변수</b>에서 만듭니다.
+        </p>
+      )}
+
       <div>
         <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">
           {newAction === 'open_url' ? 'URL'
@@ -1893,10 +1975,62 @@ function InspectorInner() {
             : newAction === 'animate_object' ? '대상 오브젝트 + 클립'
             : newAction === 'move_object' ? '대상 오브젝트 + 이동량'
             : newAction === 'play_sound' ? '오디오 URL'
+            : newAction === 'set_variable' ? '변경할 변수'
             : OBJECT_TARGET_ACTIONS.has(newAction) ? '대상 오브젝트'
             : '팝업 내용'}
         </span>
         {(() => {
+          if (newAction === 'set_variable') {
+            // value = "변수명|연산|값"
+            const [vn = '', op = 'add', amt = ''] = newValue.split('|');
+            const setSV = (name: string, o: string, a: string) => setNewValue(`${name}|${o}|${a}`);
+            const selVar = variables.find((v) => v.name === vn);
+            const isBool = selVar?.type === 'boolean';
+            const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+            if (variables.length === 0) {
+              return (
+                <p className="text-muted text-[10px] bg-surface border border-amber-500/40 rounded-xs px-2 py-1.5">
+                  아직 게임 변수가 없어요. 빈 곳을 클릭해 Environment → <b>게임 변수</b>에서 먼저 변수를 만드세요.
+                </p>
+              );
+            }
+            return (
+              <div className="space-y-1.5">
+                <SelectBox
+                  value={vn || variables[0].name}
+                  onChange={(name) => setSV(name, op, amt)}
+                  options={variables.map((v) => ({ value: v.name, label: `${v.name} (${v.type === 'boolean' ? '참/거짓' : '숫자'})` }))}
+                />
+                <div className="grid grid-cols-2 gap-1.5">
+                  <SelectBox
+                    value={op}
+                    onChange={(o) => setSV(vn || variables[0].name, o, amt)}
+                    options={isBool
+                      ? [{ value: 'set', label: '설정 =' }, { value: 'toggle', label: '토글(반전)' }]
+                      : [{ value: 'add', label: '더하기 +' }, { value: 'sub', label: '빼기 −' }, { value: 'set', label: '설정 =' }, { value: 'mul', label: '곱하기 ×' }]}
+                  />
+                  {op === 'toggle' ? (
+                    <div className="text-[10px] text-muted/60 flex items-center px-1">값 불필요</div>
+                  ) : isBool ? (
+                    <SelectBox
+                      value={amt === 'true' ? 'true' : 'false'}
+                      onChange={(a) => setSV(vn || variables[0].name, op, a)}
+                      options={[{ value: 'true', label: '참(true)' }, { value: 'false', label: '거짓(false)' }]}
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      value={amt}
+                      onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)}
+                      placeholder="값 (예: 1)"
+                      className={inputCls}
+                    />
+                  )}
+                </div>
+                <p className="text-muted/60 text-[10px]">예: 동전 먹으면 점수 +1 → <b>score</b> · <b>더하기</b> · <b>1</b></p>
+              </div>
+            );
+          }
           if (newAction === 'show_popup') {
             const p = newPopup ?? {};
             const mode = p.mode ?? 'auto';
@@ -2144,6 +2278,68 @@ function InspectorInner() {
             </>
           );
         })()}
+      </div>
+
+      {/* 조건 게이트 — 이 변수 조건이 참일 때만 액션 실행. variable_changed 트리거는 필수. GAME_LOGIC.md */}
+      <div className="border-t border-border/60 pt-2">
+        {newCondition ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted/50 font-semibold tracking-wide">조건 — 참일 때만 발동</span>
+              <button onClick={() => setNewCondition(undefined)} className="text-[10px] text-muted/60 hover:text-foreground">조건 제거</button>
+            </div>
+            {variables.length === 0 ? (
+              <p className="text-muted text-[10px] bg-surface border border-amber-500/40 rounded-xs px-2 py-1.5">
+                먼저 게임 변수를 만드세요(빈 곳 클릭 → Environment → 게임 변수).
+              </p>
+            ) : (() => {
+              const c = newCondition;
+              const selVar = variables.find((v) => v.name === c.variable) ?? variables[0];
+              const isBool = selVar.type === 'boolean';
+              const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+              return (
+                <>
+                  <SelectBox
+                    value={c.variable || variables[0].name}
+                    onChange={(name) => setNewCondition({ ...c, variable: name })}
+                    options={variables.map((v) => ({ value: v.name, label: `${v.name} (${v.type === 'boolean' ? '참/거짓' : '숫자'})` }))}
+                  />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <SelectBox
+                      value={c.op}
+                      onChange={(op) => setNewCondition({ ...c, op: op as EventCondition['op'] })}
+                      options={isBool
+                        ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }]
+                        : [{ value: '>=', label: '이상 ≥' }, { value: '>', label: '초과 >' }, { value: '==', label: '같음 ==' }, { value: '<=', label: '이하 ≤' }, { value: '<', label: '미만 <' }, { value: '!=', label: '다름 !=' }]}
+                    />
+                    {isBool ? (
+                      <SelectBox
+                        value={c.value === true ? 'true' : 'false'}
+                        onChange={(v) => setNewCondition({ ...c, value: v === 'true' })}
+                        options={[{ value: 'true', label: '참(true)' }, { value: 'false', label: '거짓(false)' }]}
+                      />
+                    ) : (
+                      <input
+                        type="number"
+                        value={typeof c.value === 'number' ? c.value : 0}
+                        onChange={(e) => setNewCondition({ ...c, value: Number(e.target.value) })}
+                        className={inputCls}
+                      />
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        ) : (
+          <button
+            onClick={() => setNewCondition({ variable: variables[0]?.name ?? '', op: '>=', value: 0 })}
+            disabled={variables.length === 0}
+            className="text-[10px] text-primary hover:underline disabled:text-muted/40 disabled:no-underline"
+          >
+            + 조건 추가{variables.length === 0 ? ' (게임 변수 필요)' : newTrigger === 'variable_changed' ? ' (필수)' : ' (선택)'}
+          </button>
+        )}
       </div>
 
       <div className="flex gap-1.5">

@@ -34,6 +34,7 @@ export async function persistCurrentScene(): Promise<SaveResult> {
     prefabs: s.prefabs,
     materialAssets: s.materialAssets,
     colorAssets: s.colorAssets,
+    variables: s.variables,
   };
 
   const expected = s.savedVersion;

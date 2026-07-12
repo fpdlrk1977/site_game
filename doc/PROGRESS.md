@@ -51,6 +51,20 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 최근 완료 (2026-07-12) — 🎮 게임 로직 레이어 Phase 1 (변수 + 조건) + 킥 넉백
+
+> **방향 전환**: 사용자가 "실질적인 게임/인터랙티브 홈페이지를 만드는 플랫폼"을 원함 → 3D 뷰어를 **게임 메이커**로 확장 시작. 설계 기준 문서 **`doc/GAME_LOGIC.md`** 신설(범용·장르비의존 철학, Phase 1~3 로드맵, 구현 위치·결정 로그). 이어서 작업할 땐 **GAME_LOGIC.md가 기준**.
+
+- **게임 로직 Phase 1 — 변수 + 조건 (범용 상태 시스템)**: "버튼→팝업" 단발 이벤트에 **상태(변수)+규칙(조건)**을 얹어 진짜 게임 규칙("동전 N개 모으면 문 열림", "체력 0이면…")을 노코드로. **기존 Events 시스템 확장(비침습)**.
+  - **스키마**(`src/types/scene.ts`): `GameVariable{id,name,type:number|boolean,initial,showInHud}`, `EventCondition{variable,op,value}`, `EventSchema.condition?`(조건 게이트), 트리거 `variable_changed`(변수 바뀔 때 조건 false→true 엣지에서 1회 발동), 액션 `set_variable`(value=`"변수명|연산|값"`, 연산 set/add/sub/mul/toggle), `ProjectSceneSchema.variables?`. `normalizeSceneData` 갱신.
+  - **스토어**(`sceneStore.ts`): `variables` state + `addVariable/updateVariable/removeVariable`(이름 공백제거·타입변경 시 initial 보정) + loadScene/undo/redo/HistoryEntry 반영. **저장**(`saveScene.ts`)·**복제**(remapSceneData JSON 딥클론) 자동 보존.
+  - **뷰어 런타임**(`ViewerClient.tsx`): `varsRef`(권위 동기값)+`hudVars`(HUD 재렌더)+`watcherState`(엣지 감지)+`evalDepth`(재진입 가드 16). `evalCondition`/`applyVarOp`/`evaluateWatchers`(variable_changed 순회, false→true만 발동)/`onVarsChanged`. **핵심 리팩터**: 이벤트 실행부를 `runEventAction(obj,ev,trigger)`(단일 이벤트)로 추출 → 워처도 재사용. `handleObjectEvent`는 **조건 게이트**(`ev.condition` 참인 것만) 후 디스패치. **HUD 오버레이**(showInHud 변수 상단 표시, 탐색/플레이·임베드 공통).
+  - **에디터 UI**(`InspectorPanel.tsx`): Environment(빈 곳 클릭) **'게임 변수' 섹션**(추가/이름/타입/초기값/HUD토글/삭제) + 이벤트 폼에 **`set_variable` 입력**(변수 SelectBox+연산+값, bool은 참/거짓·토글) · **`variable_changed` 트리거**(+안내) · **조건 게이트 UI**(변수/비교연산/값, 접이식 "+조건 추가", bool/number 적응).
+  - **검증 예제(GAME_LOGIC.md §6)**: score(number,0,HUD) → 동전 interact=`set_variable score|add|1`+hide_object / 문 `variable_changed`+condition `score>=3`=`set_passable`. → 3개 먹으면 문 열림·HUD 점수.
+  - 검증: **tsc 클린 + editor/space 컴파일 200**. **브라우저 실동작 검증 대기**(로그인 필요). Phase 2(타이머·스폰·HUD고도화·승패)·Phase 3(커스텀 스크립트·노드 에디터)는 GAME_LOGIC.md 로드맵.
+- **킥/강한 넉백(F키)**(`PlayModeController.tsx`): 캐릭터가 이미 dynamic 밀기(`setApplyImpulsesToDynamicBodies`)는 됐고, **F키**로 앞쪽 콘 2.8m 내 dynamic 물체를 앞·위로 **질량 무관 일정 속도**(impulse=목표속도×질량)로 날림. keydown 핸들러에 `world.forEachRigidBody`+`isDynamic()`+전방 dot 필터. 튜닝상수 RANGE/LAUNCH/LAUNCH_UP. **F키 확인됨(사용자)**. (모바일 버튼·온스크린 힌트는 미구현.)
+- **Physics Dynamic 토글 + Mass 입력**(`InspectorPanel.tsx`): Physics 섹션에 mass 컨트롤이 없어 중력 낙하를 켤 수 없던 갭 → **Dynamic 토글**(mass 0↔1)+**Mass 입력**(Is Sensor 아닐 때). 플레이 모드에서 dynamic 낙하·Restitution 튕김. **낙하 확인됨(사용자)**.
+
 ## 최근 완료 (2026-07-06)
 
 - 계층 리스트 **드래그 정렬 + 그룹 안팎 재부모화**(월드 좌표 보존) + 그룹 피벗 recenter + 기즈모 안정화
