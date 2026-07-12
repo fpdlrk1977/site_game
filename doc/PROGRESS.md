@@ -51,6 +51,15 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 진행 중 (2026-07-12) — 🧹 InspectorPanel 리팩터 (섹션 컴포넌트화)
+
+> 사용자 합의: 3,855줄 InspectorPanel을 **섹션별 컴포넌트로 분리**(기능 늘면 파일 추가해 붙이는 구조). 순수 리팩터(동작 무변경). 점진적·tsc+컴파일 확인하며 진행. 신규 폴더 `panels/inspector/`.
+
+- **1단계 완료 — 공용 UI 프리미티브 추출** → `panels/inspector/ui.tsx`(294줄): `fmt·evalMath·NumInput·LabeledNum·XYZRow·LiveTransformRows·SectionHeader·Toggle·GroupBox`. InspectorPanel·EnvironmentPanel이 import. (주의: 원본 GroupBox가 className을 받고도 무시하던 동작까지 그대로 보존.)
+- **2단계 완료 — EnvironmentPanel 분리** → `panels/inspector/EnvironmentPanel.tsx`(1,085줄): MOOD_PRESETS + 함수 통째 이동(자체 완결). InspectorPanel은 import만. 미사용 lucide import 정리.
+- **결과**: InspectorPanel.tsx **3,855 → 2,493줄**(−35%). tsc 클린 + editor 컴파일 200(SSR 정상). HMR "full reload"는 컴포넌트 이동 시 정상.
+- **남음**: 3단계 EventsSection(가장 크고 상태 많음) · 4단계 나머지 섹션(Transform/Material/Physics/Motion/Array/Prefab/Geometry 등). **순수 리팩터라 브라우저에서 인스펙터·Environment 패널이 이전과 동일하게 보이고 동작하는지 확인 후 이어서 진행 권장**.
+
 ## 최근 완료 (2026-07-12) — 🎮 게임 로직 Phase 2 (타이머·스폰·HUD·승패) + Phase 3 (커스텀 스크립트)
 
 > 기준 문서 **`doc/GAME_LOGIC.md`** 갱신(Phase 2 완료·Phase 3 run_script 완료·비주얼 노드 에디터 분석/보류·HUD 커스터마이즈 분석). 전부 **tsc 클린 + editor/space 컴파일 200**, **브라우저 실동작 검증 대기**.
