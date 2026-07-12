@@ -51,7 +51,15 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
-## 진행 중 (2026-07-12) — 🧹 InspectorPanel 리팩터 (섹션 컴포넌트화)
+## ✅ 완료 (2026-07-12) — 🧹 InspectorPanel 리팩터 (섹션 컴포넌트화)
+
+> **최종 결과: InspectorPanel.tsx 3,855 → 277줄 (−93%)**. `panels/inspector/` 폴더에 18개 파일로 분리 완료. tsc 클린 + editor 컴파일 200(SSR 정상). 순수 리팩터(동작 무변경). **브라우저 실동작 최종 확인 대기**(특히 EventsSection — 이벤트 추가/수정/조건/타이머/대화/미리보기).
+> - 공용: `ui.tsx`(프리미티브)·`GlbClipPicker.tsx`. 패널: `EnvironmentPanel.tsx`(1085)·`MultiSelectPanel.tsx`(다중선택)·`EventsSection.tsx`(1034 — 이벤트/조건/대화 전부). 단일오브젝트 섹션 13개: Transform·Material·Geometry·Subdivision·Visibility·Physics·Motion·Light·Content·Particle·Cloner·Array·Prefab.
+> - **EventsSection(마지막·최고난도)**: 이벤트 폼 상태 11개·핸들러·600줄 renderEventForm·리스트·대화 UI를 통째 이동. previewPopup 오버레이는 부모(aside relative 기준 positioning 보존)에 남기고 리스트 미리보기는 `onPreview` 콜백으로 위임. 상수(TRIGGER_LABELS/ACTION_LABELS/OBJECT_TARGET_ACTIONS/ELSE_ACTION_OPTIONS)도 함께 이동.
+> - InspectorPanel 잔여 미사용 import·store 구조분해 전면 정리(three·bbox·lib·icons·types·store 액션 15개 제거).
+> - **패턴 확립**(향후 새 섹션): `panels/inspector/XSection.tsx` 만들어 `<GroupBox>` 반환 + 스토어 직접 select, 부모는 `{guard && <XSection obj={obj} open={isOpen('x')} onToggle={()=>toggleSection('x')}/>}` 한 줄. 접힘/미리보기 등은 prop으로.
+
+### (이력) 진행 과정
 
 > 사용자 합의: 3,855줄 InspectorPanel을 **섹션별 컴포넌트로 분리**(기능 늘면 파일 추가해 붙이는 구조). 순수 리팩터(동작 무변경). 점진적·tsc+컴파일 확인하며 진행. 신규 폴더 `panels/inspector/`.
 
