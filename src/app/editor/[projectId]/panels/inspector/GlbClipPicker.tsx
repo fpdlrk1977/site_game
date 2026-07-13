@@ -34,6 +34,22 @@ function getGlbAnimationNames(url: string): Promise<string[]> {
   return p;
 }
 
+// GLB의 애니메이션 클립 이름 목록을 반환하는 훅 — null=로딩 중, []=클립 없음.
+// Animation 섹션을 "클립 있는 GLB에만" 노출하는 게이트로 쓰인다(캐시 공유라 재파싱 없음).
+export function useGlbClipNames(url: string | null): string[] | null {
+  const [clips, setClips] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!url) { setClips([]); return; }
+    let cancelled = false;
+    setClips(null);
+    getGlbAnimationNames(url)
+      .then((names) => { if (!cancelled) setClips(names); })
+      .catch(() => { if (!cancelled) setClips([]); });
+    return () => { cancelled = true; };
+  }, [url]);
+  return clips;
+}
+
 export function GlbClipPicker({ url, value, onChange }: { url: string; value: string; onChange: (v: string) => void }) {
   const [clips, setClips] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);

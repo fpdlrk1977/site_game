@@ -760,7 +760,7 @@ export function EditorCanvas() {
 
   const useHdr = (environment.hdrPreset ?? "none") !== "none";
   const isSkyMode = !useHdr && environment.sky.type === "sky";
-  const skyColor = environment.sky.type === "color" ? environment.sky.value : "#FFD2D2";
+  const skyColor = environment.sky.type === "color" ? environment.sky.value : "#f3f1f1";
 
   return (
     <ObjectRefsContext.Provider value={objectRefsRef}>

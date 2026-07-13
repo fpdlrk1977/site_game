@@ -61,6 +61,9 @@ export interface EnvSchema {
   defaultMode?: 'explore' | 'play';
   // true면 이 씬은 '둘러보기 전용' — 걷기(플레이) 모드·캐릭터 없음, 뷰어에서 플레이 토글 숨김. (포트폴리오/제품 뷰어)
   disableWalk?: boolean;
+  // 마지막으로 적용한 Mood 프리셋 id(에디터 스위치 상태 유지용). 미설정/'default'=무드 미적용.
+  //   실제 조명·HDR·노출은 프리셋이 lights/hdrPreset/toneMappingExposure에 이미 적용됨(이 값은 표시/토글용).
+  mood?: string;
   // 상호작용(클릭/호버 이벤트) 오브젝트 위에 떠다니는 힌트 링 표시. 미설정 = 켜짐(true).
   // 탐색 모드 뷰어/임베드에서만 렌더(플레이 모드·에디터는 미표시). 포트폴리오 등 깔끔한 씬은 끌 수 있음.
   showInteractionHints?: boolean;
@@ -456,13 +459,17 @@ export const DEFAULT_PHYSICS: PhysicsSchema = {
 };
 
 export const DEFAULT_ENVIRONMENT: EnvSchema = {
-  sky: { type: 'color', value: '#FFD2D2' },
+  sky: { type: 'color', value: '#f3f1f1' },
   fog: { enabled: false, color: '#ffffff', near: 10, far: 100 },
   lights: {
     ambientIntensity: 0.6,
     directionalPosition: { x: 5, y: 10, z: 5 },
     directionalIntensity: 1.2,
   },
+  // 새 씬 기본 = 둘러보기 전용(Player 걷기 모드 off). 켜려면 Environment › Player 스위치.
+  disableWalk: true,
+  // 팝업 기본 크기 600×600 (미지정이면 뷰어가 큰 기본값을 써서 커 보이므로 명시).
+  defaultPopup: { width: '600px', height: '600px' },
 };
 
 export const SCENE_VERSION = 1;

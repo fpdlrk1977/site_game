@@ -4,7 +4,7 @@
 // InspectorPanel.tsx 분리 리팩터 2단계: 자체 완결 컴포넌트라 통째로 이동(동작 무변경). 공용 프리미티브는 ./ui에서 가져온다.
 
 import { useState, useRef } from 'react';
-import { User, RotateCcw, X, Sunrise, Sun, Sunset, Moon, Lightbulb, Sprout, Mountain, Waves, Gem, Droplet, Palette, Trash2 } from 'lucide-react';
+import { User, RotateCcw, X, Sunrise, Sun, Sunset, Moon, Lightbulb, Sprout, Mountain, Waves, Gem, Droplet, Palette, Trash2, Plus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
@@ -31,14 +31,15 @@ const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<
 
 // 팝업 기본 크기 입력 — 숫자 드래그(NumInput) + 단위(px/vw/vh) 드롭다운.
 // 값은 "800px" 형태 CSS 문자열로 저장, 0/미설정 = 자동(반응형 기본값).
-function SizeField({ label, value, onChange, onCommit }: {
+function SizeField({ label, value, onChange, onCommit, fallback = 0 }: {
   label: string;
   value: string | undefined;
   onChange: (v: string | undefined) => void;
   onCommit: () => void;
+  fallback?: number; // 미설정 시 표시할 기본 숫자(예: 600)
 }) {
   const m = /^(\d+(?:\.\d+)?)(px|vw|vh)$/.exec((value ?? '').trim());
-  const num = m ? parseFloat(m[1]) : 0;
+  const num = m ? parseFloat(m[1]) : fallback;
   const unit = m ? m[2] : 'px';
   const emit = (n: number, u: string) => onChange(n > 0 ? `${n}${u}` : undefined);
   return (
@@ -66,7 +67,10 @@ export function EnvironmentPanel() {
   const { environment, updateEnvironment, pushHistory, assets, projectId, variables, addVariable, updateVariable, removeVariable, hudElements, addHudElement, updateHudElement, removeHudElement } = useSceneStore();
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(true);
-  const [moodSel, setMoodSel] = useState(''); // 마지막으로 적용한 Mood(표시용) — env에 저장되진 않음
+  // 표시용(보여주기만) 섹션의 화살표 접기 상태 — enable 스위치 섹션(Ground/Fog/Player)은 제외.
+  const [envCollapsed, setEnvCollapsed] = useState<Set<string>>(new Set(['interaction', 'post', 'frame', 'popup']));
+  const envToggle = (k: string) => setEnvCollapsed((prev) => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const envOpen = (k: string) => !envCollapsed.has(k);
   const [groundTexUploading, setGroundTexUploading] = useState(false);
   const groundTexInputRef = useRef<HTMLInputElement>(null);
   const [boundaryTexUploading, setBoundaryTexUploading] = useState(false);
@@ -174,8 +178,8 @@ export function EnvironmentPanel() {
     <div className="flex-1 overflow-y-auto">
         {/* Sky */}
       <GroupBox>
-        <SectionHeader title="Sky" />
-        <div className="px-3 pb-3 space-y-2">
+        <SectionHeader title="Sky" isOpen={envOpen('sky')} onToggle={() => envToggle('sky')} />
+        {envOpen('sky') && <div className="px-3 pb-3 space-y-2">
           {/* 모드 탭 */}
           {(() => {
             const useHdr = (env.hdrPreset ?? 'none') !== 'none';
@@ -237,7 +241,7 @@ export function EnvironmentPanel() {
               
             );
           })()}
-        </div>
+        </div>}
       </GroupBox>
 
       {/* Ground */}
@@ -419,24 +423,37 @@ export function EnvironmentPanel() {
 
       {/* Mood — 분위기 프리셋 (HDR+라이트+노출 한 번에) */}
       <GroupBox>
-        <SectionHeader title="Mood" hint="Sets lighting, background and exposure in one go. Fine-tune below afterwards." />
-        <div className="px-3 pb-3">
+        <div className="relative">
+        <SectionHeader title="Mood" hint="분위기 프리셋(조명·배경·노출 한 번에). 스위치를 켜면 기본 morning, 끄면 default(무드 해제). 켜진 상태에서 다른 무드도 고를 수 있어요." />
+        {/* Mood on/off — ON=morning 적용, OFF=default(해제). Fog처럼 헤더 우측 스위치 */}
+        <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <Toggle
+            value={!!env.mood && env.mood !== 'default'}
+            onChange={(v) => {
+              const id = v ? 'morning' : 'default';
+              const m = MOOD_PRESETS.find((p) => p.id === id);
+              if (m) { updateEnvironment({ ...m.env, mood: id }); pushHistory(); }
+            }}
+          />
+        </label>
+        </div>
+        {!!env.mood && env.mood !== 'default' && <div className="px-3 pb-3">
           <SelectBox
-            value={moodSel}
+            value={env.mood ?? 'morning'}
             onChange={(id) => {
               const m = MOOD_PRESETS.find((p) => p.id === id);
-              if (m) { updateEnvironment(m.env); pushHistory(); setMoodSel(id); }
+              if (m) { updateEnvironment({ ...m.env, mood: id }); pushHistory(); }
             }}
-            options={MOOD_PRESETS.map((m) => ({ value: m.id, label: m.label, icon: <m.icon size={14} /> }))}
+            options={MOOD_PRESETS.filter((m) => m.id !== 'default').map((m) => ({ value: m.id, label: m.label, icon: <m.icon size={14} /> }))}
             placeholder="Select mood..."
           />
-        </div>
+        </div>}
       </GroupBox>
 
       {/* Lights */}
       <GroupBox>
-        <SectionHeader title="Lights" hint="Scene-wide lighting — intensity and direction of the ambient and directional (sun) lights. Affects how dark the shadows are." />
-        <div className="px-3 space-y-1 pb-4">
+        <SectionHeader title="Lights" hint="Scene-wide lighting — intensity and direction of the ambient and directional (sun) lights. Affects how dark the shadows are." isOpen={envOpen('lights')} onToggle={() => envToggle('lights')} />
+        {envOpen('lights') && <div className="px-3 space-y-1 pb-4">
           <div className='flex gap-2'>
             <div>
               <LabeledNum
@@ -516,13 +533,13 @@ export function EnvironmentPanel() {
               onChange={(v) => { updateEnvironment({ contactShadows: v }); pushHistory(); }}
             />
           </label>
-        </div>
+        </div>}
       </GroupBox>
 
       {/* Interaction — 뷰어 상호작용 어포던스 */}
       <GroupBox>
-        <SectionHeader title="Interaction" hint="Shows a floating hint ring above objects that have click/hover events, signaling they're interactive. Explore mode only; you can turn it off for a cleaner scene." />
-        <div className="px-3 pb-4 space-y-1">
+        <SectionHeader title="Interaction" hint="Shows a floating hint ring above objects that have click/hover events, signaling they're interactive. Explore mode only; you can turn it off for a cleaner scene." isOpen={envOpen('interaction')} onToggle={() => envToggle('interaction')} />
+        {envOpen('interaction') && <div className="px-3 pb-4 space-y-1">
           {/* 클릭/호버 이벤트가 있는 오브젝트 위에 힌트 링 표시 (탐색 모드 뷰어/임베드에서만) */}
           <label className="flex items-center justify-between cursor-pointer pb-1">
             <span className="text-[10px] font-semibold text-muted/70">Show interaction hints</span>
@@ -541,13 +558,13 @@ export function EnvironmentPanel() {
               A per-object range overrides this value.
             </p>
           </div>
-        </div>
+        </div>}
       </GroupBox>
 
       {/* 팝업 기본값 — 씬 전역 show_popup 스타일 (개별 이벤트가 우선) */}
       <GroupBox>
-        <SectionHeader title="Popup defaults" hint="Scene-wide default position, size and background for show_popup popups. Values set on an individual event take priority over these defaults." />
-        <div className="px-3 pb-4 space-y-1.5">
+        <SectionHeader title="Popup defaults" hint="Scene-wide default position, size and background for show_popup popups. Values set on an individual event take priority over these defaults." isOpen={envOpen('popup')} onToggle={() => envToggle('popup')} />
+        {envOpen('popup') && <div className="px-3 pb-4 space-y-1.5">
           {(() => {
             const dp = env.defaultPopup ?? {};
             const setDP = (patch: Partial<typeof dp>) => updateEnvironment({ defaultPopup: { ...dp, ...patch } });
@@ -569,8 +586,8 @@ export function EnvironmentPanel() {
                   />
                 </label>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <SizeField label="기본 너비" value={dp.width} onChange={(v) => setDP({ width: v })} onCommit={pushHistory} />
-                  <SizeField label="기본 높이" value={dp.height} onChange={(v) => setDP({ height: v })} onCommit={pushHistory} />
+                  <SizeField label="기본 너비" value={dp.width} onChange={(v) => setDP({ width: v })} onCommit={pushHistory} fallback={600} />
+                  <SizeField label="기본 높이" value={dp.height} onChange={(v) => setDP({ height: v })} onCommit={pushHistory} fallback={600} />
                 </div>
 
 
@@ -586,26 +603,23 @@ export function EnvironmentPanel() {
               </>
             );
           })()}
-        </div>
+        </div>}
       </GroupBox>
 
       {/* Player */}
       <GroupBox>
-        <SectionHeader title="Player" hint="플레이(걷기) 모드의 캐릭터·속도·점프. 캐릭터 GLB를 지정하지 않으면 기본 캡슐로 걸어다녀요." />
+        <div className="relative">
+        <SectionHeader title="Player" hint="플레이(걷기) 모드의 캐릭터·속도·점프. 스위치를 켜면 걷기(플레이) 모드, 끄면 둘러보기 전용 씬이 됩니다." />
+        {/* 걷기(플레이) 모드 on/off — Fog처럼 헤더 우측 스위치 (텍스트 없이 스위치만) */}
+        <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <Toggle
+            value={!env.disableWalk}
+            onChange={(v) => { updateEnvironment({ disableWalk: !v }); pushHistory(); }}
+          />
+        </label>
+        </div>
+        {!env.disableWalk && (
         <div className="px-3 pb-4 space-y-1">
-          {/* 걷기(플레이) 모드 사용 — 끄면 이 씬은 둘러보기 전용(캐릭터·플레이 없음) */}
-          <label className="flex items-center justify-between cursor-pointer pb-1">
-            <span className="text-[10px] font-semibold text-muted/70">걷기(플레이) 모드 사용</span>
-            <Toggle
-              value={!env.disableWalk}
-              onChange={(v) => { updateEnvironment({ disableWalk: !v }); pushHistory(); }}
-            />
-          </label>
-          {env.disableWalk ? (
-            <p className="text-[10px] text-muted/60 leading-relaxed">
-              둘러보기 전용 씬입니다. 뷰어에서 캐릭터·플레이 없이 orbit으로만 감상합니다.
-            </p>
-          ) : (
           <>
           {/* 뷰어 기본 진입 모드 — 접속 시 탐색/플레이 중 무엇으로 시작할지 */}
           <div className="pb-1">
@@ -680,48 +694,49 @@ export function EnvironmentPanel() {
                     />
                   </div>
                 </div>
+                {/* Spawn Point — 캐릭터 시작 위치. 독립 섹션이었으나 Player에 포함(Speed/Jump 아래) */}
+                <div className="pt-1">
+                  <XYZRow
+                    label="Spawn Point"
+                    x={env.playerStartPosition?.x ?? 0}
+                    y={env.playerStartPosition?.y ?? 0}
+                    z={env.playerStartPosition?.z ?? 0}
+                    onChangeX={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, x: v } })}
+                    onChangeY={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, y: Math.max(0, v) } })}
+                    onChangeZ={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, z: v } })}
+                    onCommit={pushHistory} dragStep={0.5}
+                  />
+                  {env.playerStartPosition && (
+                    <button
+                      onClick={() => { updateEnvironment({ playerStartPosition: undefined }); pushHistory(); }}
+                      className="w-full mt-1 py-1 rounded-xs border border-dashed text-[10px] text-danger border-danger/50 hover:bg-danger/2 transition-colors cursor-pointer"
+                    >
+                      스폰 포인트 초기화
+                    </button>
+                  )}
+                </div>
               </>
             );
           })()}
           </>
-          )}
         </div>
+        )}
       </GroupBox>
 
-      {/* 스폰 포인트 — 걷기 모드일 때만 (둘러보기 전용 씬은 캐릭터·스폰 없음) */}
-      {!env.disableWalk && (
-      <GroupBox>
-        <SectionHeader title="Spawn Point" />
-        <div className="px-3 pb-4 space-y-1">
-          <XYZRow
-            label="Position"
-            x={env.playerStartPosition?.x ?? 0}
-            y={env.playerStartPosition?.y ?? 0}
-            z={env.playerStartPosition?.z ?? 0}
-            onChangeX={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, x: v } })}
-            onChangeY={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, y: Math.max(0, v) } })}
-            onChangeZ={(v) => updateEnvironment({ playerStartPosition: { ...env.playerStartPosition ?? { x: 0, y: 0, z: 0 }, z: v } })}
-            onCommit={pushHistory} dragStep={0.5}
-          />
-          {env.playerStartPosition && (
-            <button
-              onClick={() => { updateEnvironment({ playerStartPosition: undefined }); pushHistory(); }}
-              className="w-full py-1 rounded-xs border border-dashed text-[10px] text-danger border-danger/50 hover:bg-danger/2 transition-colors cursor-pointer"
-            >
-              스폰 포인트 초기화
-            </button>
-          )}
-          {/* {!env.playerStartPosition && (
-            <p className="mt-1 text-[10px] text-muted/60">기본값: X=0, Y=4, Z=0</p>
-          )} */}
-        </div>
-      </GroupBox>
-      )}
 
       {/* Boundary */}
       <GroupBox>
-        <SectionHeader title="Boundary" hint="플레이 이동 제한 영역. 가로(X)·세로(Z)=중심에서 벽까지 거리(반경). 벽 스타일(단색·텍스처)로 방/전시장처럼 감쌀 수 있어요." />
-        <div className="px-3 pb-4">
+        <div className="relative">
+        <SectionHeader title="Boundary" hint="플레이 이동 제한 영역. 스위치를 켜면 기본 3 크기의 정사각 경계가 생기고, 가로(X)·세로(Z)로 크기를 조절해요. 벽 스타일(단색·텍스처)로 방/전시장처럼 감쌀 수 있어요." />
+        {/* 경계 on/off — 켜면 기본 3 정사각 경계, 끄면 경계 없음 (Fog처럼 헤더 우측 스위치) */}
+        <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <Toggle
+            value={(env.boundary ?? 0) > 0}
+            onChange={(v) => { updateEnvironment(v ? { boundary: 3, boundaryZ: 3 } : { boundary: undefined, boundaryZ: undefined }); pushHistory(); }}
+          />
+        </label>
+        </div>
+        {(env.boundary ?? 0) > 0 && <div className="px-3 pb-4">
           <div className="grid grid-cols-2 gap-2">
             <LabeledNum
               label="가로(X)"
@@ -880,13 +895,13 @@ export function EnvironmentPanel() {
               </div>
             );
           })()}
-        </div>
+        </div>}
       </GroupBox>
 
       {/* Post Processing */}
       <GroupBox>
-        <SectionHeader title="Post Processing" hint="화면 전체 필터. 프리셋 또는 개별 효과. 개별 효과(SSAO/블룸/비네트 등)를 하나라도 올리면 프리셋 대신 그 조합으로 렌더돼요. SSAO=구석 음영(묵직함)." />
-        <div className="px-3 pb-4 space-y-2">
+        <SectionHeader title="Post Processing" hint="화면 전체 필터. 프리셋 또는 개별 효과. 개별 효과(SSAO/블룸/비네트 등)를 하나라도 올리면 프리셋 대신 그 조합으로 렌더돼요. SSAO=구석 음영(묵직함)." isOpen={envOpen('post')} onToggle={() => envToggle('post')} />
+        {envOpen('post') && <div className="px-3 pb-4 space-y-2">
           <div>
             <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">Preset</span>
             <SelectBox
@@ -923,13 +938,13 @@ export function EnvironmentPanel() {
               </div>
             );
           })()}
-        </div>
+        </div>}
       </GroupBox>
 
       {/* Frame — 게시 뷰어 고정 화면 비율 */}
       <GroupBox>
-        <SectionHeader title="Frame" hint="게시된 뷰어의 고정 화면 비율. '자유'는 브라우저를 꽉 채우고, 비율을 정하면 그 틀로 레터박스(가운데 정렬 + 배경 여백)해요. 에디터엔 미반영 — 게시/공유 화면에 적용됩니다." />
-        <div className="px-3 pb-4">
+        <SectionHeader title="Frame" hint="게시된 뷰어의 고정 화면 비율. '자유'는 브라우저를 꽉 채우고, 비율을 정하면 그 틀로 레터박스(가운데 정렬 + 배경 여백)해요. 에디터엔 미반영 — 게시/공유 화면에 적용됩니다." isOpen={envOpen('frame')} onToggle={() => envToggle('frame')} />
+        {envOpen('frame') && <div className="px-3 pb-4">
           <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">화면 비율</span>
           <SelectBox
             value={String(env.frameAspect && env.frameAspect > 0 ? env.frameAspect : 0)}
@@ -943,16 +958,16 @@ export function EnvironmentPanel() {
               { value: String(3 / 4), label: '3:4 (세로)' },
             ]}
           />
-        </div>
+        </div>}
       </GroupBox>
 
       {/* 게임 변수 — 점수·체력 등 상태. GAME_LOGIC.md Phase 1 */}
       <GroupBox>
+        <div className="relative">
         <SectionHeader title="게임 변수" hint="점수·체력·아이템 보유 같은 게임 상태값. 이벤트의 '변수 변경' 액션으로 값을 바꾸고, 이벤트 '조건'으로 값에 따라 발동을 걸 수 있어요. '변수 변경 시' 트리거로 '점수 10이 되면 문 열기' 같은 반응형 규칙도 가능. HUD를 켜면 뷰어 화면에 값이 표시됩니다." />
-        <div className="px-3 pb-4 space-y-2">
-          {variables.length === 0 && (
-            <p className="text-muted text-[10px]">아직 변수가 없어요. 아래 버튼으로 추가하세요 (예: <b>score</b>, <b>health</b>).</p>
-          )}
+        <button onClick={addVariable} title="변수 추가" className="absolute top-2.5 right-3 w-6 h-6 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-primary/10 transition-colors"><Plus size={15} /></button>
+        </div>
+        {variables.length > 0 && <div className="px-3 pb-4 space-y-2">
           {variables.map((v) => (
             <div key={v.id} className="bg-surface border border-border rounded-xs p-2 space-y-1.5">
               <div className="flex items-center gap-1.5">
@@ -1000,22 +1015,16 @@ export function EnvironmentPanel() {
               </label>
             </div>
           ))}
-          <button
-            onClick={addVariable}
-            className="w-full py-1.5 rounded-xs border border-dashed border-border text-[11px] text-muted hover:text-foreground hover:border-primary/50 transition-colors"
-          >
-            + 변수 추가
-          </button>
-        </div>
+        </div>}
       </GroupBox>
 
       {/* HUD 위젯 — 변수를 텍스트/체력바/목숨으로 화면 표시. GAME_LOGIC.md Phase 2 */}
       <GroupBox>
+        <div className="relative">
         <SectionHeader title="HUD (화면 표시)" hint="게임 변수를 화면 구석에 텍스트·체력바·목숨 아이콘으로 표시합니다. 각 위젯을 변수에 연결하고 종류·위치·색을 정하세요. (변수의 '화면 HUD에 표시' 간단 텍스트와 별개로, 더 꾸민 위젯)" />
-        <div className="px-3 pb-4 space-y-2">
-          {variables.length === 0 && (
-            <p className="text-muted text-[10px]">먼저 위에서 <b>게임 변수</b>를 만들어야 HUD에 연결할 수 있어요.</p>
-          )}
+        <button onClick={addHudElement} disabled={variables.length === 0} title="HUD 위젯 추가" className="absolute top-2.5 right-3 w-6 h-6 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"><Plus size={15} /></button>
+        </div>
+        {hudElements.length > 0 && <div className="px-3 pb-4 space-y-2">
           {hudElements.map((el) => (
             <div key={el.id} className="bg-surface border border-border rounded-xs p-2 space-y-1.5">
               <div className="flex items-center gap-1.5">
@@ -1079,14 +1088,7 @@ export function EnvironmentPanel() {
               )}
             </div>
           ))}
-          <button
-            onClick={addHudElement}
-            disabled={variables.length === 0}
-            className="w-full py-1.5 rounded-xs border border-dashed border-border text-[11px] text-muted hover:text-foreground hover:border-primary/50 transition-colors disabled:opacity-40"
-          >
-            + HUD 위젯 추가
-          </button>
-        </div>
+        </div>}
       </GroupBox>
 
       {/* 씬 메모 */}

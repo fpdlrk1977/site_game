@@ -6,7 +6,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { SectionHeader, GroupBox, LabeledNum, XYZRow } from './ui';
 import type { ObjectNodeSchema } from '@/types/scene';
 
-export function ClonerSection({ obj }: { obj: ObjectNodeSchema }) {
+export function ClonerSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { objects, updateCloner, pushHistory } = useSceneStore();
   if (!obj.clonerConfig) return null;
           const cfg = obj.clonerConfig!;
@@ -14,8 +14,8 @@ export function ClonerSection({ obj }: { obj: ObjectNodeSchema }) {
           const setCfg = (patch: Partial<typeof cfg>) => updateCloner(obj.id, { ...cfg, ...patch });
           return (
             <GroupBox>
-              <SectionHeader title="Cloner (Live)" icon={<Grid2x2 size={12} />} hint="Non-destructive array — changing count/spacing/mode regenerates the clones live. Editing the single source updates every clone. Clones appear under the cloner group in the tree." />
-              <div className="px-3 pb-4 space-y-2">
+              <SectionHeader title="Cloner (Live)" icon={<Grid2x2 size={12} />} hint="Non-destructive array — changing count/spacing/mode regenerates the clones live. Editing the single source updates every clone. Clones appear under the cloner group in the tree." isOpen={open} onToggle={onToggle} />
+              {open && <div className="px-3 pb-4 space-y-2">
                 <div className="grid grid-cols-2 gap-1">
                   {(['linear', 'radial'] as const).map((m) => (
                     <button key={m} onClick={() => { setCfg({ mode: m }); pushHistory(); }}
@@ -47,7 +47,7 @@ export function ClonerSection({ obj }: { obj: ObjectNodeSchema }) {
                   </>
                 )}
                 <p className="text-[10px] text-muted/50">{cloneCount} placed. Edit the source and clones update automatically.</p>
-              </div>
+              </div>}
             </GroupBox>
           );
 }

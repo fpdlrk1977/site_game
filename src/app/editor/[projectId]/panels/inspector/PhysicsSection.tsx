@@ -8,21 +8,20 @@ import { SelectBox } from '@/components/ui/SelectBox';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
 import type { ObjectNodeSchema, ColliderType } from '@/types/scene';
 
-export function PhysicsSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
+// Physics는 '동작에 영향(enable)' 섹션 — 화살표 접기 없이 스위치 하나로 켜고 끈다(Ground와 동일 패턴).
+export function PhysicsSection({ obj }: { obj: ObjectNodeSchema }) {
   const { updateObject, pushHistory } = useSceneStore();
   return (
         <GroupBox>
           <div className="relative">
-          <SectionHeader title="Physics" hint="Collision in play mode. When on, the character bumps into it. Turn on Is Sensor to make it a pass-through invisible trigger zone used for area events." isOpen={open} onToggle={onToggle} dot={obj.physics.enabled} />
-          {open &&<label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
-            {/* <span className="text-[10px] font-semibold text-muted/50">Enable Physics</span> */}
+          <SectionHeader title="Physics" hint="Collision in play mode. When on, the character bumps into it. Turn on Is Sensor to make it a pass-through invisible trigger zone used for area events." />
+          <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
             <Toggle
               value={obj.physics.enabled}
               onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, enabled: v } }); pushHistory(); }}
             />
           </label>
-          }
-          {open && obj.physics.enabled && (
+          {obj.physics.enabled && (
             <div className='px-3 pb-3 space-y-1'>
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Collider Type</span>

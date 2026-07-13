@@ -278,7 +278,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
   const useHdr = (environment.hdrPreset ?? 'none') !== 'none';
   const isSkyMode = !useHdr && environment.sky.type === 'sky';
   // 단색 배경 — HDR/Sky 모두 아닐 때만 사용
-  const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#FFD2D2';
+  const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#f3f1f1';
 
   const instancedIds = useMemo(() => getInstancedIds(objects), [objects]);
   const particleObjects = useMemo(() => objects.filter((o) => o.visible && o.particle), [objects]);

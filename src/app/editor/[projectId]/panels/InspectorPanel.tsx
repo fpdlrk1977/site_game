@@ -11,7 +11,7 @@ import { uploadGlbBlob } from '@/lib/uploadAsset';
 import { persistCurrentScene } from '@/lib/saveScene';
 import { SectionHeader, GroupBox } from './inspector/ui';
 import { EnvironmentPanel } from './inspector/EnvironmentPanel';
-import { GlbClipPicker } from './inspector/GlbClipPicker';
+import { GlbClipPicker, useGlbClipNames } from './inspector/GlbClipPicker';
 import { MotionSection } from './inspector/MotionSection';
 import { PhysicsSection } from './inspector/PhysicsSection';
 import { LightSection } from './inspector/LightSection';
@@ -68,7 +68,7 @@ function InspectorInner() {
   // 섹션 접기 상태 — 점진적 공개(STEP 3): 기본은 Transform·Material·Content·Geometry·Visibility만 펼치고
   // 고급 섹션(물리·모션·이벤트·파티클·서브디비전·애니메이션·배열)은 접어 둔다. 값이 있으면 헤더에 점(dot)으로 표시.
   const [collapsed, setCollapsed] = useState<Set<string>>(
-    new Set(['array', 'subdivision', 'particle', 'physics', 'motion', 'events', 'animation']),
+    new Set(['array', 'subdivision', 'particle', 'motion', 'events', 'animation']),
   );
   const toggleSection = (key: string) =>
     setCollapsed((prev) => {
@@ -83,6 +83,10 @@ function InspectorInner() {
   // 이벤트 프리뷰 팝업
   const [previewPopup, setPreviewPopup] = useState<{ content: string; config?: PopupConfig } | null>(null);
 
+  // Animation 섹션은 '클립 있는 GLB'에만 노출 — 선택 GLB의 클립을 미리 조회.
+  // (훅은 조건부 반환 전에 항상 호출해야 하므로 여기서 실행)
+  const animGlbUrl = obj && !obj.isGroup && obj.assetId ? (assets.find((a) => a.id === obj.assetId)?.dracoUrl ?? null) : null;
+  const animClips = useGlbClipNames(animGlbUrl);
 
   if (isMultiSelect) return <MultiSelectPanel />;
 
@@ -230,7 +234,7 @@ function InspectorInner() {
         )}
 
         {/* Prefab — 원본 정의화 / 인스턴스 동기화 (조건 불충족 시 자체 null) */}
-        <PrefabSection obj={obj} />
+        <PrefabSection obj={obj} open={isOpen('prefab')} onToggle={() => toggleSection('prefab')} />
 
         {/* Transform */}
         <TransformSection obj={obj} open={isOpen('transform')} onToggle={() => toggleSection('transform')} />
@@ -242,7 +246,7 @@ function InspectorInner() {
         {(obj.primitiveShape === 'box' || obj.primitiveShape === 'frustum' || obj.primitiveShape === 'loft') && <GeometrySection obj={obj} open={isOpen('geometry')} onToggle={() => toggleSection('geometry')} />}
 
         {/* Cloner (라이브 비파괴 배열) */}
-        {obj.clonerConfig && <ClonerSection obj={obj} />}
+        {obj.clonerConfig && <ClonerSection obj={obj} open={isOpen('cloner')} onToggle={() => toggleSection('cloner')} />}
 
         {/* Array — 반복 복제 (클로너 그룹엔 위 Cloner를 씀) */}
         {!obj.clonerConfig && !obj.clonerClone && <ArraySection obj={obj} open={isOpen('array')} onToggle={() => toggleSection('array')} />}
@@ -262,16 +266,15 @@ function InspectorInner() {
         {/* Light */}
         {obj.light && <LightSection obj={obj} open={isOpen('light')} onToggle={() => toggleSection('light')} />}
 
-        {/* Physics — 그룹·라이트 제외 */}
-        {!obj.light && !obj.isGroup && <PhysicsSection obj={obj} open={isOpen('physics')} onToggle={() => toggleSection('physics')} />}
+        {/* Physics — 그룹·라이트 제외. enable 스위치만(화살표 없음) */}
+        {!obj.light && !obj.isGroup && <PhysicsSection obj={obj} />}
 
         {/* Motion — 앰비언트 애니메이션 (라이트 제외) */}
         {!obj.light && <MotionSection obj={obj} open={isOpen('motion')} onToggle={() => toggleSection('motion')} />}
 
         {/* Animation — GLB 내장 클립을 트리거 없이 자동 재생(idle/앰비언트). GLB 오브젝트 전용 */}
-        {!obj.isGroup && obj.assetId && (() => {
-          const glbUrl = assets.find((a) => a.id === obj.assetId)?.dracoUrl;
-          if (!glbUrl) return null;
+        {!obj.isGroup && obj.assetId && animGlbUrl && animClips && animClips.length > 0 && (() => {
+          const glbUrl = animGlbUrl;
           return (
             <GroupBox>
               <SectionHeader title="Animation" hint="Auto-loops one of the GLB's built-in animation clips on scene load, with no trigger (spinning fan, waving flag, idle character…). If a click/hover/area event animation fires, it takes over (viewer only)." isOpen={isOpen('animation')} onToggle={() => toggleSection('animation')} dot={!!obj.defaultClip} />

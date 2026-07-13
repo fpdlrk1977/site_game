@@ -839,7 +839,10 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
         <SectionHeader title="Events" hint="트리거(클릭·호버·근접 E·영역 진입)에 따라 동작(팝업·URL·씬 이동·애니메이션·이동·사운드 등)을 실행해요. 다가가면 뜨는 '대화 말풍선'도 여기서 설정합니다." isOpen={open} onToggle={onToggle} dot={obj.events.length > 0 || !!obj.dialogue} />
         {open && (
           <div className="px-3 pb-4 space-y-2">
-            {/* 상호작용 근접 범위 오버라이드 — 비우면 씬 기본값 사용 (interact(E)/approach·E 프롬프트·하이라이트) */}
+            {/* 상호작용 근접 범위 오버라이드 — interact/approach 이벤트(또는 근접 대화)가 있을 때만 노출.
+                이 범위는 interact(E)/approach에만 쓰이므로 관련 트리거가 없으면 의미가 없다. 비우면 씬 기본값. */}
+            {(obj.events.some((e) => e.trigger === 'interact' || e.trigger === 'approach_enter' || e.trigger === 'approach_exit')
+              || obj.dialogue?.show === 'approach' || obj.dialogue?.show === 'interact') && (
             <div className="space-y-1">
               <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">상호작용 범위 (m)</span>
               <div className="flex items-center gap-1.5">
@@ -865,6 +868,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               </div>
               <p className="text-[10px] text-muted/50">이 오브젝트의 E/approach 발동 거리. 비우면 씬 기본값을 씁니다.</p>
             </div>
+            )}
 
             {/* 대화(말풍선) — 플레이 모드에서 오브젝트 위에 뜨는 순차 문장 */}
             <div className="space-y-1.5">

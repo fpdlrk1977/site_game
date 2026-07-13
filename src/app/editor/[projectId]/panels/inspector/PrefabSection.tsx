@@ -23,7 +23,7 @@ const OVERRIDE_LABELS: Record<PrefabOverrideGroup, string> = {
   dialogue: 'Dialogue',
 };
 
-export function PrefabSection({ obj }: { obj: ObjectNodeSchema }) {
+export function PrefabSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { objects, prefabs, createPrefab, applyInstanceToPrefab, revertInstance } = useSceneStore();
   const { addToast } = useToast();
           const prefabDef = obj.prefabId ? prefabs.find((p) => p.id === obj.prefabId) : undefined;
@@ -47,8 +47,8 @@ export function PrefabSection({ obj }: { obj: ObjectNodeSchema }) {
 
           return (
             <GroupBox>
-              <SectionHeader title="Prefab" icon={<Component size={12} />} hint="Group objects into a reusable master. Editing the master updates every instance (sync); changing a value on one instance detaches only that field (override)." />
-              <div className="px-3 pb-4 space-y-2">
+              <SectionHeader title="Prefab" icon={<Component size={12} />} hint="Group objects into a reusable master. Editing the master updates every instance (sync); changing a value on one instance detaches only that field (override)." isOpen={open} onToggle={onToggle} />
+              {open && <div className="px-3 pb-4 space-y-2">
                 {!isInstance && canCreate && (
                   <>
                     <button
@@ -105,7 +105,7 @@ export function PrefabSection({ obj }: { obj: ObjectNodeSchema }) {
                     <p className="text-[10px] text-muted/50">Position, rotation and scale always stay per-instance (never synced).</p>
                   </>
                 )}
-              </div>
+              </div>}
             </GroupBox>
           );
 }

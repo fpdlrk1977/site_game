@@ -74,7 +74,7 @@ export default function PerfTestPage() {
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <Canvas shadows={shadows === 'percentage' ? 'percentage' : false} camera={{ position: [5, 4, 8], fov: 60 }}>
-        <color attach="background" args={[env.sky.type === 'color' ? env.sky.value : '#FFD2D2']} />
+        <color attach="background" args={[env.sky.type === 'color' ? env.sky.value : '#f3f1f1']} />
         <hemisphereLight args={['#b9d5ff', '#4a5568', 0.2]} />
         <ambientLight intensity={env.lights.ambientIntensity} />
         <directionalLight
