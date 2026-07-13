@@ -14,7 +14,7 @@ export function LightSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
   if (!obj.light) return null; // 부모가 obj.light일 때만 렌더 — 내부 좁히기용
   return (
           <GroupBox>
-            <SectionHeader title="Light" hint="포인트/스팟/방향 광원. 색·강도·거리·감쇠 등을 조절해요." isOpen={open} onToggle={onToggle} />
+            <SectionHeader title="Light" hint="Point / spot / directional light. Adjust color, intensity, distance, decay and more." isOpen={open} onToggle={onToggle} />
             {open && (
               <div className="px-3 pb-4 space-y-2">
                 {/* Type */}

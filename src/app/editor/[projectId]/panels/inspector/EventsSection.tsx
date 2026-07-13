@@ -835,7 +835,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
 
   return (
         <GroupBox>
-        <SectionHeader title="Events" hint="트리거(클릭·호버·근접 E·영역 진입)에 따라 동작(팝업·URL·씬 이동·애니메이션·이동·사운드 등)을 실행해요. 다가가면 뜨는 '대화 말풍선'도 여기서 설정합니다." isOpen={open} onToggle={onToggle} />
+        <SectionHeader title="Events" hint="트리거(클릭·호버·근접 E·영역 진입)에 따라 동작(팝업·URL·씬 이동·애니메이션·이동·사운드 등)을 실행해요. 다가가면 뜨는 '대화 말풍선'도 여기서 설정합니다." isOpen={open} onToggle={onToggle} dot={obj.events.length > 0 || !!obj.dialogue} />
         {open && (
           <div className="px-3 pb-4 space-y-2">
             {/* 상호작용 근접 범위 오버라이드 — 비우면 씬 기본값 사용 (interact(E)/approach·E 프롬프트·하이라이트) */}

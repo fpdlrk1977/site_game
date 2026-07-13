@@ -13,7 +13,7 @@ export function ContentSection({ obj, open, onToggle }: { obj: ObjectNodeSchema;
   if (!obj.content) return null;
   return (
           <GroupBox>
-            <SectionHeader title="Content" hint="텍스트·이미지·영상 콘텐츠. URL을 넣으면 이미지/유튜브 등 리치 콘텐츠로 표시돼요." isOpen={open} onToggle={onToggle} />
+            <SectionHeader title="Content" hint="Text, image and video content. Paste a URL to show rich content like images or YouTube." isOpen={open} onToggle={onToggle} />
             {open && <div className="px-3 pb-4 space-y-1">
               {obj.content.type === 'text' && (
                 <>
@@ -53,7 +53,7 @@ export function ContentSection({ obj, open, onToggle }: { obj: ObjectNodeSchema;
               {(obj.content.type === 'image' || obj.content.type === 'video') && (
                 <div>
                   <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">
-                    {obj.content.type === 'image' ? '이미지 URL' : '동영상 URL'}
+                    {obj.content.type === 'image' ? 'Image URL' : 'Video URL'}
                   </span>
                   <input
                     type="text"

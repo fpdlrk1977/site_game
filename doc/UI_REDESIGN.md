@@ -97,9 +97,23 @@
 - **STEP 3 — 인스펙터 점진적 공개**: 각 섹션 "기본/고급" 분리(Transform·색만 먼저, 물리·이벤트 고급값 접기) + 접힘 상태 기억. **방금 `panels/inspector/` 컴포넌트화(3855→277줄)로 붙이기 쉬움.**
 - **STEP 4 — 시그니처 모먼트**: 빈 상태·온보딩·플레이 토글·에셋 카드에 브랜드 액센트·부드러운 모션. "예쁘다" 지점.
 
-## 결정 대기 (Step 1 착수 전 확정)
-1. **액센트 색**: 바이올렛(추천) / 웜 코럴 / 일렉트릭 라임
-2. **기본 테마**: 다크 우선(추천) / 라이트 우선 유지
+## ✅ 결정 확정 (2026-07-13, 사용자)
+1. **액센트 색 = 바이올렛** (`--primary` light `#6A4DFF` / dark `#7C6CFF`). 기존 브랜드(violet→cyan) 계승.
+2. **기본 테마 = 다크 우선** (themeStore가 이미 `theme:'dark'` 기본 — 별도 변경 불필요, 라이트도 정제 유지).
+3. **레이아웃 = 떠있는 패널(Figma/Spline)** — 도킹 컬럼 폐기, 캔버스 풀블리드 + 유리 패널이 그 위에 뜬다(STEP 2).
+4. **모든 UI 타이틀 = 영문** (Objects/Assets/Inspector/Transform/Material/Physics/Motion/Events/Play/Share …).
+
+> 비주얼 설계서(실렌더 목업): 이 세션 아티팩트 "PARK Editor — UI Redesign Spec"(떠있는 레이아웃·컴포넌트 해부·모션·아이디어 6종).
+
+## 진행 상황
+- **STEP 1 — 토큰 교체 ✅ 완료 (2026-07-13)**: `globals.css` 교체.
+  - 중립색 slate 램프 → **바이올렛-편향**(light/dark 표대로), `--primary` 파랑 → 바이올렛.
+  - radius ↑ (`xs 6→8, sm 8→10, md 12→14, lg 16→18, xl 20→22`) — `rounded-xs` 등 전역 utility가 즉시 반영(Tailwind v4 `--radius-*` 매핑).
+  - 떠있는 패널용 신규 토큰: `--glass`(light `rgba(255,255,255,.80)` / dark `rgba(22,20,30,.82)`) + `@theme inline`에 `--color-glass` 매핑 + `--shadow-float`. 그림자 소폭 강화.
+  - 검증: dev 컴파일 200(editor/login/dashboard) `✓ Compiled`. **브라우저 실동작(색감·radius 체감) 확인 대기.**
+- **STEP 2 — 떠있는 패널 ✅ 완료 (2026-07-13)**: `EditorClient` 그리드 → 캔버스 풀블리드(absolute inset-0) + 유리 패널 floating(공용 shell `rounded-lg bg-glass backdrop-blur-xl border-border/60 shadow-float`). 뷰포트 오버레이는 '자유 캔버스' 인셋 컨테이너로 감싸 좌표 무수정 충돌 회피. 패널 5종 투명화(bg/border 제거). 상단바·GNB 라벨 영문화. **브라우저 확인 대기.** 잔여 한글 섹션 타이틀은 STEP 2b 스윕.
+- **STEP 3 — 점진적 공개 ✅ 완료 (2026-07-13)**: `SectionHeader`에 `dot` prop(접힘+값 있으면 액센트 점). 고급 섹션(physics·motion·events·particle·subdivision·animation·array) 기본 접힘, Motion·Subdivision도 접기 가능화. 펼침 유지=transform·material·content·geometry·visibility·light. **브라우저 확인 대기.** 접힘 오브젝트별 기억은 후속.
+- **STEP 4 — 시그니처**: Empty-state 코칭 · Play 토글 · 문장형 이벤트 · 오브젝트 프리셋.
 
 ## 연계
 - P0 UX(오토세이브·인에디터 플레이·게임/로직 탭·Undo/Redo 노출·인스펙터 탭 분리)와 병행 가능. **STEP 3(점진적 공개)은 P0 "인스펙터 탭 분리"와 사실상 동일 작업** → 함께 처리 권장.

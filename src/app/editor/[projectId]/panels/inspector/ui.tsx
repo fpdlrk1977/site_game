@@ -249,24 +249,30 @@ export function SectionHeader({
   hint,
   isOpen,
   onToggle,
+  dot,
 }: {
   title: string;
   icon?: ReactNode;
   hint?: string;
   isOpen?: boolean;
   onToggle?: () => void;
+  // 점진적 공개: 접힌 섹션에 설정값이 있으면 액센트 점으로 표시(값이 숨지 않도록)
+  dot?: boolean;
 }) {
   const collapsible = onToggle !== undefined;
   return (
     <div
       onClick={onToggle}
-      className={`flex items-center gap-2 px-3 py-3 text-[11px] font-semibold text-muted tracking-wide bg-surface/40 select-none`}
+      className={`flex items-center gap-2 px-3 py-3 text-[11px] font-semibold text-muted tracking-wide bg-surface/40 select-none ${collapsible ? 'cursor-pointer hover:text-foreground transition-colors' : ''}`}
     >
       {icon && <span className="opacity-60 flex items-center">{icon}</span>}
       <span className="flex-1 text-foreground flex items-center gap-1.5">
         {title}
         {hint && <InfoHint text={hint} />}
       </span>
+      {dot && collapsible && !isOpen && (
+        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" title="설정값 있음" />
+      )}
       {collapsible && (
         <span className="text-muted/40">{isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
       )}

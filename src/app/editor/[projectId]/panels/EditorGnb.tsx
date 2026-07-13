@@ -86,7 +86,7 @@ function SettingsMenu({ projectName }: { projectName: string }) {
       <RailButton
         buttonRef={triggerRef}
         icon={<Settings size={16} />}
-        label="설정"
+        label="Settings"
         active={open}
         onClick={toggle}
       />
@@ -96,17 +96,17 @@ function SettingsMenu({ projectName }: { projectName: string }) {
           style={panelStyle}
           className="w-48 bg-surface border border-border rounded-xs shadow-dropdown py-1 overflow-hidden"
         >
-          <div className="px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider">설정</div>
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider">Settings</div>
           <button onClick={() => { toggleTheme(); close(); }} className={MENU_ITEM_CLASS}>
             <span className="w-4 flex items-center justify-center text-muted">{theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}</span>
-            {theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
           </button>
           <div className="border-t border-border my-1" />
           <button onClick={openShare} className={MENU_ITEM_CLASS}>
-            <Share2 size={13} className="text-muted" /> 공유 / 임베드
+            <Share2 size={13} className="text-muted" /> Share / Embed
           </button>
           <button onClick={openDomain} className={MENU_ITEM_CLASS}>
-            <Globe size={13} className="text-muted" /> 커스텀 도메인
+            <Globe size={13} className="text-muted" /> Custom domain
           </button>
         </div>,
         document.body,
@@ -151,7 +151,7 @@ function AccountMenu() {
       <RailButton
         buttonRef={triggerRef}
         icon={<UserRound size={16} />}
-        label="계정"
+        label="Account"
         active={open}
         onClick={handleToggle}
       />
@@ -162,15 +162,15 @@ function AccountMenu() {
           className="w-52 bg-surface border border-border rounded-xs shadow-dropdown py-1 overflow-hidden"
         >
           <div className="px-3 py-2 border-b border-border/60">
-            <p className="text-[10px] text-muted">로그인 계정</p>
+            <p className="text-[10px] text-muted">Signed in as</p>
             <p className="text-xs text-foreground truncate">{email ?? '...'}</p>
           </div>
           <Link href="/account" className={MENU_ITEM_CLASS} onClick={close}>
-            <SlidersHorizontal size={13} className="text-muted" /> 계정 설정
+            <SlidersHorizontal size={13} className="text-muted" /> Account settings
           </Link>
           <form action="/api/auth/signout" method="POST">
             <button type="submit" className={`${MENU_ITEM_CLASS} text-danger hover:bg-danger/10`}>
-              <LogOut size={13} /> 로그아웃
+              <LogOut size={13} /> Sign out
             </button>
           </form>
         </div>,
@@ -183,7 +183,7 @@ function AccountMenu() {
 // ── GNB 레일 ────────────────────────────────────────────────────
 export function EditorGnb({ tab, panelOpen, onTabClick, projectName }: Props) {
   return (
-    <div className="flex flex-col w-12 h-full bg-surface border-r border-border py-2 gap-1 shrink-0 select-none">
+    <div className="flex flex-col w-full h-full py-2 gap-1 shrink-0 select-none">
       <RailButton
         icon={<Layers size={16} />}
         label="Object"

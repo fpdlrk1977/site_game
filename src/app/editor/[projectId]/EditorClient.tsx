@@ -8,6 +8,7 @@ import { ViewportToolbar } from './panels/ViewportToolbar';
 import { EditorGnb, type GnbTab } from './panels/EditorGnb';
 import { LeftPanel } from './panels/LeftPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
+import { EditorEmptyState } from './panels/EditorEmptyState';
 import { EditorOnboarding } from './EditorOnboarding';
 import { ViewportStatusBar } from './canvas/ViewportStatusBar';
 import { ViewportFloatingToolbar } from './canvas/ViewportFloatingToolbar';
@@ -137,50 +138,65 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     );
   }
 
+  // ── Floating layout (Figma/Spline) — 캔버스 풀블리드 + 유리 패널이 그 위에 뜬다 ──
+  // 패널 배치 상수(px): 가장자리 여백 12, 상단바 높이 44, 레일 48, 좌패널 240, 인스펙터 288.
+  const railW = 48, leftW = 240, inspW = 288, edge = 12, gap = 8;
+  const panelTop = edge + 44 + gap;          // 상단바 아래 = 64
+  const leftPanelX = edge + railW + gap;      // 좌패널 시작 x = 68
+  const overlayLeft = leftOpen ? leftPanelX + leftW + gap : leftPanelX; // 자유 캔버스 좌측 경계
+  const overlayRight = edge + inspW + gap;    // 자유 캔버스 우측 경계 = 308
+  const panelShell = 'rounded-sm bg-surface border border-border/60 overflow-hidden';
+
   return (
-    <div
-      className="w-screen h-screen bg-sidebar overflow-hidden"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: `48px ${leftOpen ? '240px' : '0px'} 1fr 280px`,
-        gridTemplateRows: '48px 1fr',
-        transition: 'grid-template-columns 0.18s ease',
-      }}
-    >
-      {/* 헤더 — 전체 열 */}
-      <div style={{ gridColumn: '1 / -1', gridRow: '1' }}>
-        <ViewportToolbar projectName={projectName} />
-      </div>
-
-      {/* GNB 레일 — 좌측 패널과 별개, 항상 표시 */}
-      <div style={{ gridColumn: '1', gridRow: '2', overflow: 'hidden' }}>
-        <EditorGnb tab={gnbTab} panelOpen={leftOpen} onTabClick={handleGnbTabClick} projectName={projectName} />
-      </div>
-
-      {/* 왼쪽 패널 (GNB 선택에 따라 Objects / Assets) */}
-      <div style={{ gridColumn: '2', gridRow: '2', overflow: 'hidden' }}>
-        <LeftPanel tab={gnbTab} />
-      </div>
-
-      {/* Viewport */}
-      <div style={{ gridColumn: '3', gridRow: '2' }} className="relative overflow-hidden">
+    <div className="relative w-screen h-screen overflow-hidden bg-canvas">
+      {/* Canvas — 모든 것 뒤에서 화면을 채움 */}
+      <div className="absolute inset-0 z-0">
         <EditorCanvas />
+      </div>
+
+      {/* 빈 씬 코칭 — 오브젝트 0개일 때만 (자체적으로 숨김) */}
+      <EditorEmptyState />
+
+      {/* Viewport overlays — 떠있는 패널과 겹치지 않도록 '자유 캔버스' 사각형에 가둔다.
+          자식 오버레이의 기존 top-3/right-3/bottom-3 좌표는 이 컨테이너 기준으로 그대로 동작. */}
+      <div
+        className="absolute z-10 pointer-events-none"
+        style={{ top: panelTop - gap, bottom: edge, left: overlayLeft, right: overlayRight, transition: 'left .18s ease' }}
+      >
         <ViewportFloatingToolbar />
         <ViewportOrientationGizmo />
         <ViewportStatusBar />
-
-        {/* 왼쪽 패널 토글 버튼 (GNB 레일은 항상 유지) */}
-        <button
-          onClick={() => setLeftOpen((v) => !v)}
-          title={leftOpen ? '왼쪽 패널 숨기기' : '왼쪽 패널 표시'}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-3.5 h-9 bg-surface border border-l-0 border-border rounded-r-md flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
-        >
-          {leftOpen ? <ChevronLeft size={10} /> : <ChevronRight size={10} />}
-        </button>
       </div>
 
-      {/* Inspector */}
-      <div style={{ gridColumn: '4', gridRow: '2', overflow: 'hidden' }}>
+      {/* Floating top bar */}
+      <div className={`absolute top-3 left-3 right-3 h-11 z-40 ${panelShell}`}>
+        <ViewportToolbar projectName={projectName} />
+      </div>
+
+      {/* Floating GNB rail */}
+      <div className={`absolute left-3 bottom-3 w-12 z-30 ${panelShell}`} style={{ top: panelTop }}>
+        <EditorGnb tab={gnbTab} panelOpen={leftOpen} onTabClick={handleGnbTabClick} projectName={projectName} />
+      </div>
+
+      {/* Floating left panel (Objects / Assets) */}
+      {leftOpen && (
+        <div className={`absolute bottom-3 w-60 z-30 ${panelShell}`} style={{ top: panelTop, left: leftPanelX }}>
+          <LeftPanel tab={gnbTab} />
+        </div>
+      )}
+
+      {/* Left panel toggle handle */}
+      <button
+        onClick={() => setLeftOpen((v) => !v)}
+        title={leftOpen ? 'Hide panel' : 'Show panel'}
+        className="absolute z-30 top-1/2 -translate-y-1/2 w-3.5 h-10 bg-surface border border-border/60 rounded-r-sm flex items-center justify-center text-muted hover:text-foreground"
+        style={{ left: leftOpen ? leftPanelX + leftW : leftPanelX, transition: 'left .18s ease' }}
+      >
+        {leftOpen ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
+      </button>
+
+      {/* Floating inspector */}
+      <div className={`absolute right-3 bottom-3 w-72 z-30 ${panelShell}`} style={{ top: panelTop }}>
         <InspectorPanel />
       </div>
 

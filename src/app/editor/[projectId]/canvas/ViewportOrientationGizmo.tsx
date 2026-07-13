@@ -11,7 +11,7 @@ export function ViewportOrientationGizmo() {
   return (
     <div className="absolute top-3 right-3 z-20 flex flex-col items-center gap-1.5 pointer-events-auto select-none">
       {/* XYZ 방향 기즈모 */}
-      {/* <div className="w-[60px] h-[60px] rounded-xs bg-surface/90 backdrop-blur-sm border border-border/80 shadow-floating flex items-center justify-center">
+      <div className="w-[60px] h-[60px] rounded-xs bg-surface/90 backdrop-blur-sm border border-border/80 shadow-floating flex items-center justify-center">
         <div className="relative w-8 h-8">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-muted/40" />
           <div className="absolute top-1/2 left-1/2 -translate-y-1/2 flex items-center">
@@ -29,7 +29,7 @@ export function ViewportOrientationGizmo() {
             <span className="text-[7px] font-bold text-blue-400 leading-none opacity-70">Z</span>
           </div>
         </div>
-      </div> */}
+      </div>
 
       {/* Perspective 드롭다운 */}
       <SelectBox

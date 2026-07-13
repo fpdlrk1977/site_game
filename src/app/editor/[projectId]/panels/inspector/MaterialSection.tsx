@@ -23,7 +23,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
     e.target.value = '';
     if (!file || !projectId) return;
     if (file.size > 8 * 1024 * 1024) {
-      addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error');
+      addToast('Image is too large. Max 8MB.', 'error');
       return;
     }
     setObjTexUploading(true);
@@ -35,7 +35,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
       updateObject(objId, { material: { ...cur, textureUrl: asset.dracoUrl } });
       pushHistory();
     } catch (err) {
-      addToast('텍스처 업로드 실패', 'error');
+      addToast('Texture upload failed', 'error');
       console.error(err);
     } finally {
       setObjTexUploading(false);
@@ -43,16 +43,16 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
   };
   return (
           <GroupBox>
-            <SectionHeader title="Material" hint="색상·자체발광·거칠기·금속성. 프리미티브(박스/구체/원기둥 등)와 텍스트 콘텐츠에 적용돼요." isOpen={open} onToggle={onToggle} />
+            <SectionHeader title="Material" hint="Color, emissive, roughness and metalness. Applies to primitives (box, sphere, cylinder…) and text content." isOpen={open} onToggle={onToggle} />
             {open && (() => {
               const matRef = obj.materialId ? (materialAssets.find((m) => m.id === obj.materialId) ?? null) : null;
               return (
               <div className="px-3 pb-4 space-y-2">
                 {matRef && (
                   <div className="rounded-xs bg-primary/10 border border-primary/30 p-2 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-[11px] text-primary"><Palette size={13} /> 재질 에셋 <b className="font-semibold">{matRef.name}</b></div>
-                    <p className="text-[10px] text-muted/60 leading-snug">공유 재질이에요 — 편집은 Materials 탭에서 하면 이 재질을 쓰는 모든 오브젝트에 반영돼요. 이 오브젝트만 따로 바꾸려면 연결을 끊으세요.</p>
-                    <button onClick={() => detachMaterial(obj.id)} className="w-full py-1 rounded-xs border border-border text-muted hover:text-foreground hover:border-primary/50 text-[10px] transition-all">연결 끊기 (독립 재질로)</button>
+                    <div className="flex items-center gap-1.5 text-[11px] text-primary"><Palette size={13} /> Material asset <b className="font-semibold">{matRef.name}</b></div>
+                    <p className="text-[10px] text-muted/60 leading-snug">Shared material — edit it in the Materials tab to update every object using it. To change only this object, detach it.</p>
+                    <button onClick={() => detachMaterial(obj.id)} className="w-full py-1 rounded-xs border border-border text-muted hover:text-foreground hover:border-primary/50 text-[10px] transition-all">Detach (make independent)</button>
                   </div>
                 )}
                 {!matRef && (<>
@@ -122,22 +122,22 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 {/* 물리 재질(MeshPhysicalMaterial) — 클리어코트/시인/투과. 하나라도 올리면 physical 재질로 렌더(프리미티브만) */}
                 {obj.primitiveShape && !obj.content && (
                   <div className="pt-2 border-t border-border/50 space-y-1.5">
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">물리 재질 (고급)</span>
-                    <LabeledNum label="Clearcoat (코팅 광택)" value={obj.material?.clearcoat ?? 0}
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">Physical material (advanced)</span>
+                    <LabeledNum label="Clearcoat" value={obj.material?.clearcoat ?? 0}
                       onChange={(v) => updateObject(obj.id, { material: { ...obj.material, clearcoat: v } })} onCommit={pushHistory}
                       min={0} max={1} precision={2} dragStep={0.02} />
-                    <LabeledNum label="Sheen (천 광택)" value={obj.material?.sheen ?? 0}
+                    <LabeledNum label="Sheen" value={obj.material?.sheen ?? 0}
                       onChange={(v) => updateObject(obj.id, { material: { ...obj.material, sheen: v } })} onCommit={pushHistory}
                       min={0} max={1} precision={2} dragStep={0.02} />
-                    <LabeledNum label="Transmission (투과/유리)" value={obj.material?.transmission ?? 0}
+                    <LabeledNum label="Transmission (glass)" value={obj.material?.transmission ?? 0}
                       onChange={(v) => updateObject(obj.id, { material: { ...obj.material, transmission: v } })} onCommit={pushHistory}
                       min={0} max={1} precision={2} dragStep={0.02} />
                     {(obj.material?.transmission ?? 0) > 0 && (
-                      <LabeledNum label="IOR (굴절률)" value={obj.material?.ior ?? 1.5}
+                      <LabeledNum label="IOR" value={obj.material?.ior ?? 1.5}
                         onChange={(v) => updateObject(obj.id, { material: { ...obj.material, ior: v } })} onCommit={pushHistory}
                         min={1} max={2.4} precision={2} dragStep={0.02} />
                     )}
-                    <p className="text-[10px] text-muted/50">투과(Transmission)를 올리면 유리처럼 투명해져요. 셋 다 0이면 기본(standard) 재질입니다.</p>
+                    <p className="text-[10px] text-muted/50">Raise Transmission to make it glass-like transparent. With all three at 0 it uses the standard material.</p>
                   </div>
                 )}
 
@@ -147,7 +147,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                   return (
                   <div className="pt-2 border-t border-border/50 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Texture (이미지)</span>
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Texture</span>
                       <Toggle value={texActive} onChange={(on) => {
                         setTexPanelOpen(on);
                         if (!on) { updateObject(obj.id, { material: { ...obj.material, textureUrl: undefined, textureRepeat: undefined } }); pushHistory(); }
@@ -173,14 +173,14 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                             <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
                               <input type="checkbox" checked={!!obj.material?.textureRepeat}
                                 onChange={(e) => { updateObject(obj.id, { material: { ...obj.material, textureRepeat: e.target.checked ? { x: 2, y: 2 } : undefined } }); pushHistory(); }} />
-                              타일 반복 (패턴)
+                              Tile repeat (pattern)
                             </label>
                             {obj.material?.textureRepeat && (
                               <div className="flex gap-2">
-                                <LabeledNum label="가로 반복" value={obj.material.textureRepeat.x}
+                                <LabeledNum label="Repeat X" value={obj.material.textureRepeat.x}
                                   onChange={(v) => updateObject(obj.id, { material: { ...obj.material, textureRepeat: { x: Math.max(1, v), y: obj.material?.textureRepeat?.y ?? 1 } } })}
                                   onCommit={pushHistory} min={1} max={20} precision={0} dragStep={1} />
-                                <LabeledNum label="세로 반복" value={obj.material.textureRepeat.y}
+                                <LabeledNum label="Repeat Y" value={obj.material.textureRepeat.y}
                                   onChange={(v) => updateObject(obj.id, { material: { ...obj.material, textureRepeat: { x: obj.material?.textureRepeat?.x ?? 1, y: Math.max(1, v) } } })}
                                   onCommit={pushHistory} min={1} max={20} precision={0} dragStep={1} />
                               </div>
@@ -195,10 +195,10 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 </>)}
                 {!matRef && (
                   <button
-                    onClick={() => { const id = addMaterialAsset(obj.name || '재질', obj.material ?? {}); useSceneStore.getState().assignMaterialAsset([obj.id], id); }}
+                    onClick={() => { const id = addMaterialAsset(obj.name || 'Material', obj.material ?? {}); useSceneStore.getState().assignMaterialAsset([obj.id], id); }}
                     className="w-full py-1.5 rounded-xs border border-border text-muted hover:text-primary hover:border-primary/50 text-[11px] transition-all"
                   >
-                    이 재질을 에셋으로 저장 (공유)
+                    Save this material as an asset (shared)
                   </button>
                 )}
               </div>

@@ -108,7 +108,7 @@ export function ViewportToolbar({ projectName }: Props) {
     if (!autoSaveAt) return;
     const update = () => {
       const mins = Math.floor((Date.now() - autoSaveAt) / 60_000);
-      setAutoSaveAgo(mins === 0 ? '방금 전' : `${mins}분 전`);
+      setAutoSaveAgo(mins === 0 ? 'just now' : `${mins} min ago`);
     };
     update();
     const id = setInterval(update, 30_000);
@@ -117,10 +117,10 @@ export function ViewportToolbar({ projectName }: Props) {
 
   return (
     <>
-      <header className="flex items-center gap-2 px-3 h-full bg-surface border-b border-border/80 select-none">
+      <header className="flex items-center gap-2 px-3 h-full select-none">
 
         {/* 왼쪽: 네비게이션 + 프로젝트/씬 */}
-        <Tooltip content="대시보드로 이동">
+        <Tooltip content="Back to dashboard">
           <Link
             href="/dashboard"
             className="w-7 h-7 flex items-center justify-center text-muted hover:text-foreground hover:bg-background rounded-xs transition-all shrink-0"
@@ -143,7 +143,7 @@ export function ViewportToolbar({ projectName }: Props) {
           <span className="text-muted text-xs hidden lg:block">—</span>
           <SceneSwitcher />
           {isModified && (
-            <Tooltip content="저장되지 않은 변경사항">
+            <Tooltip content="Unsaved changes">
               <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0 animate-pulse" />
             </Tooltip>
           )}
@@ -154,12 +154,12 @@ export function ViewportToolbar({ projectName }: Props) {
         {/* 오토세이브 표시 */}
         {autoSaveAt && (
           <span className="text-[10px] text-muted hidden lg:block shrink-0">
-            자동저장 {autoSaveAgo}
+            Autosaved {autoSaveAgo}
           </span>
         )}
 
         {/* 오른쪽: 액션 */}
-        <Tooltip content="버전 히스토리">
+        <Tooltip content="Version history">
           <button
             onClick={() => setShowHistory(true)}
             className="w-7 h-7 flex items-center justify-center rounded-xs border border-border text-muted hover:bg-background hover:text-foreground transition-all shrink-0"
@@ -168,7 +168,7 @@ export function ViewportToolbar({ projectName }: Props) {
           </button>
         </Tooltip>
 
-        <Tooltip content={isModified ? '저장 (Ctrl+S)' : '변경사항 없음'}>
+        <Tooltip content={isModified ? 'Save (Ctrl+S)' : 'No changes'}>
           <button
             id="save-btn"
             onClick={handleSave}
@@ -180,12 +180,12 @@ export function ViewportToolbar({ projectName }: Props) {
             }`}
           >
             <Save size={12} />
-            <span className="hidden sm:block">{saving ? '저장 중...' : '저장'}</span>
+            <span className="hidden sm:block">{saving ? 'Saving…' : 'Save'}</span>
           </button>
         </Tooltip>
 
         {sceneId && (
-          <Tooltip content={isModified ? '저장 후 새 탭으로 미리보기' : '새 탭으로 미리보기'}>
+          <Tooltip content={isModified ? 'Save & open preview' : 'Open preview'}>
             <button
               onClick={async () => {
                 if (isModified) await handleSave();
@@ -194,7 +194,7 @@ export function ViewportToolbar({ projectName }: Props) {
               className="flex items-center gap-1.5 px-3 h-7 rounded-xs border border-border text-foreground hover:bg-background hover:border-border/60 transition-all text-xs font-medium shrink-0"
             >
               <ExternalLink size={12} />
-              <span className="hidden md:block">미리보기</span>
+              <span className="hidden md:block">Preview</span>
             </button>
           </Tooltip>
         )}

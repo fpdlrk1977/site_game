@@ -40,7 +40,7 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
   };
   return (
         <GroupBox>
-          <SectionHeader title="Transform" hint="위치·회전·크기. 기즈모 회전 중 Shift를 누르면 15°씩 스냅돼요. GLB는 추가 시 밑면이 바닥에 자동 정렬되고, '바닥에 놓기'로 다시 맞출 수 있어요." isOpen={open} onToggle={onToggle} />
+          <SectionHeader title="Transform" hint="Position, rotation and scale. Hold Shift while rotating with the gizmo to snap every 15°. GLB models auto-align to the floor when added; use 'Drop to floor' to re-align." isOpen={open} onToggle={onToggle} />
           {open && (
             <div className="px-3 pb-4 space-y-1">
               {/* 기즈모 드래그 중 라이브 채널로 실시간 갱신(캔버스 리렌더 없이 이 서브트리만) */}
@@ -56,7 +56,7 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
                 const setSize = (axis: 'x' | 'y' | 'z', v: number) => setScl(axis, Math.max(0.001, v) / (ls[axis] || 1));
                 return (
                   <XYZRow
-                    label="크기 (m)"
+                    label="Size (m)"
                     x={+(ls.x * obj.scale.x).toFixed(3)}
                     y={+(ls.y * obj.scale.y).toFixed(3)}
                     z={+(ls.z * obj.scale.z).toFixed(3)}
@@ -73,10 +73,10 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
                 <button
                   onClick={snapToGround}
                   disabled={!canSnapToGround}
-                  title={canSnapToGround ? '오브젝트 밑면을 바닥(y=0)에 맞춤' : (glbUnloaded ? '모델 로딩 후 사용할 수 있습니다' : '바닥에 놓을 수 없습니다')}
+                  title={canSnapToGround ? "Align the object's bottom to the floor (y=0)" : (glbUnloaded ? 'Available after the model loads' : "Can't drop to floor")}
                   className="w-full mt-1 py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted disabled:hover:bg-transparent inline-flex items-center justify-center gap-1.5"
                 >
-                  <ArrowDownToLine size={13} /> 바닥에 놓기
+                  <ArrowDownToLine size={13} /> Drop to floor
                 </button>
               )}
             </div>

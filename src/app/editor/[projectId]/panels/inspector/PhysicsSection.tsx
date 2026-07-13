@@ -13,7 +13,7 @@ export function PhysicsSection({ obj, open, onToggle }: { obj: ObjectNodeSchema;
   return (
         <GroupBox>
           <div className="relative">
-          <SectionHeader title="Physics" hint="플레이 모드 충돌. 켜면 캐릭터가 부딪혀요. Is Sensor를 켜면 통과 가능한 투명 트리거 영역이 되어 area 이벤트에 씁니다." isOpen={open} onToggle={onToggle} />
+          <SectionHeader title="Physics" hint="Collision in play mode. When on, the character bumps into it. Turn on Is Sensor to make it a pass-through invisible trigger zone used for area events." isOpen={open} onToggle={onToggle} dot={obj.physics.enabled} />
           {open &&<label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
             {/* <span className="text-[10px] font-semibold text-muted/50">Enable Physics</span> */}
             <Toggle
@@ -34,13 +34,13 @@ export function PhysicsSection({ obj, open, onToggle }: { obj: ObjectNodeSchema;
                     { value: 'sphere', label: 'Sphere (Ball)' },
                     { value: 'capsule', label: 'Capsule' },
                     { value: 'hull', label: 'Convex Hull' },
-                    { value: 'trimesh', label: 'Trimesh (정확/느림)' },
+                    { value: 'trimesh', label: 'Trimesh (accurate/slow)' },
                   ]}
                 />
               </div>
               <label className="flex items-center justify-between cursor-pointer">
                 <div>
-                  <p className="text-[10px] font-semibold text-muted/50">Is Sensor  <span className="text-[10px] font-normal text-muted/60 mt-0.5">(Area 진입 시 이벤트 발생)</span></p>
+                  <p className="text-[10px] font-semibold text-muted/50">Is Sensor  <span className="text-[10px] font-normal text-muted/60 mt-0.5">(fires event on area enter)</span></p>
                   
                 </div>
                 <Toggle
@@ -52,7 +52,7 @@ export function PhysicsSection({ obj, open, onToggle }: { obj: ObjectNodeSchema;
               {!obj.physics.isSensor && (
                 <>
                   <label className="flex items-center justify-between cursor-pointer">
-                    <p className="text-[10px] font-semibold text-muted/50">Dynamic <span className="font-normal text-muted/60">(중력 낙하·튕김)</span></p>
+                    <p className="text-[10px] font-semibold text-muted/50">Dynamic <span className="font-normal text-muted/60">(gravity fall &amp; bounce)</span></p>
                     <Toggle
                       value={obj.physics.mass > 0}
                       onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, mass: v ? (obj.physics.mass > 0 ? obj.physics.mass : 1) : 0 } }); pushHistory(); }}
@@ -60,7 +60,7 @@ export function PhysicsSection({ obj, open, onToggle }: { obj: ObjectNodeSchema;
                   </label>
                   {obj.physics.mass > 0 && (
                     <LabeledNum
-                      label="Mass (질량)"
+                      label="Mass"
                       value={obj.physics.mass}
                       onChange={(v) => updateObject(obj.id, { physics: { ...obj.physics, mass: Math.max(0.01, v) } })}
                       onCommit={pushHistory}

@@ -15,17 +15,17 @@ import type { EnvSchema, HdrPreset, GroundPreset, PopupConfig, PostProcessPreset
 
 const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<EnvSchema> }[] = [
   // 기본값 복귀 — HDR/라이트/노출을 DEFAULT_ENVIRONMENT 상태로 되돌린다(무드 해제).
-  { id: 'default', label: '기본', icon: RotateCcw, env: { hdrPreset: 'none', toneMappingExposure: 1,
+  { id: 'default', label: 'Default', icon: RotateCcw, env: { hdrPreset: 'none', toneMappingExposure: 1,
     lights: { ambientIntensity: 0.6, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 }, directionalColor: '#ffffff', ambientColor: '#ffffff' } } },
-  { id: 'morning', label: '아침', icon: Sunrise, env: { hdrPreset: 'dawn', toneMappingExposure: 1.05,
+  { id: 'morning', label: 'Morning', icon: Sunrise, env: { hdrPreset: 'dawn', toneMappingExposure: 1.05,
     lights: { ambientIntensity: 0.55, directionalIntensity: 1.0, directionalPosition: { x: 8, y: 5, z: 6 }, directionalColor: '#ffe4c4', ambientColor: '#dfe8ff' } } },
-  { id: 'noon', label: '한낮', icon: Sun, env: { hdrPreset: 'park', toneMappingExposure: 1.0,
+  { id: 'noon', label: 'Noon', icon: Sun, env: { hdrPreset: 'park', toneMappingExposure: 1.0,
     lights: { ambientIntensity: 0.6, directionalIntensity: 1.5, directionalPosition: { x: 4, y: 12, z: 4 }, directionalColor: '#fffaf0', ambientColor: '#ffffff' } } },
-  { id: 'sunset', label: '노을', icon: Sunset, env: { hdrPreset: 'sunset', toneMappingExposure: 0.95,
+  { id: 'sunset', label: 'Sunset', icon: Sunset, env: { hdrPreset: 'sunset', toneMappingExposure: 0.95,
     lights: { ambientIntensity: 0.5, directionalIntensity: 1.0, directionalPosition: { x: 10, y: 3, z: 2 }, directionalColor: '#ff9d5c', ambientColor: '#ffcfa8' } } },
-  { id: 'night', label: '밤', icon: Moon, env: { hdrPreset: 'night', toneMappingExposure: 0.85,
+  { id: 'night', label: 'Night', icon: Moon, env: { hdrPreset: 'night', toneMappingExposure: 0.85,
     lights: { ambientIntensity: 0.3, directionalIntensity: 0.4, directionalPosition: { x: 3, y: 8, z: 5 }, directionalColor: '#9db4e8', ambientColor: '#4a5a80' } } },
-  { id: 'studio', label: '스튜디오', icon: Lightbulb, env: { hdrPreset: 'studio', toneMappingExposure: 1.0,
+  { id: 'studio', label: 'Studio', icon: Lightbulb, env: { hdrPreset: 'studio', toneMappingExposure: 1.0,
     lights: { ambientIntensity: 0.7, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 }, directionalColor: '#ffffff', ambientColor: '#ffffff' } } },
 ];
 
@@ -46,7 +46,7 @@ export function EnvironmentPanel() {
     e.target.value = '';
     if (!file || !projectId) return;
     if (file.size > 8 * 1024 * 1024) {
-      addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error');
+      addToast('Image is too large. Max 8MB.', 'error');
       return;
     }
     setGroundTexUploading(true);
@@ -63,7 +63,7 @@ export function EnvironmentPanel() {
       updateEnvironment({ ground: { ...env.ground!, textureUrl: publicUrl } });
       pushHistory();
     } catch (err) {
-      addToast('텍스처 업로드 실패', 'error');
+      addToast('Texture upload failed', 'error');
       console.error(err);
     } finally {
       setGroundTexUploading(false);
@@ -75,7 +75,7 @@ export function EnvironmentPanel() {
     e.target.value = '';
     if (!file || !projectId) return;
     if (file.size > 8 * 1024 * 1024) {
-      addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error');
+      addToast('Image is too large. Max 8MB.', 'error');
       return;
     }
     setBoundaryTexUploading(true);
@@ -91,7 +91,7 @@ export function EnvironmentPanel() {
       updateEnvironment({ boundaryWall: { ...(env.boundaryWall ?? {}), style: 'texture', textureUrl: publicUrl } });
       pushHistory();
     } catch (err) {
-      addToast('텍스처 업로드 실패', 'error');
+      addToast('Texture upload failed', 'error');
       console.error(err);
     } finally {
       setBoundaryTexUploading(false);
@@ -101,7 +101,7 @@ export function EnvironmentPanel() {
   // 경계 이미지 범용 업로더 — 면별 텍스처/스카이박스가 공유. 성공 시 public URL 반환.
   const uploadBoundaryImage = async (file: File): Promise<string | null> => {
     if (!projectId) return null;
-    if (file.size > 8 * 1024 * 1024) { addToast('이미지가 너무 큽니다. 최대 8MB까지 지원합니다.', 'error'); return null; }
+    if (file.size > 8 * 1024 * 1024) { addToast('Image is too large. Max 8MB.', 'error'); return null; }
     try {
       const supabase = createBrowserSupabase();
       const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
@@ -110,7 +110,7 @@ export function EnvironmentPanel() {
       if (error) throw error;
       return supabase.storage.from('assets').getPublicUrl(path).data.publicUrl;
     } catch (err) {
-      addToast('이미지 업로드 실패', 'error'); console.error(err); return null;
+      addToast('Image upload failed', 'error'); console.error(err); return null;
     }
   };
 
@@ -175,21 +175,21 @@ export function EnvironmentPanel() {
                     pushHistory();
                   }}
                   options={[
-                    { value: 'color', label: '단색' },
-                    { value: 'sky', label: '하늘' },
+                    { value: 'color', label: 'Solid color' },
+                    { value: 'sky', label: 'Sky' },
                     { value: 'hdr', label: 'HDR' },
                   ]}
                 />
 
                 {mode === 'color' && (
-                  <div className="px-2 flex  items-center border border-border rounded-xs">
+                  <div className="px-2 flex  items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                     <input type="color" value={env.sky.value}
                       onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
                       onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
                     <input type="text" value={env.sky.value}
                       onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
                       onBlur={pushHistory}
-                      className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+                      className="w-full flex-1 px-2.5 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
                   </div>
                 )}
 
@@ -211,7 +211,7 @@ export function EnvironmentPanel() {
       {/* Ground */}
       <GroupBox>
         <div className="relative">
-          <SectionHeader title="Ground" hint="바닥 평면. 프리셋 또는 단색/이미지 텍스처. 바닥은 불투명이라, 오브젝트 밑면이 바닥 아래로 내려가면 가려져 잘려 보여요(자동 바닥 스냅으로 방지)." />
+          <SectionHeader title="Ground" hint="The floor plane. A preset, or a solid color / image texture. The floor is opaque, so if an object's bottom sinks below it, it gets hidden and looks cut off (auto floor-snap prevents this)." />
           <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
             <Toggle
               value={env.ground?.enabled ?? false}
@@ -224,12 +224,12 @@ export function EnvironmentPanel() {
             {/* 프리셋 */}
             {(() => {
               const GROUND_PRESETS: { id: GroundPreset; label: string; icon: LucideIcon }[] = [
-                { id: 'grass',  label: '잔디', icon: Sprout },
-                { id: 'dirt',   label: '흙',   icon: Mountain },
-                { id: 'sand',   label: '모래', icon: Waves },
-                { id: 'stone',  label: '돌',   icon: Gem },
-                { id: 'water',  label: '물',   icon: Droplet },
-                { id: 'custom', label: '직접', icon: Palette },
+                { id: 'grass',  label: 'Grass', icon: Sprout },
+                { id: 'dirt',   label: 'Dirt',  icon: Mountain },
+                { id: 'sand',   label: 'Sand',  icon: Waves },
+                { id: 'stone',  label: 'Stone', icon: Gem },
+                { id: 'water',  label: 'Water', icon: Droplet },
+                { id: 'custom', label: 'Custom', icon: Palette },
               ];
               const current = env.ground!.preset ?? 'custom';
               return (
@@ -252,7 +252,7 @@ export function EnvironmentPanel() {
                         onClick={() => groundTexInputRef.current?.click()}
                         className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-primary/80 transition-colors"
                       >
-                        교체
+                        Replace
                       </button>
                       <button
                         onClick={() => {
@@ -262,7 +262,7 @@ export function EnvironmentPanel() {
                         }}
                         className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-danger/80 transition-colors"
                       >
-                        제거
+                        Remove
                       </button>
                     </div>
                   </div>
@@ -272,7 +272,7 @@ export function EnvironmentPanel() {
                     disabled={groundTexUploading}
                     className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {groundTexUploading ? '업로드 중...' : '텍스처 이미지 업로드\nJPG · PNG · WEBP'}
+                    {groundTexUploading ? 'Uploading...' : 'Upload texture image\nJPG · PNG · WEBP'}
                   </button>
                 )}
                 <input
@@ -284,7 +284,7 @@ export function EnvironmentPanel() {
                 />
                 {/* 텍스처 없을 때 단색 폴백 컬러 */}
                 {!env.ground.textureUrl && (
-                  <div className="px-2 flex items-center border border-border rounded-xs">
+                  <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                     <input type="color" value={env.ground.color}
                       onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
                       onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
@@ -337,20 +337,20 @@ export function EnvironmentPanel() {
                 </div>
               </div>
               <div className="mt-2">
-                <span className="text-[10px] text-muted/50 font-semibold block mb-1">방식</span>
+                <span className="text-[10px] text-muted/50 font-semibold block mb-1">Mode</span>
                 <SelectBox
                   value={env.fog.mode ?? 'linear'}
                   onChange={(v) => { updateEnvironment({ fog: { ...env.fog, mode: v as 'linear' | 'exp' } }); pushHistory(); }}
                   options={[
-                    { value: 'linear', label: 'Linear (Near~Far 구간)' },
-                    { value: 'exp', label: 'Exp (밀도 — 균일 깊이감)' },
+                    { value: 'linear', label: 'Linear (Near–Far range)' },
+                    { value: 'exp', label: 'Exp (density — even depth)' },
                   ]}
                 />
               </div>
               {(env.fog.mode ?? 'linear') === 'exp' ? (
                 <div className='mt-2'>
                   <LabeledNum
-                    label="Density (밀도)"
+                    label="Density"
                     value={env.fog.density ?? 0.02}
                     onChange={(v) => updateEnvironment({ fog: { ...env.fog, density: v } })}
                     onCommit={pushHistory}
@@ -387,7 +387,7 @@ export function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader title="Mood" />
         <div className="px-3 pb-3">
-          <p className="text-[10px] text-muted/60 mb-2">한 번에 조명·배경·노출을 세팅합니다. 이후 아래에서 미세조정하세요.</p>
+          <p className="text-[10px] text-muted/60 mb-2">Sets lighting, background and exposure in one go. Fine-tune below afterwards.</p>
           <SelectBox
             value={moodSel}
             onChange={(id) => {
@@ -395,14 +395,14 @@ export function EnvironmentPanel() {
               if (m) { updateEnvironment(m.env); pushHistory(); setMoodSel(id); }
             }}
             options={MOOD_PRESETS.map((m) => ({ value: m.id, label: m.label, icon: <m.icon size={14} /> }))}
-            placeholder="무드 선택..."
+            placeholder="Select mood..."
           />
         </div>
       </GroupBox>
 
       {/* Lights */}
       <GroupBox>
-        <SectionHeader title="Lights" hint="씬 전역 조명 — 환경광(ambient)·방향광(태양)의 강도·방향. 그림자 진하기에 영향을 줘요." />
+        <SectionHeader title="Lights" hint="Scene-wide lighting — intensity and direction of the ambient and directional (sun) lights. Affects how dark the shadows are." />
         <div className="px-3 space-y-1 pb-4">
           <div className='flex gap-2'>
             <div>
@@ -464,20 +464,20 @@ export function EnvironmentPanel() {
           {/* 노출(Exposure) — NeutralToneMapping의 밝기. 1=기본. 씬 전체 톤 조절 */}
           <div className="pt-1">
             <LabeledNum
-              label="Exposure (노출)"
+              label="Exposure"
               value={env.toneMappingExposure ?? 1}
               onChange={(v) => updateEnvironment({ toneMappingExposure: v })}
               onCommit={pushHistory}
               min={0.3} max={2} precision={2} dragStep={0.02}
             />
             <p className="text-[10px] text-muted/60 mt-1">
-              씬 전체 밝기. 색은 지정값 그대로 나오도록 Linear 톤매핑을 씁니다. 너무 밝아
-              하얗게 뜨는 부분이 있으면 노출을 낮추세요.
+              Overall scene brightness. Uses Linear tone mapping so colors render as set.
+              If some areas blow out to white, lower the exposure.
             </p>
           </div>
           {/* 접지 그림자 — 오브젝트가 바닥에 붙은 느낌. 기본 꺼짐, 켜서 확인 */}
           <label className="flex items-center justify-between cursor-pointer pt-2">
-            <span className="text-[10px] font-semibold text-muted/70">접지 그림자 (Contact Shadows)</span>
+            <span className="text-[10px] font-semibold text-muted/70">Contact Shadows</span>
             <Toggle
               value={env.contactShadows === true}
               onChange={(v) => { updateEnvironment({ contactShadows: v }); pushHistory(); }}
@@ -488,28 +488,28 @@ export function EnvironmentPanel() {
 
       {/* Interaction — 뷰어 상호작용 어포던스 */}
       <GroupBox>
-        <SectionHeader title="Interaction" hint="클릭/호버 이벤트가 있는 오브젝트 위에 떠다니는 힌트 링을 띄워 '상호작용 가능'을 알려줘요. 탐색 모드 전용, 깔끔한 씬은 끌 수 있습니다." />
+        <SectionHeader title="Interaction" hint="Shows a floating hint ring above objects that have click/hover events, signaling they're interactive. Explore mode only; you can turn it off for a cleaner scene." />
         <div className="px-3 pb-4 space-y-1">
           {/* 클릭/호버 이벤트가 있는 오브젝트 위에 힌트 링 표시 (탐색 모드 뷰어/임베드에서만) */}
           <label className="flex items-center justify-between cursor-pointer pb-1">
-            <span className="text-[10px] font-semibold text-muted/70">상호작용 힌트 표시</span>
+            <span className="text-[10px] font-semibold text-muted/70">Show interaction hints</span>
             <Toggle
               value={env.showInteractionHints !== false}
               onChange={(v) => { updateEnvironment({ showInteractionHints: v }); pushHistory(); }}
             />
           </label>
           <p className="text-[10px] text-muted/60 leading-relaxed">
-            클릭·호버 이벤트가 있는 오브젝트 위에 떠다니는 링을 띄워 방문자에게 상호작용
-            가능함을 알립니다. 뷰어의 탐색 모드에서만 보이며, 에디터엔 표시되지 않습니다.
+            Shows a floating ring above objects with click/hover events to tell visitors
+            they're interactive. Visible only in the viewer's explore mode, not in the editor.
           </p>
           {/* 상호작용 근접 범위 기본값 — interact(E)/approach·E 프롬프트·하이라이트 공유 */}
           <div className="pt-2">
-            <LabeledNum label="상호작용 범위 기본값(m)" value={env.interactRange ?? 3}
+            <LabeledNum label="Default interaction range (m)" value={env.interactRange ?? 3}
               onChange={(v) => updateEnvironment({ interactRange: Math.max(0.5, v) })}
               onCommit={pushHistory} min={0.5} max={10} precision={1} dragStep={0.1} />
             <p className="text-[10px] text-muted/60 leading-relaxed mt-1">
-              플레이 모드에서 캐릭터가 이만큼 가까이 가면 E 프롬프트·하이라이트·approach가 발동해요.
-              오브젝트에 개별 범위를 지정하면 그 값이 우선합니다.
+              In play mode, the E prompt, highlight and approach trigger fire when the character gets this close.
+              A per-object range overrides this value.
             </p>
           </div>
         </div>
@@ -517,7 +517,7 @@ export function EnvironmentPanel() {
 
       {/* 팝업 기본값 — 씬 전역 show_popup 스타일 (개별 이벤트가 우선) */}
       <GroupBox>
-        <SectionHeader title="팝업 기본값" hint="show_popup 팝업의 씬 전역 기본 위치·크기·배경색. 개별 이벤트에서 지정한 값이 이 기본값보다 우선합니다." />
+        <SectionHeader title="Popup defaults" hint="Scene-wide default position, size and background for show_popup popups. Values set on an individual event take priority over these defaults." />
         <div className="px-3 pb-4 space-y-1.5">
           {(() => {
             const dp = env.defaultPopup ?? {};
@@ -769,7 +769,7 @@ export function EnvironmentPanel() {
                         disabled={boundaryTexUploading}
                         className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-pre-line"
                       >
-                        {boundaryTexUploading ? '업로드 중...' : '텍스처 이미지 업로드\nJPG · PNG · WEBP'}
+                        {boundaryTexUploading ? 'Uploading...' : 'Upload texture image\nJPG · PNG · WEBP'}
                       </button>
                     )}
                     <input
@@ -821,7 +821,7 @@ export function EnvironmentPanel() {
                     ) : (
                       <button onClick={() => triggerBwUpload('skybox')} disabled={bwUploading}
                         className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 whitespace-pre-line">
-                        {bwUploading ? '업로드 중...' : '360° 파노라마 업로드\n좌우로 이어지는 equirectangular 이미지'}
+                        {bwUploading ? 'Uploading...' : '360° 파노라마 업로드\n좌우로 이어지는 equirectangular 이미지'}
                       </button>
                     )}
                     <p className="text-[10px] text-muted/50">벽 대신 씬 전체를 감쌉니다. 4면 벽·천장 설정은 무시돼요.</p>

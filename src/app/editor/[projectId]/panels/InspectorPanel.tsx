@@ -43,8 +43,11 @@ function InspectorInner() {
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
 
-  // 섹션 접기 상태 — Array(반복 복제)는 가끔 쓰는 툴이라 기본 접힘
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(['array']));
+  // 섹션 접기 상태 — 점진적 공개(STEP 3): 기본은 Transform·Material·Content·Geometry·Visibility만 펼치고
+  // 고급 섹션(물리·모션·이벤트·파티클·서브디비전·애니메이션·배열)은 접어 둔다. 값이 있으면 헤더에 점(dot)으로 표시.
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    new Set(['array', 'subdivision', 'particle', 'physics', 'motion', 'events', 'animation']),
+  );
   const toggleSection = (key: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -64,7 +67,7 @@ function InspectorInner() {
   if (!obj) {
     const isCharSelected = selectedId === CHARACTER_PREVIEW_ID;
     return (
-      <aside className="flex flex-col bg-surface border-l border-border overflow-hidden h-full">
+      <aside className="flex flex-col overflow-hidden h-full">
         <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
           <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">
             {isCharSelected ? 'Player Character' : 'Environment'}
@@ -72,24 +75,24 @@ function InspectorInner() {
         </div>
         {isCharSelected && (
           <div className="px-3 py-2 bg-primary/5 border-b border-border shrink-0">
-            <p className="text-[10px] text-primary">뷰포트에서 드래그해 위치 조정 · 스케일/속성은 Player 섹션에서</p>
+            <p className="text-[10px] text-primary">Drag in the viewport to reposition · scale &amp; properties in the Player section</p>
           </div>
         )}
         <div className="flex-1 overflow-y-auto">
           {!isCharSelected && (
             <div className="px-3 pt-3">
               <button
-                onClick={() => { requestExport([], 'scene'); addToast('씬 전체 GLB 내보내기 시작', 'success'); }}
-                title="씬의 모든 오브젝트를 하나의 .glb 파일로 내보내기"
+                onClick={() => { requestExport([], 'scene'); addToast('Exporting whole scene as GLB', 'success'); }}
+                title="Export all scene objects into one .glb file"
                 className="w-full py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all inline-flex items-center justify-center gap-1.5"
               >
-                <Download size={13} /> 씬 전체 GLB로 내보내기
+                <Download size={13} /> Export whole scene as GLB
               </button>
             </div>
           )}
           {!isCharSelected && prefabs.length > 0 && (
             <GroupBox>
-              <SectionHeader title="Prefab 라이브러리" icon={<Component size={12} />} hint="이 씬의 프리팹 원본 목록. '배치'를 누르면 새 인스턴스를 씬에 추가해요. 삭제하면 정의만 지워지고 이미 배치된 오브젝트는 독립 오브젝트로 남습니다." />
+              <SectionHeader title="Prefab Library" icon={<Component size={12} />} hint="Master prefabs in this scene. 'Place' adds a new instance to the scene. Deleting removes only the definition; already-placed objects remain as independent objects." />
               <div className="px-3 pb-4 space-y-1.5">
                 {prefabs.map((p) => {
                   const count = new Set(objects.filter((o) => o.prefabId === p.id).map((o) => o.prefabInstanceId)).size;
@@ -98,14 +101,14 @@ function InspectorInner() {
                       <span className="text-[11px] text-foreground font-medium flex-1 truncate flex items-center gap-1.5" title={p.name}><Component size={12} className="shrink-0 text-muted" /> {p.name}</span>
                       <span className="text-[10px] text-muted shrink-0">{count}</span>
                       <button
-                        onClick={() => { instantiatePrefab(p.id); addToast(`'${p.name}' 배치`, 'success'); }}
+                        onClick={() => { instantiatePrefab(p.id); addToast(`'${p.name}' placed`, 'success'); }}
                         className="px-2 py-0.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[10px] font-semibold transition-colors shrink-0"
                       >
-                        배치
+                        Place
                       </button>
                       <button
-                        onClick={() => { if (confirm(`'${p.name}' 프리팹 정의를 삭제할까요?\n이미 배치된 ${count}개 인스턴스는 독립 오브젝트로 남습니다.`)) { deletePrefab(p.id); addToast('프리팹 정의 삭제됨', 'success'); } }}
-                        title="프리팹 정의 삭제(인스턴스는 유지)"
+                        onClick={() => { if (confirm(`Delete the prefab definition '${p.name}'?\nThe ${count} placed instances remain as independent objects.`)) { deletePrefab(p.id); addToast('Prefab definition deleted', 'success'); } }}
+                        title="Delete prefab definition (instances kept)"
                         className="px-1 py-0.5 rounded-xs text-muted hover:text-red-500 transition-colors shrink-0 flex items-center"
                       >
                         <X size={12} />
@@ -126,7 +129,7 @@ function InspectorInner() {
 
 
   return (
-    <aside className="flex flex-col bg-surface border-l border-border overflow-hidden relative h-full">
+    <aside className="flex flex-col overflow-hidden relative h-full">
       {/* 이벤트 프리뷰 팝업 오버레이 */}
       {previewPopup !== null && (() => {
         // 뷰어와 동일 병합(이벤트 config > 씬 defaultPopup)으로 모드/크기/배경을 미리보기.
@@ -139,7 +142,7 @@ function InspectorInner() {
         const height = c?.height ?? d?.height;
         const bg = c?.bg ?? d?.bg;
         const posNote = c?.position && c.position !== 'center'
-          ? ` · 뷰어에선 ${({ bottom: '하단', left: '왼쪽', right: '오른쪽' } as Record<string, string>)[c.position]} 배치`
+          ? ` · shown ${({ bottom: 'bottom', left: 'left', right: 'right' } as Record<string, string>)[c.position]} in the viewer`
           : '';
         const cardStyle = isFrame
           ? { width: width || 'min(80vw, 720px)', height: height || 'min(70vh, 520px)', background: bg }
@@ -151,7 +154,7 @@ function InspectorInner() {
               style={cardStyle}
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-[10px] text-muted/60 mb-2 font-semibold tracking-wide shrink-0">팝업 미리보기{posNote}</p>
+              <p className="text-[10px] text-muted/60 mb-2 font-semibold tracking-wide shrink-0">Popup preview{posNote}</p>
               {isFrame ? (
                 <div className="flex-1 min-h-0"><PopupFrame value={previewPopup.content} config={c} /></div>
               ) : (
@@ -161,14 +164,14 @@ function InspectorInner() {
                 onClick={() => setPreviewPopup(null)}
                 className="mt-3 shrink-0 w-full py-1.5 rounded-xs bg-primary text-white  text-[11px] font-semibold hover:bg-primary/80 transition-colors"
               >
-                닫기
+                Close
               </button>
             </div>
           </div>
         );
       })()}
       <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
-        <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">{obj.isGroup ? 'Inspector — 그룹' : 'Inspector'}</span>
+        <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">{obj.isGroup ? 'Inspector — Group' : 'Inspector'}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -181,8 +184,8 @@ function InspectorInner() {
             className="flex-1 min-w-0 bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
           />
           <button
-            onClick={() => { requestExport(selectedIds.length > 0 ? selectedIds : [obj.id], obj.name || 'object'); addToast('GLB 내보내기 시작', 'success'); }}
-            title="이 오브젝트를 .glb 파일로 내보내기(다운로드)"
+            onClick={() => { requestExport(selectedIds.length > 0 ? selectedIds : [obj.id], obj.name || 'object'); addToast('Exporting GLB', 'success'); }}
+            title="Export this object as a .glb file (download)"
             className="shrink-0 h-[30px] px-2 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary text-[11px] transition-all inline-flex items-center gap-1"
           >
             <Download size={12} /> GLB
@@ -196,7 +199,7 @@ function InspectorInner() {
         <TransformSection obj={obj} open={isOpen('transform')} onToggle={() => toggleSection('transform')} />
 
         {/* Subdivision — 표면 세분화. 모든 프리미티브 */}
-        {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && <SubdivisionSection obj={obj} />}
+        {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && <SubdivisionSection obj={obj} open={isOpen('subdivision')} onToggle={() => toggleSection('subdivision')} />}
 
         {/* Geometry — 프리미티브 확장 파라미터(둥근 박스·각뿔대·로프트) */}
         {(obj.primitiveShape === 'box' || obj.primitiveShape === 'frustum' || obj.primitiveShape === 'loft') && <GeometrySection obj={obj} open={isOpen('geometry')} onToggle={() => toggleSection('geometry')} />}
@@ -226,7 +229,7 @@ function InspectorInner() {
         {!obj.light && !obj.isGroup && <PhysicsSection obj={obj} open={isOpen('physics')} onToggle={() => toggleSection('physics')} />}
 
         {/* Motion — 앰비언트 애니메이션 (라이트 제외) */}
-        {!obj.light && <MotionSection obj={obj} />}
+        {!obj.light && <MotionSection obj={obj} open={isOpen('motion')} onToggle={() => toggleSection('motion')} />}
 
         {/* Animation — GLB 내장 클립을 트리거 없이 자동 재생(idle/앰비언트). GLB 오브젝트 전용 */}
         {!obj.isGroup && obj.assetId && (() => {
@@ -234,10 +237,10 @@ function InspectorInner() {
           if (!glbUrl) return null;
           return (
             <GroupBox>
-              <SectionHeader title="Animation" hint="GLB에 내장된 애니메이션 클립 중 하나를 트리거 없이 씬 로드 시 자동 루프 재생해요(돌아가는 선풍기·펄럭이는 깃발·idle 캐릭터 등). 클릭/호버/영역 이벤트 애니메이션이 실행되면 그쪽으로 덮입니다(뷰어 전용)." isOpen={isOpen('animation')} onToggle={() => toggleSection('animation')} />
+              <SectionHeader title="Animation" hint="Auto-loops one of the GLB's built-in animation clips on scene load, with no trigger (spinning fan, waving flag, idle character…). If a click/hover/area event animation fires, it takes over (viewer only)." isOpen={isOpen('animation')} onToggle={() => toggleSection('animation')} dot={!!obj.defaultClip} />
               {isOpen('animation') && (
                 <div className="px-3 pb-4 space-y-1.5">
-                  <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">기본 클립</span>
+                  <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">Default clip</span>
                   <GlbClipPicker
                     url={glbUrl}
                     value={obj.defaultClip ?? ''}
@@ -248,11 +251,11 @@ function InspectorInner() {
                       onClick={() => { updateObject(obj.id, { defaultClip: undefined }); pushHistory(); }}
                       className="text-[10px] text-muted/60 hover:text-danger transition-colors"
                     >
-                      기본 애니메이션 해제
+                      Clear default animation
                     </button>
                   )}
                   <p className="text-[10px] text-muted/50">
-                    에디터엔 정적, 실제 재생은 뷰어에서 확인. 한 번 재생 후 idle 복귀는 없어요.
+                    Static in the editor; see playback in the viewer. It doesn&apos;t return to idle after a one-shot.
                   </p>
                 </div>
               )}
@@ -267,7 +270,7 @@ function InspectorInner() {
         {obj.isGroup && (
           <div className="px-3 py-3">
             <p className="text-[11px] text-muted leading-relaxed">
-              그룹 해제: <kbd className="bg-background border border-border rounded px-1 text-[10px]">Ctrl+Shift+G</kbd>
+              Ungroup: <kbd className="bg-background border border-border rounded px-1 text-[10px]">Ctrl+Shift+G</kbd>
             </p>
           </div>
         )}

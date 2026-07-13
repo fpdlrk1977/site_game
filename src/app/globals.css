@@ -10,28 +10,33 @@
   the dark values win when the class is present — no specificity tricks needed.
 */
 @layer base {
+  /* Light — violet-biased neutrals (STEP 1 리뉴얼: slate 램프 탈출) */
   :root {
-    --background: #F6F7F9;
+    --background: #F7F6FB;
     --surface:    #FFFFFF;
-    --sidebar:    #FBFBFC;
-    --canvas:     #EEF1F4;
-    --border:     #E8EBEF;
-    --foreground: #0F172A;
-    --muted:      #64748B;
-    --primary:    #2563EB;
+    --sidebar:    #FBFAFE;
+    --canvas:     #EDEBF3;
+    --border:     #E7E4F0;
+    --foreground: #16141E;
+    --muted:      #6C6979;
+    --primary:    #6A4DFF;
     --success:    #22C55E;
     --warning:    #F59E0B;
     --danger:     #EF4444;
+    /* 떠있는 유리 패널(STEP 2) — 반투명 표면 */
+    --glass:      rgba(255,255,255,.80);
   }
+  /* Dark-first (기본 테마) — near-black 위 바이올렛 */
   .dark {
-    --background: #111317;
-    --surface:    #181B21;
-    --sidebar:    #14171C;
-    --canvas:     #0D1015;
-    --border:     #252B34;
-    --foreground: #F8FAFC;
-    --muted:      #94A3B8;
-    --primary:    #3B82F6;
+    --background: #0E0D13;
+    --surface:    #17161F;
+    --sidebar:    #131219;
+    --canvas:     #0A0910;
+    --border:     #262430;
+    --foreground: #EDEBF4;
+    --muted:      #8E8B9E;
+    --primary:    #7C6CFF;
+    --glass:      rgba(22,20,30,.82);
   }
 }
 
@@ -49,22 +54,24 @@
   --color-foreground: var(--foreground);
   --color-muted:      var(--muted);
   --color-primary:    var(--primary);
+  --color-glass:      var(--glass);
   --color-success:    var(--success);
   --color-warning:    var(--warning);
   --color-danger:     var(--danger);
 
-  /* Radius */
-  --radius-xs: 6px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  /* Radius — 리뉴얼: 부드러운 모서리(Spline 친근함) */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
 
-  /* Shadow */
+  /* Shadow — 떠있는 패널을 위한 깊이(테두리 대신 단차) */
   --shadow-card:     0 1px 2px rgba(15,23,42,.05);
-  --shadow-floating: 0 8px 24px rgba(15,23,42,.08);
-  --shadow-dropdown: 0 12px 32px rgba(15,23,42,.12);
-  --shadow-modal:    0 24px 60px rgba(15,23,42,.18);
+  --shadow-floating: 0 8px 24px rgba(15,23,42,.10);
+  --shadow-dropdown: 0 12px 32px rgba(15,23,42,.14);
+  --shadow-modal:    0 24px 60px rgba(15,23,42,.20);
+  --shadow-float:    0 2px 6px rgba(0,0,0,.18), 0 20px 50px rgba(0,0,0,.28);
 
   /* Fonts */
   --font-sans: "Inter", sans-serif;

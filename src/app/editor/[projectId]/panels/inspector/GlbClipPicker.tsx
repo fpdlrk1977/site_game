@@ -51,7 +51,7 @@ export function GlbClipPicker({ url, value, onChange }: { url: string; value: st
   if (clips === null) {
     return (
       <div className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-muted/50">
-        클립 목록 로딩 중…
+        Loading clips…
       </div>
     );
   }
@@ -62,8 +62,8 @@ export function GlbClipPicker({ url, value, onChange }: { url: string; value: st
           placeholder="clip name"
           className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-white placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary" />
         {loadError
-          ? <p className="text-danger text-[10px] mt-1">로드 실패: {loadError.slice(0, 80)}</p>
-          : <p className="text-muted/50 text-[10px] mt-1">이 GLB에 애니메이션 클립이 없습니다.</p>}
+          ? <p className="text-danger text-[10px] mt-1">Load failed: {loadError.slice(0, 80)}</p>
+          : <p className="text-muted/50 text-[10px] mt-1">This GLB has no animation clips.</p>}
       </>
     );
   }
@@ -72,7 +72,7 @@ export function GlbClipPicker({ url, value, onChange }: { url: string; value: st
       value={value}
       options={clips.map((n) => ({ value: n, label: n }))}
       onChange={onChange}
-      placeholder="클립 선택"
+      placeholder="Select clip"
     />
   );
 }
