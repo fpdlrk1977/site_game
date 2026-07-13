@@ -10,7 +10,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
-import { SectionHeader, GroupBox, LabeledNum, XYZRow, Toggle } from './ui';
+import { SectionHeader, GroupBox, LabeledNum, XYZRow, Toggle, NumInput } from './ui';
 import type { EnvSchema, HdrPreset, GroundPreset, PopupConfig, PostProcessPreset, GameVariable, HudElement } from '@/types/scene';
 
 const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<EnvSchema> }[] = [
@@ -28,6 +28,38 @@ const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<
   { id: 'studio', label: 'Studio', icon: Lightbulb, env: { hdrPreset: 'studio', toneMappingExposure: 1.0,
     lights: { ambientIntensity: 0.7, directionalIntensity: 1.2, directionalPosition: { x: 5, y: 10, z: 5 }, directionalColor: '#ffffff', ambientColor: '#ffffff' } } },
 ];
+
+// 팝업 기본 크기 입력 — 숫자 드래그(NumInput) + 단위(px/vw/vh) 드롭다운.
+// 값은 "800px" 형태 CSS 문자열로 저장, 0/미설정 = 자동(반응형 기본값).
+function SizeField({ label, value, onChange, onCommit }: {
+  label: string;
+  value: string | undefined;
+  onChange: (v: string | undefined) => void;
+  onCommit: () => void;
+}) {
+  const m = /^(\d+(?:\.\d+)?)(px|vw|vh)$/.exec((value ?? '').trim());
+  const num = m ? parseFloat(m[1]) : 0;
+  const unit = m ? m[2] : 'px';
+  const emit = (n: number, u: string) => onChange(n > 0 ? `${n}${u}` : undefined);
+  return (
+    <label className="block">
+      <span className="text-[10px] text-muted/50 block mb-1">{label}</span>
+      <div className="flex gap-1">
+        <div className="flex-1">
+          <NumInput value={num} onChange={(n) => emit(n, unit)} onCommit={onCommit} min={0} precision={0} dragStep={5} prefix={false} />
+        </div>
+        <div className="w-14 shrink-0">
+          <SelectBox
+            value={unit}
+            onChange={(u) => { emit(num, u); onCommit(); }}
+            options={[{ value: 'px', label: 'px' }, { value: 'vw', label: 'vw' }, { value: 'vh', label: 'vh' }]}
+            className="px-2 py-1 text-[11px] border border-border rounded-xs bg-muted/5 dark:bg-muted/10"
+          />
+        </div>
+      </div>
+    </label>
+  );
+}
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 export function EnvironmentPanel() {
@@ -270,7 +302,7 @@ export function EnvironmentPanel() {
                   <button
                     onClick={() => groundTexInputRef.current?.click()}
                     disabled={groundTexUploading}
-                    className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-2.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {groundTexUploading ? 'Uploading...' : 'Upload texture image\nJPG · PNG · WEBP'}
                   </button>
@@ -316,36 +348,38 @@ export function EnvironmentPanel() {
         </div>
         {env.fog.enabled && <div className="px-3 pb-3">
           
-              <div className="">
-                <span className="text-[10px] text-muted/50 w-12 font-semibold">Color</span>
+              <div className='flex gap-2'>
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] text-muted/50 w-12 font-semibold">Color</span>
+                  <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                    <input
+                      type="color"
+                      value={env.fog.color}
+                      onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="w-5 h-5 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={env.fog.color}
+                      onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
+                      onBlur={pushHistory}
+                      className="flex-1 w-full px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
 
-                <div className="px-2 flex items-center border border-border rounded-xs">
-                  <input
-                    type="color"
-                    value={env.fog.color}
-                    onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="w-5 h-5 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={env.fog.color}
-                    onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                <div className="mt-2 flex-1 min-w-0">
+                  <span className="text-[10px] text-muted/50 font-semibold block mb-1">Mode</span>
+                  <SelectBox
+                    value={env.fog.mode ?? 'linear'}
+                    onChange={(v) => { updateEnvironment({ fog: { ...env.fog, mode: v as 'linear' | 'exp' } }); pushHistory(); }}
+                    options={[
+                      { value: 'linear', label: 'Linear (Near–Far range)' },
+                      { value: 'exp', label: 'Exp (density — even depth)' },
+                    ]}
                   />
                 </div>
-              </div>
-              <div className="mt-2">
-                <span className="text-[10px] text-muted/50 font-semibold block mb-1">Mode</span>
-                <SelectBox
-                  value={env.fog.mode ?? 'linear'}
-                  onChange={(v) => { updateEnvironment({ fog: { ...env.fog, mode: v as 'linear' | 'exp' } }); pushHistory(); }}
-                  options={[
-                    { value: 'linear', label: 'Linear (Near–Far range)' },
-                    { value: 'exp', label: 'Exp (density — even depth)' },
-                  ]}
-                />
               </div>
               {(env.fog.mode ?? 'linear') === 'exp' ? (
                 <div className='mt-2'>
@@ -385,9 +419,8 @@ export function EnvironmentPanel() {
 
       {/* Mood — 분위기 프리셋 (HDR+라이트+노출 한 번에) */}
       <GroupBox>
-        <SectionHeader title="Mood" />
+        <SectionHeader title="Mood" hint="Sets lighting, background and exposure in one go. Fine-tune below afterwards." />
         <div className="px-3 pb-3">
-          <p className="text-[10px] text-muted/60 mb-2">Sets lighting, background and exposure in one go. Fine-tune below afterwards.</p>
           <SelectBox
             value={moodSel}
             onChange={(id) => {
@@ -436,9 +469,9 @@ export function EnvironmentPanel() {
           />
           {/* 라이트 색(warm/cool) — 태양·환경광 색조. 미설정=흰색. 노을은 따뜻하게, 밤은 차갑게 등 무드 연출. */}
           <div className="flex gap-2 pt-1">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <span className="text-[10px] text-muted/50 font-semibold">Sun Color</span>
-              <div className="px-2 flex items-center border border-border rounded-xs mt-0.5">
+              <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                 <input type="color" value={env.lights.directionalColor ?? '#ffffff'}
                   onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalColor: e.target.value } })}
                   onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
@@ -448,9 +481,9 @@ export function EnvironmentPanel() {
                   className="flex-1 w-full px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <span className="text-[10px] text-muted/50 font-semibold">Ambient Color</span>
-              <div className="px-2 flex items-center border border-border rounded-xs mt-0.5">
+              <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                 <input type="color" value={env.lights.ambientColor ?? '#ffffff'}
                   onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientColor: e.target.value } })}
                   onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
@@ -498,10 +531,6 @@ export function EnvironmentPanel() {
               onChange={(v) => { updateEnvironment({ showInteractionHints: v }); pushHistory(); }}
             />
           </label>
-          <p className="text-[10px] text-muted/60 leading-relaxed">
-            Shows a floating ring above objects with click/hover events to tell visitors
-            they're interactive. Visible only in the viewer's explore mode, not in the editor.
-          </p>
           {/* 상호작용 근접 범위 기본값 — interact(E)/approach·E 프롬프트·하이라이트 공유 */}
           <div className="pt-2">
             <LabeledNum label="Default interaction range (m)" value={env.interactRange ?? 3}
@@ -522,7 +551,8 @@ export function EnvironmentPanel() {
           {(() => {
             const dp = env.defaultPopup ?? {};
             const setDP = (patch: Partial<typeof dp>) => updateEnvironment({ defaultPopup: { ...dp, ...patch } });
-            const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+            // const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+            const inputCls = 'flex-1 w-full px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary';
             return (
               <>
                 <label className="block">
@@ -539,25 +569,20 @@ export function EnvironmentPanel() {
                   />
                 </label>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <label className="block">
-                    <span className="text-[10px] text-muted/50 block mb-1">기본 너비</span>
-                    <input type="text" value={dp.width ?? ''} onChange={(e) => setDP({ width: e.target.value })} onBlur={pushHistory} placeholder="예: 800px" className={inputCls} />
-                  </label>
-                  <label className="block">
-                    <span className="text-[10px] text-muted/50 block mb-1">기본 높이</span>
-                    <input type="text" value={dp.height ?? ''} onChange={(e) => setDP({ height: e.target.value })} onBlur={pushHistory} placeholder="예: 600px" className={inputCls} />
-                  </label>
+                  <SizeField label="기본 너비" value={dp.width} onChange={(v) => setDP({ width: v })} onCommit={pushHistory} />
+                  <SizeField label="기본 높이" value={dp.height} onChange={(v) => setDP({ height: v })} onCommit={pushHistory} />
                 </div>
-                <label className="block">
-                  <span className="text-[10px] text-muted/50 block mb-1">기본 배경색</span>
-                  <div className="flex items-center gap-1.5">
-                    <input type="color" value={dp.bg || '#ffffff'} onChange={(e) => setDP({ bg: e.target.value })} onBlur={pushHistory} className="w-7 h-7 rounded-xs border border-border bg-surface shrink-0 cursor-pointer" />
-                    <input type="text" value={dp.bg ?? ''} onChange={(e) => setDP({ bg: e.target.value })} onBlur={pushHistory} placeholder="#ffffff (기본 흰색)" className={inputCls} />
+
+
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] text-muted/50 w-12 font-semibold">기본 배경색</span>
+                  <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                    <input type="color" value={dp.bg || '#ffffff'} onChange={(e) => setDP({ bg: e.target.value })} onBlur={pushHistory} className="w-5 h-5 cursor-pointer" />
+                    <input type="text" value={dp.bg ?? '#ffffff'} onChange={(e) => setDP({ bg: e.target.value })} onBlur={pushHistory} placeholder="#ffffff" className={inputCls} />
                   </div>
-                </label>
-                <p className="text-[10px] text-muted/60 leading-relaxed">
-                  이 씬의 모든 팝업에 적용되는 기본값이에요. 개별 이벤트에서 위치·크기·배경색을 지정하면 그 값이 우선합니다.
-                </p>
+                </div>
+                  
+     
               </>
             );
           })()}
@@ -767,7 +792,7 @@ export function EnvironmentPanel() {
                       <button
                         onClick={() => boundaryTexInputRef.current?.click()}
                         disabled={boundaryTexUploading}
-                        className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-pre-line"
+                        className="w-full py-2.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-pre-line"
                       >
                         {boundaryTexUploading ? 'Uploading...' : 'Upload texture image\nJPG · PNG · WEBP'}
                       </button>
@@ -790,7 +815,7 @@ export function EnvironmentPanel() {
                               <img src={url} alt={label} className="w-full h-full object-cover" />
                             ) : (
                               <button onClick={() => triggerBwUpload(face)} disabled={bwUploading}
-                                className="w-full h-full flex items-center justify-center text-[10px] text-muted hover:text-primary hover:bg-primary/5 transition-colors disabled:opacity-50">
+                                className="w-full h-full flex items-center justify-center text-[10px] text-foreground hover:text-muted hover:bg-background transition-colors disabled:opacity-50">
                                 {label} +
                               </button>
                             )}
@@ -820,7 +845,7 @@ export function EnvironmentPanel() {
                       </div>
                     ) : (
                       <button onClick={() => triggerBwUpload('skybox')} disabled={bwUploading}
-                        className="w-full py-2.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[10px] transition-all disabled:opacity-50 whitespace-pre-line">
+                        className="w-full py-2.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background text-[10px] transition-all disabled:opacity-50 whitespace-pre-line">
                         {bwUploading ? 'Uploading...' : '360° 파노라마 업로드\n좌우로 이어지는 equirectangular 이미지'}
                       </button>
                     )}

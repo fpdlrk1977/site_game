@@ -14,7 +14,6 @@ export function SubdivisionSection({ obj, open, onToggle }: { obj: ObjectNodeSch
               <LabeledNum label="Level (0 = original)" value={obj.geom?.subdivisions ?? 0}
                 onChange={(v) => updateObject(obj.id, { geom: { ...obj.geom, subdivisions: Math.round(v) } })} onCommit={pushHistory}
                 min={0} max={3} precision={0} dragStep={1} />
-              <p className="text-[10px] text-muted/50 mt-1">Even a sharp box gets rounder as you raise the level. Up to 3 for performance.</p>
             </div>}
           </GroupBox>
   );

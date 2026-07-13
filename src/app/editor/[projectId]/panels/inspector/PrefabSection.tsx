@@ -97,7 +97,7 @@ export function PrefabSection({ obj }: { obj: ObjectNodeSchema }) {
                         onClick={() => { revertInstance(instanceRoot.id); addToast('Reverted to master', 'success'); }}
                         disabled={overrides.length === 0}
                         title="Discard all overrides on this instance and restore master values"
-                        className="py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary text-[11px] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Revert to master
                       </button>

@@ -65,7 +65,7 @@ export function CustomDomainModal({ projectId, projectName, currentDomain, onClo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-surface border border-border rounded-2xl w-full max-w-md shadow-modal overflow-hidden">
+      <div className="relative bg-surface border border-border rounded-sm w-full max-w-md shadow-modal overflow-hidden">
         {/* 헤더 */}
         <div className="px-5 py-4 border-b border-border flex items-center gap-3">
           <div className="w-8 h-8 rounded-xs bg-primary/20 flex items-center justify-center text-primary">

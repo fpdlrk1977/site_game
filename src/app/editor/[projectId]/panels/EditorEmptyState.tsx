@@ -42,7 +42,7 @@ export function EditorEmptyState() {
             <button
               key={shape}
               onClick={() => addObject(shape)}
-              className="flex flex-col items-center gap-1.5 py-3 rounded-md border border-border text-muted hover:text-primary hover:border-primary/60 hover:bg-primary/5 transition-all"
+              className="flex flex-col items-center gap-1.5 py-3 rounded-md bg-surface border border-border text-foreground hover:text-muted hover:bg-background transition-all"
             >
               <Icon size={18} />
               <span className="text-[10px] font-medium">{label}</span>
@@ -58,7 +58,7 @@ export function EditorEmptyState() {
               <button
                 key={id}
                 onClick={() => addPreset(id)}
-                className="flex flex-col items-center gap-1.5 py-3 rounded-md border border-border text-muted hover:text-primary hover:border-primary/60 hover:bg-primary/5 transition-all"
+                className="flex flex-col items-center gap-1.5 py-3 rounded-md bg-surface border border-border text-foreground hover:text-muted hover:bg-background transition-all"
               >
                 <Icon size={18} />
                 <span className="text-[10px] font-medium">{label}</span>

@@ -12,6 +12,7 @@ import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { GlbClipPicker } from './GlbClipPicker';
 import { SectionHeader, GroupBox, Toggle, LabeledNum, XYZRow } from './ui';
+import { DraggablePopup } from '@/components/ui/DraggablePopup';
 import type { ObjectNodeSchema, EventSchema, EventCondition, EventAction, DialogueConfig, PopupConfig } from '@/types/scene';
 
 const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
@@ -215,7 +216,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
 
   // 이벤트 추가/수정 폼 — 신규는 목록 하단, 수정은 해당 항목 자리에 인라인으로 렌더한다
   const renderEventForm = () => (
-    <div className="bg-surface border border-primary/40 rounded-xs p-2.5 space-y-2">
+    <div className="space-y-2">
       <div className="grid grid-cols-2 gap-1.5">
         <div>
           <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Trigger</span>
@@ -957,10 +958,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             )}
 
             {obj.events.map((ev) => {
-              if (editingId === ev.id) {
-                /* 수정 중 — 이 항목 자리에 폼을 인라인으로 표시 */
-                return <div key={ev.id}>{renderEventForm()}</div>;
-              }
+              // 편집은 팝업 모달로 열림 — 카드는 그대로 두고, 편집 중인 항목만 강조
               // 문장 꼬리(값 요약) — 대상/씬/오프셋을 사람이 읽는 형태로
               const valueSummary = ev.value
                 ? (ev.action === 'go_to_scene' ? sceneName(ev.value)
@@ -973,7 +971,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               const conds = ev.conditions && ev.conditions.length ? ev.conditions : (ev.condition ? [ev.condition] : []);
               const condText = conds.map((c) => `${c.variable} ${c.op} ${c.value}`).join(ev.conditionLogic === 'or' ? ' 또는 ' : ' 그리고 ');
               return (
-              <div key={ev.id} className="bg-surface border border-border/80 rounded-xs p-2.5">
+              <div key={ev.id} className={`bg-surface border rounded-xs p-2.5 transition-colors ${editingId === ev.id ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border/80'}`}>
                 <div className="flex items-start justify-between gap-2">
                   {/* 문장: When ⟨트리거⟩ → ⟨액션⟩ 값 */}
                   <div className="min-w-0 flex-1 text-[11px] leading-relaxed">
@@ -1034,15 +1032,19 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               );
             })}
 
-            {/* 수정 중이면 해당 항목 자리에 폼이 인라인으로 뜨므로 하단엔 아무것도 안 띄운다.
-                신규 추가(showAddEvent)면 하단에 폼, 아니면 '이벤트 추가' 버튼. */}
-            {editingId ? null : showAddEvent ? renderEventForm() : (
-              <button
-                onClick={() => { setEditingId(null); setNewValue(''); setShowAddEvent(true); }}
-                className="w-full py-1.5 rounded-xs border border-dashed border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5  text-[11px] transition-all cursor-pointer"
-              >
-                이벤트 추가
-              </button>
+            {/* '이벤트 추가' 버튼 — 폼은 좁은 패널 대신 팝업 모달로 열린다(아래 portal) */}
+            <button
+              onClick={() => { setEditingId(null); setNewValue(''); setShowAddEvent(true); }}
+              className="w-full py-1.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background  text-[11px] transition-all cursor-pointer"
+            >
+              이벤트 추가
+            </button>
+
+            {/* 이벤트 추가/수정 폼 — 공용 DraggablePopup(헤더 드래그·overlay 없음·✕/Esc 닫힘). 넓은 작업 공간 확보 */}
+            {(showAddEvent || editingId) && (
+              <DraggablePopup title={editingId ? '이벤트 수정' : '새 이벤트'} width={420} onClose={cancelEventForm}>
+                {renderEventForm()}
+              </DraggablePopup>
             )}
           </div>
         )}

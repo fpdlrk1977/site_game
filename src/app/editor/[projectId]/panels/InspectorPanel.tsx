@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, X, Component } from 'lucide-react';
+import { Download, X, Component, Package } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
+import { buildMergedGlb } from '@/lib/mergeObjects';
+import { uploadGlbBlob } from '@/lib/uploadAsset';
+import { persistCurrentScene } from '@/lib/saveScene';
 import { SectionHeader, GroupBox } from './inspector/ui';
 import { EnvironmentPanel } from './inspector/EnvironmentPanel';
 import { GlbClipPicker } from './inspector/GlbClipPicker';
@@ -38,8 +41,27 @@ export function InspectorPanel() {
 }
 
 function InspectorInner() {
-  const { objects, assets, selectedId, selectedIds, projectId, environment, prefabs, updateObject, pushHistory, instantiatePrefab, deletePrefab, requestExport } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, environment, prefabs, updateObject, pushHistory, instantiatePrefab, deletePrefab, requestExport, mergeIntoAsset } = useSceneStore();
   const { addToast } = useToast();
+  // 단일 오브젝트를 GLB로 구워 Models(에셋)에 등록 — Merge와 동일 파이프라인(단일 rootId).
+  const [savingModel, setSavingModel] = useState(false);
+  const saveAsModel = async (targetId: string, name: string) => {
+    if (!projectId || savingModel) return;
+    setSavingModel(true);
+    try {
+      const result = await buildMergedGlb(useSceneStore.getState().objects, [targetId]);
+      if (!result) { addToast('구울 프리미티브가 없어요 (GLB·콘텐츠·라이트 제외).', 'error'); return; }
+      const asset = await uploadGlbBlob(result.blob, name, projectId, 'model');
+      mergeIntoAsset([targetId], asset, result.center, name);
+      const save = await persistCurrentScene();
+      if (save.status === 'conflict') addToast('저장했지만 다른 탭·기기에서 씬이 먼저 저장돼 반영하지 못했어요. 새로고침 후 다시 시도해 주세요.', 'error');
+      else addToast('모델 에셋으로 저장했어요 — Assets › Models에서 재사용할 수 있어요.', 'success');
+    } catch (err) {
+      addToast(`모델 저장 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`, 'error');
+    } finally {
+      setSavingModel(false);
+    }
+  };
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
 
@@ -84,7 +106,7 @@ function InspectorInner() {
               <button
                 onClick={() => { requestExport([], 'scene'); addToast('Exporting whole scene as GLB', 'success'); }}
                 title="Export all scene objects into one .glb file"
-                className="w-full py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all inline-flex items-center justify-center gap-1.5"
+                className="w-full py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] transition-all inline-flex items-center justify-center gap-1.5"
               >
                 <Download size={13} /> Export whole scene as GLB
               </button>
@@ -150,7 +172,7 @@ function InspectorInner() {
         return (
           <div className="absolute inset-0 z-10 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewPopup(null)}>
             <div
-              className={`bg-white border border-border rounded-2xl shadow-2xl ${isFrame ? 'flex flex-col p-4 max-w-[92vw] max-h-[88vh]' : 'p-5 w-full max-w-sm max-h-[80vh] overflow-y-auto'}`}
+              className={`bg-white border border-border rounded-sm shadow-2xl ${isFrame ? 'flex flex-col p-4 max-w-[92vw] max-h-[88vh]' : 'p-5 w-full max-w-sm max-h-[80vh] overflow-y-auto'}`}
               style={cardStyle}
               onClick={(e) => e.stopPropagation()}
             >
@@ -186,11 +208,26 @@ function InspectorInner() {
           <button
             onClick={() => { requestExport(selectedIds.length > 0 ? selectedIds : [obj.id], obj.name || 'object'); addToast('Exporting GLB', 'success'); }}
             title="Export this object as a .glb file (download)"
-            className="shrink-0 h-[30px] px-2 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary text-[11px] transition-all inline-flex items-center gap-1"
+            className="shrink-0 h-[30px] px-2 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] transition-all inline-flex items-center gap-1"
           >
             <Download size={12} /> GLB
           </button>
         </div>
+
+        {/* 모델 에셋으로 저장 — 프리미티브(또는 프리미티브 그룹)를 GLB로 구워 Models 라이브러리에 등록.
+            GLB/콘텐츠/라이트/파티클은 제외(이미 에셋이거나 프리미티브 아님). */}
+        {!obj.assetId && !obj.content && !obj.light && !obj.particle && (
+          <div className="px-3 pt-2 pb-1">
+            <button
+              onClick={() => saveAsModel(obj.id, obj.name || '모델')}
+              disabled={savingModel}
+              title="이 오브젝트를 GLB 모델 에셋으로 저장 (Assets › Models에서 재사용)"
+              className="w-full py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] transition-all inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Package size={13} /> {savingModel ? '모델로 굽는 중…' : '모델 에셋으로 저장'}
+            </button>
+          </div>
+        )}
 
         {/* Prefab — 원본 정의화 / 인스턴스 동기화 (조건 불충족 시 자체 null) */}
         <PrefabSection obj={obj} />

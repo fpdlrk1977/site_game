@@ -72,7 +72,7 @@ export function EditorOnboarding() {
 
   return (
     <div className="fixed bottom-6 right-6 z-50 w-80 pointer-events-auto">
-      <div className="bg-surface border border-border rounded-2xl shadow-floating overflow-hidden">
+      <div className="bg-surface border border-border rounded-sm shadow-floating overflow-hidden">
         {/* 진행 바 */}
         <div className="h-0.5 bg-border">
           <div

@@ -130,7 +130,7 @@ function HierarchyItem({
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
         onContextMenu={(e) => { e.preventDefault(); selectObject(obj.id); setMenuOpen(true); }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
-        className={`flex items-center px-1 py-[2px] rounded-xs cursor-pointer group transition-all text-xs ${
+        className={`flex items-center px-1.5 h-7 rounded-xs cursor-pointer group transition-all text-xs gap-1 ${
           isSelected
             ? 'bg-primary/10 text-foreground'
             : 'text-foreground/70 hover:bg-background'
@@ -167,7 +167,7 @@ function HierarchyItem({
 
         {/* 오브젝트 아이콘 */}
         <span className="w-4 flex items-center justify-center shrink-0 text-muted">
-          {(() => { const I = getIcon(obj); return <I size={13} />; })()}
+          {(() => { const I = getIcon(obj); return <I size={14} />; })()}
         </span>
 
         {/* 이름 */}
@@ -185,7 +185,7 @@ function HierarchyItem({
             className="flex-1 bg-background border border-border rounded px-1.5 py-0 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
         ) : (
-          <span className={`flex-1 truncate text-[11px] font-medium ${isSelected ? 'text-foreground' : 'text-foreground/70'}`}>
+          <span className={`flex-1 truncate text-[12px] font-medium ${isSelected ? 'text-foreground' : 'text-foreground/70'}`}>
             {obj.name}
           </span>
         )}
@@ -388,7 +388,7 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
           className="w-full bg-background border border-border rounded-xs px-2.5 py-1 text-xs text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
         />
       </div>
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+      <div className="flex-1 overflow-y-auto p-1.5">
         {objects.filter((o) => o.parentId === null).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <p className="text-muted text-xs leading-relaxed">오브젝트가 없습니다.</p>

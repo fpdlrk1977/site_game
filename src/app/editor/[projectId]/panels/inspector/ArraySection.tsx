@@ -62,7 +62,7 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                   arraySelected(arrayCount, arrayOffset, arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : null);
                   addToast(`Created ${arrayCount - 1} independent copies`, 'success');
                 }}
-                className="w-full py-1.5 rounded-xs bg-background border border-border text-muted hover:text-foreground hover:bg-surface text-[11px] font-medium transition-colors"
+                className="w-full py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] font-medium transition-colors"
               >
 <span className="inline-flex items-center gap-1.5">{arrayMode === 'radial' ? <CircleDot size={13} /> : <Grid2x2 size={13} />} Duplicate once ({arrayCount}, independent)</span>
               </button>

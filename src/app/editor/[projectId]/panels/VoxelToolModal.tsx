@@ -167,7 +167,7 @@ export function VoxelToolModal() {
     <>
       <div
         ref={panelRef}
-        className="fixed z-50 bg-surface border border-border rounded-2xl shadow-2xl p-4 w-[720px] max-w-[95vw]"
+        className="fixed z-50 bg-surface border border-border rounded-sm shadow-2xl p-4 w-[720px] max-w-[95vw]"
         style={panelPos ? { left: panelPos.x, top: panelPos.y } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
       >
         <div className="flex items-center justify-between mb-2.5 cursor-move select-none" onMouseDown={onHeaderDown}>

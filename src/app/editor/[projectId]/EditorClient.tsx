@@ -162,7 +162,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
   const leftPanelX = edge + railW + gap;      // 좌패널 시작 x = 68
   const overlayLeft = leftOpen ? leftPanelX + leftW + gap : leftPanelX; // 자유 캔버스 좌측 경계
   const overlayRight = edge + inspW + gap;    // 자유 캔버스 우측 경계 = 308
-  const panelShell = 'rounded-sm bg-surface border border-border/60 overflow-hidden';
+  const panelShell = 'rounded-sm bg-surface border border-border overflow-hidden';
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-canvas">
@@ -206,7 +206,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       <button
         onClick={() => setLeftOpen((v) => !v)}
         title={leftOpen ? 'Hide panel' : 'Show panel'}
-        className="absolute z-30 top-1/2 -translate-y-1/2 w-3.5 h-10 bg-surface border border-border/60 rounded-r-sm flex items-center justify-center text-muted hover:text-foreground"
+        className="absolute z-30 top-1/2 -translate-y-1/2 w-3.5 h-10 bg-surface border border-border rounded-r-sm flex items-center justify-center text-muted hover:text-foreground"
         style={{ left: leftOpen ? leftPanelX + leftW : leftPanelX, transition: 'left .18s ease' }}
       >
         {leftOpen ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}

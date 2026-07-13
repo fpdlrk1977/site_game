@@ -74,7 +74,7 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
                   onClick={snapToGround}
                   disabled={!canSnapToGround}
                   title={canSnapToGround ? "Align the object's bottom to the floor (y=0)" : (glbUnloaded ? 'Available after the model loads' : "Can't drop to floor")}
-                  className="w-full mt-1 py-1.5 rounded-xs border border-border text-muted hover:border-primary/60 hover:text-primary hover:bg-primary/5 text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted disabled:hover:bg-transparent inline-flex items-center justify-center gap-1.5"
+                  className="w-full mt-1 py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-foreground disabled:hover:bg-surface inline-flex items-center justify-center gap-1.5"
                 >
                   <ArrowDownToLine size={13} /> Drop to floor
                 </button>

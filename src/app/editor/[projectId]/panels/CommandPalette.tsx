@@ -117,7 +117,7 @@ export function CommandPalette({ onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-sidebar border border-border rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full max-w-lg bg-sidebar border border-border rounded-sm shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 검색 입력 */}

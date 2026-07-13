@@ -30,7 +30,7 @@ function TemplatePickerModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-surface border border-border rounded-2xl w-full max-w-lg shadow-modal overflow-hidden">
+      <div className="relative bg-surface border border-border rounded-sm w-full max-w-lg shadow-modal overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground">씬 템플릿 선택</h3>
           <button onClick={onClose} className="text-muted hover:text-foreground transition-colors"><X size={16} /></button>

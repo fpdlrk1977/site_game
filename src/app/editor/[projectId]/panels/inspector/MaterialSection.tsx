@@ -196,7 +196,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 {!matRef && (
                   <button
                     onClick={() => { const id = addMaterialAsset(obj.name || 'Material', obj.material ?? {}); useSceneStore.getState().assignMaterialAsset([obj.id], id); }}
-                    className="w-full py-1.5 rounded-xs border border-border text-muted hover:text-primary hover:border-primary/50 text-[11px] transition-all"
+                    className="w-full py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] transition-all"
                   >
                     Save this material as an asset (shared)
                   </button>
