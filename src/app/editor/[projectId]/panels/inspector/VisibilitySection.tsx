@@ -29,8 +29,8 @@ export function VisibilitySection({ obj, open, onToggle }: { obj: ObjectNodeSche
                 {([
                   { k: 'flatShading', label: 'Flat Shading', def: false },
                   { k: 'doubleSided', label: 'Double-sided', def: false },
-                  { k: 'castShadow', label: 'Cast Shadow', def: true },
-                  { k: 'receiveShadow', label: 'Receive Shadow', def: true },
+                  { k: 'castShadow', label: 'Cast Shadow', def: false },
+                  { k: 'receiveShadow', label: 'Receive Shadow', def: false },
                 ] as const).map(({ k, label, def }) => (
                   <label key={k} className="flex items-center justify-between cursor-pointer">
                     <span className="text-[10px] font-semibold text-muted/50">{label}</span>

@@ -836,8 +836,8 @@ export function ViewerObject({
   const emissive = object.material?.emissive ?? "#000000";
   const rdFlat = object.render?.flatShading ?? false;
   const rdSide = object.render?.doubleSided ? THREE.DoubleSide : THREE.FrontSide;
-  const rdCast = object.render?.castShadow ?? true;
-  const rdReceive = object.render?.receiveShadow ?? true;
+  const rdCast = object.render?.castShadow ?? false;
+  const rdReceive = object.render?.receiveShadow ?? false;
 
   const primMesh = (
     <mesh

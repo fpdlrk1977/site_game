@@ -379,7 +379,7 @@ export function AssetBrowser() {
               className="w-full bg-surface border border-border rounded-xs px-2.5 py-1 mb-2 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
             <input ref={modelInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleModelFile} />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <UploadButton
                 uploading={uploading}
                 onClick={() => modelInputRef.current?.click()}
@@ -404,7 +404,7 @@ export function AssetBrowser() {
         {tab === 'character' && (
           <>
             <input ref={characterInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleCharacterFile} />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <UploadButton
                 uploading={uploading}
                 onClick={() => characterInputRef.current?.click()}
@@ -427,7 +427,7 @@ export function AssetBrowser() {
         )}
 
         {tab === 'content' && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {CONTENT_ITEMS.map(({ type, label, icon: Icon }) => (
               <button
                 key={type}
@@ -442,7 +442,7 @@ export function AssetBrowser() {
         )}
 
         {tab === 'particle' && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {PARTICLE_ITEMS.map(({ preset, label, icon: Icon }) => (
               <button
                 key={preset}
@@ -457,7 +457,7 @@ export function AssetBrowser() {
         )}
 
         {tab === 'lights' && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {LIGHT_ITEMS.map(({ type, label, icon: Icon }) => (
               <button
                 key={type}
@@ -497,7 +497,7 @@ export function AssetBrowser() {
         {tab === 'textures' && (
           <>
             <input ref={textureInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleTextureFile} />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <UploadButton uploading={uploading} onClick={() => textureInputRef.current?.click()} label="이미지" title="JPG·PNG·WEBP 이미지를 업로드해 재사용할 수 있습니다" />
               {textureAssets.map((asset) => (
                 <TextureCard key={asset.id} asset={asset}
@@ -573,7 +573,7 @@ export function AssetBrowser() {
               </div>
             )}
             <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1.5">질감 프리셋 (복사 적용)</span>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {MATERIAL_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
@@ -620,7 +620,7 @@ export function AssetBrowser() {
 
         {tab === 'hdr' && (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {HDR_TILES.map((tile) => {
                 const active = (environment.hdrPreset ?? 'none') === tile.id;
                 return (

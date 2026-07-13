@@ -135,6 +135,47 @@ function SpawnMarker({ position }: { position: Vec3 }) {
   );
 }
 
+// 전역 태양 방향 표식(읽기 전용) — Environment › Lights › Sun Position(directionalPosition)이
+// 화면 어디서 어느 방향으로 비추는지 보여준다. 전역 directionalLight는 이 위치에서 원점(0,0,0)을
+// 향해 비추므로, 광선 방향 = normalize(-directionalPosition). 조명 동작/값은 건드리지 않는 순수
+// 에디터 표식(뷰어/플레이 미표시). 노랑 구=태양 위치(dir×R), 화살표=광선 방향(태양→원점).
+function SunDirectionGizmo({ position }: { position: Vec3 }) {
+  const R = 10;
+  const shaftLen = 2.4;
+  const { sunPos, quat } = useMemo(() => {
+    const dir = new THREE.Vector3(position.x, position.y, position.z);
+    if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
+    dir.normalize();
+    const sun = dir.clone().multiplyScalar(R);
+    const rayDir = dir.clone().multiplyScalar(-1); // 태양 → 원점(광선이 나아가는 방향)
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), rayDir);
+    return { sunPos: sun, quat: q };
+  }, [position.x, position.y, position.z]);
+
+  // depthTest=false + 높은 renderOrder → 바닥/그리드/오브젝트에 가려지지 않고 항상 위에 그려짐
+  // (카메라를 낮춰도 높이 뜬 태양 표식이 바닥에 가리지 않게 하는 오버레이 규칙).
+  return (
+    <group renderOrder={999}>
+      {/* 태양 위치 */}
+      <mesh position={[sunPos.x, sunPos.y, sunPos.z]} renderOrder={999}>
+        <sphereGeometry args={[0.5, 16, 16]} />
+        <meshBasicMaterial color="#facc15" depthTest={false} depthWrite={false} />
+      </mesh>
+      {/* 광선 방향 화살표(태양 → 원점) — 로컬 +Y축이 rayDir을 향하도록 회전 */}
+      <group position={[sunPos.x, sunPos.y, sunPos.z]} quaternion={quat}>
+        <mesh position={[0, shaftLen / 2, 0]} renderOrder={999}>
+          <cylinderGeometry args={[0.05, 0.05, shaftLen, 8]} />
+          <meshBasicMaterial color="#facc15" depthTest={false} depthWrite={false} />
+        </mesh>
+        <mesh position={[0, shaftLen + 0.25, 0]} renderOrder={999}>
+          <coneGeometry args={[0.2, 0.5, 12]} />
+          <meshBasicMaterial color="#facc15" depthTest={false} depthWrite={false} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
 function CameraCapture({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.Camera | null> }) {
   const { camera } = useThree();
   cameraRef.current = camera;
@@ -898,6 +939,9 @@ export function EditorCanvas() {
             ) : environment.playerStartPosition ? (
               <SpawnMarker position={environment.playerStartPosition} />
             ) : null)}
+
+          {/* 전역 태양 방향 표식(읽기 전용) — Sun Position이 어느 방향으로 비추는지 시각화 */}
+          <SunDirectionGizmo position={environment.lights.directionalPosition} />
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 

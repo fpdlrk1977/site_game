@@ -288,7 +288,7 @@ function makeObject(shape: PrimitiveShape): ObjectNodeSchema {
     name: `${SHAPE_NAMES[shape]} ${objectCounter}`,
     primitiveShape: shape,
     ...(geom ? { geom: { ...geom } } : {}),
-    material: { color: '#00a4eb', roughness: 0.5, metalness: 0.1 },
+    material: { color: '#ffffff', roughness: 0.5, metalness: 0.1 },
     position: { x: 0, y: 0.5, z: 0 },
   });
 }
