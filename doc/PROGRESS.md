@@ -51,6 +51,25 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-13) — 라이트 방향/길이 기즈모 + 그림자·색 기본값 + AssetBrowser 3단
+
+> 이 세션 작업. **라이트 방향 기즈모는 사용자 브라우저 확인 완료("잘된다")**, 나머지는 tsc/컴파일 클린(실동작 확인 권장).
+
+- **🔦 라이트 방향/길이 드래그 기즈모** (`EditorObjectInstance.tsx` `LightObjectInstance` — spot/directional):
+  - **빔 방향 = 라이트 로컬 -Y를 object.rotation으로 회전**. 실제 three 라이트에 **`target`(로컬 -Y)** 을 붙여 emission이 회전을 따라감("후레쉬 위로 하면 빛도 위로"). 뷰어(`ViewerCanvas` `SceneLight`)·플레이(`PlayCanvas` `PlaySceneLight`)도 동일 target 방식으로 통일(편집=게시 룩 일치).
+  - **끝 핸들(원+화살촉) 드래그 = 방향 + 길이 동시 조절**: 카메라 평면에 광선 투영한 3D 지점으로 방향(rotation)과 길이(=`light.distance`) 산출. **min=라이트, max=바닥**(`hit.y≥0` 클램프). dash가 실시간으로 늘었다 줄었다.
+  - **실시간성 2종**: ①핸들 드래그 중 `liveTransformStore`에 회전 게시(Inspector 수치 실시간)+그룹 quaternion 즉시. ②**메인 기즈모로 라이트를 옮길 때도 `liveTransformStore` 구독**으로 dash가 실시간 따라옴(예전엔 놓을 때 "딱" 붙던 것 해결). 드래그는 window 리스너+카메라 레이캐스트(커서가 핸들 벗어나도 안정).
+  - **visible=false면 dash·핸들 통째로 사라짐**(`object.visible` 게이트). point 라이트는 방향 없음 → 위치/높이용 수직 드롭라인만.
+  - 커밋: 놓을 때 `updateObject({rotation, light:{...distance}})`+`pushHistory`(undo 1회).
+  - ⚠️ **동작 변경**: 기존 spot/directional은 원점을 향해 비췄으나 이제 회전 기준(기본 아래). 회전 0인 기존 라이트는 곧바로 아래로.
+- **🌞 전역 태양 방향 화살표**(`EditorCanvas.tsx` `SunDirectionGizmo`): `env.lights.directionalPosition` 방향으로 노랑 구+화살표(광선=원점 방향). `depthTest=false`+`renderOrder=999`로 바닥에 안 가림. 읽기전용·에디터 전용.
+- **오브젝트 그림자 기본값 false**: `render.castShadow`/`receiveShadow` 기본 `?? true`→`?? false` (에디터 `EditorObjectInstance`·뷰어 `ViewerObject`·Inspector `VisibilitySection` def 3곳). 새 프리미티브는 기본적으로 그림자 안 만들고 안 받음.
+- **프리미티브 기본 색 흰색**: `sceneStore.makeObject` `#00a4eb`→`#ffffff`.
+- **호버 시 원래 색 유지**: `EditorObjectInstance` 프리미티브·텍스트의 **hover emissive 틴트 제거**(가이드 와이어박스는 유지). 선택 하이라이트는 유지.
+- **AssetBrowser 아이템 그리드 2단→3단**: 전 탭 `grid-cols-2`→`grid-cols-3`(8곳).
+
+---
+
 ## ✅ 완료 (2026-07-13) — 전역 태양 방향 화살표 (읽기 전용 표식)
 
 > **다른 PC에서 이어작업 시 참고.** 이 세션에서 구현 완료. `EditorCanvas.tsx` 단독 변경(스키마·스토어·뷰어 무변경).

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 import { Physics, RigidBody, CuboidCollider } from '@react-three/rapier';
 import type { RapierRigidBody } from '@react-three/rapier';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
@@ -14,6 +14,34 @@ import { computeMotion, makeWanderState } from '@/lib/motion';
 import { worldMatrix, localCenter } from '@/lib/objectBBox';
 
 const DEG2RAD = Math.PI / 180;
+
+// 씬 라이트 렌더(플레이 모드) — spot/directional은 로컬 -Y target으로 방향이 object.rotation을
+// 따라가게 한다(에디터/탐색 뷰어와 동일 규칙).
+function PlaySceneLight({ object: o }: { object: ObjectNodeSchema }) {
+  const lc = o.light!;
+  const targetObj = useMemo(() => new THREE.Object3D(), []);
+  const isDir = lc.type !== 'point';
+  return (
+    <group position={[o.position.x, o.position.y, o.position.z]}
+      rotation={[o.rotation.x * DEG2RAD, o.rotation.y * DEG2RAD, o.rotation.z * DEG2RAD]}>
+      {lc.type === 'point' && (
+        <pointLight color={lc.color} intensity={lc.intensity}
+          distance={lc.distance ?? 20} decay={lc.decay ?? 2} castShadow={lc.castShadow} />
+      )}
+      {lc.type === 'spot' && (
+        <spotLight color={lc.color} intensity={lc.intensity}
+          distance={lc.distance ?? 20} decay={lc.decay ?? 2}
+          angle={lc.angle ?? Math.PI / 6} penumbra={lc.penumbra ?? 0.1}
+          castShadow={lc.castShadow} target={targetObj} />
+      )}
+      {lc.type === 'directional' && (
+        <directionalLight color={lc.color} intensity={lc.intensity}
+          castShadow={lc.castShadow} target={targetObj} />
+      )}
+      {isDir && <primitive object={targetObj} position={[0, -3, 0]} />}
+    </group>
+  );
+}
 
 // 오브젝트별 콜라이더 거동 판정 — 루트/그룹자식 어디서든 동일하게 쓰는 순수 함수.
 // 위치가 움직이는 모션(float/spin/orbit/wander) + 콜라이더 동반 → kinematic 이동 장애물.
@@ -353,24 +381,7 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
     <Physics gravity={[0, -20, 0]} timeStep="vary">
       {/* 씬 라이트 오브젝트 */}
       {lightObjects.map((o) => (
-        <group key={o.id} position={[o.position.x, o.position.y, o.position.z]}
-          rotation={[o.rotation.x * DEG2RAD, o.rotation.y * DEG2RAD, o.rotation.z * DEG2RAD]}>
-          {o.light!.type === 'point' && (
-            <pointLight color={o.light!.color} intensity={o.light!.intensity}
-              distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
-              castShadow={o.light!.castShadow} />
-          )}
-          {o.light!.type === 'spot' && (
-            <spotLight color={o.light!.color} intensity={o.light!.intensity}
-              distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
-              angle={o.light!.angle ?? Math.PI / 6} penumbra={o.light!.penumbra ?? 0.1}
-              castShadow={o.light!.castShadow} />
-          )}
-          {o.light!.type === 'directional' && (
-            <directionalLight color={o.light!.color} intensity={o.light!.intensity}
-              castShadow={o.light!.castShadow} />
-          )}
-        </group>
+        <PlaySceneLight key={o.id} object={o} />
       ))}
 
       {/* 바닥 */}

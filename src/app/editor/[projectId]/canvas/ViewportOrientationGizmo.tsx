@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { SelectBox } from '@/components/ui/SelectBox';
+import { useState } from "react";
+import { SelectBox } from "@/components/ui/SelectBox";
 
-type Projection = 'Perspective' | 'Orthographic';
+type Projection = "Perspective" | "Orthographic";
 
 export function ViewportOrientationGizmo() {
-  const [projection, setProjection] = useState<Projection>('Perspective');
+  const [projection, setProjection] = useState<Projection>("Perspective");
 
   return (
     <div className="absolute top-3 right-3 z-20 flex flex-col items-center gap-1.5 pointer-events-auto select-none">
       {/* XYZ 방향 기즈모 */}
-      <div className="w-[60px] h-[60px] rounded-xs bg-surface/90 backdrop-blur-sm border border-border/80 shadow-floating flex items-center justify-center">
+      <div className="w-[60px] h-[60px] flex items-center justify-center">
         <div className="relative w-8 h-8">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-muted/40" />
           <div className="absolute top-1/2 left-1/2 -translate-y-1/2 flex items-center">
@@ -22,7 +22,10 @@ export function ViewportOrientationGizmo() {
             <span className="text-[8px] font-bold text-green-400 leading-none">Y</span>
             <div className="w-px h-[14px] bg-green-500" />
           </div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-end" style={{ transform: 'translate(-50%, -50%) rotate(135deg)' }}>
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-end"
+            style={{ transform: "translate(-50%, -50%) rotate(135deg)" }}
+          >
             <div className="w-[10px] h-px bg-blue-400 opacity-60" />
           </div>
           <div className="absolute bottom-0 left-0 flex items-center">
@@ -36,8 +39,8 @@ export function ViewportOrientationGizmo() {
         value={projection}
         onChange={(v) => setProjection(v as Projection)}
         options={[
-          { value: 'Perspective', label: 'Perspective' },
-          { value: 'Orthographic', label: 'Orthographic' },
+          { value: "Perspective", label: "Perspective" },
+          { value: "Orthographic", label: "Orthographic" },
         ]}
         fullWidth={false}
         className="bg-surface/90 backdrop-blur-sm border border-border/80 rounded-xs px-2.5 py-1 shadow-card text-[10px] font-medium hover:border-border transition-all whitespace-nowrap"

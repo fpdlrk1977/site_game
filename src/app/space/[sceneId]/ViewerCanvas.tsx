@@ -59,6 +59,36 @@ function objWorldPos(objects: ObjectNodeSchema[], id: string): THREE.Vector3 | n
   return v;
 }
 
+// 씬 라이트 오브젝트 렌더. spot/directional은 그룹의 로컬 -Y에 target을 둬서 emission이
+// object.rotation을 따라가게 한다(에디터 방향 기즈모와 동일 규칙 — 편집/게시 룩 일치).
+function SceneLight({ object: o }: { object: ObjectNodeSchema }) {
+  const lc = o.light!;
+  const targetObj = useMemo(() => new THREE.Object3D(), []);
+  const isDir = lc.type !== 'point';
+  return (
+    <group
+      position={[o.position.x, o.position.y, o.position.z]}
+      rotation={[o.rotation.x * Math.PI / 180, o.rotation.y * Math.PI / 180, o.rotation.z * Math.PI / 180]}
+    >
+      {lc.type === 'point' && (
+        <pointLight color={lc.color} intensity={lc.intensity}
+          distance={lc.distance ?? 20} decay={lc.decay ?? 2} castShadow={lc.castShadow} />
+      )}
+      {lc.type === 'spot' && (
+        <spotLight color={lc.color} intensity={lc.intensity}
+          distance={lc.distance ?? 20} decay={lc.decay ?? 2}
+          angle={lc.angle ?? Math.PI / 6} penumbra={lc.penumbra ?? 0.1}
+          castShadow={lc.castShadow} target={targetObj} />
+      )}
+      {lc.type === 'directional' && (
+        <directionalLight color={lc.color} intensity={lc.intensity}
+          castShadow={lc.castShadow} target={targetObj} />
+      )}
+      {isDir && <primitive object={targetObj} position={[0, -3, 0]} />}
+    </group>
+  );
+}
+
 // 포커스 프레이밍용 대상 반경(월드) — GLB는 캐시된 로컬 bbox×스케일, 그 외는 스케일 근사
 function objFocusRadius(objects: ObjectNodeSchema[], assets: AssetRefSchema[], id: string): number {
   const o = objects.find((x) => x.id === id);
@@ -427,26 +457,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
 
       {/* ── 씬 라이트 오브젝트 ── */}
       {objects.filter((o) => o.light && o.visible).map((o) => (
-        <group key={o.id}
-          position={[o.position.x, o.position.y, o.position.z]}
-          rotation={[o.rotation.x * Math.PI / 180, o.rotation.y * Math.PI / 180, o.rotation.z * Math.PI / 180]}
-        >
-          {o.light!.type === 'point' && (
-            <pointLight color={o.light!.color} intensity={o.light!.intensity}
-              distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
-              castShadow={o.light!.castShadow} />
-          )}
-          {o.light!.type === 'spot' && (
-            <spotLight color={o.light!.color} intensity={o.light!.intensity}
-              distance={o.light!.distance ?? 20} decay={o.light!.decay ?? 2}
-              angle={o.light!.angle ?? Math.PI / 6} penumbra={o.light!.penumbra ?? 0.1}
-              castShadow={o.light!.castShadow} />
-          )}
-          {o.light!.type === 'directional' && (
-            <directionalLight color={o.light!.color} intensity={o.light!.intensity}
-              castShadow={o.light!.castShadow} />
-          )}
-        </group>
+        <SceneLight key={o.id} object={o} />
       ))}
 
       <PostProcessingEffects preset={environment.postProcessing?.preset ?? 'none'} effects={environment.effects} />

@@ -2,12 +2,14 @@
 
 import { useRef, useLayoutEffect, useMemo, useEffect, useState, Suspense } from 'react';
 import * as THREE from 'three';
-import { Text3D, Center } from '@react-three/drei';
+import { useThree, type ThreeEvent } from '@react-three/fiber';
+import { Text3D, Center, Line } from '@react-three/drei';
 import { createPrimitiveGeometry, primitiveGeomKey } from '@/lib/primitiveGeometry';
 import { primLocalBboxCache } from '@/lib/primBboxCache';
 import { effectiveMaterial } from '@/lib/effectiveMaterial';
 import { useShallow } from 'zustand/react/shallow';
 import { useSceneStore } from '@/store/sceneStore';
+import { useLiveTransformStore } from '@/store/liveTransformStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { GlbObject } from './GlbObject';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
@@ -65,6 +67,19 @@ const LIGHT_ICON_COLOR: Record<LightType, string> = {
   directional: '#60a5fa',
 };
 
+// 라이트 빔의 기본(회전 0) 방향 = 로컬 -Y(아래). object.rotation을 적용해 실제 월드 방향을 얻는다.
+const LIGHT_DOWN = new THREE.Vector3(0, -1, 0);
+const LIGHT_HANDLE_DIST = 3; // 라이트 target(방향)까지의 로컬 거리(방향만 쓰므로 값 자체는 무의미)
+const LIGHT_MIN_LEN = 0.5;   // dash 최소 길이(핸들이 라이트에 붙어 사라지지 않게)
+const _lightRaycaster = new THREE.Raycaster();
+const _lightNdc = new THREE.Vector2();
+// 월드 빔 방향 → object.rotation(도) 변환. 로컬 -Y를 그 방향으로 돌리는 최소 회전(roll 무시 — 라이트엔 무의미).
+function beamDirToRotDeg(dir: THREE.Vector3): { x: number; y: number; z: number } {
+  const q = new THREE.Quaternion().setFromUnitVectors(LIGHT_DOWN, dir);
+  const e = new THREE.Euler().setFromQuaternion(q);
+  return { x: e.x / DEG2RAD, y: e.y / DEG2RAD, z: e.z / DEG2RAD };
+}
+
 function LightObjectInstance({ object }: Props) {
   const groupRef = useRef<THREE.Group>(null);
   const refsMap = useObjectRefs();
@@ -96,9 +111,119 @@ function LightObjectInstance({ object }: Props) {
 
   const handleClick = (shiftKey: boolean) => selectByClick(object, shiftKey);
 
+  const updateObject = useSceneStore((s) => s.updateObject);
+  const pushHistory = useSceneStore((s) => s.pushHistory);
+  const controls = useThree((s) => s.controls) as { enabled: boolean } | null;
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+
+  // (A) 라이브 트랜스폼 구독 — 메인 기즈모로 라이트를 옮기는/돌리는 '중'에도 dash가 실시간으로 따라오게.
+  // 기즈모는 드래그 중 liveTransformStore에 매 프레임 게시하고 object.position/rotation은 commit 때만 갱신됨.
+  const live = useLiveTransformStore((s) => s.live);
+  const lv = live && live.id === object.id ? live : null;
+  const px = lv ? lv.position.x : object.position.x;
+  const py = lv ? lv.position.y : object.position.y;
+  const pz = lv ? lv.position.z : object.position.z;
+  const rrx = lv ? lv.rotation.x : object.rotation.x;
+  const rry = lv ? lv.rotation.y : object.rotation.y;
+  const rrz = lv ? lv.rotation.z : object.rotation.z;
+  const isDir = lc.type !== 'point'; // point는 무지향성 → 방향 기즈모 없음
+
+  // 실제 three 라이트의 target(방향) — 그룹의 로컬 -Y에 둔다. 그룹이 회전하면 함께 돌아
+  // emission 방향이 object.rotation을 따라간다("후레쉬를 위로 하면 빛도 위로").
+  const targetObj = useMemo(() => new THREE.Object3D(), []);
+
+  // 현재 빔 방향(월드). 핸들 드래그 중이면 그 방향으로 덮어씀.
+  const baseDir = useMemo(() => {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rrx * DEG2RAD, rry * DEG2RAD, rrz * DEG2RAD));
+    return LIGHT_DOWN.clone().applyQuaternion(q);
+  }, [rrx, rry, rrz]);
+  const [drag, setDrag] = useState<THREE.Vector3 | null>(null);   // 드래그 중 빔 방향
+  const [dragLen, setDragLen] = useState<number | null>(null);    // 드래그 중 빔 길이
+  const [dragging, setDragging] = useState(false);
+  const commitRef = useRef<{ dir: THREE.Vector3; len: number } | null>(null);
+  const dir = drag ?? baseDir;
+
+  // (B) dash 길이 = 저장된 빔 길이(light.distance)를 바닥(y=0)까지로 클램프 → min=라이트, max=바닥.
+  const storedLen = lc.distance ?? (lc.type === 'spot' ? 20 : 5);
+  const floorReach = dir.y < -1e-3 ? py / -dir.y : Infinity; // 빔이 바닥에 닿는 거리(위/수평이면 무한대)
+  const dashLen = dragLen ?? Math.max(LIGHT_MIN_LEN, Math.min(storedLen, floorReach));
+
+  // 카메라를 향한 평면(라이트 중심 통과)에 광선을 투영 → 3D 지점 p. p.y는 바닥 아래로 못 감(max=바닥).
+  // p로부터 방향(dir)과 길이(len=|p-light|)를 동시에 얻는다 → 핸들 하나로 방향+길이 조절.
+  const _camN = useMemo(() => new THREE.Vector3(), []);
+  const _plane = useMemo(() => new THREE.Plane(), []);
+  const solveHandle = (ray: THREE.Ray): { dir: THREE.Vector3; len: number } | null => {
+    const lp = new THREE.Vector3(px, py, pz);
+    camera.getWorldDirection(_camN);
+    _plane.setFromNormalAndCoplanarPoint(_camN, lp);
+    const hit = new THREE.Vector3();
+    if (!ray.intersectPlane(_plane, hit)) return null;
+    if (hit.y < 0) hit.y = 0; // 바닥 아래로 못 내려감 → 최대 길이는 바닥
+    const d = hit.sub(lp);
+    const len = d.length();
+    if (len < 1e-4) return null;
+    return { dir: d.divideScalar(len), len: Math.max(LIGHT_MIN_LEN, len) };
+  };
+  // 드래그 중 실시간: 그룹 회전(=emission 미리보기) 즉시 반영 + Inspector 회전 수치 라이브 게시.
+  const publishLive = (d: THREE.Vector3) => {
+    const g = groupRef.current;
+    if (g) g.quaternion.setFromUnitVectors(LIGHT_DOWN, d);
+    useLiveTransformStore.getState().setLive({
+      id: object.id, position: { x: px, y: py, z: pz }, rotation: beamDirToRotDeg(d), scale: { x: 1, y: 1, z: 1 },
+    });
+  };
+
+  // 드래그는 window 리스너 + 카메라 레이캐스트로 처리 → 커서가 핸들을 벗어나도 안정적으로 따라온다.
+  useEffect(() => {
+    if (!dragging) return;
+    const el = gl.domElement;
+    const move = (ev: PointerEvent) => {
+      const rect = el.getBoundingClientRect();
+      _lightNdc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+      _lightRaycaster.setFromCamera(_lightNdc, camera);
+      const r = solveHandle(_lightRaycaster.ray);
+      if (!r) return;
+      commitRef.current = r;
+      setDrag(r.dir);
+      setDragLen(r.len);
+      publishLive(r.dir);
+    };
+    const up = () => {
+      setDragging(false);
+      document.body.style.cursor = '';
+      if (controls) controls.enabled = true;
+      const r = commitRef.current;
+      // 방향(rotation) + 길이(light.distance) 함께 커밋(undo 1회).
+      if (r) { updateObject(object.id, { rotation: beamDirToRotDeg(r.dir), light: { ...lc, distance: r.len } }); pushHistory(); }
+      setDrag(null);
+      setDragLen(null);
+      useLiveTransformStore.getState().setLive(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragging]);
+
+  const onHandleDown = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    pointerDownOnObjectRef.current = true;
+    commitRef.current = { dir: dir.clone(), len: dashLen };
+    if (controls) controls.enabled = false; // orbit 잠금(드래그가 카메라로 안 새게)
+    setDrag(dir.clone());
+    setDragLen(dashLen);
+    setDragging(true);
+  };
+
+  // 방향 핸들(빔 끝) 월드 좌표 + 핸들 방향 정렬 쿼터니언(로컬 +Y → dir).
+  const hx = px + dir.x * dashLen, hy = py + dir.y * dashLen, hz = pz + dir.z * dashLen;
+  const handleQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+
   return (
+    <>
     <group ref={groupRef} onPointerDown={markObjectHit}>
-      {/* 실제 라이트 — 에디터에서도 조명 효과 미리보기 */}
+      {/* 실제 라이트 — 에디터에서도 조명 효과 미리보기. spot/directional은 target으로 방향 제어. */}
       {lc.type === 'point' && (
         <pointLight
           color={lc.color} intensity={lc.intensity}
@@ -112,11 +237,13 @@ function LightObjectInstance({ object }: Props) {
           distance={lc.distance ?? 20} decay={lc.decay ?? 2}
           angle={lc.angle ?? Math.PI / 6} penumbra={lc.penumbra ?? 0.1}
           castShadow={lc.castShadow}
+          target={targetObj}
         />
       )}
       {lc.type === 'directional' && (
-        <directionalLight color={lc.color} intensity={lc.intensity} castShadow={lc.castShadow} />
+        <directionalLight color={lc.color} intensity={lc.intensity} castShadow={lc.castShadow} target={targetObj} />
       )}
+      {isDir && <primitive object={targetObj} position={[0, -LIGHT_HANDLE_DIST, 0]} />}
 
       {/* 아이콘 — 클릭 가능한 시각 표시자 */}
       <mesh
@@ -131,10 +258,10 @@ function LightObjectInstance({ object }: Props) {
         <sphereGeometry args={[0.28, 8, 8]} />
         <meshBasicMaterial color={iconColor} transparent opacity={0.12} depthWrite={false} />
       </mesh>
-      {/* spot: 방향 콘 와이어프레임 */}
+      {/* spot: 방향 콘 와이어프레임 — 로컬 -Y(빔)로 펼쳐져 회전 시 함께 돌며 방향을 보여줌 */}
       {lc.type === 'spot' && (
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <coneGeometry args={[Math.tan(lc.angle ?? Math.PI / 6) * 3, 3, 12, 1, true]} />
+        <mesh position={[0, -1.5, 0]}>
+          <coneGeometry args={[Math.tan(lc.angle ?? Math.PI / 6) * 3, 3, 16, 1, true]} />
           <meshBasicMaterial color={iconColor} wireframe transparent opacity={0.3} />
         </mesh>
       )}
@@ -146,6 +273,71 @@ function LightObjectInstance({ object }: Props) {
         </mesh>
       )}
     </group>
+
+    {/* ── 방향 기즈모(spot/directional) — 라이트에서 빔 방향으로 뻗는 점선 + 끝의 드래그 핸들.
+        핸들을 끌면 빛 방향이 바뀌고(그룹 회전+target 이동) Inspector 수치가 실시간 갱신된다.
+        object.visible=false면 통째로 사라진다. 회전 그룹 밖(월드 공간)이라 좌표는 직접 계산. ── */}
+    {isDir && object.visible && (
+      <group>
+        <Line
+          points={[[px, py, pz], [hx, hy, hz]]}
+          color={iconColor}
+          lineWidth={1.5}
+          dashed
+          dashSize={0.25}
+          gapSize={0.15}
+          transparent
+          opacity={0.85}
+          depthTest={false}
+          renderOrder={998}
+        />
+        <group position={[hx, hy, hz]} quaternion={handleQuat}>
+          {/* 방향 화살촉(빔 방향) */}
+          <mesh position={[0, 0.17, 0]} renderOrder={999}>
+            <coneGeometry args={[0.13, 0.34, 14]} />
+            <meshBasicMaterial color={iconColor} depthTest={false} depthWrite={false} />
+          </mesh>
+          {/* 링(빔에 수직) — 잡는 '원' */}
+          <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={999}>
+            <ringGeometry args={[0.2, 0.3, 24]} />
+            <meshBasicMaterial color={iconColor} transparent opacity={0.9} depthTest={false} depthWrite={false} side={THREE.DoubleSide} />
+          </mesh>
+          {/* 잡기 히트영역(투명·크게) — 드래그로 방향 조절 */}
+          <mesh
+            renderOrder={999}
+            onPointerDown={onHandleDown}
+            onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'grab'; }}
+            onPointerOut={() => { if (!dragging) document.body.style.cursor = ''; }}
+          >
+            <sphereGeometry args={[0.42, 12, 12]} />
+            <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
+          </mesh>
+        </group>
+      </group>
+    )}
+
+    {/* point 라이트 — 방향이 없으므로 위치/높이 표시용 수직 드롭 라인만(visible 게이트). */}
+    {lc.type === 'point' && object.visible && py > 0.05 && (
+      <group>
+        <Line
+          points={[[px, py, pz], [px, 0.002, pz]]}
+          color={iconColor}
+          lineWidth={1.5}
+          dashed
+          dashSize={0.25}
+          gapSize={0.15}
+          transparent
+          opacity={0.8}
+          depthTest={false}
+          renderOrder={998}
+        />
+        <mesh position={[px, 0.004, pz]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={998}>
+          <ringGeometry args={[0.16, 0.26, 24]} />
+          <meshBasicMaterial color={iconColor} transparent opacity={0.8} depthWrite={false} depthTest={false} />
+        </mesh>
+      </group>
+    )}
+    </>
   );
 }
 
