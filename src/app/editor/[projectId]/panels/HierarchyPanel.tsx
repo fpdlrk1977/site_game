@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import {
   Box, Circle, Cylinder, Cone, Hexagon, Square, Folder, Type, Image as ImageIcon, Play,
   Package, Sparkles, Grid2x2, CircleDot, ChevronDown, ChevronRight,
@@ -62,20 +62,36 @@ interface ItemProps {
   onDropItem: (id: string) => void;
   onDragEndItem: () => void;
   menuOpen: boolean;
-  onOpenMenu: () => void;
+  menuPos: { x: number; y: number } | null;
+  onOpenMenu: (x: number, y: number) => void;
   onCloseMenu: () => void;
 }
 
 function HierarchyItem({
   obj, depth, index, isExpanded, onToggleExpand, onClickItem,
   dragEnabled, isDragging, dropPos, onDragStartItem, onDragOverItem, onDropItem, onDragEndItem,
-  menuOpen, onOpenMenu, onCloseMenu,
+  menuOpen, menuPos, onOpenMenu, onCloseMenu,
 }: ItemProps) {
   const { selectedId, selectedIds, updateObject, setObjectLocked, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected, openPenToolEdit, openVoxelEdit } = useSceneStore();
   const objects = useSceneStore((s) => s.objects);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  // 컨텍스트 메뉴는 마우스 포인터 위치에 fixed로 뜬다. 렌더 후 크기를 재 뷰포트 밖으로 나가면 되접는다.
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  useLayoutEffect(() => {
+    if (!menuOpen || !menuPos) return;
+    let left = menuPos.x + 2; // 포인터 오른쪽
+    let top = menuPos.y;
+    const el = menuRef.current;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      if (left + r.width > window.innerWidth - 4) left = menuPos.x - r.width - 2; // 오른쪽 넘치면 왼쪽으로 뒤집기
+      if (top + r.height > window.innerHeight - 4) top = window.innerHeight - r.height - 4;
+    }
+    setMenuStyle({ left: Math.max(4, left), top: Math.max(4, top) });
+  }, [menuOpen, menuPos]);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(obj.id) : selectedId === obj.id;
   const hasChildren = obj.isGroup;
   // 조상(부모 체인) 중 잠긴 게 있으면 이 행의 잠금은 조상에서 내려온 것 → 개별 해제 불가(버튼 disabled).
@@ -134,7 +150,7 @@ function HierarchyItem({
         }}
         onDrop={(e) => { if (!dragEnabled) return; e.preventDefault(); onDropItem(obj.id); }}
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
-        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); selectObject(obj.id); onOpenMenu(); }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); selectObject(obj.id); onOpenMenu(e.clientX, e.clientY); }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
         className={`flex items-center px-1.5 h-7 rounded-xs cursor-pointer group transition-all text-xs gap-1 ${
           isSelected
@@ -222,8 +238,8 @@ function HierarchyItem({
 
       {/* 컨텍스트 메뉴 — 백드롭 없이(다른 행 우클릭 시 그 행 메뉴로 전환되도록) 패널이 바깥클릭 닫기 담당.
           data-ctx-menu: 패널의 바깥클릭 리스너가 메뉴 내부 클릭을 무시하는 표식. */}
-      {menuOpen && (
-        <div data-ctx-menu className="absolute left-2 top-full mt-0.5 w-44 bg-surface border border-border rounded-xs shadow-2xl shadow-black/30 z-50 py-1 overflow-hidden">
+      {menuOpen && menuPos && (
+        <div ref={menuRef} data-ctx-menu style={{ position: 'fixed', left: menuStyle.left, top: menuStyle.top }} className="w-44 bg-surface border border-border rounded-xs shadow-2xl shadow-black/30 z-50 py-1 overflow-hidden">
           {!obj.isGroup && (
             <button
               onClick={() => { onCloseMenu(); setEditing(true); }}
@@ -284,6 +300,7 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // 컨텍스트 메뉴는 패널 레벨에서 단일 관리(한 번에 하나) — 다른 행 우클릭 시 그 행으로 전환.
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   // 바깥 클릭/우클릭/스크롤/Esc 시 메뉴 닫기(메뉴 내부 클릭은 무시). 백드롭 대신 이 리스너가 담당해
   // 다른 행 우클릭이 백드롭에 막히지 않고 그 행 메뉴로 넘어가게 한다.
@@ -415,7 +432,8 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
           onDropItem={handleDropItem}
           onDragEndItem={handleDragEndItem}
           menuOpen={openMenuId === obj.id}
-          onOpenMenu={() => setOpenMenuId(obj.id)}
+          menuPos={openMenuId === obj.id ? menuPos : null}
+          onOpenMenu={(x, y) => { setMenuPos({ x, y }); setOpenMenuId(obj.id); }}
           onCloseMenu={() => setOpenMenuId(null)}
         />,
       ];

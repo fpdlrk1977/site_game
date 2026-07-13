@@ -63,6 +63,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
   - 한계: 재편집 그리드 크기 추정 · 물리 콜라이더는 프리미티브 기본(거침) · subdivision 시 정점색 보존 미검증(기본 0) · 지난 GLB 복셀은 그대로.
 - **펜툴 Ctrl+클릭 = 점 추가**: `onSvgDown`에 Ctrl(⌘)+클릭 분기 → 가장 가까운 변에 점 삽입. **닫힌 경로(재편집 도형)에도** 점 추가 가능(기존엔 막힘). `distToSeg` 헬퍼.
 - **🐛 계층 컨텍스트 메뉴 전환**: 각 행 로컬 `menuOpen`+전체화면 백드롭 → 다른 행 우클릭이 백드롭에 막혀 네이티브 메뉴가 뜨던 문제. **패널 레벨 단일 `openMenuId` + 백드롭 제거**(mousedown/scroll/Esc 문서 리스너로 바깥클릭 닫기, 메뉴 내부는 `data-ctx-menu`로 무시). 이제 A 열린 채 B 우클릭 → A 닫히고 B 메뉴 즉시 전환.
+- **계층 컨텍스트 메뉴 마우스 포인터 위치 (2026-07-14, 사용자 "잘된다" 확인)**: 행 기준 `absolute left-2 top-full` 고정 → 우클릭 `clientX/Y` 저장 후 `position:fixed`로 **포인터 오른쪽**에 표시. 뷰포트 클램핑(오른쪽 넘치면 왼쪽 뒤집기·아래 넘치면 위로, `useLayoutEffect`로 렌더 후 크기 재 보정=깜빡임 없음). 패널 레벨 `menuPos` state 추가, ItemProps에 `menuPos`+`onOpenMenu(x,y)`.
 
 ---
 
