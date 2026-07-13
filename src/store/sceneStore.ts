@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { MathUtils, Quaternion, Euler, Vector3, Matrix4 } from 'three';
 import { worldBBox } from '@/lib/objectBBox';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
+import { OBJECT_PRESETS, PRESET_SELF } from '@/lib/objectPresets';
 
 // 추가 직후 아직 bbox(GLB 로드)가 없어 바닥 스냅을 못한 오브젝트 id들 — 로드되면 GlbObject가 재시도
 const pendingFloorSnap = new Set<string>();
@@ -123,6 +124,8 @@ interface SceneActions {
   setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
   setTransformSpace: (space: 'world' | 'local') => void;
   addObject: (shape: PrimitiveShape, placeAt?: PlaceXZ) => void;
+  // 완성형 프리셋(바퀴/문/동전)을 스탬프로 추가. 동전 등은 필요 시 'score' 변수 자동 생성.
+  addPreset: (presetId: string, placeAt?: PlaceXZ) => void;
   /** 펜 툴 프로파일로 돌출/회전체 오브젝트 생성 */
   addProfileObject: (shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean) => void;
   addAsset: (asset: AssetRefSchema) => void;
@@ -454,6 +457,53 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       selectedIds: [obj.id],
       isModified: true,
       ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  addPreset: (presetId, placeAt) => {
+    const def = OBJECT_PRESETS.find((p) => p.id === presetId);
+    if (!def) return;
+    objectCounter += 1;
+    const b = def.build;
+    let obj = makeBaseObject({
+      name: `${def.label} ${objectCounter}`,
+      primitiveShape: b.primitiveShape,
+      material: { ...b.material },
+      position: { ...b.position },
+      rotation: b.rotation ? { ...b.rotation } : { x: 0, y: 0, z: 0 },
+      scale: b.scale ? { ...b.scale } : { x: 1, y: 1, z: 1 },
+    });
+    if (b.motion) obj = { ...obj, motion: { ...b.motion } };
+    if (b.physics) obj = { ...obj, physics: { ...obj.physics, ...b.physics } };
+    if (b.events) {
+      const selfId = obj.id;
+      obj = {
+        ...obj,
+        events: b.events.map((e) => ({
+          id: MathUtils.generateUUID(),
+          trigger: e.trigger,
+          action: e.action,
+          value: e.value === PRESET_SELF ? selfId : e.value,
+        })),
+      };
+    }
+    if (placeAt) obj = { ...obj, position: { ...obj.position, x: placeAt.x, z: placeAt.z } };
+
+    const { objects, environment, variables, past } = get();
+    // 'score' 변수 자동 생성(동전 등). 이미 있으면 그대로 둔다.
+    let nextVars = variables;
+    if (def.ensureScore && !variables.some((v) => v.name === 'score')) {
+      const scoreVar: GameVariable = { id: MathUtils.generateUUID(), name: 'score', type: 'number', initial: 0, showInHud: true };
+      nextVars = [...variables, scoreVar];
+    }
+    set({
+      objects: [...objects, obj],
+      variables: nextVars,
+      selectedId: obj.id,
+      selectedIds: [obj.id],
+      isModified: true,
+      // 변수를 건드릴 때만 스냅샷에 포함(undo가 자동 생성 변수도 되돌리도록)
+      ...withHistory({ objects, environment, ...(def.ensureScore ? { variables } : {}) }, past),
     });
   },
 

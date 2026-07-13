@@ -5,7 +5,7 @@ import {
   Move, RotateCcw, Maximize2, Globe, Crosshair,
   Magnet, Box, Layers, Undo2, Redo2, AlignCenter, Camera,
   Circle, Cylinder, Cone, Hexagon, Square, PenTool, Boxes,
-  ChevronDown, Save, Grid3x3,
+  ChevronDown, Save, Grid3x3, Sparkles, Disc, DoorClosed, Coins,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
@@ -25,7 +25,14 @@ const SHAPES: { shape: PrimitiveShape; label: string; icon: LucideIcon }[] = [
 
 const SNAP_STEPS = [0.25, 0.5, 1, 2];
 
-type Menu = 'align' | 'snap' | 'bookmark' | 'shapes' | null;
+// 완성형 프리셋(게임 재료) — id는 objectPresets.ts와 매칭
+const PRESET_ITEMS: { id: string; label: string; icon: LucideIcon }[] = [
+  { id: 'wheel', label: '바퀴 (굴러가는)', icon: Disc },
+  { id: 'door',  label: '문 (E로 열림)',   icon: DoorClosed },
+  { id: 'coin',  label: '동전 (점수 +1)',  icon: Coins },
+];
+
+type Menu = 'align' | 'snap' | 'bookmark' | 'shapes' | 'presets' | null;
 
 export function ViewportFloatingToolbar() {
   const {
@@ -33,7 +40,7 @@ export function ViewportFloatingToolbar() {
     selectedIds, cameraBookmarks,
     gridPlane, cycleGridPlane, objectSnap, toggleObjectSnap,
     setTransformMode, setTransformSpace, setSnap, toggleWireframe,
-    beginPlacement, undo, redo, alignSelected, requestSaveBookmark, requestRecallBookmark, setPenToolOpen, setVoxelToolOpen,
+    beginPlacement, addPreset, undo, redo, alignSelected, requestSaveBookmark, requestRecallBookmark, setPenToolOpen, setVoxelToolOpen,
   } = useSceneStore();
 
   const [openMenu, setOpenMenu] = useState<Menu>(null);
@@ -203,6 +210,32 @@ export function ViewportFloatingToolbar() {
               <Boxes size={14} />
             </button>
           </Tooltip>
+          {/* 프리셋 — 완성형 게임 재료(바퀴/문/동전) */}
+          <div className="relative flex items-center">
+            <Tooltip content="프리셋 — 완성형 게임 재료 (바퀴·문·동전)">
+              <button
+                onClick={() => setOpenMenu(openMenu === 'presets' ? null : 'presets')}
+                className={`w-7 h-7 rounded-xs flex items-center justify-center transition-all ${
+                  openMenu === 'presets' ? 'bg-primary text-white' : 'text-muted hover:text-primary hover:bg-background'
+                }`}
+              >
+                <Sparkles size={14} />
+              </button>
+            </Tooltip>
+            {openMenu === 'presets' && (
+              <div className="absolute top-full left-0 mt-2 bg-surface border border-border rounded-xs shadow-dropdown z-50 p-1 min-w-[160px]">
+                {PRESET_ITEMS.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => { addPreset(id); setOpenMenu(null); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xs text-[11px] text-foreground hover:bg-background transition-colors"
+                  >
+                    <Icon size={14} className="text-muted" /> {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {SEP}
