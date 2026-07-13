@@ -16,7 +16,8 @@ import { localCenter } from "@/lib/objectBBox";
 import { PrimitiveMaterial } from "@/components/three/PrimitiveMaterial";
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
-import { createPrimitiveGeometry } from "@/lib/primitiveGeometry";
+import { createPrimitiveGeometry, profileSig } from "@/lib/primitiveGeometry";
+import { voxelSig } from "@/lib/voxelGeometry";
 
 const DEG2RAD = Math.PI / 180;
 
@@ -577,7 +578,7 @@ export function ViewerObject({
   const isPrimitive = !object.assetId && !object.content && !object.light && !object.particle;
   const primGeom = useMemo(
     () => (isPrimitive ? createPrimitiveGeometry(object.primitiveShape, object.geom) : null),
-    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profile?.length, object.geom?.subdivisions],
+    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions],
   );
   useEffect(() => () => primGeom?.dispose(), [primGeom]);
 
@@ -868,6 +869,7 @@ export function ViewerObject({
         sheen={object.material?.sheen}
         transmission={object.material?.transmission}
         ior={object.material?.ior}
+        vertexColors={object.primitiveShape === 'voxel'}
       />
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>

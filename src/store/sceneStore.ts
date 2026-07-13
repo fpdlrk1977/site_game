@@ -129,9 +129,11 @@ interface SceneActions {
   // 완성형 프리셋(바퀴/문/동전)을 스탬프로 추가. 동전 등은 필요 시 'score' 변수 자동 생성.
   addPreset: (presetId: string, placeAt?: PlaceXZ) => void;
   /** 펜 툴 프로파일로 돌출/회전체 오브젝트 생성 */
-  addProfileObject: (shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean) => void;
+  addProfileObject: (shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean, profileRaw?: { x: number; y: number }[], smooth?: boolean) => void;
+  /** 펜 툴 재편집 — 기존 돌출/회전체 오브젝트의 프로파일/두께를 갱신(형태 교체) */
+  updateProfileObject: (id: string, shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean, profileRaw?: { x: number; y: number }[], smooth?: boolean) => void;
   addAsset: (asset: AssetRefSchema) => void;
-  addAssetObject: (asset: AssetRefSchema, placeAt?: PlaceXZ) => void;
+  addAssetObject: (asset: AssetRefSchema, placeAt?: PlaceXZ, extra?: Partial<ObjectNodeSchema>) => void;
   addContentObject: (type: ContentType, placeAt?: PlaceXZ) => void;
   addParticleObject: (preset: ParticlePreset, placeAt?: PlaceXZ) => void;
   /** 배치 모드 — 뷰포트 클릭 위치에 생성. begin=시작(고스트 따라다님), commit=클릭 위치에 생성, cancel=ESC 취소 */
@@ -148,7 +150,15 @@ interface SceneActions {
   requestExport: (ids: string[], name: string) => void;
   /** 펜 툴 모달 열기/닫기 */
   setPenToolOpen: (open: boolean) => void;
+  /** 펜 툴 모달을 특정 오브젝트 재편집 모드로 열기 */
+  penToolEditId: string | null;
+  openPenToolEdit: (id: string) => void;
   setVoxelToolOpen: (open: boolean) => void;
+  /** 복셀 오브젝트 — live 프리미티브(primitiveShape 'voxel'). 생성/재편집(B안). */
+  addVoxelObject: (voxels: { x: number; y: number; z: number; color: string }[], placeAt?: PlaceXZ) => void;
+  updateVoxelObject: (id: string, voxels: { x: number; y: number; z: number; color: string }[]) => void;
+  voxelEditId: string | null;
+  openVoxelEdit: (id: string) => void;
   setEditorPlaying: (v: boolean) => void;
   requestCameraView: (view: 'top' | 'front' | 'right') => void;
   duplicateInPlace: () => void;
@@ -236,6 +246,7 @@ const SHAPE_NAMES: Record<PrimitiveShape, string> = {
   loft: '로프트',
   extrude: '돌출',
   lathe: '회전체',
+  voxel: '복셀',
 };
 
 // 히스토리 스택 최대 길이 (past/future 공통)
@@ -392,8 +403,10 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   focusSelectedRequest: null,
   exportRequest: null,
   penToolOpen: false,
+  penToolEditId: null,
   editorPlaying: false,
   voxelToolOpen: false,
+  voxelEditId: null,
   cameraViewRequest: null,
   sceneLoadTick: 0,
   isModified: false,
@@ -511,12 +524,15 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
-  addProfileObject: (shape, profile, extrudeDepth, closed) => {
+  addProfileObject: (shape, profile, extrudeDepth, closed, profileRaw, smooth) => {
     objectCounter += 1;
+    const geom = shape === 'extrude'
+      ? { profile, extrudeDepth, profileRaw, profileSmooth: smooth }
+      : { profile, profileClosed: closed, profileRaw, profileSmooth: smooth };
     const obj = makeBaseObject({
       name: `${shape === 'lathe' ? '회전체' : '돌출'} ${objectCounter}`,
       primitiveShape: shape,
-      geom: shape === 'extrude' ? { profile, extrudeDepth } : { profile, profileClosed: closed },
+      geom,
       material: { color: '#a78bfa', roughness: 0.5, metalness: 0.1 },
       position: { x: 0, y: 0.5, z: 0 },
     });
@@ -525,6 +541,22 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       objects: [...objects, obj],
       selectedId: obj.id,
       selectedIds: [obj.id],
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  updateProfileObject: (id, shape, profile, extrudeDepth, closed, profileRaw, smooth) => {
+    const { objects, environment, past } = get();
+    const target = objects.find((o) => o.id === id);
+    if (!target) return;
+    // 기존 geom(subdivisions 등)은 보존하고 프로파일 관련 필드만 교체. 모드 전환도 반영(primitiveShape).
+    const base = { ...target.geom, profile, profileRaw, profileSmooth: smooth };
+    const geom = shape === 'extrude'
+      ? { ...base, extrudeDepth, profileClosed: undefined }
+      : { ...base, profileClosed: closed, extrudeDepth: undefined };
+    set({
+      objects: objects.map((o) => (o.id === id ? { ...o, primitiveShape: shape, geom } : o)),
       isModified: true,
       ...withHistory({ objects, environment }, past),
     });
@@ -555,8 +587,41 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   requestFocusAll: () => set({ focusAllRequest: Date.now() }),
   requestFocusSelected: () => set({ focusSelectedRequest: Date.now() }),
   requestExport: (ids, name) => set({ exportRequest: { ids, name, _tick: Date.now() } }),
-  setPenToolOpen: (open) => set({ penToolOpen: open }),
-  setVoxelToolOpen: (open) => set({ voxelToolOpen: open }),
+  setPenToolOpen: (open) => set(open ? { penToolOpen: true } : { penToolOpen: false, penToolEditId: null }),
+  openPenToolEdit: (id) => set({ penToolEditId: id, penToolOpen: true }),
+  setVoxelToolOpen: (open) => set(open ? { voxelToolOpen: true } : { voxelToolOpen: false, voxelEditId: null }),
+  openVoxelEdit: (id) => set({ voxelEditId: id, voxelToolOpen: true }),
+
+  addVoxelObject: (voxels, placeAt) => {
+    objectCounter += 1;
+    // 지오메트리는 X/Z 중심·바닥 y=0 정렬이라 position.y=0이면 지면에 앉는다(바닥 스냅 불필요).
+    const obj = makeBaseObject({
+      name: `복셀 ${objectCounter}`,
+      primitiveShape: 'voxel',
+      geom: { voxels },
+      material: { color: '#ffffff', roughness: 0.75, metalness: 0 },
+      position: { x: placeAt?.x ?? 0, y: 0, z: placeAt?.z ?? 0 },
+    });
+    const { objects, environment, past } = get();
+    set({
+      objects: [...objects, obj],
+      selectedId: obj.id,
+      selectedIds: [obj.id],
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  updateVoxelObject: (id, voxels) => {
+    const { objects, environment, past } = get();
+    const target = objects.find((o) => o.id === id);
+    if (!target) return;
+    set({
+      objects: objects.map((o) => (o.id === id ? { ...o, geom: { ...o.geom, voxels } } : o)),
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
   setEditorPlaying: (v) => set({ editorPlaying: v }),
 
   requestCameraView: (view) => set({ cameraViewRequest: { view, _tick: Date.now() } }),
@@ -687,12 +752,13 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     return allToDelete.size;
   },
 
-  addAssetObject: (asset, placeAt) => {
+  addAssetObject: (asset, placeAt, extra) => {
     objectCounter += 1;
     const obj = makeBaseObject({
       name: asset.name,
       ...(placeAt ? { position: { x: placeAt.x, y: 0, z: placeAt.z } } : {}),
       assetId: asset.id,
+      ...(extra ?? {}),
     });
     const { objects, environment, past } = get();
     set({

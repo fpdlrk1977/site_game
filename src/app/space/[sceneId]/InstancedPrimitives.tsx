@@ -75,6 +75,7 @@ export function getInstancedIds(objects: ObjectNodeSchema[]): Set<string> {
   const map = new Map<string, ObjectNodeSchema[]>();
   for (const obj of objects) {
     if (!obj.visible || obj.content || obj.assetId || !obj.primitiveShape) continue;
+    if (obj.primitiveShape === 'voxel') continue; // 복셀은 정점색·고유 지오메트리 → 인스턴싱 제외
     if (obj.material?.textureUrl) continue; // 텍스처는 오브젝트별 map이라 인스턴싱 제외(단일 재질 배칭 불가)
     if (obj.events.length > 0) continue;
     if (obj.particle) continue;
@@ -96,6 +97,7 @@ export function InstancedPrimitives({ objects }: Props) {
     const map = new Map<string, ObjectNodeSchema[]>();
     for (const obj of objects) {
       if (!obj.visible || obj.content || obj.assetId || !obj.primitiveShape) continue;
+    if (obj.primitiveShape === 'voxel') continue; // 복셀은 정점색·고유 지오메트리 → 인스턴싱 제외
       if (obj.material?.textureUrl) continue; // 텍스처는 인스턴싱 제외(getInstancedIds와 동일 규칙)
       if (obj.events.length > 0) continue;
       if (obj.particle) continue;

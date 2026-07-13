@@ -5,7 +5,7 @@ import {
   Box, Circle, Cylinder, Cone, Hexagon, Square, Folder, Type, Image as ImageIcon, Play,
   Package, Sparkles, Grid2x2, CircleDot, ChevronDown, ChevronRight,
   Eye, EyeOff, Lock, Unlock, Pencil, Copy, X, Ungroup,
-  Lightbulb, Flashlight, Sun,
+  Lightbulb, Flashlight, Sun, PenTool, Boxes,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSceneStore, isDescendant } from '@/store/sceneStore';
@@ -15,6 +15,8 @@ type DropPos = 'before' | 'after' | 'inside';
 
 const SHAPE_ICONS: Record<string, LucideIcon> = {
   box: Box, sphere: Circle, cylinder: Cylinder, plane: Square, frustum: Cone, loft: Hexagon,
+  extrude: PenTool, lathe: PenTool, // 펜툴로 만든 돌출/회전체
+  voxel: Boxes, // 복셀(live 프리미티브)
 };
 
 function getIcon(obj: ObjectNodeSchema): LucideIcon {
@@ -23,6 +25,7 @@ function getIcon(obj: ObjectNodeSchema): LucideIcon {
   if (obj.isGroup) return Folder;
   if (obj.light) return obj.light.type === 'point' ? Lightbulb : obj.light.type === 'spot' ? Flashlight : Sun;
   if (obj.content) return obj.content.type === 'text' ? Type : obj.content.type === 'image' ? ImageIcon : Play;
+  if (obj.voxels) return Boxes;   // 복셀로 만든 오브젝트(현재는 GLB로 구워지지만 레시피로 식별)
   if (obj.assetId) return Package;
   if (obj.particle) return Sparkles;
   return SHAPE_ICONS[obj.primitiveShape ?? ''] ?? Circle;
@@ -58,15 +61,18 @@ interface ItemProps {
   onDragOverItem: (id: string, pos: DropPos) => void;
   onDropItem: (id: string) => void;
   onDragEndItem: () => void;
+  menuOpen: boolean;
+  onOpenMenu: () => void;
+  onCloseMenu: () => void;
 }
 
 function HierarchyItem({
   obj, depth, index, isExpanded, onToggleExpand, onClickItem,
   dragEnabled, isDragging, dropPos, onDragStartItem, onDragOverItem, onDropItem, onDragEndItem,
+  menuOpen, onOpenMenu, onCloseMenu,
 }: ItemProps) {
-  const { selectedId, selectedIds, updateObject, setObjectLocked, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected } = useSceneStore();
+  const { selectedId, selectedIds, updateObject, setObjectLocked, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected, openPenToolEdit, openVoxelEdit } = useSceneStore();
   const objects = useSceneStore((s) => s.objects);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -128,7 +134,7 @@ function HierarchyItem({
         }}
         onDrop={(e) => { if (!dragEnabled) return; e.preventDefault(); onDropItem(obj.id); }}
         onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
-        onContextMenu={(e) => { e.preventDefault(); selectObject(obj.id); setMenuOpen(true); }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); selectObject(obj.id); onOpenMenu(); }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
         className={`flex items-center px-1.5 h-7 rounded-xs cursor-pointer group transition-all text-xs gap-1 ${
           isSelected
@@ -214,45 +220,59 @@ function HierarchyItem({
         </div>
       </div>
 
-      {/* 컨텍스트 메뉴 */}
-      {menuOpen && isSelected && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute left-2 top-full mt-0.5 w-44 bg-surface border border-border rounded-xs shadow-2xl shadow-black/30 z-50 py-1 overflow-hidden">
-            {!obj.isGroup && (
-              <button
-                onClick={() => { setMenuOpen(false); setEditing(true); }}
-                className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
-              >
-                <Pencil size={13} className="text-muted" /> 이름 변경
-              </button>
-            )}
-            {obj.isGroup && (
-              <button
-                onClick={() => { ungroupSelected(); setMenuOpen(false); }}
-                className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
-              >
-                <Ungroup size={13} className="text-muted" /> 그룹 해제
-                <span className="ml-auto text-muted/60 text-[10px]">⌃⇧G</span>
-              </button>
-            )}
+      {/* 컨텍스트 메뉴 — 백드롭 없이(다른 행 우클릭 시 그 행 메뉴로 전환되도록) 패널이 바깥클릭 닫기 담당.
+          data-ctx-menu: 패널의 바깥클릭 리스너가 메뉴 내부 클릭을 무시하는 표식. */}
+      {menuOpen && (
+        <div data-ctx-menu className="absolute left-2 top-full mt-0.5 w-44 bg-surface border border-border rounded-xs shadow-2xl shadow-black/30 z-50 py-1 overflow-hidden">
+          {!obj.isGroup && (
             <button
-              onClick={() => { duplicateSelected(); setMenuOpen(false); }}
+              onClick={() => { onCloseMenu(); setEditing(true); }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
-              <Copy size={13} className="text-muted" /> 복제
-              <span className="ml-auto text-muted/60 text-[10px]">⌃D</span>
+              <Pencil size={13} className="text-muted" /> 이름 변경
             </button>
-            <div className="border-t border-border my-1" />
+          )}
+          {(obj.primitiveShape === 'extrude' || obj.primitiveShape === 'lathe') && (
             <button
-              onClick={() => { deleteSelected(); setMenuOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-background transition-colors flex items-center gap-2"
+              onClick={() => { onCloseMenu(); openPenToolEdit(obj.id); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
-              <X size={13} /> 삭제
-              <span className="ml-auto text-muted/60 text-[10px]">Del</span>
+              <PenTool size={13} className="text-muted" /> 펜툴로 수정
             </button>
-          </div>
-        </>
+          )}
+          {obj.primitiveShape === 'voxel' && (
+            <button
+              onClick={() => { onCloseMenu(); openVoxelEdit(obj.id); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
+            >
+              <Boxes size={13} className="text-muted" /> 복셀 수정
+            </button>
+          )}
+          {obj.isGroup && (
+            <button
+              onClick={() => { ungroupSelected(); onCloseMenu(); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
+            >
+              <Ungroup size={13} className="text-muted" /> 그룹 해제
+              <span className="ml-auto text-muted/60 text-[10px]">⌃⇧G</span>
+            </button>
+          )}
+          <button
+            onClick={() => { duplicateSelected(); onCloseMenu(); }}
+            className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
+          >
+            <Copy size={13} className="text-muted" /> 복제
+            <span className="ml-auto text-muted/60 text-[10px]">⌃D</span>
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            onClick={() => { deleteSelected(); onCloseMenu(); }}
+            className="w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-background transition-colors flex items-center gap-2"
+          >
+            <X size={13} /> 삭제
+            <span className="ml-auto text-muted/60 text-[10px]">Del</span>
+          </button>
+        </div>
       )}
     </div>
   );
@@ -262,6 +282,29 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   const { objects, selectedId, selectObject, selectObjects, moveObject } = useSceneStore();
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // 컨텍스트 메뉴는 패널 레벨에서 단일 관리(한 번에 하나) — 다른 행 우클릭 시 그 행으로 전환.
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  // 바깥 클릭/우클릭/스크롤/Esc 시 메뉴 닫기(메뉴 내부 클릭은 무시). 백드롭 대신 이 리스너가 담당해
+  // 다른 행 우클릭이 백드롭에 막히지 않고 그 행 메뉴로 넘어가게 한다.
+  useEffect(() => {
+    if (!openMenuId) return;
+    const onDown = (e: MouseEvent) => {
+      if ((e.target as Element | null)?.closest?.('[data-ctx-menu]')) return; // 메뉴 내부 클릭은 유지
+      setOpenMenuId(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenuId(null); };
+    const onScroll = () => setOpenMenuId(null);
+    // mousedown은 우클릭(다른 행)보다 먼저 발생해 현재 메뉴를 닫고, 이어 그 행 onContextMenu가 새로 연다.
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [openMenuId]);
 
   // 선택된 오브젝트가 그룹 안에 있으면 조상 그룹들을 전부 펼쳐 트리에서 보이게 한다.
   // (뷰포트에서 자식을 더블클릭해 드릴인 선택하면, 중첩이면 부모+상위 그룹이 모두 펼쳐짐)
@@ -371,6 +414,9 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
           onDragOverItem={handleDragOverItem}
           onDropItem={handleDropItem}
           onDragEndItem={handleDragEndItem}
+          menuOpen={openMenuId === obj.id}
+          onOpenMenu={() => setOpenMenuId(obj.id)}
+          onCloseMenu={() => setOpenMenuId(null)}
         />,
       ];
       if (obj.isGroup && (expanded.has(obj.id) || search.trim())) {

@@ -51,6 +51,41 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-14) — 복셀 B안(편집형 오브젝트) + 펜툴 Ctrl+클릭 + 컨텍스트 메뉴 전환
+
+> **사용자 브라우저 확인 완료("잘된다").**
+
+- **복셀 B안 — GLB bake 폐기, live 편집형 프리미티브**:
+  - **`primitiveShape: 'voxel'` + `geom.voxels`** 로 만들어 프리미티브 파이프라인(에디터/뷰어 렌더·bbox·subdivision·물리) 상속. **Models 탭 안 거치고 오브젝트 리스트에만** 나옴(에셋 아님). 우클릭 "복셀 수정"으로 재편집.
+  - 신규 `src/lib/voxelGeometry.ts`: `buildVoxelGeometry`(복셀→정점색 BufferGeometry, X/Z중심·바닥0)·`voxelSig`(정수 해시, 재편집 변경 감지). `voxelModel.ts`(GLB 굽기)도 이걸 재사용(내보내기 등 후속용 유지).
+  - `createPrimitiveGeometry`에 `'voxel'` case. `primitiveGeomKey`·에디터/뷰어 primGeom 메모 의존성에 `voxelSig` 추가. `PrimitiveMaterial`에 **`vertexColors`** prop(복셀 정점색, 베이스 흰색) — 에디터/뷰어 배선. `InstancedPrimitives`에서 복셀 제외. `SHAPE_NAMES`에 '복셀'.
+  - 스토어: `addVoxelObject`(assetId 없는 live, 바닥 y=0)·`updateVoxelObject`·`voxelEditId`·`openVoxelEdit`. `VoxelToolModal` = bake/업로드 제거, 열 때 저장된 복셀 로드(그리드 크기 좌표로 추정), 타이틀/버튼 수정모드.
+  - 한계: 재편집 그리드 크기 추정 · 물리 콜라이더는 프리미티브 기본(거침) · subdivision 시 정점색 보존 미검증(기본 0) · 지난 GLB 복셀은 그대로.
+- **펜툴 Ctrl+클릭 = 점 추가**: `onSvgDown`에 Ctrl(⌘)+클릭 분기 → 가장 가까운 변에 점 삽입. **닫힌 경로(재편집 도형)에도** 점 추가 가능(기존엔 막힘). `distToSeg` 헬퍼.
+- **🐛 계층 컨텍스트 메뉴 전환**: 각 행 로컬 `menuOpen`+전체화면 백드롭 → 다른 행 우클릭이 백드롭에 막혀 네이티브 메뉴가 뜨던 문제. **패널 레벨 단일 `openMenuId` + 백드롭 제거**(mousedown/scroll/Esc 문서 리스너로 바깥클릭 닫기, 메뉴 내부는 `data-ctx-menu`로 무시). 이제 A 열린 채 B 우클릭 → A 닫히고 B 메뉴 즉시 전환.
+
+---
+
+## ✅ 완료 (2026-07-14) — 펜툴 오브젝트 재편집 + 계층 아이콘(펜툴/복셀)
+
+> **사용자 브라우저 확인 완료.** 만든 오브젝트를 되돌아가 고치는 첫 걸음. 복셀은 B안(편집형) 예정 — 이번엔 식별 표식만.
+
+- **펜툴 재편집(돌출/회전체)** — 오브젝트 리스트 **우클릭 → "펜툴로 수정"**(뷰포트 클릭 아님):
+  - `HierarchyPanel` 컨텍스트 메뉴에 항목 추가(extrude/lathe만). `sceneStore.openPenToolEdit(id)` → `penToolEditId` 세팅 + 모달 오픈.
+  - `PenToolModal`: 열 때 `penToolEditId`면 저장된 프로파일 로드(모델→SVG 역변환 `CENTER + x*SCALE` / `CENTER - y*SCALE`), 모드/두께/닫힘/스무딩 복원. "수정 적용" → `updateProfileObject`(기존 오브젝트 geom 교체, primitiveShape도 갱신=모드전환 반영, undo 1회). 타이틀·버튼 라벨 수정모드 반영.
+  - **재편집 충실도**: `PrimitiveGeom.profileRaw`(스무딩 전 원본 점)+`profileSmooth` 추가 저장 → 곡선으로 만든 것도 컨트롤 점으로 재편집. `profile`(스무딩 반영)은 지오메트리용 그대로.
+  - **🐛 핵심 버그 수정**: `primGeom` useMemo 의존성이 `profile?.length`(개수)만 봐서 **점만 옮기면 지오메트리 재생성 안 되던** 문제 → `profileSig(object.geom)`+`profileClosed`로 교체. `profileSig`도 첫/끝점만→**전체 점** 직렬화로 강화(`primitiveGeometry.ts`). 이제 중간 점만 옮겨도 형태 갱신.
+  - 아이콘: extrude/lathe → `PenTool`(SHAPE_ICONS).
+- **복셀 계층 아이콘** — 복셀 오브젝트에 **`ObjectNodeSchema.voxels`(복셀 레시피) 저장**(`addAssetObject`에 `extra` 파라미터 추가 → `VoxelToolModal`이 전달). `HierarchyPanel.getIcon`이 `obj.voxels`면 `Boxes` 아이콘(assetId보다 먼저 체크). **이 레시피 저장이 복셀 B안(편집형 렌더+재편집) 재편집의 기반**. 현재는 여전히 GLB로 구움.
+- 스키마 무해 추가(전부 옵셔널, normalizeSceneData·buildSceneData가 objects 그대로 통과 → 자동 보존). 한계: 이번 변경 **이전** 생성물엔 profileRaw/voxels 없음(펜툴은 profile 폴백, 복셀 아이콘은 안 뜸) — 새로 만드는 것부터 적용.
+
+### ⏭️ 다음 후보 (사용자와 논의 중)
+- **복셀 B안** — 복셀을 프리미티브형 편집 오브젝트로(GLB bake 대신 live 렌더 + 모달 재오픈 재편집). subdivision·재질 등 프리미티브 도구 상속 가능(정점색 보존·성능·색충돌 주의). Models 탭 대신 오브젝트 리스트에만.
+- **메쉬 편집(half-edge Edit Mode)** — 숙제로 보류(스코프 아웃 검토 완료, `이것좀 검토` 결론).
+- 그 외: 게임 저작 접근성(문장형 이벤트 2단계·GNB 탭), 에디터 UX(Undo/Redo 툴바·오토세이브 결정), 게임 완성도(세이브/로드·리더보드), 미검증 항목 정리.
+
+---
+
 ## ✅ 완료 (2026-07-13) — 라이트 방향/길이 기즈모 + 그림자·색 기본값 + AssetBrowser 3단
 
 > 이 세션 작업. **라이트 방향 기즈모는 사용자 브라우저 확인 완료("잘된다")**, 나머지는 tsc/컴파일 클린(실동작 확인 권장).

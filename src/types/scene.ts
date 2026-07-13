@@ -191,7 +191,7 @@ export interface PhysicsSchema {
   restitution: number;
 }
 
-export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane' | 'frustum' | 'loft' | 'extrude' | 'lathe';
+export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane' | 'frustum' | 'loft' | 'extrude' | 'lathe' | 'voxel';
 
 // 프리미티브 확장 지오메트리 파라미터(옵셔널=하위호환). 미설정이면 각진 기본 형태.
 export interface PrimitiveGeom {
@@ -209,6 +209,12 @@ export interface PrimitiveGeom {
   profileClosed?: boolean;
   // extrude: 돌출 두께(정규화 전 로컬 단위). 기본 0.5.
   extrudeDepth?: number;
+  // 펜툴 재편집용 — 스무딩 전 원본 컨트롤 점(있으면 재편집 시 이걸 로드). profile은 지오메트리용(스무딩 반영).
+  profileRaw?: { x: number; y: number }[];
+  // 펜툴 재편집용 — 스무딩(곡선) 여부.
+  profileSmooth?: boolean;
+  // voxel: 복셀 셀 목록(1×1×1 큐브). live 렌더(정점색) + 모달 재편집. primitiveShape==='voxel'과 짝.
+  voxels?: { x: number; y: number; z: number; color: string }[];
   // 표면 세분화(Loop Subdivision) 레벨 — 0=원본, 1~3=면을 쪼개 부드러운 유기적 곡면으로. 성능상 3까지.
   subdivisions?: number;
 }
@@ -272,6 +278,9 @@ export interface ObjectNodeSchema {
   primitiveShape?: PrimitiveShape;
   // 프리미티브 확장 지오메트리 파라미터(둥근 박스 cornerRadius·각뿔대 topScale 등).
   geom?: PrimitiveGeom;
+  // 복셀로 만든 오브젝트의 원본 복셀 데이터(레시피). 현재는 GLB로 구워 렌더하되 재편집·아이콘 식별용으로 보존.
+  // (복셀 B안 재편집의 기반 — 있으면 계층 트리에서 복셀 아이콘 표시.)
+  voxels?: { x: number; y: number; z: number; color: string }[];
   // 재질: materialId가 있으면 씬 materialAssets에서 참조(공유), 없으면 아래 인라인 material 사용(공존).
   materialId?: string;
   material?: MaterialOverride;

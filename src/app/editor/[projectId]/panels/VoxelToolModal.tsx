@@ -8,9 +8,7 @@ import { Boxes, X, Plus, Minus } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { useToast } from '@/hooks/useToast';
-import { persistCurrentScene } from '@/lib/saveScene';
-import { uploadGlbBlob } from '@/lib/uploadAsset';
-import { buildVoxelGlb, type Voxel } from '@/lib/voxelModel';
+import type { Voxel } from '@/lib/voxelGeometry';
 
 const SIZE = 340;                       // 2D 페인터 픽셀(고정) — 칸 크기는 그리드 수에 맞춰 자동 조정
 const GRID_SIZES = [8, 16, 24, 32];     // 사용자가 고를 수 있는 그리드 한 변(칸 수)
@@ -47,15 +45,14 @@ function VoxelPreview({ voxels, layer, gridN }: { voxels: Record<string, string>
 export function VoxelToolModal() {
   const open = useSceneStore((s) => s.voxelToolOpen);
   const setOpen = useSceneStore((s) => s.setVoxelToolOpen);
-  const projectId = useSceneStore((s) => s.projectId);
-  const addAsset = useSceneStore((s) => s.addAsset);
-  const addAssetObject = useSceneStore((s) => s.addAssetObject);
+  const addVoxelObject = useSceneStore((s) => s.addVoxelObject);
+  const updateVoxelObject = useSceneStore((s) => s.updateVoxelObject);
+  const editId = useSceneStore((s) => s.voxelEditId); // null=새로 만들기, 아니면 그 오브젝트 재편집
   const { addToast } = useToast();
 
   const [voxels, setVoxels] = useState<Record<string, string>>({});
   const [color, setColor] = useState('#22c55e');
   const [layer, setLayer] = useState(0);      // 현재 Y 레이어
-  const [busy, setBusy] = useState(false);
   const [gridN, setGridN] = useState(16);     // 그리드 한 변(칸 수) — 사용자 선택
   const CELL = SIZE / gridN;                  // 칸 픽셀(그리드 수에 맞춰 자동)
   const paintMode = useRef<'paint' | 'erase' | null>(null); // 드래그 중 동작(좌=칠하기, 우=지우기)
@@ -91,8 +88,20 @@ export function VoxelToolModal() {
   };
   const endDrag = () => { panelDrag.current = null; setDragging(false); };
 
+  // 열 때: 재편집이면 저장된 복셀 로드, 아니면 빈 상태로 초기화.
   useEffect(() => {
-    if (open) { setVoxels({}); setLayer(0); setGridN(16); setPanelPos(null); }
+    if (!open) return;
+    const { voxelEditId, objects } = useSceneStore.getState();
+    const evox = voxelEditId ? objects.find((o) => o.id === voxelEditId)?.geom?.voxels : null;
+    if (evox && evox.length) {
+      const dict: Record<string, string> = {};
+      let maxCoord = 0;
+      for (const v of evox) { dict[key(v.x, v.y, v.z)] = v.color; maxCoord = Math.max(maxCoord, v.x, v.z); }
+      const g = GRID_SIZES.find((n) => maxCoord < n) ?? GRID_SIZES[GRID_SIZES.length - 1]; // 좌표가 다 들어가는 최소 그리드
+      setVoxels(dict); setGridN(g); setLayer(0); setPanelPos(null);
+    } else {
+      setVoxels({}); setLayer(0); setGridN(16); setPanelPos(null);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -129,29 +138,21 @@ export function VoxelToolModal() {
 
   const count = Object.keys(voxels).length;
 
-  const create = async () => {
+  // B안: GLB 굽기·업로드 없이 live 프리미티브(primitiveShape 'voxel')로 생성/재편집.
+  const create = () => {
     if (count === 0) { addToast('큐브를 하나 이상 배치하세요.', 'error'); return; }
-    if (!projectId) return;
-    setBusy(true);
-    try {
-      const vox: Voxel[] = Object.entries(voxels).map(([k, c]) => {
-        const [x, y, z] = k.split(',').map(Number);
-        return { x, y, z, color: c };
-      });
-      const baked = await buildVoxelGlb(vox);
-      if (!baked) { addToast('생성 실패', 'error'); return; }
-      const asset = await uploadGlbBlob(baked.blob, '복셀 모델', projectId, 'model');
-      addAsset(asset);
-      addAssetObject(asset);
-      const result = await persistCurrentScene();
-      if (result.status === 'conflict') addToast('만들었지만 다른 탭·기기에서 씬이 먼저 저장돼 반영하지 못했어요. 새로고침 후 다시 시도해 주세요.', 'error');
-      else addToast(`복셀 모델 생성 (${baked.count}칸)`, 'success');
-      setOpen(false);
-    } catch (err) {
-      addToast(`복셀 생성 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`, 'error');
-    } finally {
-      setBusy(false);
+    const vox: Voxel[] = Object.entries(voxels).map(([k, c]) => {
+      const [x, y, z] = k.split(',').map(Number);
+      return { x, y, z, color: c };
+    });
+    if (editId) {
+      updateVoxelObject(editId, vox);
+      addToast(`복셀 수정됨 (${vox.length}칸)`, 'success');
+    } else {
+      addVoxelObject(vox);
+      addToast(`복셀 생성 (${vox.length}칸)`, 'success');
     }
+    setOpen(false);
   };
 
   // 쌓기 도우미 — 아래층 발자국(정렬 참고용)
@@ -171,7 +172,7 @@ export function VoxelToolModal() {
         style={panelPos ? { left: panelPos.x, top: panelPos.y } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
       >
         <div className="flex items-center justify-between mb-2.5 cursor-move select-none" onMouseDown={onHeaderDown}>
-          <span className="text-[13px] font-semibold text-foreground flex items-center gap-1.5"><Boxes size={14} /> 복셀 — 큐브를 쌓아 만들기</span>
+          <span className="text-[13px] font-semibold text-foreground flex items-center gap-1.5"><Boxes size={14} /> {editId ? '복셀 — 수정' : '복셀 — 큐브를 쌓아 만들기'}</span>
           <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setOpen(false)} className="text-muted hover:text-foreground px-1 cursor-pointer"><X size={15} /></button>
         </div>
 
@@ -287,11 +288,11 @@ export function VoxelToolModal() {
         {/* 푸터 */}
         <div className="flex items-center gap-2 mt-3">
           <p className="flex-1 text-[10px] text-muted/70 leading-relaxed">
-            큐브를 쌓아 도트 감성 3D 모델을 만들어요. 완성하면 하나의 GLB 에셋으로 구워져 씬에 배치됩니다.
+            큐브를 쌓아 도트 감성 3D 모델을 만들어요. 언제든 오브젝트 리스트에서 우클릭해 다시 수정할 수 있어요.
           </p>
-          <button onClick={create} disabled={busy || count === 0}
+          <button onClick={create} disabled={count === 0}
             className="px-4 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-            {busy ? '만드는 중…' : `만들기 (${count})`}
+            {editId ? '수정 적용' : '만들기'} ({count})
           </button>
         </div>
       </div>

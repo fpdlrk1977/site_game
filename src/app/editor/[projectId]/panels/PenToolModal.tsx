@@ -35,10 +35,21 @@ function smoothPts(pts: Pt[], closed: boolean, samples = 14): Pt[] {
   return out;
 }
 
+// 점 p에서 선분 ab까지의 최단 거리 — Ctrl+클릭 시 가장 가까운 변을 찾아 점을 삽입한다.
+function distToSeg(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
 export function PenToolModal() {
   const open = useSceneStore((s) => s.penToolOpen);
   const setOpen = useSceneStore((s) => s.setPenToolOpen);
   const addProfileObject = useSceneStore((s) => s.addProfileObject);
+  const updateProfileObject = useSceneStore((s) => s.updateProfileObject);
+  const editId = useSceneStore((s) => s.penToolEditId); // null이면 새로 만들기, 아니면 그 오브젝트 재편집
   const { addToast } = useToast();
 
   const [mode, setMode] = useState<'extrude' | 'lathe'>('extrude');
@@ -80,9 +91,26 @@ export function PenToolModal() {
   // 되돌리기 한 단계 — 닫혀 있으면 먼저 열고, 아니면 마지막 점 제거.
   const undoStep = () => { if (closedRef.current) setClosed(false); else setPoints((p) => p.slice(0, -1)); };
 
-  // 열 때마다 기본 상태로 초기화(탭=돌출, 점 비움)
+  // 열 때: 재편집이면 저장된 프로파일 로드, 아니면 기본 상태로 초기화(탭=돌출, 점 비움)
   useEffect(() => {
-    if (open) { setMode('extrude'); setPoints([]); setClosed(false); setSmooth(false); setDepth(0.5); setHover(null); setSelected(new Set()); setBox(null); setPanelPos(null); }
+    if (!open) return;
+    const { penToolEditId, objects } = useSceneStore.getState();
+    const eo = penToolEditId ? objects.find((o) => o.id === penToolEditId) : null;
+    if (eo && (eo.primitiveShape === 'extrude' || eo.primitiveShape === 'lathe')) {
+      const g = eo.geom ?? {};
+      const m = eo.primitiveShape;
+      // profileRaw(스무딩 전 컨트롤 점)가 있으면 그걸, 없으면 profile을 로드.
+      const srcPts = (g.profileRaw && g.profileRaw.length ? g.profileRaw : g.profile) ?? [];
+      // 모델 좌표 → SVG 픽셀 (toProfile 역변환). lathe는 저장 x≥0라 축 오른쪽에 놓임(reflectRight와 일치).
+      setMode(m);
+      setPoints(srcPts.map((p) => ({ x: CENTER + p.x * SCALE, y: CENTER - p.y * SCALE })));
+      setClosed(m === 'extrude' ? true : (g.profileClosed ?? false));
+      setSmooth(g.profileSmooth ?? false);
+      setDepth(g.extrudeDepth ?? 0.5);
+      setHover(null); setSelected(new Set()); setBox(null); setPanelPos(null);
+    } else {
+      setMode('extrude'); setPoints([]); setClosed(false); setSmooth(false); setDepth(0.5); setHover(null); setSelected(new Set()); setBox(null); setPanelPos(null);
+    }
   }, [open]);
 
   // 회전체 모드에선 점을 항상 축 오른쪽으로 반사(WYSIWYG: 점·프리뷰·결과가 일치, 좌우 헷갈림 제거).
@@ -126,6 +154,24 @@ export function PenToolModal() {
 
   const onSvgDown = (e: React.MouseEvent<SVGSVGElement>) => {
     const p = svgXY(e);
+    // Ctrl/⌘+클릭 → 가장 가까운 변에 점 삽입. 닫힌 경로·재편집에서도 점을 늘릴 수 있다.
+    if (e.ctrlKey || e.metaKey) {
+      const np = place(p);
+      setPoints((prev) => {
+        if (prev.length < 2) return [...prev, np];
+        const segN = closed ? prev.length : prev.length - 1; // 닫혔으면 마지막→첫 변도 후보
+        let best = prev.length - 1, bestD = Infinity;
+        for (let i = 0; i < segN; i++) {
+          const d = distToSeg(np, prev[i], prev[(i + 1) % prev.length]);
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        const next = [...prev];
+        next.splice(best + 1, 0, np); // 가장 가까운 변의 두 점 사이에 삽입
+        return next;
+      });
+      setSelected(new Set());
+      return;
+    }
     // Shift+드래그(또는 닫힌 상태에서 빈 곳 드래그) → 박스 선택 시작
     if (e.shiftKey) { boxRef.current = p; setBox({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }); return; }
     if (closed) { setSelected(new Set()); return; } // 닫힌 경로: 빈 곳 클릭=선택 해제(점 드래그만)
@@ -189,8 +235,15 @@ export function PenToolModal() {
     if (mode === 'lathe' && points.length < 2) { addToast('회전체는 점 2개 이상 필요해요.', 'error'); return; }
     if (mode === 'extrude' && !closed) { addToast('첫 점을 클릭해 경로를 닫아주세요.', 'error'); return; }
     const raw = smooth ? smoothPts(points, closed) : points;
-    addProfileObject(mode, toProfile(raw), depth, closed);
-    addToast(`${mode === 'lathe' ? '회전체' : '돌출'} 오브젝트 생성`, 'success');
+    const profile = toProfile(raw);       // 지오메트리용(스무딩 반영)
+    const rawProfile = toProfile(points);  // 재편집용 원본 컨트롤 점
+    if (editId) {
+      updateProfileObject(editId, mode, profile, depth, closed, rawProfile, smooth);
+      addToast(`${mode === 'lathe' ? '회전체' : '돌출'} 수정됨`, 'success');
+    } else {
+      addProfileObject(mode, profile, depth, closed, rawProfile, smooth);
+      addToast(`${mode === 'lathe' ? '회전체' : '돌출'} 오브젝트 생성`, 'success');
+    }
     setPoints([]); setClosed(false); setOpen(false);
   };
   const close = () => { setPoints([]); setClosed(false); setOpen(false); };
@@ -225,7 +278,7 @@ export function PenToolModal() {
           className="flex items-center justify-between mb-2.5 cursor-move select-none"
           onMouseDown={onHeaderDown}
         >
-          <span className="text-[13px] font-semibold text-foreground flex items-center gap-1.5"><PenTool size={14} /> 펜 툴 — 2D 그려서 3D 만들기</span>
+          <span className="text-[13px] font-semibold text-foreground flex items-center gap-1.5"><PenTool size={14} /> {editId ? '펜 툴 — 오브젝트 수정' : '펜 툴 — 2D 그려서 3D 만들기'}</span>
           <button onMouseDown={(e) => e.stopPropagation()} onClick={close} className="text-muted hover:text-foreground px-1 cursor-pointer"><X size={15} /></button>
         </div>
 
@@ -292,7 +345,7 @@ export function PenToolModal() {
           {mode === 'extrude'
             ? '점을 찍어 단면을 그린 뒤 첫 점(보라)을 다시 클릭해 닫으세요(3점+). 두께만큼 세워집니다(별·하트 기둥).'
             : '세로축 오른쪽에 반쪽 단면을 그리세요(2점+, 왼쪽 클릭은 오른쪽에 맞춰짐·점선=회전 미러). 첫 점을 클릭해 닫으면 도넛·링이 돼요.'}
-          {' '}점 드래그로 조정. <b>Shift+드래그</b>=여러 점 선택→함께 이동, <b>Delete</b>=선택 삭제, <b>Ctrl+Z</b>=점 취소{closed ? ' · 닫힘' : ''}.
+          {' '}점 드래그로 조정. <b>Ctrl+클릭</b>=변에 점 추가, <b>Shift+드래그</b>=여러 점 선택→함께 이동, <b>Delete</b>=선택 삭제, <b>Ctrl+Z</b>=점 취소{closed ? ' · 닫힘' : ''}.
         </p>
 
         {mode === 'extrude' && (
@@ -309,7 +362,7 @@ export function PenToolModal() {
           <button onClick={clearAll} disabled={points.length === 0}
             className="flex-1 py-1.5 rounded-xs bg-background text-muted hover:text-foreground text-[11px] transition-colors disabled:opacity-40">전체 지우기</button>
           <button onClick={create}
-            className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors">만들기 ({points.length})</button>
+            className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors">{editId ? '수정 적용' : '만들기'} ({points.length})</button>
         </div>
       </div>
 

@@ -4,7 +4,8 @@ import { useRef, useLayoutEffect, useMemo, useEffect, useState, Suspense } from 
 import * as THREE from 'three';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import { Text3D, Center, Line } from '@react-three/drei';
-import { createPrimitiveGeometry, primitiveGeomKey } from '@/lib/primitiveGeometry';
+import { createPrimitiveGeometry, primitiveGeomKey, profileSig } from '@/lib/primitiveGeometry';
+import { voxelSig } from '@/lib/voxelGeometry';
 import { primLocalBboxCache } from '@/lib/primBboxCache';
 import { effectiveMaterial } from '@/lib/effectiveMaterial';
 import { useShallow } from 'zustand/react/shallow';
@@ -511,7 +512,8 @@ export function EditorObjectInstance({ object }: Props) {
   // 프리미티브 지오메트리(둥근 박스·각뿔대 등 확장 파라미터 반영). 파라미터 바뀌면 재생성·이전 것 dispose.
   const primGeom = useMemo(
     () => createPrimitiveGeometry(object.primitiveShape, object.geom),
-    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profile?.length, object.geom?.subdivisions],
+    // profileSig/voxelSig는 내용을 반영 → 펜툴·복셀 재편집으로 데이터가 바뀌면 지오메트리 재생성.
+    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
 
@@ -671,6 +673,7 @@ export function EditorObjectInstance({ object }: Props) {
             sheen={mat?.sheen}
             transmission={mat?.transmission}
             ior={mat?.ior}
+            vertexColors={object.primitiveShape === 'voxel'}
           />
         </mesh>
       )}

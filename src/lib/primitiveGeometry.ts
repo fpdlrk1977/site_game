@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { LoopSubdivision } from 'three-subdivide';
+import { buildVoxelGeometry, voxelSig } from './voxelGeometry';
 import type { PrimitiveShape, PrimitiveGeom } from '@/types/scene';
 
 // 지오메트리를 원점 중심 + 최대 변 1로 정규화(프리미티브 단위 박스 관례에 맞춤 → bbox/바닥스냅/기즈모 일관).
@@ -110,20 +111,22 @@ function buildBaseGeometry(
       return new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
     case 'plane':
       return new THREE.PlaneGeometry(1, 1);
+    case 'voxel':
+      return buildVoxelGeometry(geom?.voxels) ?? new THREE.BoxGeometry(1, 1, 1);
     default:
       return new THREE.BoxGeometry(1, 1, 1);
   }
 }
 
 // 인스턴싱/메모 캐시 키 — 같은 형태+파라미터면 같은 키(지오메트리 공유).
-// profile 서명 — 점 개수 + 앞뒤 좌표(전체 JSON 대신 저렴하게). 편집이 드물어 충돌 위험 낮음.
+// profile 서명 — 모든 점을 반영(재편집으로 중간 점만 옮겨도 지오메트리가 재생성되도록).
+// 프로파일 점은 대개 수~수십 개라 전체 직렬화 비용도 미미하다.
 export function profileSig(geom?: PrimitiveGeom): string {
   const p = geom?.profile;
   if (!p || p.length === 0) return '';
-  const f = p[0], l = p[p.length - 1];
-  return `${p.length}:${f.x.toFixed(3)},${f.y.toFixed(3)}:${l.x.toFixed(3)},${l.y.toFixed(3)}`;
+  return `${p.length}:` + p.map((pt) => `${pt.x.toFixed(3)},${pt.y.toFixed(3)}`).join(';');
 }
 
 export function primitiveGeomKey(shape: PrimitiveShape | undefined, geom?: PrimitiveGeom): string {
-  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}`;
+  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}|${voxelSig(geom?.voxels)}`;
 }
