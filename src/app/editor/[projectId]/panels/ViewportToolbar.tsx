@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Save, History, ExternalLink, Hexagon } from 'lucide-react';
+import { ArrowLeft, Save, History, ExternalLink, Hexagon, Play } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
@@ -18,7 +18,7 @@ interface Props {
 
 
 export function ViewportToolbar({ projectName }: Props) {
-  const { isModified, projectId, sceneId } = useSceneStore();
+  const { isModified, projectId, sceneId, setEditorPlaying } = useSceneStore();
   const { addToast } = useToast();
   const [showHistory, setShowHistory] = useState(false);
   const [autoSaveAt, setAutoSaveAt] = useState<number | null>(null);
@@ -181,6 +181,16 @@ export function ViewportToolbar({ projectName }: Props) {
           >
             <Save size={12} />
             <span className="hidden sm:block">{saving ? 'Saving…' : 'Save'}</span>
+          </button>
+        </Tooltip>
+
+        <Tooltip content="에디터에서 바로 플레이 (걷기/게임 테스트)">
+          <button
+            onClick={() => setEditorPlaying(true)}
+            className="flex items-center gap-1.5 px-3 h-7 rounded-xs bg-primary text-white hover:bg-primary/85 transition-all text-xs font-semibold shrink-0"
+          >
+            <Play size={12} />
+            <span className="hidden sm:block">플레이</span>
           </button>
         </Tooltip>
 

@@ -93,6 +93,8 @@ interface SceneState {
   // 펜 툴(2D 프로파일 → 돌출/회전체) 모달 열림 상태.
   penToolOpen: boolean;
   voxelToolOpen: boolean;
+  // 인에디터 플레이 — true면 편집 중 씬을 뷰어로 구동(걷기/게임 테스트). 상단바 ▶로 토글.
+  editorPlaying: boolean;
   cameraViewRequest: { view: 'top' | 'front' | 'right'; _tick: number } | null;
   // 씬 로드 카운터 — loadScene마다 증가. 에디터가 '로드 직후 1회 전체 맞춤'을 이 값 변화로 감지
   // (새 빈 씬에서 첫 오브젝트 추가 시 카메라가 튀지 않도록 objects 변화가 아닌 로드 시점에 묶음).
@@ -147,6 +149,7 @@ interface SceneActions {
   /** 펜 툴 모달 열기/닫기 */
   setPenToolOpen: (open: boolean) => void;
   setVoxelToolOpen: (open: boolean) => void;
+  setEditorPlaying: (v: boolean) => void;
   requestCameraView: (view: 'top' | 'front' | 'right') => void;
   duplicateInPlace: () => void;
   requestSaveBookmark: (slot: number) => void;
@@ -389,6 +392,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   focusSelectedRequest: null,
   exportRequest: null,
   penToolOpen: false,
+  editorPlaying: false,
   voxelToolOpen: false,
   cameraViewRequest: null,
   sceneLoadTick: 0,
@@ -553,6 +557,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   requestExport: (ids, name) => set({ exportRequest: { ids, name, _tick: Date.now() } }),
   setPenToolOpen: (open) => set({ penToolOpen: open }),
   setVoxelToolOpen: (open) => set({ voxelToolOpen: open }),
+  setEditorPlaying: (v) => set({ editorPlaying: v }),
 
   requestCameraView: (view) => set({ cameraViewRequest: { view, _tick: Date.now() } }),
 

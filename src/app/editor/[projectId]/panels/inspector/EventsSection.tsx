@@ -956,20 +956,46 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               <p className="text-muted/60  text-[11px] py-1">이벤트 없음</p>
             )}
 
-            {obj.events.map((ev) => (
-              editingId === ev.id ? (
-              /* 수정 중 — 이 항목 자리에 폼을 인라인으로 표시 */
-              <div key={ev.id}>{renderEventForm()}</div>
-              ) : (
+            {obj.events.map((ev) => {
+              if (editingId === ev.id) {
+                /* 수정 중 — 이 항목 자리에 폼을 인라인으로 표시 */
+                return <div key={ev.id}>{renderEventForm()}</div>;
+              }
+              // 문장 꼬리(값 요약) — 대상/씬/오프셋을 사람이 읽는 형태로
+              const valueSummary = ev.value
+                ? (ev.action === 'go_to_scene' ? sceneName(ev.value)
+                  : ev.action === 'animate_object' ? `${objectName(ev.value.split('|')[0])} : ${ev.value.split('|')[1] ?? ''}`
+                  : ev.action === 'move_object' ? `${objectName(ev.value.split('|')[0])} Δ(${ev.value.split('|')[1] ?? '0,0,0'}) ${ev.value.split('|')[2] ?? '1'}초`
+                  : OBJECT_TARGET_ACTIONS.has(ev.action) ? objectName(ev.value)
+                  : ev.value)
+                : '';
+              // 조건(단서) — 다중 조건 AND/OR 또는 레거시 단일 condition
+              const conds = ev.conditions && ev.conditions.length ? ev.conditions : (ev.condition ? [ev.condition] : []);
+              const condText = conds.map((c) => `${c.variable} ${c.op} ${c.value}`).join(ev.conditionLogic === 'or' ? ' 또는 ' : ' 그리고 ');
+              return (
               <div key={ev.id} className="bg-surface border border-border/80 rounded-xs p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <span className="bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-xs text-[10px] font-medium shrink-0">
+                <div className="flex items-start justify-between gap-2">
+                  {/* 문장: When ⟨트리거⟩ → ⟨액션⟩ 값 */}
+                  <div className="min-w-0 flex-1 text-[11px] leading-relaxed">
+                    <span className="text-muted/60 font-medium mr-1">When</span>
+                    <span className="inline-block bg-primary/15 text-primary border border-primary/25 px-1.5 py-0.5 rounded-xs text-[10px] font-medium align-middle">
                       {TRIGGER_LABELS[ev.trigger]}
                     </span>
-                    <span className="text-muted/60 text-[10px]">›</span>
-                    <span className="text-foreground text-[10px] truncate font-medium">{ACTION_LABELS[ev.action] ?? ev.action}</span>
+                    <span className="text-muted/40 mx-1 align-middle">→</span>
+                    <span className="inline-block bg-background text-foreground border border-border px-1.5 py-0.5 rounded-xs text-[10px] font-medium align-middle">
+                      {ACTION_LABELS[ev.action] ?? ev.action}
+                    </span>
+                    {valueSummary && (
+                      <span className="text-muted/70 ml-1 align-middle break-all">{valueSummary}</span>
+                    )}
+                    {condText && (
+                      <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400/90">단, {condText} 일 때만</div>
+                    )}
+                    {ev.elseAction && (
+                      <div className="mt-0.5 text-[10px] text-muted/60">아니면 → {ACTION_LABELS[ev.elseAction] ?? ev.elseAction}{ev.elseValue ? ` ${ev.elseValue}` : ''}</div>
+                    )}
                   </div>
+                  {/* 액션 버튼(미리보기/수정/삭제) — 동작 유지 */}
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => {
@@ -1004,18 +1030,9 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     </button>
                   </div>
                 </div>
-                {ev.value && (
-                  <p className="text-muted/60 text-[10px] mt-1.5 truncate  bg-background/50 rounded px-1.5 py-0.5">
-                    {ev.action === 'go_to_scene' ? `→ ${sceneName(ev.value)}`
-                      : ev.action === 'animate_object' ? `→ ${objectName(ev.value.split('|')[0])} : ${ev.value.split('|')[1] ?? ''}`
-                      : ev.action === 'move_object' ? `→ ${objectName(ev.value.split('|')[0])} Δ(${ev.value.split('|')[1] ?? '0,0,0'}) ${ev.value.split('|')[2] ?? '1'}초`
-                      : OBJECT_TARGET_ACTIONS.has(ev.action) ? `→ ${objectName(ev.value)}`
-                      : ev.value}
-                  </p>
-                )}
               </div>
-              )
-            ))}
+              );
+            })}
 
             {/* 수정 중이면 해당 항목 자리에 폼이 인라인으로 뜨므로 하단엔 아무것도 안 띄운다.
                 신규 추가(showAddEvent)면 하단에 폼, 아니면 '이벤트 추가' 버튼. */}

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { ChevronLeft, ChevronRight, Monitor } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Monitor, Square } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
+import { buildSceneData } from '@/lib/saveScene';
 import { ViewportToolbar } from './panels/ViewportToolbar';
 import { EditorGnb, type GnbTab } from './panels/EditorGnb';
 import { LeftPanel } from './panels/LeftPanel';
@@ -24,6 +25,12 @@ const EditorCanvas = dynamic(
   { ssr: false, loading: () => <div className="w-full h-full bg-surface flex items-center justify-center"><span className="text-muted text-sm">뷰포트 로딩 중...</span></div> },
 );
 
+// 인에디터 플레이 — 편집 중 씬을 뷰어 스택으로 구동(popup을 자체 렌더하도록 standalone 사용).
+const PlayViewer = dynamic(
+  () => import('@/app/space/[sceneId]/ViewerClient').then((m) => m.ViewerClient),
+  { ssr: false, loading: () => <div className="w-full h-full bg-canvas flex items-center justify-center"><span className="text-muted text-sm">플레이 로딩 중...</span></div> },
+);
+
 interface Props {
   projectName: string;
   initialScene: ProjectSceneSchema;
@@ -36,7 +43,15 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     setTransformMode, requestFocus, requestFocusAll, requestFocusSelected, requestCameraView,
     groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark,
     copyObjectProperties, pasteObjectProperties,
+    editorPlaying, setEditorPlaying,
   } = useSceneStore();
+
+  // 플레이 시작 시점의 편집 상태를 스냅샷으로 굳혀 뷰어에 전달(항상 play 모드로 시작).
+  const playScene = useMemo(() => {
+    if (!editorPlaying) return null;
+    const data = buildSceneData();
+    return { ...data, environment: { ...data.environment, defaultMode: 'play' as const } };
+  }, [editorPlaying]);
   const [isMobile, setIsMobile] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [gnbTab, setGnbTab] = useState<GnbTab>('objects');
@@ -83,6 +98,8 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
   // 전역 키보드 단축키
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // 플레이 중엔 에디터 단축키(삭제·변환·undo 등) 비활성 — 뷰어 입력이 편집을 건드리지 않게
+      if (useSceneStore.getState().editorPlaying) return;
       const tag = (e.target as HTMLElement)?.tagName;
       const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
       // e.key는 IME(한글)·Shift 조합에서 값이 달라지므로 물리 키 기반 e.code로 판정
@@ -199,6 +216,20 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       <div className={`absolute right-3 bottom-3 w-72 z-30 ${panelShell}`} style={{ top: panelTop }}>
         <InspectorPanel />
       </div>
+
+      {/* 인에디터 플레이 — 편집 중 씬을 뷰어로 전체 오버레이 구동 */}
+      {editorPlaying && playScene && (
+        <div className="absolute inset-0 z-50 bg-canvas">
+          <PlayViewer scene={playScene} isOwner hideBadge projectName={projectName} />
+          <button
+            onClick={() => setEditorPlaying(false)}
+            title="플레이 종료 (편집으로 돌아가기)"
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-1.5 px-3.5 h-9 rounded-md bg-surface/95 border border-border text-foreground text-xs font-semibold hover:bg-surface shadow-float"
+          >
+            <Square size={12} className="fill-current" /> 편집으로
+          </button>
+        </div>
+      )}
 
       <EditorOnboarding />
       <Toaster />

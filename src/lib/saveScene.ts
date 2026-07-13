@@ -9,6 +9,27 @@ export type SaveResult =
   | { status: 'no-scene' };
 
 /**
+ * 현재 스토어 상태를 뷰어가 받는 ProjectSceneSchema로 직렬화한다(DB 저장 X).
+ * 저장(persistCurrentScene)과 인에디터 플레이(편집 중 상태 그대로 뷰어 구동)가 공유.
+ */
+export function buildSceneData(): ProjectSceneSchema {
+  const s = useSceneStore.getState();
+  return {
+    projectId: s.projectId ?? '',
+    sceneId: s.sceneId ?? '',
+    version: SCENE_VERSION,
+    environment: s.environment,
+    assets: s.assets,
+    objects: s.objects,
+    prefabs: s.prefabs,
+    materialAssets: s.materialAssets,
+    colorAssets: s.colorAssets,
+    variables: s.variables,
+    hudElements: s.hudElements,
+  };
+}
+
+/**
  * 현재 스토어의 씬 상태를 scenes 테이블에 저장한다 (낙관적 잠금).
  *
  * scenes.version 컬럼을 행 리비전 카운터로 사용해:
@@ -24,19 +45,7 @@ export async function persistCurrentScene(): Promise<SaveResult> {
   const s = useSceneStore.getState();
   if (!s.sceneId) return { status: 'no-scene' };
 
-  const sceneData: ProjectSceneSchema = {
-    projectId: s.projectId ?? '',
-    sceneId: s.sceneId,
-    version: SCENE_VERSION,
-    environment: s.environment,
-    assets: s.assets,
-    objects: s.objects,
-    prefabs: s.prefabs,
-    materialAssets: s.materialAssets,
-    colorAssets: s.colorAssets,
-    variables: s.variables,
-    hudElements: s.hudElements,
-  };
+  const sceneData = buildSceneData();
 
   const expected = s.savedVersion;
   const supabase = createBrowserSupabase();
