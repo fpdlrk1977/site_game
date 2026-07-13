@@ -51,6 +51,39 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ⏭️ 다음 세션 바로 착수 (2026-07-13) — 전역 태양 방향 화살표 (읽기 전용 표식)
+
+> **다른 PC에서 이걸 먼저 하면 됨.** 준비: `git status`가 clean인지 확인(이전 조명 삽질은 discard 완료).
+
+### 배경 (왜 하는가)
+사용자 문제: **Environment › Lights › Sun Position(XYZ)** 을 조절해도 **그 태양광이 화면 어디서 어느 방향으로 비추는지 안 보여서** 설정이 맞는지 확인 불가. → **전역 태양의 방향만 화살표로 시각화**(조명 동작·값은 절대 안 건드림, 순수 표식).
+
+### ⚠️ 하지 말 것 (지난 세션 삽질 교훈 — 전부 discard함)
+- 전역 라이트(directionalLight) 동작/강도/그림자/target **건들지 말 것**. 사용자 명시: "기본 라이트는 건들지 말자".
+- 라이트 **오브젝트**(Assets›Lights로 추가하는 것)에 와이어프레임/강도×4π/target -Y/그림자 카메라 넣는 삽질 **재발 금지**. 이건 이 작업과 **무관**. (지난번 스팟 그림자 디버깅하다 엉뚱한 방향으로 감.)
+- 이번 작업은 **에디터 뷰포트 표식 1개 추가**가 전부. 스키마·스토어·뷰어 변경 없음.
+
+### 정확한 사실 (파일·필드)
+- **태양 방향 저장**: `env.lights.directionalPosition = { x, y, z }` (기본 `{5,10,5}`). 이건 태양의 **위치**이고, 전역 directionalLight는 이 위치에서 **원점(0,0,0) 쪽으로** 비춤(target 원점). 즉 광선 방향 = `origin − directionalPosition` = `-directionalPosition` 정규화.
+- **UI**: `EnvironmentPanel.tsx` L478 `XYZRow label="Sun Position"` (→ `updateEnvironment({ lights:{...directionalPosition}})`).
+- **전역 태양 렌더 위치**: `EditorCanvas.tsx` — `Sky sunPosition`이 L803-808에서 `directionalPosition` 사용, 전역 `<directionalLight>`는 L826 부근. **여긴 읽기만** 하고 건들지 말 것.
+- 참고 패턴: 같은 파일 `SpawnMarker`(L119, cylinder+cone 화살표, `meshBasicMaterial`)가 **에디터 전용 표식**의 좋은 본보기.
+
+### 구현 스펙
+1. `EditorCanvas.tsx` 안에 **`SunDirectionGizmo`** 컴포넌트 신설(에디터 Canvas 내부에만 렌더 — 뷰어/플레이 X).
+   - `dir = normalize(directionalPosition)`. 씬 중앙 위쪽 태양 위치를 나타내는 작은 구(노랑 `#facc15` `meshBasicMaterial`)를 `dir * R`(예 R=8~12)에 배치.
+   - 그 구에서 **원점 방향으로 화살표**(광선 방향 표시): 얇은 실린더 + 끝에 cone, `-dir` 방향으로 향하게(quaternion `setFromUnitVectors(new Vector3(0,1,0), rayDir)` 또는 `lookAt`). SpawnMarker 방식 참고.
+   - `depthTest`는 켜두거나(가림 자연스러움) 필요시 조정. `depthWrite={false}` 권장.
+2. Sun Position 슬라이더 돌리면 `directionalPosition` 변경 → 화살표가 **실시간으로 같이 회전**(props로 값 받아 useMemo).
+3. **읽기 전용**(클릭/기즈모 없음). 드래그로 태양 옮기는 건 후속(원하면 나중에).
+4. 검증: tsc 클린 + 에디터에서 Sun Position XYZ 바꿀 때 화살표 방향 따라 도는지 브라우저 확인.
+
+### 선택(후속, 이번엔 안 해도 됨)
+- 화살표를 **드래그**해서 태양 방향 직접 조절(기즈모 상호작용).
+- 뷰어에도 옵션으로 표시 토글.
+
+---
+
 ## 🎯 다음 작업 후보 (2026-07-12 기준 — 다른 PC에서 이어서)
 
 > 오늘까지: 게임 로직 Phase 1~3 완료, 인스펙터 리팩터 완료(3855→277줄). 아래 둘 중 골라 진행. **상세 스펙은 각 기준 문서에 있음.**
