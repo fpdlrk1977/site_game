@@ -59,7 +59,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 <div className='flex gap-2'>
                   <div className='flex-1'>
                     <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Color</span>
-                    <div className="px-2 flex items-center border border-border rounded-xs">
+                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                       <input
                         type="color"
                         value={obj.material?.color ?? '#a78bfa'}
@@ -79,7 +79,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
 
                   <div className='flex-1'>
                     <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Emissive</span>
-                    <div className="px-2 flex items-center border border-border rounded-xs">
+                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                       <input
                         type="color"
                         value={obj.material?.emissive ?? '#000000'}

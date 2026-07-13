@@ -41,7 +41,7 @@ export function LightSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                     <span className="text-[10px]  text-muted">{obj.light.color}</span>
                   </div> */}
 
-                  <div className="px-2 flex items-center border border-border rounded-xs">
+                  <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                     <input
                       type="color"
                       value={obj.light.color}
