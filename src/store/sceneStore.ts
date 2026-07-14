@@ -281,6 +281,83 @@ function withHistory(snapshot: HistoryEntry, past: HistoryEntry[]): { past: Hist
   return { past: pushPast(past, snapshot), future: [] };
 }
 
+// 복제(duplicate)·프리팹 인스턴스화 시 애니 클립도 함께 복제 — rootId/트랙 objectId를 idMap으로 리맵.
+// 대상 오브젝트가 복제 집합(idMap)에 있으면 새 클립 생성 → 복제/프리팹에 애니가 따라간다. ANIMATION.md P2b.
+//   clipIdMap(옛 클립id→새 클립id)도 반환 → 복제된 오브젝트의 play_clip 이벤트를 새 클립으로 리맵하는 데 씀.
+// 클립 키프레임은 절대 트랜스폼(position)을 저장한다(뷰어가 그대로 덮어씀). 복제본은 원본과 다른 위치에
+// 놓이므로(예: +1 오프셋), 복제 클립의 position 키프레임을 그 오브젝트의 이동량(posDelta)만큼 옮겨야
+// "제 위치에서 같은 동작"을 한다. posDelta는 OLD 오브젝트 id로 키잉(없으면 이동 0). rotation/scale은 위치무관이라 그대로.
+function dupAnimClips(
+  animClips: AnimClip[],
+  idMap: Map<string, string>,
+  posDelta?: Map<string, { x: number; y: number; z: number }>,
+): { clips: AnimClip[]; clipIdMap: Map<string, string> } {
+  const clips: AnimClip[] = [];
+  const clipIdMap = new Map<string, string>();
+  // 재생 목록에서 구분되도록 복제 클립 이름을 "~ 복사"로(중복이면 번호). 기존 + 이번에 만든 이름과 겹치지 않게.
+  const usedNames = new Set(animClips.map((c) => c.name));
+  const uniqueName = (base: string): string => {
+    let name = `${base} 복사`;
+    let n = 2;
+    while (usedNames.has(name)) name = `${base} 복사 ${n++}`;
+    usedNames.add(name);
+    return name;
+  };
+  for (const clip of animClips) {
+    const rootIn = clip.rootId ? idMap.has(clip.rootId) : false;
+    const trackIn = clip.tracks.some((t) => idMap.has(t.objectId));
+    if (!rootIn && !trackIn) continue;
+    const newId = MathUtils.generateUUID();
+    clipIdMap.set(clip.id, newId);
+    clips.push({
+      ...clip,
+      id: newId,
+      name: uniqueName(clip.name),
+      rootId: clip.rootId && idMap.has(clip.rootId) ? idMap.get(clip.rootId)! : clip.rootId,
+      tracks: clip.tracks.map((t) => {
+        const d = posDelta?.get(t.objectId);
+        return {
+          objectId: idMap.get(t.objectId) ?? t.objectId,
+          keys: t.keys.map((k) => ({
+            time: k.time,
+            position: k.position ? (d ? { x: k.position.x + d.x, y: k.position.y + d.y, z: k.position.z + d.z } : { ...k.position }) : undefined,
+            rotation: k.rotation ? { ...k.rotation } : undefined,
+            scale: k.scale ? { ...k.scale } : undefined,
+          })),
+        };
+      }),
+      pivot: clip.pivot ? { ...clip.pivot } : undefined,
+    });
+  }
+  return { clips, clipIdMap };
+}
+// 복제된 오브젝트들의 play_clip 이벤트 값(클립 id)을 새 클립 id로 교체. 그래야 복제본이 자기 애니를 재생.
+function remapPlayClipEvents(objs: ObjectNodeSchema[], clipIdMap: Map<string, string>): ObjectNodeSchema[] {
+  if (clipIdMap.size === 0) return objs;
+  return objs.map((o) =>
+    o.events?.some((e) => e.action === 'play_clip' && clipIdMap.has(e.value))
+      ? { ...o, events: o.events.map((e) => (e.action === 'play_clip' && clipIdMap.has(e.value) ? { ...e, value: clipIdMap.get(e.value)! } : e)) }
+      : o,
+  );
+}
+
+// 삭제된 오브젝트를 참조하는 애니 클립을 정리(고아 클립 방지):
+// 각 클립에서 삭제 오브젝트 트랙을 빼고, 트랙이 하나도 안 남으면 클립 자체를 제거. stale rootId도 비운다.
+// changed=false면 animClips 원본을 그대로 반환(불필요한 히스토리/리렌더 방지).
+function pruneOrphanClips(animClips: AnimClip[], deleted: Set<string>): { clips: AnimClip[]; changed: boolean } {
+  if (animClips.length === 0) return { clips: animClips, changed: false };
+  const origClip = new Map(animClips.map((c) => [c.id, c]));
+  const clips = animClips
+    .map((c) => ({
+      ...c,
+      rootId: c.rootId && deleted.has(c.rootId) ? undefined : c.rootId,
+      tracks: c.tracks.filter((t) => !deleted.has(t.objectId)),
+    }))
+    .filter((c) => c.tracks.length > 0);
+  const changed = clips.length !== animClips.length || clips.some((c) => { const o = origClip.get(c.id); return !o || c.tracks.length !== o.tracks.length || c.rootId !== o.rootId; });
+  return { clips: changed ? clips : animClips, changed };
+}
+
 let objectCounter = 0;
 
 // 모든 오브젝트가 공유하는 기본값 팩토리. overrides로 타입별 필드(assetId/content/particle/light 등)를 덮어쓴다.
@@ -649,7 +726,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   requestCameraView: (view) => set({ cameraViewRequest: { view, _tick: Date.now() } }),
 
   duplicateInPlace: () => {
-    const { selectedId, objects, environment, past } = get();
+    const { selectedId, objects, environment, animClips, past } = get();
     if (!selectedId) return;
     const src = objects.find((o) => o.id === selectedId);
     if (!src) return;
@@ -675,11 +752,15 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         ...o,
         parentId: idMap.get(o.parentId!) ?? o.parentId,
       }));
-      set({ objects: [...objects, newGroup, ...fixedDescendants], selectedId: newGroupId, selectedIds: [newGroupId], isModified: true, ...withHistory({ objects, environment }, past) });
+      const { clips: dupClips, clipIdMap } = dupAnimClips(animClips, idMap);
+      const remapped = remapPlayClipEvents([newGroup, ...fixedDescendants], clipIdMap);
+      set({ objects: [...objects, ...remapped], animClips: dupClips.length ? [...animClips, ...dupClips] : animClips, selectedId: newGroupId, selectedIds: [newGroupId], isModified: true, ...withHistory({ objects, environment, animClips }, past) });
     } else {
       // 그룹 내부 오브젝트는 같은 부모 아래에 제자리 복제
       const copy: ObjectNodeSchema = { ...src, id: MathUtils.generateUUID(), name: `${src.name} 복사`, parentId: src.parentId };
-      set({ objects: [...objects, copy], selectedId: copy.id, selectedIds: [copy.id], isModified: true, ...withHistory({ objects, environment }, past) });
+      const { clips: dupClips, clipIdMap } = dupAnimClips(animClips, new Map([[src.id, copy.id]]));
+      const [remappedCopy] = remapPlayClipEvents([copy], clipIdMap);
+      set({ objects: [...objects, remappedCopy], animClips: dupClips.length ? [...animClips, ...dupClips] : animClips, selectedId: copy.id, selectedIds: [copy.id], isModified: true, ...withHistory({ objects, environment, animClips }, past) });
     }
   },
 
@@ -756,7 +837,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   removeObjectsByAsset: (assetId) => {
-    const { objects, environment, past, selectedId, selectedIds } = get();
+    const { objects, environment, animClips, past, selectedId, selectedIds } = get();
     const directIds = objects.filter((o) => o.assetId === assetId).map((o) => o.id);
     if (directIds.length === 0) return 0;
     const collectDescendants = (oid: string): string[] => {
@@ -764,12 +845,14 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       return [oid, ...children.flatMap((c) => collectDescendants(c.id))];
     };
     const allToDelete = new Set(directIds.flatMap((id) => collectDescendants(id)));
+    const { clips: nextClips, changed: clipsChanged } = pruneOrphanClips(animClips, allToDelete);
     set({
       objects: objects.filter((o) => !allToDelete.has(o.id)),
+      animClips: nextClips,
       selectedId: selectedId && allToDelete.has(selectedId) ? null : selectedId,
       selectedIds: selectedIds.filter((id) => !allToDelete.has(id)),
       isModified: true,
-      ...withHistory({ objects, environment }, past),
+      ...withHistory(clipsChanged ? { objects, environment, animClips } : { objects, environment }, past),
     });
     return allToDelete.size;
   },
@@ -955,7 +1038,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   deleteSelected: () => {
-    const { selectedId, selectedIds, objects, environment, past } = get();
+    const { selectedId, selectedIds, objects, environment, animClips, past } = get();
     const roots = selectedIds.length > 0 ? selectedIds : (selectedId ? [selectedId] : []);
     if (roots.length === 0) return;
     // 그룹의 모든 자손도 함께 삭제
@@ -964,12 +1047,15 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       return [id, ...children.flatMap((c) => collectDescendants(c.id))];
     };
     const allToDelete = new Set(roots.flatMap((id) => collectDescendants(id)));
+    // 삭제되는 오브젝트를 참조하는 애니 클립 제거(고아 클립 정리)
+    const { clips: nextClips, changed: clipsChanged } = pruneOrphanClips(animClips, allToDelete);
     set({
       objects: objects.filter((o) => !allToDelete.has(o.id)),
+      animClips: nextClips,
       selectedId: null,
       selectedIds: [],
       isModified: true,
-      ...withHistory({ objects, environment }, past),
+      ...withHistory(clipsChanged ? { objects, environment, animClips } : { objects, environment }, past),
     });
   },
 
@@ -1000,7 +1086,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   duplicateSelected: () => {
-    const { selectedId, objects, environment, past } = get();
+    const { selectedId, objects, environment, animClips, past } = get();
     if (!selectedId) return;
     const src = objects.find((o) => o.id === selectedId);
     if (!src) return;
@@ -1036,12 +1122,17 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         ...o,
         parentId: idMap.get(o.parentId!) ?? o.parentId,
       }));
+      // 그룹 루트만 +1 이동(자식은 로컬 위치 유지) → 클립 키프레임도 루트 이동량만 오프셋
+      const posDelta = new Map([[src.id, { x: newGroup.position.x - src.position.x, y: newGroup.position.y - src.position.y, z: newGroup.position.z - src.position.z }]]);
+      const { clips: dupClips, clipIdMap } = dupAnimClips(animClips, idMap, posDelta); // 애니 클립도 복제 + play_clip 리맵 + 위치 오프셋
+      const remapped = remapPlayClipEvents([newGroup, ...fixedDescendants], clipIdMap);
       set({
-        objects: [...objects, newGroup, ...fixedDescendants],
+        objects: [...objects, ...remapped],
+        animClips: dupClips.length ? [...animClips, ...dupClips] : animClips,
         selectedId: newGroupId,
         selectedIds: [newGroupId],
         isModified: true,
-        ...withHistory({ objects, environment }, past),
+        ...withHistory({ objects, environment, animClips }, past),
       });
     } else {
       // 그룹 내부 오브젝트는 같은 부모 아래에 복제 (parentId 유지)
@@ -1052,12 +1143,16 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         position: { ...src.position, x: src.position.x + 1 },
         parentId: src.parentId,
       };
+      const posDelta = new Map([[src.id, { x: copy.position.x - src.position.x, y: copy.position.y - src.position.y, z: copy.position.z - src.position.z }]]);
+      const { clips: dupClips, clipIdMap } = dupAnimClips(animClips, new Map([[src.id, copy.id]]), posDelta);
+      const [remappedCopy] = remapPlayClipEvents([copy], clipIdMap);
       set({
-        objects: [...objects, copy],
+        objects: [...objects, remappedCopy],
+        animClips: dupClips.length ? [...animClips, ...dupClips] : animClips,
         selectedId: copy.id,
         selectedIds: [copy.id],
         isModified: true,
-        ...withHistory({ objects, environment }, past),
+        ...withHistory({ objects, environment, animClips }, past),
       });
     }
   },
