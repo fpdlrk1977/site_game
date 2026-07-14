@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/useToast";
 import { createBrowserSupabase } from "@/lib/supabase";
 import { SelectBox } from "@/components/ui/SelectBox";
 import { SectionHeader, GroupBox, LabeledNum, XYZRow, Toggle, NumInput } from "./ui";
+import { SceneLogicSection } from "./SceneLogicSection";
 import type { EnvSchema, HdrPreset, GroundPreset, PopupConfig, PostProcessPreset, GameVariable, HudElement } from "@/types/scene";
 
 const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<EnvSchema> }[] = [
@@ -196,7 +197,7 @@ export function EnvironmentPanel() {
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(true);
   // 표시용(보여주기만) 섹션의 화살표 접기 상태 — enable 스위치 섹션(Ground/Fog/Player)은 제외.
-  const [envCollapsed, setEnvCollapsed] = useState<Set<string>>(new Set(["interaction", "post", "frame", "popup"]));
+  const [envCollapsed, setEnvCollapsed] = useState<Set<string>>(new Set(["interaction", "post", "frame", "popup", "gamelogic"]));
   const envToggle = (k: string) =>
     setEnvCollapsed((prev) => {
       const n = new Set(prev);
@@ -1422,6 +1423,8 @@ export function EnvironmentPanel() {
                       { value: "string", label: "텍스트" },
                       { value: "enum", label: "선택지(상태)" },
                       { value: "color", label: "색" },
+                      { value: "asset", label: "모델(에셋)" },
+                      { value: "timer", label: "타이머(카운트다운)" },
                     ]}
                   />
                   {v.type === "boolean" ? (
@@ -1436,13 +1439,13 @@ export function EnvironmentPanel() {
                         { value: "true", label: "초기: 참" },
                       ]}
                     />
-                  ) : v.type === "number" ? (
+                  ) : (v.type === "number" || v.type === "timer") ? (
                     <input
                       type="number"
                       value={typeof v.initial === "number" ? v.initial : 0}
                       onChange={(e) => updateVariable(v.id, { initial: Number(e.target.value) })}
                       onBlur={pushHistory}
-                      placeholder="초기값"
+                      placeholder={v.type === "timer" ? "시작 초" : "초기값"}
                       className="w-full bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   ) : v.type === "enum" ? (
@@ -1462,6 +1465,14 @@ export function EnvironmentPanel() {
                       />
                       <span className="text-[10px] text-muted tabular-nums">{typeof v.initial === "string" ? v.initial : "#ffffff"}</span>
                     </div>
+                  ) : v.type === "asset" ? (
+                    <SelectBox
+                      value={typeof v.initial === "string" ? v.initial : ""}
+                      onChange={(val) => { updateVariable(v.id, { initial: val }); pushHistory(); }}
+                      options={assets.filter((a) => a.type === "model" || a.type === "character" || !a.type).length
+                        ? assets.filter((a) => a.type === "model" || a.type === "character" || !a.type).map((a) => ({ value: a.id, label: a.name }))
+                        : [{ value: "", label: "(모델 에셋 없음)" }]}
+                    />
                   ) : (
                     <input
                       type="text"
@@ -1503,6 +1514,19 @@ export function EnvironmentPanel() {
                     </button>
                   </div>
                 )}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-muted/60 shrink-0">유지 범위</span>
+                  <SelectBox
+                    value={v.scope ?? "scene"}
+                    onChange={(sc) => { updateVariable(v.id, { scope: sc as GameVariable["scope"] }); pushHistory(); }}
+                    options={[
+                      { value: "scene", label: "씬 (기본, 리셋)" },
+                      { value: "global", label: "전역 (씬 이동 유지)" },
+                      { value: "persistent", label: "저장 (최고점수 등)" },
+                    ]}
+                    fullWidth={false}
+                  />
+                </div>
                 <label className="flex items-center justify-between cursor-pointer">
                   <span className="text-[10px] text-muted/60">화면 HUD에 표시</span>
                   <Toggle
@@ -1638,6 +1662,9 @@ export function EnvironmentPanel() {
           </div>
         )}
       </GroupBox>
+
+      {/* 게임 컨트롤러 — 씬 전역 로직 규칙. GAME_LOGIC.md 게임 컨트롤러 Phase 1 */}
+      <SceneLogicSection open={envOpen("gamelogic")} onToggle={() => envToggle("gamelogic")} />
 
       {/* 씬 메모 */}
       <GroupBox>

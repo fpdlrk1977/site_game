@@ -51,6 +51,22 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-14) — 🎮 변수 고도화 Phase A+B + 게임 컨트롤러 Phase 1 (기준: `doc/GAME_LOGIC.md`)
+
+> tsc 클린 + dev 컴파일(editor 307). **브라우저 실동작 확인 대기.** 상세·체크리스트는 GAME_LOGIC.md.
+
+- **변수 타입 확장(Phase A)**: `GameVariable.type`에 **string·enum·color** 추가(기존 number/boolean). enum은 `options[]`(상태 목록)+초기값 선택, color=컬러픽커, string=텍스트. `EventCondition.op`에 `contains`, value에 string. 스토어 `updateVariable` 타입변경 initial 보정. 에디터 EnvironmentPanel 변수 카드 타입별 입력 + enum 선택지 편집. EventsSection set_variable/조건 입력 타입별(숫자값=“값 또는 변수명” 텍스트).
+- **연산 강화(Phase B)**: `applyVarOp`에 div·mod·**clamp(범위제한)** + **변수↔변수 연산**(`resolveNum`이 리터럴 또는 변수명 해석 → `score add coins`). enum `next`(다음 상태 순환)·string append. `evalCondition` ==/!= String 정규화 + contains.
+- **게임 컨트롤러 Phase 1(전역 로직 홀더)**: 오브젝트에 안 매달린 **씬 전역 규칙**. `ProjectSceneSchema.sceneEvents?: EventSchema[]`(재사용). 스토어 `sceneEvents`+CRUD(withHistory)+loadScene/persist/undo. 런타임 `ViewerClient`가 합성 `sceneControllerObj`로 scene_start·on_timer·variable_changed 3패스에 sceneEvents 순회 추가(기존 runEventAction 재사용). 신규 에디터 **`SceneLogicSection.tsx`**(Environment 패널, 기본 접힘 `gamelogic`) — 트리거 3종+조건(타입인지)+액션 subset(set_variable·승패·팝업·오브젝트 표시/통과). 목적: `score>=3 → gateOpen` 같은 **공유 규칙을 한 곳에**.
+- **변수 Phase C (asset 모델 변수 + swap_model)**: `GameVariable.type`에 `'asset'`(값=에셋 id). 액션 `swap_model`(value=`"대상id|소스"`, 소스 `@변수` 또는 에셋 id) → 런타임 `modelOverride`가 effectiveScene에서 assetId 교체. **`@변수` 간접지정 첫 도입**(오브젝트 참조 변수의 토대). 에디터: 변수 카드 asset=모델 드롭다운, EventsSection swap_model=대상+소스 2단.
+- **변수 Phase D (timer)**: `type:'timer'`(number 기반) — 런타임 1초 카운트다운(0 정지, 게임오버 시 멈춤), `timer<=0 → game_lose` 등 워처로. 에디터: 초 입력, 조건/연산은 number 취급.
+- **변수 Phase E (scope/지속성)**: `GameVariable.scope: scene|global|persistent`. global=sessionStorage(씬 이동 유지)·persistent=localStorage(최고점수·이어하기), 키 `p3v:{projectId}:{name}`. init 저장값 우선, onVarsChanged 저장, restart는 scene+global 리셋·persistent 유지. 에디터 변수 카드 '유지 범위' 드롭다운.
+- **게임 컨트롤러 Phase 2 부분**: SceneLogicSection 액션 팔레트 확장(swap_model·play_sound 추가). **남음**: GNB Logic 전용 탭·EventsSection 폼 일반화·나머지 액션(go_to_scene/spawn/move).
+- **하위호환**: 전부 옵셔널 추가(normalize 통과). 기존 씬·이벤트 무변경.
+- **남은 로드맵**: 게임 컨트롤러 GNB 탭 + 폼 일반화 · spawn `@변수` · (변수 로드맵은 A~E 전부 완료).
+
+---
+
 ## ✅ 완료 (2026-07-14) — 복셀 B안(편집형 오브젝트) + 펜툴 Ctrl+클릭 + 컨텍스트 메뉴 전환
 
 > **사용자 브라우저 확인 완료("잘된다").**

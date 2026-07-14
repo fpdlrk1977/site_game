@@ -51,6 +51,7 @@ const ACTION_LABELS: Record<string, string> = {
   despawn_object: '오브젝트 제거(디스폰)',
   game_win: '게임 승리',
   game_lose: '게임 오버',
+  swap_model: '모델 교체',
   run_script: '스크립트 실행',
 };
 
@@ -58,15 +59,16 @@ const ACTION_LABELS: Record<string, string> = {
 const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object', 'focus_object', 'set_passable', 'set_solid', 'toggle_collision', 'despawn_object']);
 
 // 게임 변수 타입 라벨 (드롭다운 표기용)
-const VAR_TYPE_LABEL: Record<string, string> = { number: '숫자', boolean: '참/거짓', string: '텍스트', enum: '선택', color: '색' };
+const VAR_TYPE_LABEL: Record<string, string> = { number: '숫자', boolean: '참/거짓', string: '텍스트', enum: '선택', color: '색', asset: '모델', timer: '타이머' };
 
 // 조건 추가 시 변수 타입에 맞는 기본 연산/값
 function defaultCondition(v?: GameVariable): EventCondition {
   const t = v?.type;
+  const isNum = t === 'number' || t === 'timer';
   return {
     variable: v?.name ?? '',
-    op: t === 'number' ? '>=' : '==',
-    value: t === 'boolean' ? true : t === 'number' ? 0 : t === 'enum' ? (v?.options?.[0] ?? '') : t === 'color' ? '#ffffff' : '',
+    op: isNum ? '>=' : '==',
+    value: t === 'boolean' ? true : isNum ? 0 : t === 'enum' ? (v?.options?.[0] ?? '') : t === 'color' ? '#ffffff' : '',
   };
 }
 
@@ -276,6 +278,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               { value: 'set_variable', label: '변수 변경 (점수 등)' },
               { value: 'spawn_object', label: '오브젝트 생성(스폰)' },
               { value: 'despawn_object', label: '오브젝트 제거(디스폰)' },
+              { value: 'swap_model', label: '모델 교체' },
               { value: 'game_win', label: '게임 승리' },
               { value: 'game_lose', label: '게임 오버' },
               { value: 'run_script', label: '스크립트 실행 (고급)' },
@@ -363,6 +366,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             : newAction === 'play_sound' ? '오디오 URL'
             : newAction === 'set_variable' ? '변경할 변수'
             : newAction === 'spawn_object' ? '생성할 템플릿 오브젝트'
+            : newAction === 'swap_model' ? '모델 교체 (대상 + 소스)'
             : newAction === 'game_win' || newAction === 'game_lose' ? '표시할 메시지 (선택)'
             : newAction === 'run_script' ? '자바스크립트 코드'
             : OBJECT_TARGET_ACTIONS.has(newAction) ? '대상 오브젝트'
@@ -402,7 +406,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                       vtype === 'boolean' ? [{ value: 'set', label: '설정 =' }, { value: 'toggle', label: '토글(반전)' }]
                       : vtype === 'string' ? [{ value: 'set', label: '설정 =' }, { value: 'append', label: '이어붙이기 +' }]
                       : vtype === 'enum' ? [{ value: 'set', label: '설정 =' }, { value: 'next', label: '다음 상태 ▶' }]
-                      : vtype === 'color' ? [{ value: 'set', label: '설정 =' }]
+                      : (vtype === 'color' || vtype === 'asset') ? [{ value: 'set', label: '설정 =' }]
                       : [{ value: 'add', label: '더하기 +' }, { value: 'sub', label: '빼기 −' }, { value: 'set', label: '설정 =' }, { value: 'mul', label: '곱하기 ×' }, { value: 'div', label: '나누기 ÷' }, { value: 'mod', label: '나머지 %' }, { value: 'random', label: '랜덤 🎲' }, { value: 'clamp', label: '범위제한' }]
                     }
                   />
@@ -438,6 +442,13 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     </div>
                   ) : vtype === 'string' ? (
                     <input type="text" value={amt} onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)} placeholder="텍스트" className={inputCls} />
+                  ) : vtype === 'asset' ? (
+                    <SelectBox
+                      value={amt}
+                      onChange={(a) => setSV(vn || variables[0].name, op, a)}
+                      options={assets.filter((a) => a.type === 'model' || a.type === 'character' || !a.type).map((a) => ({ value: a.id, label: a.name }))}
+                      placeholder="모델 선택..."
+                    />
                   ) : (
                     <input type="text" inputMode="numeric" value={amt} onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)} placeholder="값 또는 변수명" className={inputCls} />
                   )}
@@ -447,8 +458,31 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     : vtype === 'enum' ? <>선택지 중 하나로 <b>설정</b>하거나 <b>다음 상태</b>로 순환</>
                     : vtype === 'string' ? <>텍스트를 <b>설정</b>하거나 뒤에 <b>이어붙이기</b></>
                     : vtype === 'color' ? <>색을 <b>설정</b> (HUD·재질 연결용)</>
+                    : vtype === 'asset' ? <>모델을 <b>설정</b> (모델 교체 액션에서 <b>@변수</b>로 사용)</>
                     : <>참/거짓을 <b>설정</b>하거나 <b>토글(반전)</b></>}
                 </p>
+              </div>
+            );
+          }
+          if (newAction === 'swap_model') {
+            // value = "대상objectId|소스"  소스: '@변수명'(asset 변수) 또는 에셋 id 직접. 변수 Phase C.
+            const [tid = '', source = ''] = newValue.split('|');
+            const setSM = (t: string, s: string) => setNewValue(`${t}|${s}`);
+            const assetVars = variables.filter((v) => v.type === 'asset');
+            const modelAssets = assets.filter((a) => a.type === 'model' || a.type === 'character' || !a.type);
+            return (
+              <div className="space-y-1.5">
+                <SelectBox value={tid} onChange={(t) => setSM(t, source)} options={objects.map((o) => ({ value: o.id, label: o.id === obj?.id ? `${o.name} (이 오브젝트)` : o.name }))} placeholder="대상 오브젝트 (모델)..." />
+                <SelectBox
+                  value={source}
+                  onChange={(s) => setSM(tid, s)}
+                  options={[
+                    ...assetVars.map((v) => ({ value: `@${v.name}`, label: `변수: ${v.name}` })),
+                    ...modelAssets.map((a) => ({ value: a.id, label: `모델: ${a.name}` })),
+                  ]}
+                  placeholder="바꿀 모델 (변수 또는 에셋)..."
+                />
+                <p className="text-muted/60 text-[10px]">대상의 모델을 <b>asset 변수</b>가 가리키는 것 또는 <b>선택한 에셋</b>으로 교체(플레이/뷰어). 변수(@)면 런타임 값 사용.</p>
               </div>
             );
           }
@@ -778,9 +812,10 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                       onChange={(name) => {
                         const nv = variables.find((v) => v.name === name);
                         const t = nv?.type;
+                        const isNum = t === 'number' || t === 'timer';
                         // 타입 바뀌면 연산/값을 호환되게 리셋
-                        const op: EventCondition['op'] = t === 'number' ? '>=' : '==';
-                        const value: EventCondition['value'] = t === 'boolean' ? true : t === 'number' ? 0 : t === 'enum' ? (nv?.options?.[0] ?? '') : t === 'color' ? '#ffffff' : '';
+                        const op: EventCondition['op'] = isNum ? '>=' : '==';
+                        const value: EventCondition['value'] = t === 'boolean' ? true : isNum ? 0 : t === 'enum' ? (nv?.options?.[0] ?? '') : t === 'color' ? '#ffffff' : '';
                         upd({ variable: name, op, value });
                       }}
                       options={variables.map((v) => ({ value: v.name, label: `${v.name} (${VAR_TYPE_LABEL[v.type] ?? v.type})` }))}

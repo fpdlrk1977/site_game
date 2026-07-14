@@ -174,9 +174,19 @@ number 기반 + 뷰어 자동 감소 틱, 연산 start/pause/reset, 조건 `<= 0
 ### 진행 상태
 - [x] **Phase A (string·enum·color) — 2026-07-14 구현**
 - [x] **Phase B (ops div/mod/clamp·변수↔변수 연산) — 2026-07-14 구현**
-- [ ] Phase C (asset 변수 + swap_model/spawn)
-- [ ] Phase D (timer)
-- [ ] Phase E (scope/persist)
+- [x] **Phase C (asset 변수 + swap_model) — 2026-07-14 구현** (spawn-from-variable은 후속)
+- [x] **Phase D (timer) — 2026-07-14 구현**
+- [x] **Phase E (scope/persist) — 2026-07-14 구현**
+
+### Phase D+E 구현 내역 (2026-07-14) — tsc 클린, 브라우저 실동작 대기
+- **Phase D timer**: `GameVariable.type` `'timer'`(number 기반). 런타임 `ViewerClient`에 1초 interval — timer 변수를 `-1`(0에서 멈춤), `onVarsChanged`로 워처 발동(→ `timer<=0 → game_lose` 가능). 게임오버 시 정지, 재시작 재설정. 에디터: 변수 카드 timer=초 입력, 조건/연산은 number로 처리(fall-through). set_variable로 시간 가감 가능.
+- **Phase E scope/persist**: `GameVariable.scope?: 'scene'|'global'|'persistent'`. 런타임: `scopeStore`(global=sessionStorage·persistent=localStorage, 키 `p3v:{projectId}:{name}`), init에서 `readScopedInitial`(저장값 우선), `onVarsChanged`에서 `persistScoped`(scoped 변수 저장). restartGame: scene+global→initial(global 세션 제거), persistent 유지. 에디터: 변수 카드 '유지 범위' 드롭다운. 씬 이동(go_to_scene=새 페이지)해도 global 유지, 브라우저 재방문해도 persistent 유지(최고점수·이어하기).
+
+### Phase C 구현 내역 (2026-07-14) — tsc 클린, 브라우저 실동작 대기
+- **스키마**: `GameVariable.type`에 `'asset'`(값=AssetRefSchema.id). `EventAction`에 `'swap_model'`.
+- **런타임**(`ViewerClient`): `modelOverride: Record<objId, assetId>` state → effectiveScene에서 `assetId` 덮어씀(vis/pos/material Override와 동일 패턴). `swap_model` 액션 = value `"대상id|소스"`, 소스 `@변수명`이면 `varsRef`에서 asset id 해석(= **`@변수` 간접지정 첫 도입**), 아니면 에셋 id 직접. restartGame에서 초기화.
+- **에디터**: EnvironmentPanel 변수 카드 type 'asset' → 씬 모델 에셋 드롭다운. EventsSection `swap_model` 액션 = 대상 오브젝트 + 소스(asset 변수 `@name` 또는 직접 모델 에셋) 2단 선택.
+- **한계/후속**: spawn_object가 `@변수` 해석은 아직(스폰은 템플릿 오브젝트 기준) · swap 대상은 GLB 오브젝트가 자연스러움(프리미티브에 걸면 GLB로 바뀜) · SceneLogicSection엔 swap_model 미노출(EventsSection만). `@변수` 메커니즘은 향후 "오브젝트 참조 변수"의 토대.
 
 ### Phase A+B 구현 내역 (2026-07-14) — tsc 클린, **브라우저 실동작 확인 대기**
 - **스키마**(`scene.ts`): `GameVariable.type`에 string·enum·color 추가, `initial: number|boolean|string`, `options?: string[]`(enum). `EventCondition.op`에 `contains`, `value: number|boolean|string`.
@@ -184,3 +194,45 @@ number 기반 + 뷰어 자동 감소 틱, 연산 start/pause/reset, 조건 `<= 0
 - **런타임**(`ViewerClient.tsx`): `varsRef`/`hudVars` 타입에 string. `evalCondition` ==/!=를 `String()` 정규화 + `contains`. `applyVarOp`: string 브랜치(set/append/next=enum 순환), 숫자에 div/mod/clamp 추가, **`resolveNum`으로 리터럴 또는 변수명 해석**(변수↔변수 연산). `api.set` 타입 string 포함.
 - **에디터**: EnvironmentPanel 변수 카드 = 타입 5종 드롭다운 + 타입별 초기값 입력(텍스트/컬러픽커/enum드롭다운) + enum 선택지 목록 편집. EventsSection = `VAR_TYPE_LABEL`·`defaultCondition` 헬퍼, set_variable 폼/조건 입력을 타입별로(숫자값 입력은 "값 또는 변수명" 텍스트라 변수참조 UI 노출).
 - **하위호환**: 기존 number/boolean 변수·조건 그대로 동작(normalizeSceneData는 variables 배열 통과).
+
+---
+
+## 🎮 게임 컨트롤러 (전역 로직 홀더) 로드맵 (2026-07-14 수립)
+
+> 문제: 현재 이벤트가 **오브젝트에만** 붙음 → "score>=3" 같은 공유 규칙을 반응체마다 복붙해야 함(중복). 해결: 오브젝트에 안 매달린 **씬 전역 규칙 그릇**.
+> 핵심: 기존 `EventSchema`(trigger→condition→action)를 **그대로 재사용**, 오브젝트가 아니라 씬에 붙임 → 런타임·폼 대부분 재활용(저리스크).
+
+### 스키마
+- `ProjectSceneSchema.sceneEvents?: EventSchema[]` — 씬 전역 규칙. EventSchema 재사용. normalize 통과(하위호환).
+
+### 트리거/액션 제약 (에디터)
+- 씬 레벨 트리거 = 공간 불필요한 것만: **scene_start · on_timer · variable_changed**. (click/hover/interact/approach/area는 오브젝트 필요 → 숨김.)
+- 액션 = 대상 명시/전역인 것(set_variable·spawn·popup·game_win/lose·set_passable(대상 지정)·show/hide 등).
+
+### 런타임 (ViewerClient) — 기존 함수 재사용, 3패스만 추가
+- `evaluateWatchers`: object events 순회에 **`scene.sceneEvents` 순회 추가**(watcherState는 이벤트 id 기준이라 그대로).
+- `scene_start`·`on_timer`: 셋업에 씬 이벤트 포함.
+- **합성 self**: `runEventAction(obj,...)`에 가상 컨트롤러 `{ id:'__scene__', name:'Scene' }` 전달. 대상 명시 액션 정상, self-타겟만 무의미(무해).
+
+### 스토어 — `variables`와 동일 패턴
+- `sceneEvents` state + `addSceneEvent`/`updateSceneEvent`/`removeSceneEvent` + loadScene·persist(saveScene/buildSceneData)·undo·normalize.
+
+### 에디터 UI
+- **Phase 1(추천 시작)**: 빈 곳 클릭 → Environment 패널에 **"Game Logic" 섹션**(트리거 3종 + 조건 + 핵심 액션). 발견성 OK, 저난이도.
+- **Phase 2**: GNB "Logic" 탭 전용 화면, 문장 카드, EventsSection 폼 완전 일반화(obj 의존 제거).
+- **난관**: 현 `EventsSection` renderEventForm이 obj에 강결합 → Phase 1은 focused 컴포넌트로 시작, Phase 2에서 일반화.
+
+### 미래
+- 성숙 시 **비주얼 노드 에디터**의 데이터 백엔드(씬 전역 그래프 = sceneEvents).
+
+### 진행 상태
+- [x] **Phase 1 — 2026-07-14 구현** (스키마+스토어+런타임 + Environment "Game Logic" 섹션). tsc 클린, 브라우저 실동작 확인 대기.
+- [~] **Phase 2 부분 — 2026-07-14** (액션 팔레트 확장: SceneLogicSection에 swap_model·play_sound 추가). **남음**: GNB Logic 전용 탭, EventsSection 폼 완전 일반화(obj 의존 제거), go_to_scene/spawn/move 등 나머지 액션.
+
+### Phase 1 구현 내역 (2026-07-14)
+- **스키마**(`scene.ts`): `ProjectSceneSchema.sceneEvents?: EventSchema[]` + normalizeSceneData 통과.
+- **스토어**(`sceneStore.ts`): `sceneEvents` state + `addSceneEvent`/`updateSceneEvent`/`removeSceneEvent`(withHistory 즉시 커밋) + 초기상태/loadScene/undo·redo 번들/HistoryEntry에 포함. `EventSchema` import 추가.
+- **저장**(`saveScene.ts` buildSceneData): `sceneEvents` 포함(= 저장·인에디터 플레이 공유).
+- **런타임**(`ViewerClient.tsx`): 합성 컨트롤러 `sceneControllerObj`(`{id:'__scene__'}`, useRef, `as unknown as` 캐스트) → scene_start·on_timer(`setupTimer` 헬퍼)·evaluateWatchers(`runWatcher` 헬퍼) 3패스에 `scene.sceneEvents` 순회 추가(전부 기존 runEventAction/evalGate 재사용). watcherState는 이벤트 id 기준이라 그대로 동작.
+- **에디터**(신규 `panels/inspector/SceneLogicSection.tsx`): 자체 완결 컴포넌트(EventsSection 재사용 아님 — obj 강결합 회피). Environment 패널 HUD 아래 배치, 기본 접힘(`gamelogic`). 트리거 3종(scene_start/on_timer/variable_changed)+조건(타입인지, 다중 AND/OR)+액션 subset(set_variable[타입인지]·game_win/lose·show_popup·오브젝트 표시/숨김/토글/통과/제거). 헤더 `+`로 규칙 추가, 문장 카드 목록+수정/삭제.
+- **한계(Phase 2로)**: 액션 팔레트 subset(go_to_scene·spawn·move·sound·focus 등 미포함), GNB 전용 탭 없음(Environment 안), EventsSection 폼 미일반화(중복 존재), else 분기 미지원.

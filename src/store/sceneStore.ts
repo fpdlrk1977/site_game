@@ -17,6 +17,7 @@ import {
   ColorAsset,
   GameVariable,
   HudElement,
+  EventSchema,
   MaterialOverride,
   DEFAULT_ENVIRONMENT,
   DEFAULT_PHYSICS,
@@ -56,6 +57,8 @@ interface HistoryEntry {
   variables?: GameVariable[];
   // HUD 위젯 스냅샷(HUD 액션만 채움). 미설정 = 안 바꿈.
   hudElements?: HudElement[];
+  // 씬 전역 규칙 스냅샷(게임 컨트롤러 액션만 채움). 미설정 = 안 바꿈.
+  sceneEvents?: EventSchema[];
 }
 
 interface SceneState {
@@ -73,6 +76,8 @@ interface SceneState {
   variables: GameVariable[];
   // HUD 위젯(씬 단위) — 변수를 텍스트/체력바/목숨으로 화면 표시.
   hudElements: HudElement[];
+  // 게임 컨트롤러(씬 전역 로직) — 오브젝트에 매달리지 않은 규칙들. GAME_LOGIC.md.
+  sceneEvents: EventSchema[];
   selectedId: string | null;
   selectedIds: string[];
   // 그룹 격리(isolation) 스코프 — 더블클릭으로 '진입'한 그룹 id. 설정 시 단일 클릭이 이 그룹 안에서만
@@ -212,6 +217,10 @@ interface SceneActions {
   addHudElement: () => void;
   updateHudElement: (id: string, patch: Partial<HudElement>) => void;
   removeHudElement: (id: string) => void;
+  // ── 게임 컨트롤러(씬 전역 규칙) ──
+  addSceneEvent: (ev: EventSchema) => void;
+  updateSceneEvent: (id: string, patch: Partial<EventSchema>) => void;
+  removeSceneEvent: (id: string) => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -389,6 +398,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   colorAssets: [],
   variables: [],
   hudElements: [],
+  sceneEvents: [],
   selectedId: null,
   groupScope: null,
   transformMode: 'translate',
@@ -435,6 +445,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       colorAssets: data.colorAssets ?? [],
       variables: data.variables ?? [],
       hudElements: data.hudElements ?? [],
+      sceneEvents: data.sceneEvents ?? [],
       selectedId: null,
       selectedIds: [],
       groupScope: null,
@@ -1432,7 +1443,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
           const t = patch.type;
           if (t === 'boolean') next.initial = false;
           else if (t === 'number') next.initial = 0;
-          else if (t === 'string') next.initial = '';
+          else if (t === 'timer') next.initial = 30; // 카운트다운 기본 30초
+          else if (t === 'string' || t === 'asset') next.initial = '';
           else if (t === 'color') next.initial = '#ffffff';
           else if (t === 'enum') {
             if (!next.options || next.options.length === 0) next.options = ['A', 'B'];
@@ -1481,6 +1493,26 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({ hudElements: hudElements.filter((h) => h.id !== id), isModified: true, ...withHistory({ objects, environment, hudElements }, past) });
   },
 
+  // ── 게임 컨트롤러(씬 전역 규칙) ── (GAME_LOGIC.md 게임 컨트롤러 Phase 1)
+  addSceneEvent: (ev) => {
+    const { sceneEvents, objects, environment, past } = get();
+    set({ sceneEvents: [...sceneEvents, ev], isModified: true, ...withHistory({ objects, environment, sceneEvents }, past) });
+  },
+  updateSceneEvent: (id, patch) => {
+    const { sceneEvents, objects, environment, past } = get();
+    if (!sceneEvents.some((e) => e.id === id)) return;
+    set({
+      sceneEvents: sceneEvents.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+      isModified: true,
+      ...withHistory({ objects, environment, sceneEvents }, past),
+    });
+  },
+  removeSceneEvent: (id) => {
+    const { sceneEvents, objects, environment, past } = get();
+    if (!sceneEvents.some((e) => e.id === id)) return;
+    set({ sceneEvents: sceneEvents.filter((e) => e.id !== id), isModified: true, ...withHistory({ objects, environment, sceneEvents }, past) });
+  },
+
   updateEnvironment: (patch) => {
     const { environment, objects, _prevSnapshot } = get();
     set({
@@ -1497,7 +1529,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   undo: () => {
-    const { past, objects, environment, prefabs, materialAssets, variables, hudElements, future } = get();
+    const { past, objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents, future } = get();
     if (past.length === 0) return;
     const prev = past[past.length - 1];
     set({
@@ -1508,15 +1540,16 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       materialAssets: prev.materialAssets ?? materialAssets,
       variables: prev.variables ?? variables,
       hudElements: prev.hudElements ?? hudElements,
+      sceneEvents: prev.sceneEvents ?? sceneEvents,
       past: past.slice(0, -1),
-      future: [{ objects, environment, prefabs, materialAssets, variables, hudElements }, ...future],
+      future: [{ objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents }, ...future],
       isModified: true,
       _prevSnapshot: null,
     });
   },
 
   redo: () => {
-    const { past, objects, environment, prefabs, materialAssets, variables, hudElements, future } = get();
+    const { past, objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents, future } = get();
     if (future.length === 0) return;
     const next = future[0];
     set({
@@ -1526,7 +1559,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       materialAssets: next.materialAssets ?? materialAssets,
       variables: next.variables ?? variables,
       hudElements: next.hudElements ?? hudElements,
-      past: pushPast(past, { objects, environment, prefabs, materialAssets, variables, hudElements }),
+      sceneEvents: next.sceneEvents ?? sceneEvents,
+      past: pushPast(past, { objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents }),
       future: future.slice(1),
       isModified: true,
       _prevSnapshot: null,

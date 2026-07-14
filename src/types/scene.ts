@@ -110,6 +110,7 @@ export type EventAction =
   | 'despawn_object'
   | 'game_win'
   | 'game_lose'
+  | 'swap_model'
   | 'run_script';
 
 export interface EventSchema {
@@ -421,6 +422,9 @@ export interface ProjectSceneSchema {
   variables?: GameVariable[];
   // HUD 위젯 — 변수를 텍스트/체력바/목숨 아이콘으로 화면에 표시(Phase 2). 미설정 = 변수의 showInHud 간단 텍스트만.
   hudElements?: HudElement[];
+  // 게임 컨트롤러(전역 로직) — 오브젝트에 매달리지 않은 씬 전역 규칙. scene_start/on_timer/variable_changed 트리거.
+  //   EventSchema 재사용. 미설정 = 없음(하위호환). GAME_LOGIC.md '게임 컨트롤러' 참조.
+  sceneEvents?: EventSchema[];
 }
 
 // HUD 위젯 — 게임 변수 하나를 화면에 시각화. (GAME_LOGIC.md Phase 2)
@@ -436,15 +440,17 @@ export interface HudElement {
 }
 
 // 게임 변수(상태) 정의 — name이 참조 키(고유). 런타임 값은 뷰어 로컬(저장 안 함), 씬엔 initial만 저장.
-//   number=숫자 / boolean=참거짓 / string=텍스트 / enum=고정 선택지(options 중 하나) / color=hex 색.
-//   enum·color·string은 값이 전부 문자열(initial: string). (GAME_LOGIC.md 변수 고도화 로드맵 Phase A)
+//   number=숫자 / boolean=참거짓 / string=텍스트 / enum=고정 선택지(options 중 하나) / color=hex 색 / asset=모델 에셋 id.
+//   enum·color·string·asset은 값이 전부 문자열(initial: string). asset은 AssetRefSchema.id를 담아 swap_model/spawn에서 소비.
 export interface GameVariable {
   id: string;
   name: string;               // 참조 키 (예: 'score') — 조건/액션에서 이 이름으로 참조
-  type: 'number' | 'boolean' | 'string' | 'enum' | 'color';
+  type: 'number' | 'boolean' | 'string' | 'enum' | 'color' | 'asset' | 'timer';
   initial: number | boolean | string;
   options?: string[];         // enum 전용 — 선택 가능한 상태 목록(예: locked/open)
-  showInHud?: boolean;        // 뷰어 화면 HUD에 "이름: 값" 표시 여부
+  // 변수 지속 범위(Phase E). scene(기본)=씬 로드마다 initial / global=씬 이동해도 유지(세션) / persistent=브라우저 저장(최고점수·이어하기).
+  scope?: 'scene' | 'global' | 'persistent';
+  showInHud?: boolean;        // 뷰어 화면 HUD에 "이름: 값" 표시 여부. timer는 자동 카운트다운(숫자).
 }
 
 // 공용 재질 에셋 — 이름 붙인 재질을 라이브러리에 저장, 오브젝트가 materialId로 참조(원본 수정 시 일괄 반영).
@@ -520,6 +526,7 @@ export function normalizeSceneData(
       colorAssets: Array.isArray(raw.colorAssets) ? (raw.colorAssets as ColorAsset[]) : undefined,
       variables: Array.isArray(raw.variables) ? (raw.variables as GameVariable[]) : undefined,
       hudElements: Array.isArray(raw.hudElements) ? (raw.hudElements as HudElement[]) : undefined,
+      sceneEvents: Array.isArray(raw.sceneEvents) ? (raw.sceneEvents as EventSchema[]) : undefined,
     };
   }
   return makeEmptySceneData(projectId, sceneId);

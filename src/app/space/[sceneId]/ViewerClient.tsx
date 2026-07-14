@@ -8,7 +8,7 @@ import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { effectiveDialogue } from './useObjectDialogue';
 import { Heart, Star, Circle, RotateCcw } from 'lucide-react';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3 } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3, GameVariable } from '@/types/scene';
 
 // 이 액션들이 (플레이 모드에서) 발동되면 상호작용이 끝날 때까지(팝업 닫기/Esc) 캐릭터 이동을 잠근다.
 // 새로 "발동 중엔 못 움직이게" 하고 싶은 액션이 생기면 여기에 추가만 하면 자동 적용된다.
@@ -119,6 +119,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 런타임 콜라이더 통과 오버라이드 (set_passable/set_solid/toggle_collision — 문 열기/닫기) — objectId → passable
   //   true면 플레이 모드에서 콜라이더 제거(시각은 유지, 통과 가능). PlayCanvas로 id Set 전달.
   const [passOverride, setPassOverride] = useState<Record<string, boolean>>({});
+  // 런타임 모델 교체 오버라이드 (swap_model — 변수/에셋으로 오브젝트 모델 바꾸기) — objectId → assetId. 변수 Phase C.
+  const [modelOverride, setModelOverride] = useState<Record<string, string>>({});
   const passableIds = useMemo(() => {
     const s = new Set<string>();
     for (const id in passOverride) if (passOverride[id]) s.add(id);
@@ -213,13 +215,54 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   const [despawnedIds, setDespawnedIds] = useState<Set<string>>(new Set()); // despawn_object로 제거된 id
   const [gameResult, setGameResult] = useState<{ kind: 'win' | 'lose'; message: string } | null>(null);
   const [runNonce, setRunNonce] = useState(0); // 재시작 시 bump → 변수/타이머/scene_start 초기화
-  // 씬 로드/변수 정의 변경/재시작 시 initial로 초기화(런타임 값은 저장하지 않음).
+  // Phase E — 변수 지속 범위. global=세션(씬 이동해도 유지), persistent=로컬(브라우저 저장). scene=저장 안 함.
+  const scopeStore = (scope?: string): Storage | null => {
+    if (typeof window === 'undefined') return null;
+    if (scope === 'global') return window.sessionStorage;
+    if (scope === 'persistent') return window.localStorage;
+    return null;
+  };
+  const varStoreKey = (name: string) => `p3v:${projectId}:${name}`;
+  const readScopedInitial = (v: GameVariable): number | boolean | string => {
+    const st = scopeStore(v.scope);
+    if (st) {
+      const raw = st.getItem(varStoreKey(v.name));
+      if (raw != null) { try { return JSON.parse(raw); } catch { /* 손상 시 initial */ } }
+    }
+    return v.initial;
+  };
+  const persistScoped = () => {
+    for (const v of scene.variables ?? []) {
+      const st = scopeStore(v.scope);
+      if (st) { try { st.setItem(varStoreKey(v.name), JSON.stringify(varsRef.current[v.name])); } catch { /* 용량 초과 무시 */ } }
+    }
+  };
+
+  // 씬 로드/변수 정의 변경/재시작 시 초기화. scene=initial / global·persistent=저장값(없으면 initial).
   useEffect(() => {
     const init: Record<string, number | boolean | string> = {};
-    for (const v of scene.variables ?? []) init[v.name] = v.initial;
+    for (const v of scene.variables ?? []) init[v.name] = readScopedInitial(v);
     varsRef.current = init;
     watcherState.current = {};
     setHudVars(init);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene.variables, runNonce]);
+
+  // Phase D — timer 변수 자동 카운트다운(1초마다 -1, 0에서 멈춤). 게임오버 시 정지, 재시작 시 재설정.
+  useEffect(() => {
+    const timerVars = (scene.variables ?? []).filter((v) => v.type === 'timer');
+    if (timerVars.length === 0) return;
+    const iv = window.setInterval(() => {
+      if (gameResultRef.current) return;
+      let changed = false;
+      for (const v of timerVars) {
+        const cur = varsRef.current[v.name];
+        if (typeof cur === 'number' && cur > 0) { varsRef.current[v.name] = Math.max(0, cur - 1); changed = true; }
+      }
+      if (changed) onVarsChanged();
+    }, 1000);
+    return () => window.clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene.variables, runNonce]);
 
   // 오버라이드를 씬 데이터에 반영해 렌더 (모든 뷰어 경로가 object.visible을 존중하므로 이걸로 충분)
@@ -229,7 +272,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     const matAssets = scene.materialAssets;
     const hasMatRefs = !!matAssets && matAssets.length > 0 && scene.objects.some((o) => o.materialId);
     const hasSpawn = spawned.length > 0 || despawnedIds.size > 0;
-    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0 && !hasMatRefs && !hasSpawn) return scene;
+    const hasModel = Object.keys(modelOverride).length > 0;
+    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0 && !hasMatRefs && !hasSpawn && !hasModel) return scene;
     const all = spawned.length > 0 ? [...scene.objects, ...spawned] : scene.objects;
     return {
       ...scene,
@@ -239,11 +283,12 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
           const vis = o.id in visOverride ? visOverride[o.id] : o.visible;
           const pos = posOverride[o.id] ?? o.position;
           const resolvedMat = hasMatRefs && o.materialId ? matAssets!.find((m) => m.id === o.materialId)?.material : undefined;
-          if (vis === o.visible && pos === o.position && !resolvedMat) return o;
-          return { ...o, visible: vis, position: pos, ...(resolvedMat ? { material: resolvedMat } : {}) };
+          const swapAsset = modelOverride[o.id]; // swap_model로 바뀐 모델 에셋 id
+          if (vis === o.visible && pos === o.position && !resolvedMat && !swapAsset) return o;
+          return { ...o, visible: vis, position: pos, ...(resolvedMat ? { material: resolvedMat } : {}), ...(swapAsset ? { assetId: swapAsset } : {}) };
         }),
     };
-  }, [scene, visOverride, posOverride, spawned, despawnedIds]);
+  }, [scene, visOverride, posOverride, spawned, despawnedIds, modelOverride]);
   // move_object로 이동 중인 오브젝트 id 집합 — PlayCanvas가 그룹을 kinematic 강체로 라우팅(콜라이더 동반).
   const movedIds = useMemo(() => new Set(Object.keys(posOverride)), [posOverride]);
 
@@ -251,7 +296,14 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   const gameResultRef = useRef<typeof gameResult>(null);
   gameResultRef.current = gameResult;
 
-  // scene_start — 뷰어 로드/재시작 시 1회 발동. 원본 오브젝트만(스폰 클론 제외 → 무한 스폰 방지).
+  // 게임 컨트롤러(전역 로직) — 씬 이벤트(sceneEvents)는 오브젝트가 없어 합성 self로 실행. GAME_LOGIC.md 게임 컨트롤러 Phase 1.
+  const sceneControllerObj = useRef<ObjectNodeSchema>({
+    id: '__scene__', name: 'Scene', parentId: null, visible: true, locked: false, layer: 0,
+    position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 },
+    events: [],
+  } as unknown as ObjectNodeSchema).current;
+
+  // scene_start — 뷰어 로드/재시작 시 1회 발동. 원본 오브젝트만(스폰 클론 제외 → 무한 스폰 방지) + 씬 전역 규칙.
   useEffect(() => {
     for (const o of scene.objects) {
       for (const ev of o.events) {
@@ -260,25 +312,30 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         else if (ev.elseAction) runElseAction(o, ev, 'scene_start');
       }
     }
+    for (const ev of scene.sceneEvents ?? []) {
+      if (ev.trigger !== 'scene_start') continue;
+      if (evalGate(ev)) runEventAction(sceneControllerObj, ev, 'scene_start');
+      else if (ev.elseAction) runElseAction(sceneControllerObj, ev, 'scene_start');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, runNonce]);
 
   // on_timer — everySec 간격 반복(once면 그 시간 뒤 1회). 원본 오브젝트만. 게임오버 시 발동 중지.
   useEffect(() => {
     const ids: number[] = [];
-    for (const o of scene.objects) {
-      for (const ev of o.events) {
-        if (ev.trigger === 'on_timer' && ev.timer && ev.timer.everySec > 0) {
-          const ms = ev.timer.everySec * 1000;
-          const fire = () => {
-            if (gameResultRef.current) return;
-            if (evalGate(ev)) runEventAction(o, ev, 'on_timer');
-            else if (ev.elseAction) runElseAction(o, ev, 'on_timer');
-          };
-          ids.push(ev.timer.once ? window.setTimeout(fire, ms) : window.setInterval(fire, ms));
-        }
+    const setupTimer = (host: ObjectNodeSchema, ev: EventSchema) => {
+      if (ev.trigger === 'on_timer' && ev.timer && ev.timer.everySec > 0) {
+        const ms = ev.timer.everySec * 1000;
+        const fire = () => {
+          if (gameResultRef.current) return;
+          if (evalGate(ev)) runEventAction(host, ev, 'on_timer');
+          else if (ev.elseAction) runElseAction(host, ev, 'on_timer');
+        };
+        ids.push(ev.timer.once ? window.setTimeout(fire, ms) : window.setInterval(fire, ms));
       }
-    }
+    };
+    for (const o of scene.objects) for (const ev of o.events) setupTimer(o, ev);
+    for (const ev of scene.sceneEvents ?? []) setupTimer(sceneControllerObj, ev); // 씬 전역 타이머
     return () => { ids.forEach((id) => { window.clearInterval(id); window.clearTimeout(id); }); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, runNonce]);
@@ -400,22 +457,23 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     if (evalDepth.current > 16) return;
     evalDepth.current += 1;
     try {
-      for (const o of effectiveScene.objects) {
-        for (const ev of o.events) {
-          if (ev.trigger !== 'variable_changed') continue;
-          const pass = evalGate(ev);
-          const prev = watcherState.current[ev.id] ?? false;
-          watcherState.current[ev.id] = pass;
-          if (pass && !prev) runEventAction(o, ev, 'variable_changed');
-          else if (!pass && prev && ev.elseAction) runElseAction(o, ev, 'variable_changed');
-        }
-      }
+      const runWatcher = (host: ObjectNodeSchema, ev: EventSchema) => {
+        if (ev.trigger !== 'variable_changed') return;
+        const pass = evalGate(ev);
+        const prev = watcherState.current[ev.id] ?? false;
+        watcherState.current[ev.id] = pass;
+        if (pass && !prev) runEventAction(host, ev, 'variable_changed');
+        else if (!pass && prev && ev.elseAction) runElseAction(host, ev, 'variable_changed');
+      };
+      for (const o of effectiveScene.objects) for (const ev of o.events) runWatcher(o, ev);
+      for (const ev of scene.sceneEvents ?? []) runWatcher(sceneControllerObj, ev); // 씬 전역 규칙
     } finally {
       evalDepth.current -= 1;
     }
   }
   function onVarsChanged() {
     setHudVars({ ...varsRef.current });
+    persistScoped(); // global/persistent 변수는 저장(씬 이동·재방문 유지)
     evaluateWatchers();
   }
 
@@ -426,10 +484,15 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     setVisOverride({});
     setPassOverride({});
     setPosOverride({});
+    setModelOverride({});
     posCurrent.current = {};
     moveAnims.current.clear();
     setGameResult(null);
     setInteractionLock(false);
+    // Phase E — 재시작 시 global(세션) 변수도 initial로(세션 저장 제거). persistent(최고점수 등)는 유지.
+    for (const v of scene.variables ?? []) {
+      if (v.scope === 'global') { try { window.sessionStorage.removeItem(varStoreKey(v.name)); } catch { /* ignore */ } }
+    }
     setRunNonce((n) => n + 1);
   }
 
@@ -551,6 +614,11 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
           };
           setSpawned((s) => [...s, clone]);
         }
+      } else if (ev.action === 'swap_model' && ev.value) {
+        // value = "대상objectId|소스"  소스: '@변수명'(asset 변수의 값) 또는 에셋 id 직접. 변수 Phase C.
+        const [targetId, source = ''] = ev.value.split('|');
+        const assetId = source.startsWith('@') ? String(varsRef.current[source.slice(1)] ?? '') : source;
+        if (targetId && assetId) setModelOverride((m) => ({ ...m, [targetId]: assetId }));
       } else if (ev.action === 'despawn_object') {
         // value = 대상 objectId (빈 값이면 자기 자신). Phase 2.
         const target = ev.value || obj.id;
