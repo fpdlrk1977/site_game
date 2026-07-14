@@ -209,13 +209,20 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   //   origin = restOrigin + (pivot − R·pivot)로 baked 저장(= 런타임 pivotOffset과 픽셀 일치).
   useEffect(() => {
     if (isCharPreview || !selectedId) { cLocalRef.current.set(0, 0, 0); return; }
-    const clip = transformMode === 'rotate' ? animClips.find((cl) => cl.rootId === selectedId && cl.pivot) : undefined;
-    if (clip?.pivot) {
+    // 선택 오브젝트가 어느 클립의 트랙이고 그 트랙(또는 클립레벨 폴백)에 pivot이 있으면 그 경첩 기준으로 회전.
+    let pivot: { x: number; y: number; z: number } | undefined;
+    if (transformMode === 'rotate') {
+      for (const cl of animClips) {
+        const tr = cl.tracks.find((t) => t.objectId === selectedId);
+        if (tr) { pivot = tr.pivot ?? (cl.rootId === selectedId ? cl.pivot : undefined); break; }
+      }
+    }
+    if (pivot) {
       const sc = objects.find((o) => o.id === selectedId)?.scale ?? { x: 1, y: 1, z: 1 };
       cLocalRef.current.set(
-        sc.x ? clip.pivot.x / sc.x : 0,
-        sc.y ? clip.pivot.y / sc.y : 0,
-        sc.z ? clip.pivot.z / sc.z : 0,
+        sc.x ? pivot.x / sc.x : 0,
+        sc.y ? pivot.y / sc.y : 0,
+        sc.z ? pivot.z / sc.z : 0,
       );
     } else {
       cLocalRef.current.copy(localCenter(objects, assets, selectedId) ?? _p.set(0, 0, 0));

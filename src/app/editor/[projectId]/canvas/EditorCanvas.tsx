@@ -193,9 +193,13 @@ function AnimPivotGizmo() {
   if (!selectedId) return null;
   const obj = objects.find((o) => o.id === selectedId);
   if (!obj || obj.isGroup || obj.parentId) return null; // 단일 루트 오브젝트만(피벗 UI와 동일)
-  const clip = animClips.find((c) => c.rootId === selectedId);
-  if (!clip) return null;
-  const p = clip.pivot ?? { x: 0, y: 0, z: 0 };
+  // 선택 오브젝트가 어느 클립의 트랙이고 경첩(pivot)이 있으면 그 축을 표식으로. 경첩 없으면 표식 숨김.
+  let p: { x: number; y: number; z: number } | undefined;
+  for (const cl of animClips) {
+    const tr = cl.tracks.find((t) => t.objectId === selectedId);
+    if (tr) { p = tr.pivot ?? (cl.rootId === selectedId ? cl.pivot : undefined); break; }
+  }
+  if (!p) return null;
   const e = new THREE.Euler(obj.rotation.x * _ANIM_DEG, obj.rotation.y * _ANIM_DEG, obj.rotation.z * _ANIM_DEG, "XYZ");
   const rp = new THREE.Vector3(p.x, p.y, p.z).applyEuler(e);
   return (

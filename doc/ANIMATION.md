@@ -90,7 +90,15 @@ interface AnimClip {
   - **샘플링 공용화**: `src/lib/animSample.ts`(`sampleTrack`·`sampleClip` — 경첩 원호 로직 포함) 추출 → **ViewerClient(뷰어 재생)와 에디터 미리보기가 동일 코드 공유**(드리프트 방지). ViewerClient의 로컬 sampleTrack/pivotOffset/lerp 제거·`sampleClip`로 대체(로직 동일, tsc 클린).
   - **구동**: 스토어 transient `animPreview{clipId,startedAt}`+`start/stopAnimPreview`(저장/undo 무관, loadScene서 리셋). `EditorCanvas`의 `ClipPreview`(Canvas 내부)가 useFrame으로 `sampleClip` → **오브젝트 Three ref 직접 구동**(기즈모와 동일 비파괴 패턴, 렌더/스토어 무변경). 종료 시 영향 오브젝트를 스토어 트랜스폼으로 복원. 회전은 `rotation.set(XYZ)`로 EditorObjectInstance와 동일 순서.
   - 제약: 포즈 2개 미만이면 버튼 비활성. 미리보기 중 편집 비권장(테스트용). 그룹/멀티트랙도 track objectId별로 구동(P3 대비 이미 일반화). tsc 클린. **브라우저 확인 대기.**
-- [ ] P3 다중 오브젝트(다중 트랙·격리모드·계층 동기)
+- [x] **P3 다중 오브젝트/다중 트랙 (2026-07-14)**: 한 클립에 **여러 오브젝트(트랙)**를 담아 함께 애니(양문·자동차 등). 런타임/미리보기는 이미 트랙 순회라 대응됨 — **저작 + 트랙별 경첩**을 확장.
+  - **스키마**: `AnimTrack.pivot?/pivotBaked?`(트랙별 경첩 — 양문 좌/우 반대 경첩). 클립레벨 `pivot`은 폴백(하위호환). `normalizeClipPivots`(로드 1회)가 레거시 클립레벨 pivot을 **트랙별로 이관 + baked 통일**(멱등).
+  - **샘플링 공용화**: `sampleClip`이 `tr.pivot ?? clip.pivot`으로 트랙별 원호 복원. `animSample.ts` 뷰어/미리보기 공유.
+  - **스토어**: `addTrackToClip`(기존 키 시간에 현재 트랜스폼으로 정렬 캡처)·`removeTrackFromClip`(마지막 트랙 보호). 포즈 추가/goToPose/updatePose는 전 트랙 대상.
+  - **에디터**(`AnimationClipSection`): 클립을 root뿐 아니라 **트랙 오브젝트 어디서든** 편집(선택 오브젝트 기준). **트랙 목록**(이름 클릭=선택→그 오브젝트 포즈/경첩 편집, +오브젝트 추가/제외) · **회전축은 트랙별**(선택 오브젝트의 track.pivot, 유효피벗 폴백+레거시 정리) · **포즈 갱신**(현재 포즈를 지금 상태로 덮어쓰기 — 나중에 추가한 오브젝트 자세 지정/포즈 수정). 기즈모·노란 표식도 선택 오브젝트의 트랙 경첩 조회.
+  - 검증: 마이그레이션(baked/미-baked)·멱등·다중트랙 독립 원호 결정적 테스트 10/10 + 앞선 8/8·6/6·3/3. tsc 클린.
+  - **후속 수정(2026-07-14, 사용자 "오브젝트 추가 후 포즈2 클릭 무반응")**: 원인 = (a) 원본이 이미 pose2에 있어 무변화 + (b) 새 트랙은 정적(모든 포즈=현재)이라 안 움직임 → **코드 버그 아님**(스토어 goToPose 테스트 6/6). UX: 오브젝트 추가 시 **자동 선택 + 안내**.
+  - **인스펙터 접힘 유지(2026-07-14, 사용자 "오브젝트 추가/트랙 선택 시 인스펙터 초기화 불편")**: 섹션 접힘 상태(`collapsed`)가 `selectedId` key로 remount되는 `InspectorInner` 안에 있어 오브젝트 전환마다 리셋됐음 → **remount 안 되는 부모 `InspectorPanel`로 올려 prop 전달** → 트랙에서 다른 오브젝트를 골라도 Animation 패널이 열린 채 유지(작업 연속성). 다른 per-object 상태는 여전히 초기화(의도 유지). **스크롤 위치도** 부모 ref에 저장 후 remount 시 `useLayoutEffect`로 복원(섹션 토글 리렌더엔 무영향) → 트랙 전환 시 스크롤이 위로 안 튐.
+  - **오토키(auto-key) 도입(2026-07-14, 사용자 "굳이 포즈 갱신 버튼? 자동 안 되나")**: 수동 '포즈 갱신' 버튼 **제거** → **포즈를 클릭(편집 중=하이라이트)한 상태에서 오브젝트를 옮기면 그 포즈에 자동 반영**. 구현: 명시 상태 `poseEdit{clipId,idx}`(transient) + 순수 헬퍼 `autoKeyPose`를 **`commitTransforms`(기즈모)·`updateObject`(인스펙터)** 커밋에 배선(objects·animClips 원자 히스토리). `goToPose`를 **스토어 액션**으로 옮겨 objects 직접 세팅(오토키 우회 → 포즈 이동이 엉뚱한 포즈 덮어쓰지 않음). `addPose`는 poseEdit 해제(추가=스냅샷, 이후 자유 이동→다음 포즈). 하이라이트=poseEdit 우선·root 트랜스폼 일치 폴백. **오토키 결정적 테스트 10/10**(포즈 선택 후 이동→해당 포즈만 갱신·타 포즈 불변·goToPose 무발동·no-op·updateObject 경로). tsc 클린. **브라우저 확인 대기.**
 - [ ] P4 타임라인 UI(모드 토글·이징 곡선)
 - [ ] P5 다듬기(최단경로·커스텀 피벗·GLB 통일)
 

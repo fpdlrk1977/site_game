@@ -32,9 +32,10 @@ export function sampleClip(clip: AnimClip, t: number): Record<string, ClipSample
   const out: Record<string, ClipSample> = {};
   for (const tr of clip.tracks) {
     let s: ClipSample;
-    if (clip.pivot) {
-      const pivot = clip.pivot;
-      const baked = clip.pivotBaked;
+    // 트랙별 피벗 우선, 없으면 클립 레벨 폴백(단일 트랙 하위호환)
+    const pivot = tr.pivot ?? clip.pivot;
+    const baked = tr.pivot ? tr.pivotBaked : clip.pivotBaked;
+    if (pivot) {
       // 각 키의 rest 위치(baked면 pivotOffset 제거; 레거시 미-baked는 keyPos가 곧 rest)
       const restKeys = tr.keys.map((k) => {
         if (!k.position || !k.rotation || !baked) return k;

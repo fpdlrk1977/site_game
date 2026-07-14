@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { MathUtils, Quaternion, Euler, Vector3, Matrix4 } from 'three';
 import { worldBBox } from '@/lib/objectBBox';
-import { bakeClipPivots } from '@/lib/animPivot';
+import { normalizeClipPivots } from '@/lib/animPivot';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { OBJECT_PRESETS, PRESET_SELF } from '@/lib/objectPresets';
 
@@ -20,6 +20,7 @@ import {
   HudElement,
   EventSchema,
   AnimClip,
+  AnimKeyframe,
   MaterialOverride,
   DEFAULT_ENVIRONMENT,
   DEFAULT_PHYSICS,
@@ -231,10 +232,16 @@ interface SceneActions {
   addAnimClip: (clip: AnimClip) => void;
   updateAnimClip: (id: string, patch: Partial<AnimClip>) => void;
   removeAnimClip: (id: string) => void;
+  addTrackToClip: (clipId: string, objectId: string) => void;
+  removeTrackFromClip: (clipId: string, objectId: string) => void;
   // 에디터 미리보기(▶) — transient(저장/undo 무관)
   animPreview: { clipId: string; startedAt: number } | null;
   startAnimPreview: (clipId: string) => void;
   stopAnimPreview: () => void;
+  // 지금 편집 중인 포즈(하이라이트·오토키 대상) — transient. 오브젝트 이동/선택전환에도 유지.
+  poseEdit: { clipId: string; idx: number } | null;
+  setPoseEdit: (clipId: string, idx: number | null) => void;
+  goToPose: (clipId: string, idx: number) => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -361,6 +368,36 @@ function pruneOrphanClips(animClips: AnimClip[], deleted: Set<string>): { clips:
     .filter((c) => c.tracks.length > 0);
   const changed = clips.length !== animClips.length || clips.some((c) => { const o = origClip.get(c.id); return !o || c.tracks.length !== o.tracks.length || c.rootId !== o.rootId; });
   return { clips: changed ? clips : animClips, changed };
+}
+
+// 오토키(auto-key) — 편집 중 포즈(poseEdit)가 있고 방금 트랜스폼이 바뀐 오브젝트가 그 클립의 트랙이면,
+// 그 포즈의 키프레임을 오브젝트의 새 트랜스폼으로 자동 갱신한다("포즈 갱신" 자동화). objects는 '갱신 후' 배열.
+// 변경 없으면 null 반환(히스토리/리렌더 최소화). goToPose 경유 이동엔 발동하면 안 되므로 그 경로는 우회한다.
+function autoKeyPose(
+  poseEdit: { clipId: string; idx: number } | null,
+  animClips: AnimClip[],
+  objects: ObjectNodeSchema[],
+  changedIds: string[],
+): AnimClip[] | null {
+  if (!poseEdit) return null;
+  const clip = animClips.find((c) => c.id === poseEdit.clipId);
+  if (!clip) return null;
+  const idx = poseEdit.idx;
+  if (idx < 0 || idx >= (clip.tracks[0]?.keys.length ?? 0)) return null;
+  const nearV = (a: Vec3Schema | undefined, b: Vec3Schema) =>
+    !!a && Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6 && Math.abs(a.z - b.z) < 1e-6;
+  let touched = false;
+  const tracks = clip.tracks.map((t) => {
+    if (!changedIds.includes(t.objectId) || !t.keys[idx]) return t;
+    const o = objects.find((x) => x.id === t.objectId);
+    if (!o) return t;
+    const k = t.keys[idx];
+    if (nearV(k.position, o.position) && nearV(k.rotation, o.rotation) && nearV(k.scale, o.scale)) return t; // 변화 없음
+    touched = true;
+    return { ...t, keys: t.keys.map((kk, i) => (i === idx ? { time: kk.time, position: { ...o.position }, rotation: { ...o.rotation }, scale: { ...o.scale } } : kk)) };
+  });
+  if (!touched) return null;
+  return animClips.map((c) => (c.id === clip.id ? { ...c, tracks } : c));
 }
 
 let objectCounter = 0;
@@ -492,6 +529,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   sceneEvents: [],
   animClips: [],
   animPreview: null,
+  poseEdit: null,
   selectedId: null,
   groupScope: null,
   transformMode: 'translate',
@@ -539,8 +577,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       variables: data.variables ?? [],
       hudElements: data.hudElements ?? [],
       sceneEvents: data.sceneEvents ?? [],
-      animClips: bakeClipPivots(data.animClips ?? []), // 레거시 pivot 클립을 baked로 1회 통일(에디터=재생 일치)
+      animClips: normalizeClipPivots(data.animClips ?? []), // 레거시 pivot→트랙별 이전 + baked 통일(에디터=재생 일치)
       animPreview: null,
+      poseEdit: null,
       selectedId: null,
       selectedIds: [],
       groupScope: null,
@@ -927,7 +966,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   updateObject: (id, patch) => {
-    const { objects, environment, prefabs, _prevSnapshot } = get();
+    const { objects, environment, prefabs, animClips, poseEdit, _prevSnapshot } = get();
     const target = objects.find((o) => o.id === id);
     // 프리팹 인스턴스 노드를 편집하면, 바뀐 필드가 속한 override 그룹을 기록 → 동기화 시 그 그룹은 원본을 안 따른다.
     let overridePatch: Partial<ObjectNodeSchema> | null = null;
@@ -941,26 +980,35 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         overridePatch = { prefabOverrides: [...merged] };
       }
     }
+    const newObjects = objects.map((o) => (o.id === id ? { ...o, ...patch, ...overridePatch } : o));
+    // 오토키 — 트랜스폼 편집 시 편집 중 포즈가 있으면 그 포즈 키프레임에 자동 반영.
+    const isTransform = 'position' in patch || 'rotation' in patch || 'scale' in patch;
+    const ak = isTransform ? autoKeyPose(poseEdit, animClips, newObjects, [id]) : null;
     set({
-      _prevSnapshot: _prevSnapshot ?? { objects, environment },
-      objects: objects.map((o) => (o.id === id ? { ...o, ...patch, ...overridePatch } : o)),
+      _prevSnapshot: _prevSnapshot ?? { objects, environment, ...(ak ? { animClips } : {}) },
+      objects: newObjects,
+      ...(ak ? { animClips: ak } : {}),
       isModified: true,
     });
   },
 
   commitTransforms: (updates) => {
-    const { objects, environment, past } = get();
+    const { objects, environment, animClips, poseEdit, past } = get();
     const map = new Map(updates.map((u) => [u.id, u]));
+    const newObjects = objects.map((o) => {
+      const u = map.get(o.id);
+      return u ? { ...o, position: { ...u.position }, rotation: { ...u.rotation }, scale: { ...u.scale } } : o;
+    });
+    // 오토키 — 편집 중 포즈가 있으면 옮긴 오브젝트를 그 포즈 키프레임에 자동 반영(objects·animClips 원자 커밋).
+    const ak = autoKeyPose(poseEdit, animClips, newObjects, updates.map((u) => u.id));
     set({
-      objects: objects.map((o) => {
-        const u = map.get(o.id);
-        return u ? { ...o, position: { ...u.position }, rotation: { ...u.rotation }, scale: { ...u.scale } } : o;
-      }),
+      objects: newObjects,
+      ...(ak ? { animClips: ak } : {}),
       isModified: true,
       // 직전에 커밋 안 된 편집 스냅샷 잔재를 버려 히스토리 오염 차단(기즈모는 자체 baseline으로 원자 커밋).
       _prevSnapshot: null,
-      // 이 변환 '직전'의 objects를 undo 기준으로 원자적 커밋 → undo가 항상 일관된 단일 상태로 복원.
-      ...withHistory({ objects, environment }, past),
+      // 이 변환 '직전'의 objects(오토키면 animClips도)를 undo 기준으로 원자적 커밋.
+      ...withHistory(ak ? { objects, environment, animClips } : { objects, environment }, past),
     });
   },
 
@@ -1646,9 +1694,54 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     if (!animClips.some((c) => c.id === id)) return;
     set({ animClips: animClips.filter((c) => c.id !== id), isModified: true, ...withHistory({ objects, environment, animClips }, past) });
   },
+  // 다중 트랙 — 클립에 오브젝트(트랙) 추가. 기존 키 시간에 맞춰 현재 트랜스폼으로 키 생성(정렬 유지). (ANIMATION.md P3)
+  addTrackToClip: (clipId, objectId) => {
+    const { animClips, objects, environment, past } = get();
+    const clip = animClips.find((c) => c.id === clipId);
+    const o = objects.find((x) => x.id === objectId);
+    if (!clip || !o || clip.tracks.some((t) => t.objectId === objectId)) return;
+    const times = (clip.tracks[0]?.keys ?? [{ time: 0 }]).map((k) => k.time);
+    const keys = times.map((time) => ({ time, position: { ...o.position }, rotation: { ...o.rotation }, scale: { ...o.scale } }));
+    set({
+      animClips: animClips.map((c) => (c.id === clipId ? { ...c, tracks: [...c.tracks, { objectId, keys }] } : c)),
+      isModified: true,
+      ...withHistory({ objects, environment, animClips }, past),
+    });
+  },
+  removeTrackFromClip: (clipId, objectId) => {
+    const { animClips, objects, environment, past } = get();
+    const clip = animClips.find((c) => c.id === clipId);
+    if (!clip || clip.tracks.length <= 1 || !clip.tracks.some((t) => t.objectId === objectId)) return; // 마지막 트랙은 유지(빈 클립 방지)
+    set({
+      animClips: animClips.map((c) => (c.id === clipId ? { ...c, tracks: c.tracks.filter((t) => t.objectId !== objectId) } : c)),
+      isModified: true,
+      ...withHistory({ objects, environment, animClips }, past),
+    });
+  },
   // 에디터 미리보기(▶) — 클립을 뷰포트에서 재생. transient(저장/undo 무관). EditorCanvas ClipPreview가 구동.
   startAnimPreview: (clipId) => set({ animPreview: { clipId, startedAt: performance.now() } }),
   stopAnimPreview: () => set({ animPreview: null }),
+  setPoseEdit: (clipId, idx) => set({ poseEdit: idx == null ? null : { clipId, idx } }),
+  // 포즈로 이동 — 모든 트랙 오브젝트를 그 키프레임으로. objects를 직접 세팅(updateObject 우회 → 오토키 무발동).
+  //   이 포즈를 '편집 중 포즈'로 지정 → 이후 오브젝트를 옮기면 오토키가 이 포즈에 반영.
+  goToPose: (clipId, idx) => {
+    const { animClips, objects, environment, past } = get();
+    const clip = animClips.find((c) => c.id === clipId);
+    if (!clip) return;
+    const keyById = new Map<string, AnimKeyframe>();
+    for (const t of clip.tracks) { const k = t.keys[idx]; if (k) keyById.set(t.objectId, k); }
+    if (keyById.size === 0) return;
+    set({
+      objects: objects.map((o) => {
+        const k = keyById.get(o.id);
+        return k ? { ...o, ...(k.position ? { position: { ...k.position } } : {}), ...(k.rotation ? { rotation: { ...k.rotation } } : {}), ...(k.scale ? { scale: { ...k.scale } } : {}) } : o;
+      }),
+      poseEdit: { clipId, idx },
+      isModified: true,
+      _prevSnapshot: null,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
 
   updateEnvironment: (patch) => {
     const { environment, objects, _prevSnapshot } = get();

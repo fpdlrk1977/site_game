@@ -443,6 +443,9 @@ export interface AnimKeyframe {
 export interface AnimTrack {
   objectId: string;        // 대상 오브젝트(그룹 자식 포함)
   keys: AnimKeyframe[];    // time 오름차순
+  // 트랙별 회전 피벗(경첩) — 다중 트랙(양문 등)에서 오브젝트마다 다른 경첩용. 미설정 시 클립 레벨(AnimClip.pivot) 폴백.
+  pivot?: Vector3;
+  pivotBaked?: boolean;
 }
 export interface AnimClip {
   id: string;

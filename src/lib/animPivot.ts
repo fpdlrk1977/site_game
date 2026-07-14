@@ -18,28 +18,33 @@ export function pivotOffset(pivot: Vector3, rotDeg: Vector3): Vector3 {
 }
 
 /**
- * 레거시(미-baked) pivot 클립의 키프레임 position에 pivot 스윙을 1회 반영(baked).
- * baked 후엔 pivotBaked=true로 표시 → 이후 런타임은 pivotOffset을 재적용하지 않고 순수 보간.
- * 이미 baked거나 pivot이 없으면 그대로 반환(멱등). 변경이 없으면 원본 배열 참조 반환.
+ * 클립 피벗 정규화 — 로드 시 1회. (1) 레거시 클립레벨 pivot을 **트랙별 pivot으로 이전**(다중 트랙 대비),
+ * (2) 미-baked면 키 position에 스윙을 반영(bake). 이후 런타임/에디터는 트랙별 pivot만 본다.
+ * 클립레벨 pivot이 없으면 그대로(멱등). 변경 없으면 원본 참조 반환.
  */
-export function bakeClipPivots(clips: AnimClip[]): AnimClip[] {
+export function normalizeClipPivots(clips: AnimClip[]): AnimClip[] {
   let changed = false;
   const out = clips.map((c) => {
-    if (!c.pivot || c.pivotBaked) return c;
+    if (!c.pivot) return c; // 이미 per-track이거나 피벗 없음
     changed = true;
-    const pivot = c.pivot;
-    return {
-      ...c,
-      pivotBaked: true,
-      tracks: c.tracks.map((t) => ({
+    const clipPivot = c.pivot;
+    const clipBaked = c.pivotBaked;
+    const tracks = c.tracks.map((t) => {
+      if (t.pivot) return t; // 이미 트랙 피벗 있으면 유지
+      if (clipBaked) return { ...t, pivot: clipPivot, pivotBaked: true }; // 키가 이미 baked → 트랙으로 이전만
+      // 레거시 미-baked → 키에 스윙 반영(bake) 후 트랙 피벗 설정
+      return {
         ...t,
+        pivot: clipPivot,
+        pivotBaked: true,
         keys: t.keys.map((k) => {
           if (!k.position || !k.rotation) return k;
-          const off = pivotOffset(pivot, k.rotation);
+          const off = pivotOffset(clipPivot, k.rotation);
           return { ...k, position: { x: k.position.x + off.x, y: k.position.y + off.y, z: k.position.z + off.z } };
         }),
-      })),
-    };
+      };
+    });
+    return { ...c, pivot: undefined, pivotBaked: undefined, tracks };
   });
   return changed ? out : clips;
 }

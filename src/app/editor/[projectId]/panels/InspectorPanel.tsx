@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect, type MutableRefObject } from 'react';
 import { Download, X, Component, Package } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
@@ -35,13 +35,33 @@ import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterP
 
 
 // ── 메인 ───────────────────────────────────────────────────────
-// 외부: selectedId를 key로 넘겨 오브젝트 전환 시 내부 상태 완전 초기화
+// 외부: selectedId를 key로 넘겨 오브젝트 전환 시 내부 상태 완전 초기화.
+//   단, 섹션 접힘 상태(collapsed)는 여기(remount 안 되는 부모)에 두어 오브젝트를 전환해도 유지한다
+//   → 애니메이션 트랙에서 다른 오브젝트를 골라도 Animation 패널이 접히지 않는다(작업 연속성).
 export function InspectorPanel() {
   const { selectedId } = useSceneStore();
-  return <InspectorInner key={selectedId ?? '__none__'} />;
+  // 섹션 접기 상태 — 점진적 공개(STEP 3): 기본은 Transform·Material·Content·Geometry·Visibility만 펼치고
+  // 고급 섹션(물리·모션·이벤트·파티클·서브디비전·애니메이션·배열)은 접어 둔다. 값이 있으면 헤더에 점(dot)으로 표시.
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    new Set(['array', 'subdivision', 'particle', 'motion', 'events', 'animation', 'animclip']),
+  );
+  const toggleSection = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  const isOpen = (key: string) => !collapsed.has(key);
+  // 스크롤 위치도 부모에 보관 → 오브젝트 전환(InspectorInner remount)에도 스크롤 유지(트랙 전환 시 위로 안 튐).
+  const scrollTopRef = useRef(0);
+  return <InspectorInner key={selectedId ?? '__none__'} isOpen={isOpen} toggleSection={toggleSection} scrollTopRef={scrollTopRef} />;
 }
 
-function InspectorInner() {
+function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key: string) => boolean; toggleSection: (key: string) => void; scrollTopRef: MutableRefObject<number> }) {
+  // remount(오브젝트 전환) 시 1회 저장된 스크롤 위치 복원(페인트 전). 섹션 토글 등 리렌더엔 안 건드림.
+  const scrollElRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (scrollElRef.current) scrollElRef.current.scrollTop = scrollTopRef.current; }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => { scrollTopRef.current = e.currentTarget.scrollTop; };
   const { objects, assets, selectedId, selectedIds, projectId, environment, prefabs, updateObject, pushHistory, instantiatePrefab, deletePrefab, requestExport, mergeIntoAsset } = useSceneStore();
   const { addToast } = useToast();
   // 단일 오브젝트를 GLB로 구워 Models(에셋)에 등록 — Merge와 동일 파이프라인(단일 rootId).
@@ -65,19 +85,6 @@ function InspectorInner() {
   };
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
-
-  // 섹션 접기 상태 — 점진적 공개(STEP 3): 기본은 Transform·Material·Content·Geometry·Visibility만 펼치고
-  // 고급 섹션(물리·모션·이벤트·파티클·서브디비전·애니메이션·배열)은 접어 둔다. 값이 있으면 헤더에 점(dot)으로 표시.
-  const [collapsed, setCollapsed] = useState<Set<string>>(
-    new Set(['array', 'subdivision', 'particle', 'motion', 'events', 'animation', 'animclip']),
-  );
-  const toggleSection = (key: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  const isOpen = (key: string) => !collapsed.has(key);
 
 
 
@@ -105,7 +112,7 @@ function InspectorInner() {
             <p className="text-[10px] text-primary">Drag in the viewport to reposition · scale &amp; properties in the Player section</p>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={scrollElRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
           {!isCharSelected && (
             <div className="px-3 pt-3">
               <button
@@ -201,7 +208,7 @@ function InspectorInner() {
         <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">{obj.isGroup ? 'Inspector — Group' : 'Inspector'}</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollElRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
         {/* 이름 + GLB 내보내기 */}
         <div className="px-3 py-2 flex items-center gap-1.5">
           <input
