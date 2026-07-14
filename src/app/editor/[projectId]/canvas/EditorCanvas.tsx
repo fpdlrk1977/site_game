@@ -182,6 +182,35 @@ function CameraCapture({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.
   return null;
 }
 
+// 애니 클립의 회전 피벗(경첩) 표식 — 선택 오브젝트에 클립이 있을 때만. 에디터 전용(뷰어 미표시).
+//   앰버 구=피벗 점, 수직선=회전축(대개 수직 경첩). depthTest off로 물체 뒤에서도 보임.
+const _ANIM_DEG = Math.PI / 180;
+function AnimPivotGizmo() {
+  const selectedId = useSceneStore((s) => s.selectedId);
+  const objects = useSceneStore((s) => s.objects);
+  const animClips = useSceneStore((s) => s.animClips);
+  if (!selectedId) return null;
+  const obj = objects.find((o) => o.id === selectedId);
+  if (!obj || obj.isGroup || obj.parentId) return null; // 단일 루트 오브젝트만(피벗 UI와 동일)
+  const clip = animClips.find((c) => c.rootId === selectedId);
+  if (!clip) return null;
+  const p = clip.pivot ?? { x: 0, y: 0, z: 0 };
+  const e = new THREE.Euler(obj.rotation.x * _ANIM_DEG, obj.rotation.y * _ANIM_DEG, obj.rotation.z * _ANIM_DEG, "XYZ");
+  const rp = new THREE.Vector3(p.x, p.y, p.z).applyEuler(e);
+  return (
+    <group position={[obj.position.x + rp.x, obj.position.y + rp.y, obj.position.z + rp.z]} renderOrder={1000}>
+      <mesh renderOrder={1000}>
+        <cylinderGeometry args={[0.015, 0.015, 2.4, 8]} />
+        <meshBasicMaterial color="#f5a623" transparent opacity={0.55} depthTest={false} />
+      </mesh>
+      <mesh renderOrder={1000}>
+        <sphereGeometry args={[0.085, 16, 16]} />
+        <meshBasicMaterial color="#f5a623" depthTest={false} />
+      </mesh>
+    </group>
+  );
+}
+
 // 씬 로드 직후 1회 자동 전체 맞춤 — 저장한 넓은 공간을 다시 열 때 카메라가 너무 가깝지 않도록
 // 들어오자마자 Shift+F(전체 맞춤) 뷰로 시작. Canvas 내부라 orbitRef 준비 타이밍이 보장되고,
 // sceneLoadTick에 묶어 '로드 시점'에만 fit(새 빈 씬에서 첫 오브젝트 추가 시 카메라 튐 방지).
@@ -942,6 +971,9 @@ export function EditorCanvas() {
 
           {/* 전역 태양 방향 표식(읽기 전용) — Sun Position이 어느 방향으로 비추는지 시각화 */}
           <SunDirectionGizmo position={environment.lights.directionalPosition} />
+
+          {/* 애니 회전 피벗(경첩) 표식 — 선택 오브젝트에 클립이 있을 때 축 위치 시각화 */}
+          <AnimPivotGizmo />
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 

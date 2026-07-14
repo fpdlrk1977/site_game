@@ -60,18 +60,45 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
     updateAnimClip(clip.id, { tracks, duration: maxT });
   };
 
-  // 오브젝트들을 첫 포즈(key0)로 되돌림 — 에디터에서 시작 상태 확인
-  const toFirstPose = () => {
+  // 지정 포즈(=키 인덱스)로 오브젝트를 이동 — 캡처한 그대로(위치·회전·크기)를 에디터에 반영해 확인.
+  //   (피벗의 경첩 회전은 재생 때만 적용 — 여기선 저작한 원본 값을 보여줌)
+  const goToPose = (idx: number) => {
     if (!clip) return;
     for (const t of clip.tracks) {
-      const k = t.keys[0];
+      const k = t.keys[idx];
       if (k) updateObject(t.objectId, { ...(k.position ? { position: k.position } : {}), ...(k.rotation ? { rotation: k.rotation } : {}), ...(k.scale ? { scale: k.scale } : {}) });
     }
     pushHistory();
   };
+  const toFirstPose = () => goToPose(0);
 
   // 포즈(=키) 시간 목록 (첫 트랙 기준)
   const poseTimes = clip ? (clip.tracks[0]?.keys ?? []).map((k) => k.time) : [];
+
+  // 현재 오브젝트가 어느 포즈와 일치하는지 — 클릭(goToPose)으로 이동하면 그 포즈를 하이라이트.
+  const eqV = (a: { x: number; y: number; z: number } | undefined, b: { x: number; y: number; z: number }) =>
+    !a || (Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3 && Math.abs(a.z - b.z) < 1e-3);
+  const curPoseIdx = clip
+    ? (clip.tracks[0]?.keys ?? []).findIndex((k) => eqV(k.position, obj.position) && eqV(k.rotation, obj.rotation) && eqV(k.scale, obj.scale))
+    : -1;
+
+  // 회전축(피벗) 프리셋 — 스케일드-로컬 모서리(단위 bbox ±0.5 × scale). 단일 오브젝트 전용.
+  const s = obj.scale;
+  const pivotPresets: { id: string; label: string; pivot?: { x: number; y: number; z: number } }[] = [
+    { id: 'center', label: '중심', pivot: undefined },
+    { id: 'left', label: '좌 −X', pivot: { x: -0.5 * s.x, y: 0, z: 0 } },
+    { id: 'right', label: '우 +X', pivot: { x: 0.5 * s.x, y: 0, z: 0 } },
+    { id: 'front', label: '앞 −Z', pivot: { x: 0, y: 0, z: -0.5 * s.z } },
+    { id: 'back', label: '뒤 +Z', pivot: { x: 0, y: 0, z: 0.5 * s.z } },
+    { id: 'bottom', label: '아래 −Y', pivot: { x: 0, y: -0.5 * s.y, z: 0 } },
+    { id: 'top', label: '위 +Y', pivot: { x: 0, y: 0.5 * s.y, z: 0 } },
+  ];
+  const isPivot = (p?: { x: number; y: number; z: number }) => {
+    const cur = clip?.pivot;
+    if (!p) return !cur;
+    if (!cur) return false;
+    return Math.abs(p.x - cur.x) < 1e-4 && Math.abs(p.y - cur.y) < 1e-4 && Math.abs(p.z - cur.z) < 1e-4;
+  };
 
   return (
     <GroupBox>
@@ -103,9 +130,11 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
               <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">포즈 (키프레임) · {trackObjs.length}개 오브젝트</span>
               <div className="space-y-1">
                 {poseTimes.map((t, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-surface border border-border rounded-xs px-2 py-1">
-                    <span className="w-4 h-4 rounded-full bg-primary/15 text-primary text-[9px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-                    <span className="flex-1 text-[11px] text-foreground">포즈 {i + 1}</span>
+                  <div key={i} className={`flex items-center gap-2 rounded-xs px-2 py-1 border transition-colors ${i === curPoseIdx ? 'bg-primary/10 border-primary/50' : 'bg-surface border-border'}`}>
+                    <button onClick={() => goToPose(i)} title="이 포즈로 이동 — 캡처한 상태를 에디터에서 확인" className="flex items-center gap-2 flex-1 min-w-0 text-left group/pose">
+                      <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0 transition-colors ${i === curPoseIdx ? 'bg-primary text-white' : 'bg-primary/15 text-primary group-hover/pose:bg-primary group-hover/pose:text-white'}`}>{i + 1}</span>
+                      <span className={`text-[11px] transition-colors ${i === curPoseIdx ? 'text-primary font-medium' : 'text-foreground group-hover/pose:text-primary'}`}>포즈 {i + 1}{i === curPoseIdx ? ' · 현재' : ''}</span>
+                    </button>
                     <input
                       type="number" min={0} step={0.1} value={t}
                       onChange={(e) => setPoseTime(i, parseFloat(e.target.value) || 0)} onBlur={pushHistory}
@@ -134,6 +163,20 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
                   <Toggle value={clip.loop === true} onChange={(v) => { updateAnimClip(clip.id, { loop: v }); pushHistory(); }} />
                 </label>
               </div>
+              {!obj.isGroup && (
+                <div className="pt-0.5">
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">회전축 (경첩)</span>
+                  <div className="grid grid-cols-4 gap-1">
+                    {pivotPresets.map((p) => (
+                      <button key={p.id} onClick={() => { updateAnimClip(clip.id, { pivot: p.pivot }); pushHistory(); }}
+                        className={`py-1 rounded-xs text-[9px] transition-colors ${isPivot(p.pivot) ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}>
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-muted/50 mt-1">뷰포트의 <b className="text-amber-500">노란 표식</b>이 현재 회전축입니다. 문·뚜껑처럼 <b>모서리 기준</b>으로 돌리려면 축을 그 모서리로. (기본=중심)</p>
+                </div>
+              )}
               <p className="text-[10px] text-primary/70 bg-primary/10 border border-primary/20 rounded-xs px-2 py-1.5 leading-snug">재생하려면 이벤트(Events)에서 <b>트리거 → 애니 재생(play_clip)</b>으로 이 애니를 선택하세요. (반복 애니는 '시작 시(scene_start)' 트리거)</p>
             </>
           )}

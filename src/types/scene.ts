@@ -452,6 +452,9 @@ export interface AnimClip {
   tracks: AnimTrack[];     // 오브젝트별 트랙(단일=1개)
   rootId?: string | null;  // 스코프(그룹/프리팹 재사용용). 미설정/null=씬 전역
   easing?: 'linear' | 'easeInOut'; // 클립 기본 이징(키별 곡선은 후속)
+  // 회전 피벗(중심) — 오브젝트 스케일드-로컬 오프셋. 미설정=중심 회전. 런타임에서만 처리(렌더/기즈모 무변경).
+  //   경첩 문: pivot=모서리 → 회전 시 그 점이 고정되도록 position을 보정(pivot − R·pivot)해서 clipOverride에 반영. ANIMATION.md.
+  pivot?: Vector3;
 }
 
 // HUD 위젯 — 게임 변수 하나를 화면에 시각화. (GAME_LOGIC.md Phase 2)

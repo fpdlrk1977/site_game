@@ -53,11 +53,19 @@ interface AnimClip {
 - `play_clip`은 새 액션(기존 액션 무변경). 기존 motion/move_object/animate_object 그대로.
 - 스토어 animClips는 variables 패턴(별도 state+CRUD, undo 스냅샷 포함).
 
-## 진행 상태
-- [x] **Phase 1 (기반 + 포즈 저작) — 2026-07-14 구현** (tsc 클린 + editor 컴파일 307, 브라우저 실동작 대기)
+## 진행 상태 (우선순위 재조정 — 피벗·미리보기를 Phase 2/3보다 먼저)
+- [x] **Phase 1 (기반 + 포즈 저작) — 2026-07-14** (tsc·컴파일 OK, 브라우저 대기)
+- [x] **회전 피벗(경첩) — 2026-07-14** (단일 애니 핵심 결함 수정, 런타임 전용)
+- [ ] **에디터 미리보기 ▶** (저작 속도 — 다음)
 - [ ] Phase 2 (다중 오브젝트/그룹 격리 편집 모드·계층 동기)
 - [ ] Phase 3 (타임라인 UI·모드 토글)
-- [ ] Phase 4 (다듬기)
+- [ ] Phase 4 (회전 최단경로 보간·Prefab 통합)
+
+### 회전 피벗 구현 내역 (2026-07-14) — 사이드이펙트 0 (렌더/기즈모 무변경)
+- **스키마**: `AnimClip.pivot?: Vector3`(스케일드-로컬 오프셋, 미설정=중심).
+- **런타임**(`ViewerClient`): `pivotOffset(pivot,rotDeg)=pivot − R·pivot`(THREE.Euler로 R 적용). tickClips에서 회전 키에 대해 position을 이 오프셋만큼 보정 → **그 점(경첩)이 고정된 채 회전**. **오브젝트 원점만 이동시켜 만드는 착시라 일반 렌더/기즈모는 안 건드림**. 수학 검증: 폭1 문 왼쪽모서리 pivot=(−0.5,0,0), 90°Y회전 → 원점 (−0.5,0,−0.5)+rot90, 왼쪽모서리 월드=(−0.5,0,0) 고정 ✓.
+- **에디터**(`AnimationClipSection`): 단일 오브젝트에 '회전축(경첩)' 프리셋(중심/좌/우/앞/뒤/아래/위 = ±0.5×scale 모서리). 그룹은 오프셋-자식 방식 병행.
+- **한계**: 프리셋은 단위 bbox×scale 가정(표준 박스/구/실린더 정확, GLB/로프트는 근사) · 커스텀 pivot 입력·그룹 pivot·스케일 애니 동반 시 pivot 드리프트는 후속.
 
 ### Phase 1 구현 내역 (2026-07-14)
 - **스키마**(`scene.ts`): `AnimKeyframe`/`AnimTrack`/`AnimClip`(rootId 스코프·tracks·duration·loop·easing) + `ProjectSceneSchema.animClips?` + `EventAction 'play_clip'` + normalize. 전부 옵셔널(하위호환).
