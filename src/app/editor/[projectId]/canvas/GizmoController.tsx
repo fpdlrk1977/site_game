@@ -184,7 +184,7 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
 
 function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate, objectSnap,
-    objects, assets, commitTransforms, updateEnvironment, pushHistory } = useSceneStore();
+    objects, assets, animClips, commitTransforms, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
   // 기즈모는 "형상 중심에 놓인 프록시"에 붙는다 → 위젯이 원점(하단)이 아니라 중심에 뜨고,
   // 프록시는 재부모화되지 않으므로 예전의 scene graph 에러도 없다. 조작은 오브젝트로 역매핑.
@@ -202,12 +202,25 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const effectiveMode = isCharPreview ? 'translate' : transformMode;
   const skipYClamp = !isCharPreview && (selectedObject?.parentId != null);
 
-  // 선택 오브젝트의 로컬 형상 중심(cLocal) 갱신 — 프리미티브/캐릭터는 원점(0)
+  // 선택 오브젝트의 로컬 회전중심(cLocal) 갱신 — 기본은 형상 중심(프리미티브/캐릭터는 원점 0).
+  //   단, 회전 모드 + 이 오브젝트를 rootId로 갖는 pivot(경첩) 클립이 있으면 → cLocal을 그 경첩 점으로.
+  //   pivot은 오브젝트 원점 기준 스케일드 오프셋(0.5×scale) → 지오메트리-로컬은 pivot/scale (형상중심 안 더함:
+  //   런타임 pivotOffset·노란 표식과 동일하게 원점 기준). 프록시가 그 점 기준으로 회전 →
+  //   origin = restOrigin + (pivot − R·pivot)로 baked 저장(= 런타임 pivotOffset과 픽셀 일치).
   useEffect(() => {
     if (isCharPreview || !selectedId) { cLocalRef.current.set(0, 0, 0); return; }
-    const c = localCenter(objects, assets, selectedId);
-    cLocalRef.current.copy(c ?? _p.set(0, 0, 0));
-  }, [selectedId, isCharPreview, objects, assets]);
+    const clip = transformMode === 'rotate' ? animClips.find((cl) => cl.rootId === selectedId && cl.pivot) : undefined;
+    if (clip?.pivot) {
+      const sc = objects.find((o) => o.id === selectedId)?.scale ?? { x: 1, y: 1, z: 1 };
+      cLocalRef.current.set(
+        sc.x ? clip.pivot.x / sc.x : 0,
+        sc.y ? clip.pivot.y / sc.y : 0,
+        sc.z ? clip.pivot.z / sc.z : 0,
+      );
+    } else {
+      cLocalRef.current.copy(localCenter(objects, assets, selectedId) ?? _p.set(0, 0, 0));
+    }
+  }, [selectedId, isCharPreview, objects, assets, transformMode, animClips]);
 
   // Shift 누르는 동안 회전 15° 스냅 (Figma식)
   const [shiftSnap, setShiftSnap] = useState(false);

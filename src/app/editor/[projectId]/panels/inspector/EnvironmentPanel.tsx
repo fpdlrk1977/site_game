@@ -365,7 +365,7 @@ export function EnvironmentPanel() {
                           value={env.sky.value}
                           onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
                           onBlur={pushHistory}
-                          className="w-full flex-1 px-2.5 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="w-full flex-1 px-2.5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                       </div>
                     )}
@@ -486,7 +486,7 @@ export function EnvironmentPanel() {
                       value={env.ground.color}
                       onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
                       onBlur={pushHistory}
-                      className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="flex-1 px-2.5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                 )}
@@ -515,7 +515,7 @@ export function EnvironmentPanel() {
           <div className="px-3 pb-3">
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] text-muted/50 w-12 font-semibold">Color</span>
+                <span className="text-[10px] text-muted/50 font-semibold block mb-1">Color</span>
                 <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                   <input
                     type="color"
@@ -529,12 +529,12 @@ export function EnvironmentPanel() {
                     value={env.fog.color}
                     onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
                     onBlur={pushHistory}
-                    className="flex-1 w-full px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 w-full px-2.5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
 
-              <div className="mt-2 flex-1 min-w-0">
+              <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/50 font-semibold block mb-1">Mode</span>
                 <SelectBox
                   value={env.fog.mode ?? "linear"}
@@ -698,7 +698,7 @@ export function EnvironmentPanel() {
                     value={env.lights.directionalColor ?? "#ffffff"}
                     onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalColor: e.target.value } })}
                     onBlur={pushHistory}
-                    className="flex-1 w-full px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 w-full px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -717,7 +717,7 @@ export function EnvironmentPanel() {
                     value={env.lights.ambientColor ?? "#ffffff"}
                     onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientColor: e.target.value } })}
                     onBlur={pushHistory}
-                    className="flex-1 w-full px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 w-full px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -811,7 +811,7 @@ export function EnvironmentPanel() {
               const dp = env.defaultPopup ?? {};
               const setDP = (patch: Partial<typeof dp>) => updateEnvironment({ defaultPopup: { ...dp, ...patch } });
               // const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
-              const inputCls = "flex-1 w-full px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
+              const inputCls = "flex-1 w-full px-2.5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
               return (
                 <>
                   <label className="block">

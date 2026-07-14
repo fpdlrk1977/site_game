@@ -168,11 +168,25 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       if (clip.loop) { t = clip.duration > 0 ? t % clip.duration : 0; }
       else if (t >= clip.duration) { t = clip.duration; playingClips.current.delete(clipId); } // 끝나면 마지막 포즈 유지
       for (const tr of clip.tracks) {
-        let s = sampleTrack(tr, t, clip.easing);
-        // 회전 피벗(경첩) — 회전 시 pivot 점이 고정되도록 position 보정. 렌더/기즈모 무변경.
-        if (clip.pivot && s.rotation && s.position) {
-          const off = pivotOffset(clip.pivot, s.rotation);
-          s = { ...s, position: { x: s.position.x + off.x, y: s.position.y + off.y, z: s.position.z + off.z } };
+        let s: ClipSample;
+        // 회전 피벗(경첩) — 완벽한 원호를 위해: 각 키의 rest 위치(baked면 pivotOffset 제거)로 회전을 보간한 뒤
+        //   보간된 회전으로 pivotOffset을 매 프레임 재계산해 더한다. (baked 위치를 직선 보간하면 경첩이
+        //   중심으로 드리프트하는 '현(chord)' 문제 → 여기서 원호로 복원. 레거시 미-baked는 keyPos가 곧 rest.)
+        if (clip.pivot) {
+          const pivot = clip.pivot;
+          const baked = clip.pivotBaked;
+          const restKeys = tr.keys.map((k) => {
+            if (!k.position || !k.rotation || !baked) return k;
+            const o = pivotOffset(pivot, k.rotation);
+            return { ...k, position: { x: k.position.x - o.x, y: k.position.y - o.y, z: k.position.z - o.z } };
+          });
+          s = sampleTrack({ ...tr, keys: restKeys }, t, clip.easing);
+          if (s.rotation && s.position) {
+            const off = pivotOffset(pivot, s.rotation);
+            s = { ...s, position: { x: s.position.x + off.x, y: s.position.y + off.y, z: s.position.z + off.z } };
+          }
+        } else {
+          s = sampleTrack(tr, t, clip.easing);
         }
         ov[tr.objectId] = { ...ov[tr.objectId], ...s };
       }

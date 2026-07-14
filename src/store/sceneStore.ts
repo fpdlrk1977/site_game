@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { MathUtils, Quaternion, Euler, Vector3, Matrix4 } from 'three';
 import { worldBBox } from '@/lib/objectBBox';
+import { bakeClipPivots } from '@/lib/animPivot';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { OBJECT_PRESETS, PRESET_SELF } from '@/lib/objectPresets';
 
@@ -533,7 +534,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       variables: data.variables ?? [],
       hudElements: data.hudElements ?? [],
       sceneEvents: data.sceneEvents ?? [],
-      animClips: data.animClips ?? [],
+      animClips: bakeClipPivots(data.animClips ?? []), // 레거시 pivot 클립을 baked로 1회 통일(에디터=재생 일치)
       selectedId: null,
       selectedIds: [],
       groupScope: null,

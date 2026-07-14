@@ -81,7 +81,11 @@ interface AnimClip {
   - **사용자 정정(2026-07-14)**: ③은 "애니 삭제 없이 오브젝트만 트리에서 삭제 시 재생 목록에 클립 잔존" — 위 (2)가 정확히 그 경로(`deleteSelected`).
 - [x] **복제본 재생 위치 버그(2026-07-14)**: 오프셋 복제(`duplicateSelected`, +1) 후 복제본 재생 시 **원본 위치로 점프**해서 애니됨. **원인**: 클립 키프레임은 **절대 position**을 저장(뷰어 `sampleTrack`→effectiveScene가 `co.position`으로 전면 덮어씀)하는데, `dupAnimClips`가 트랙 objectId만 리맵하고 키프레임 좌표는 원본 값 그대로 둠 → 복제본이 원본 절대좌표로 이동. **수정**: `dupAnimClips`에 `posDelta`(OLD 오브젝트 id→이동량) 인자 추가 → 복제 클립의 position 키프레임을 그 오브젝트 이동량만큼 오프셋. `duplicateSelected` 2브랜치(그룹=루트 이동량만·자식 로컬 유지 / 단일)는 `copy.position − src.position`를 델타로 전달, `duplicateInPlace`(오프셋 0)는 델타 없이 원위치 유지. rotation/scale은 위치무관이라 그대로. tsc 클린. **브라우저 확인 대기.**
 - [x] **복제 클립 이름 구분(2026-07-14)**: 복제 시 클립 이름이 그대로라 재생 목록에 같은 이름 2개 → `dupAnimClips`가 `"~ 복사"`(기존/이번 생성 이름과 중복이면 `"~ 복사 2/3…"`)로 유일화. 오브젝트 복제 네이밍(`${name} 복사`)과 일관.
-- [ ] **P2a 피벗 일관화(기존 ①→) ② 기즈모 피벗** ← 다음. 정체성 안 바뀜(트리 무변경), 기즈모 내부만 손댐.
+- [x] **P2a 피벗 일관화 — ② 기즈모 피벗 (2026-07-14)**: 경첩 회전을 **에디터 기즈모가 직접** 처리 → 에디터=재생 WYSIWYG. **핵심 통찰**: `SingleGizmo` 프록시가 이미 임의 로컬점(`cLocal`) 기준으로 회전하도록 일반화돼 있어, 회전 모드 + pivot 클립이면 `cLocal`을 경첩점(`pivot/scale`, 원점기준)으로만 바꾸면 됨(트리/렌더 무변경, 기즈모 격리 수정). 그러면 origin = `restOrigin + (pivot − R·pivot)`로 position+rotation이 **baked** 저장. **수학 검증**: 기즈모 baked = 레거시 런타임 `pivotOffset` = `bakeClipPivots` **세 경로 동일**(결정적 테스트 8/8·재bake 가역 3/3).
+  - **모델**: `AnimClip.pivotBaked?`(스키마) — true면 런타임 순수보간(pivotOffset 재적용 안 함). 신규 lib `src/lib/animPivot.ts`(`pivotOffset`·`bakeClipPivots`). **레거시 마이그레이션**: `loadScene`이 `bakeClipPivots`로 기존(중심회전+런타임pivot) 클립을 1회 baked 통일(멱등) → 기존 문 회귀 없음. 런타임(`ViewerClient`)은 `!clip.pivotBaked`일 때만 pivotOffset 폴백(안전).
+  - **에디터**: `GizmoController` 회전모드 cLocal=경첩. `AnimationClipSection`은 피벗 변경 시 `setPivot`으로 키프레임 **재-bake(retroactive·가역)** → 나중에 축을 바꿔도 기존 포즈가 즉시 그 경첩으로 스윙. `goToPose`/노란 표식/기즈모 축 전부 일치. **이동/스케일 모드에선 여전히 중심**(회전만 경첩) → 일반 편집 자연스러움. tsc 클린. **브라우저 확인 대기.**
+  - **동작 변화**: 피벗은 이제 "런타임 매직"이 아니라 **저작에 반영(baked)** — 예측가능. 축을 바꾸면 즉시 재-bake.
+  - **후속 수정 2건(2026-07-14, 사용자 "중심으로 열리는 느낌")**: (a) **피벗 프리셋을 실제 로컬 bbox로** — 예전 `0.5×scale` 고정이라 GLB·비단위·원점≠중심 오브젝트는 모서리가 중심 쪽으로 당겨짐 → `localBBox×scale`로 진짜 모서리(`AnimationClipSection`). (b) **런타임 원호 복원** — baked 위치를 직선 보간하면 스윙 중 경첩이 중심으로 드리프트(현/chord). `ViewerClient` tickClips가 각 키의 **rest 위치(baked면 pivotOffset 제거)로 회전을 보간 → 매 프레임 pivotOffset 재적용**해 완벽한 원호(레거시 런타임과 동일 부드러움). 끝점은 baked 포즈와 정확히 일치. 결정적 테스트: 원호 6/6·bake 8/8·재bake 3/3. tsc 클린. **브라우저 확인 대기.**
 - [ ] **P2c 에디터 미리보기 ▶**
 - [ ] P3 다중 오브젝트(다중 트랙·격리모드·계층 동기)
 - [ ] P4 타임라인 UI(모드 토글·이징 곡선)

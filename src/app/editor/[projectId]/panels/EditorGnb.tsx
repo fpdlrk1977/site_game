@@ -202,7 +202,8 @@ export function EditorGnb({ tab, panelOpen, onTabClick, projectName }: Props) {
         active={panelOpen && tab === 'logic'}
         onClick={() => onTabClick('logic')}
       />
-      <div className="flex-1" />
+      <div className="w-full h-px bg-border shrink-0 my-1"></div>
+      {/* <div className="flex-1" /> */}
       <SettingsMenu projectName={projectName} />
       <AccountMenu />
     </div>

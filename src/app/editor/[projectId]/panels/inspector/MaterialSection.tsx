@@ -77,7 +77,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                         value={obj.material?.color ?? '#a78bfa'}
                         onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
                         onBlur={pushHistory}
-                      className="w-full px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full px-2.5 py-1  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
                   </div>
@@ -97,7 +97,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                         value={obj.material?.emissive ?? '#000000'}
                         onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
                         onBlur={pushHistory}
-                      className="w-full px-2.5 py-1.5 text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full px-2.5 py-1 text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
                   </div>

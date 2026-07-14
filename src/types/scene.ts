@@ -452,9 +452,12 @@ export interface AnimClip {
   tracks: AnimTrack[];     // 오브젝트별 트랙(단일=1개)
   rootId?: string | null;  // 스코프(그룹/프리팹 재사용용). 미설정/null=씬 전역
   easing?: 'linear' | 'easeInOut'; // 클립 기본 이징(키별 곡선은 후속)
-  // 회전 피벗(중심) — 오브젝트 스케일드-로컬 오프셋. 미설정=중심 회전. 런타임에서만 처리(렌더/기즈모 무변경).
-  //   경첩 문: pivot=모서리 → 회전 시 그 점이 고정되도록 position을 보정(pivot − R·pivot)해서 clipOverride에 반영. ANIMATION.md.
+  // 회전 피벗(경첩) — 오브젝트 스케일드-로컬 오프셋(0.5×scale=모서리). 미설정=중심 회전.
+  //   에디터 기즈모가 이 점을 기준으로 회전 → position+rotation이 함께 저장(baked)되어 에디터=재생 일치.
   pivot?: Vector3;
+  // pivot 스윙이 키프레임 position에 이미 반영(baked)됐는지. true=런타임 순수 보간(pivotOffset 재적용 안 함).
+  //   레거시(pivot만 있고 false)는 로드 시 1회 bake됨(store loadScene). 런타임은 안전상 !pivotBaked면 pivotOffset 폴백.
+  pivotBaked?: boolean;
 }
 
 // HUD 위젯 — 게임 변수 하나를 화면에 시각화. (GAME_LOGIC.md Phase 2)
