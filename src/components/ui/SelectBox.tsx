@@ -21,15 +21,16 @@ interface Props {
   className?: string;
   /** 컨테이너 폭에 꽉 채울지(기본 true), 내용 크기만큼만 차지할지(false, 예: 툴바 칩 버튼) */
   fullWidth?: boolean;
+  gray?: boolean;
   /** 옵션 아이콘 크기(px). 개별 아이콘이 자체 크기를 지정해도 이 크기로 강제된다. 기본 16 */
   iconSize?: number;
   disabled?: boolean;
 }
 
-const DEFAULT_TRIGGER_CLASS = 'bg-surface border border-border rounded-xs px-2 py-1.5 text-xs';
+const DEFAULT_TRIGGER_CLASS = 'bg-surface border border-border rounded-xs px-2 py-1 text-xs';
 const ICON_WRAPPER_CLASS = 'shrink-0 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-cover';
 
-export function SelectBox({ value, options, onChange, placeholder = '선택', className, fullWidth = true, iconSize = 16, disabled }: Props) {
+export function SelectBox({ value, options, onChange, placeholder = '선택', className, fullWidth = true, iconSize = 16, disabled, gray=false }: Props) {
   const { open, openMenu, close, triggerRef, panelRef, panelStyle } = useDropdown<HTMLButtonElement>();
   const [highlight, setHighlight] = useListNav(options.length, open);
 
@@ -86,7 +87,7 @@ export function SelectBox({ value, options, onChange, placeholder = '선택', cl
         }}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`${fullWidth ? 'w-full flex' : 'inline-flex'} items-center gap-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${className ?? DEFAULT_TRIGGER_CLASS}`}
+        className={`${fullWidth ? 'w-full flex' : 'inline-flex'} items-center gap-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${className ?? DEFAULT_TRIGGER_CLASS} ${gray ? 'bg-muted/5!':''}`}
       >
         {selected?.icon && (
           <span className={ICON_WRAPPER_CLASS} style={{ width: iconSize, height: iconSize }}>{selected.icon}</span>

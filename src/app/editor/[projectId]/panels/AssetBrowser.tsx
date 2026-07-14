@@ -10,6 +10,7 @@ import { uploadGlbBlob, uploadAudioFile, uploadImageTexture } from '@/lib/upload
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { RangeSlider } from '@/components/ui/RangeSlider';
+import { InlineEditName } from '@/components/ui/InlineEditName';
 import type { AssetRefSchema, ContentType, ParticlePreset, LightType, HdrPreset, MaterialOverride } from '@/types/scene';
 import {
   Package, PersonStanding, Music, Play, Square, X, Check, Plus, Type, Image as ImageIcon, Video,
@@ -555,8 +556,9 @@ export function AssetBrowser() {
                             onChange={(e) => setM({ color: e.target.value })} onBlur={pushHistory}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                         </label>
-                        <input value={m.name} onChange={(e) => renameMaterialAsset(m.id, e.target.value)}
-                          className="flex-1 min-w-0 bg-transparent text-[11px] text-foreground focus:outline-none" />
+                        <InlineEditName value={m.name} onCommit={(n) => renameMaterialAsset(m.id, n)}
+                          title="이름 변경" placeholder="재질 이름"
+                          className="flex-1 min-w-0 bg-transparent text-[11px] text-foreground rounded-sm px-1 -mx-1 border border-transparent hover:border-border/60 focus:border-primary/50 focus:outline-none transition-colors" />
                         <button onClick={() => setExpandedMat(expanded ? null : m.id)}
                           title="속성 편집" className={`shrink-0 w-5 h-5 rounded-sm flex items-center justify-center transition-colors ${expanded ? 'text-primary' : 'text-muted hover:text-foreground'}`}><SlidersHorizontal size={12} /></button>
                         <button onClick={() => applyMaterialAssetToSelection(m.id)}

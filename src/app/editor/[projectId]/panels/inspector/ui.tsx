@@ -316,7 +316,7 @@ export function Toggle({ value, onChange }: { value: boolean; onChange: (v: bool
   return (
     <div
       onClick={() => onChange(!value)}
-      className={`relative w-7.5 h-4 rounded-full transition-colors cursor-pointer shrink-0 ${value ? "bg-primary" : "bg-border"}`}
+      className={`relative w-7.5 h-4 rounded-full transition-colors cursor-pointer shrink-0 ${value ? "bg-primary" : "bg-muted/5"}`}
     >
       <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all ${value ? "left-4" : "left-0.5"}`} />
     </div>

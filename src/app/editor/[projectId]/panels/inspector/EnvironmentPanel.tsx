@@ -777,15 +777,16 @@ export function EnvironmentPanel() {
             </label>
             {/* 상호작용 근접 범위 기본값 — interact(E)/approach·E 프롬프트·하이라이트 공유 */}
             <div className="pt-2">
-              <LabeledNum
-                label="Default interaction range (m)"
+              <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Default interaction range (m)</span>
+              <RangeSlider
                 value={env.interactRange ?? 3}
                 onChange={(v) => updateEnvironment({ interactRange: Math.max(0.5, v) })}
                 onCommit={pushHistory}
                 min={0.5}
                 max={10}
+                step={0.1}
+                showValue
                 precision={1}
-                dragStep={0.1}
               />
               <p className="text-[10px] text-muted/60 leading-relaxed mt-1">
                 In play mode, the E prompt, highlight and approach trigger fire when the character gets this close. A per-object range overrides this

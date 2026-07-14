@@ -35,7 +35,10 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                   </button>
                 ))}
               </div>
-              <RangeSlider label="Count (incl. source)" value={arrayCount} onChange={(v) => setArrayCount(Math.max(2, Math.min(100, Math.round(v))))} min={2} max={100} step={1} showValue precision={0} />
+              <div className="flex items-center gap-1 mb-1">
+                              <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Count (incl. source)</span>
+                            </div>
+              <RangeSlider value={arrayCount} onChange={(v) => setArrayCount(Math.max(1, Math.min(100, Math.round(v))))} min={1} max={100} step={1} showValue precision={0} />
               {arrayMode === 'linear' ? (
                 <XYZRow label="Spacing (m)" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
                   onChangeX={(v) => setArrayOffset((o) => ({ ...o, x: v }))}
@@ -59,6 +62,7 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                 </>
               )}
               {/* 위 설정을 공유하는 두 방식 — 한 번 복제(독립) vs 라이브 클로너(계속 편집) */}
+              
               <Tooltip wide className="w-full" content="Creates independent objects now. The count can't be changed later (they become normal objects).">
                 <button
                   onClick={() => {

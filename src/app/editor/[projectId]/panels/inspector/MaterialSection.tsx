@@ -9,11 +9,12 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { uploadImageTexture } from '@/lib/uploadAsset';
 import { TexturePicker } from '@/components/ui/TexturePicker';
+import { InlineEditName } from '@/components/ui/InlineEditName';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
 import type { ObjectNodeSchema } from '@/types/scene';
 
 export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
-  const { updateObject, pushHistory, projectId, addAsset, assets, materialAssets, addMaterialAsset, detachMaterial } = useSceneStore();
+  const { updateObject, pushHistory, projectId, addAsset, assets, materialAssets, addMaterialAsset, renameMaterialAsset, detachMaterial } = useSceneStore();
   const { addToast } = useToast();
   const [objTexUploading, setObjTexUploading] = useState(false);
   const objTexInputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +51,11 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
               <div className="px-3 pb-4 space-y-2">
                 {matRef && (
                   <div className="rounded-xs bg-primary/10 border border-primary/30 p-2 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-[11px] text-primary"><Palette size={13} /> Material asset <b className="font-semibold">{matRef.name}</b></div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-primary"><Palette size={13} className="shrink-0" /><span className="shrink-0">Material asset</span>
+                      <InlineEditName value={matRef.name} onCommit={(n) => renameMaterialAsset(matRef.id, n)}
+                        title="이름 변경" placeholder="재질 이름"
+                        className="flex-1 min-w-0 bg-transparent font-semibold text-primary rounded-sm px-1 -mx-1 border border-transparent hover:border-primary/30 focus:border-primary/50 focus:outline-none transition-colors" />
+                    </div>
                     <p className="text-[10px] text-muted/60 leading-snug">Shared material — edit it in the Materials tab to update every object using it. To change only this object, detach it.</p>
                     <button onClick={() => detachMaterial(obj.id)} className="w-full py-1 rounded-xs border border-border text-muted hover:text-foreground hover:border-primary/50 text-[10px] transition-all">Detach (make independent)</button>
                   </div>
@@ -122,21 +127,23 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 {/* 물리 재질(MeshPhysicalMaterial) — 클리어코트/시인/투과. 하나라도 올리면 physical 재질로 렌더(프리미티브만) */}
                 {obj.primitiveShape && !obj.content && (
                   <div className="pt-2 border-t border-border/50 space-y-1.5">
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">Physical material (advanced)</span>
-                    <LabeledNum label="Clearcoat" value={obj.material?.clearcoat ?? 0}
-                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, clearcoat: v } })} onCommit={pushHistory}
-                      min={0} max={1} precision={2} dragStep={0.02} />
-                    <LabeledNum label="Sheen" value={obj.material?.sheen ?? 0}
-                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, sheen: v } })} onCommit={pushHistory}
-                      min={0} max={1} precision={2} dragStep={0.02} />
-                    <LabeledNum label="Transmission (glass)" value={obj.material?.transmission ?? 0}
-                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, transmission: v } })} onCommit={pushHistory}
-                      min={0} max={1} precision={2} dragStep={0.02} />
-                    {(obj.material?.transmission ?? 0) > 0 && (
-                      <LabeledNum label="IOR" value={obj.material?.ior ?? 1.5}
-                        onChange={(v) => updateObject(obj.id, { material: { ...obj.material, ior: v } })} onCommit={pushHistory}
-                        min={1} max={2.4} precision={2} dragStep={0.02} />
-                    )}
+                    <span className="text-[10px] text-muted tracking-wide block">Physical material (advanced)</span>
+                    <div className="flex gap-2 pt-1">
+                      <LabeledNum label="Clearcoat" value={obj.material?.clearcoat ?? 0}
+                        onChange={(v) => updateObject(obj.id, { material: { ...obj.material, clearcoat: v } })} onCommit={pushHistory}
+                        min={0} max={1} precision={2} dragStep={0.02} />
+                      <LabeledNum label="Sheen" value={obj.material?.sheen ?? 0}
+                        onChange={(v) => updateObject(obj.id, { material: { ...obj.material, sheen: v } })} onCommit={pushHistory}
+                        min={0} max={1} precision={2} dragStep={0.02} />
+                      <LabeledNum label="Transmission" value={obj.material?.transmission ?? 0}
+                        onChange={(v) => updateObject(obj.id, { material: { ...obj.material, transmission: v } })} onCommit={pushHistory}
+                        min={0} max={1} precision={2} dragStep={0.02} />
+                      {(obj.material?.transmission ?? 0) > 0 && (
+                        <LabeledNum label="IOR" value={obj.material?.ior ?? 1.5}
+                          onChange={(v) => updateObject(obj.id, { material: { ...obj.material, ior: v } })} onCommit={pushHistory}
+                          min={1} max={2.4} precision={2} dragStep={0.02} />
+                      )}
+                    </div>
                     <p className="text-[10px] text-muted/50">Raise Transmission to make it glass-like transparent. With all three at 0 it uses the standard material.</p>
                   </div>
                 )}

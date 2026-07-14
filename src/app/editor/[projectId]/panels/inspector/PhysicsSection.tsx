@@ -23,7 +23,7 @@ export function PhysicsSection({ obj }: { obj: ObjectNodeSchema }) {
           </label>
           {obj.physics.enabled && (
             <div className='px-3 pb-3 space-y-1'>
-              <div>
+              <div className="flex gap-2 pt-1 justify-between items-center">
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Collider Type</span>
                 <SelectBox
                   value={obj.physics.colliderType}
@@ -35,6 +35,8 @@ export function PhysicsSection({ obj }: { obj: ObjectNodeSchema }) {
                     { value: 'hull', label: 'Convex Hull' },
                     { value: 'trimesh', label: 'Trimesh (accurate/slow)' },
                   ]}
+                  fullWidth={false}
+                  gray
                 />
               </div>
               <label className="flex items-center justify-between cursor-pointer">

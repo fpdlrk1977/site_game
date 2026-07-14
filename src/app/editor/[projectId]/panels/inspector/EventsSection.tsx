@@ -337,20 +337,13 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
       {newTrigger === 'on_timer' && (
         <div className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5 space-y-1.5">
           <p><b>일정 간격마다</b> 자동 발동합니다(주기적 스폰·카운트다운 등). 게임 오버되면 멈춥니다.</p>
-          <div className="flex items-center gap-2">
-            <span className="shrink-0">간격</span>
-            <input
-              type="number" min={0.1} step={0.1}
-              value={newTimer.everySec}
-              onChange={(e) => setNewTimer((t) => ({ ...t, everySec: Number(e.target.value) }))}
-              className="w-16 bg-background border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <span className="shrink-0">초</span>
-            <label className="flex items-center gap-1 cursor-pointer ml-auto">
-              <input type="checkbox" checked={!!newTimer.once} onChange={(e) => setNewTimer((t) => ({ ...t, once: e.target.checked }))} />
-              <span>1회만</span>
-            </label>
-          </div>
+          <LabeledNum label="간격(초)" value={newTimer.everySec}
+            onChange={(v) => setNewTimer((t) => ({ ...t, everySec: v }))} onCommit={() => {}}
+            min={0.1} precision={1} dragStep={0.1} />
+          <label className="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" checked={!!newTimer.once} onChange={(e) => setNewTimer((t) => ({ ...t, once: e.target.checked }))} />
+            <span>1회만</span>
+          </label>
         </div>
       )}
 
@@ -802,10 +795,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted/50 font-semibold tracking-wide">조건 — 참일 때만 발동</span>
               {newConditions.length > 1 && (
-                <div className="flex items-center gap-0.5">
-                  <button onClick={() => setNewLogic('and')} className={`px-1.5 py-0.5 rounded text-[10px] ${newLogic === 'and' ? 'bg-primary text-white' : 'text-muted/60 hover:text-foreground'}`}>AND(전부)</button>
-                  <button onClick={() => setNewLogic('or')} className={`px-1.5 py-0.5 rounded text-[10px] ${newLogic === 'or' ? 'bg-primary text-white' : 'text-muted/60 hover:text-foreground'}`}>OR(하나)</button>
-                </div>
+                <span className="text-[9px] text-muted/40">조건 사이 <b className={newLogic === 'and' ? 'text-primary' : 'text-amber-600'}>{newLogic === 'and' ? 'AND' : 'OR'}</b> 배지를 눌러 전환</span>
               )}
             </div>
             {variables.length === 0 ? (
@@ -815,51 +805,60 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             ) : newConditions.map((c, i) => {
               const selVar = variables.find((v) => v.name === c.variable) ?? variables[0];
               const ctype = selVar?.type ?? 'number';
-              const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+              const inputCls = 'w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
               const upd = (patch: Partial<EventCondition>) => setNewConditions((cs) => cs.map((x, j) => (j === i ? { ...x, ...patch } : x)));
               return (
-                <div key={i} className="flex items-start gap-1">
-                  <div className="flex-1 space-y-1">
-                    <SelectBox
-                      value={c.variable || variables[0].name}
-                      onChange={(name) => {
-                        const nv = variables.find((v) => v.name === name);
-                        const t = nv?.type;
-                        const isNum = t === 'number' || t === 'timer';
-                        // 타입 바뀌면 연산/값을 호환되게 리셋
-                        const op: EventCondition['op'] = isNum ? '>=' : '==';
-                        const value: EventCondition['value'] = t === 'boolean' ? true : isNum ? 0 : t === 'enum' ? (nv?.options?.[0] ?? '') : t === 'color' ? '#ffffff' : '';
-                        upd({ variable: name, op, value });
-                      }}
-                      options={variables.map((v) => ({ value: v.name, label: `${v.name} (${VAR_TYPE_LABEL[v.type] ?? v.type})` }))}
-                    />
-                    <div className="grid grid-cols-2 gap-1">
+                <div key={i}>
+                  {/* 조건 사이 커넥터 — 전역 AND/OR를 눈에 보이게 + 클릭해 전환(색 구분) */}
+                  {i > 0 && (
+                    <div className="flex justify-center py-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setNewLogic(newLogic === 'and' ? 'or' : 'and')}
+                        title="클릭해서 AND ↔ OR 전환 (모든 조건에 공통 적용)"
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold border transition-colors ${newLogic === 'and' ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/25' : 'bg-amber-500/15 text-amber-600 border-amber-500/40 hover:bg-amber-500/25'}`}
+                      >
+                        {newLogic === 'and' ? '그리고 · AND' : '또는 · OR'}
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1">
+                    <div className="flex-1 min-w-0">
+                      <SelectBox
+                        value={c.variable || variables[0].name}
+                        onChange={(name) => {
+                          const nv = variables.find((v) => v.name === name);
+                          const t = nv?.type;
+                          const isNum = t === 'number' || t === 'timer';
+                          // 타입 바뀌면 연산/값을 호환되게 리셋
+                          const op: EventCondition['op'] = isNum ? '>=' : '==';
+                          const value: EventCondition['value'] = t === 'boolean' ? true : isNum ? 0 : t === 'enum' ? (nv?.options?.[0] ?? '') : t === 'color' ? '#ffffff' : '';
+                          upd({ variable: name, op, value });
+                        }}
+                        options={variables.map((v) => ({ value: v.name, label: `${v.name} (${VAR_TYPE_LABEL[v.type] ?? v.type})` }))}
+                      />
+                    </div>
+                    <div className="w-[4.75rem] shrink-0">
                       <SelectBox
                         value={c.op}
                         onChange={(op) => upd({ op: op as EventCondition['op'] })}
                         options={
-                          ctype === 'boolean' ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }]
-                          : ctype === 'string' ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }, { value: 'contains', label: '포함 ⊃' }]
-                          : (ctype === 'enum' || ctype === 'color') ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }]
-                          : [{ value: '>=', label: '이상 ≥' }, { value: '>', label: '초과 >' }, { value: '==', label: '같음 ==' }, { value: '<=', label: '이하 ≤' }, { value: '<', label: '미만 <' }, { value: '!=', label: '다름 !=' }]
+                          ctype === 'boolean' ? [{ value: '==', label: '== 같음' }, { value: '!=', label: '!= 다름' }]
+                          : ctype === 'string' ? [{ value: '==', label: '== 같음' }, { value: '!=', label: '!= 다름' }, { value: 'contains', label: '⊃ 포함' }]
+                          : (ctype === 'enum' || ctype === 'color') ? [{ value: '==', label: '== 같음' }, { value: '!=', label: '!= 다름' }]
+                          : [{ value: '>=', label: '≥ 이상' }, { value: '>', label: '> 초과' }, { value: '==', label: '== 같음' }, { value: '<=', label: '≤ 이하' }, { value: '<', label: '< 미만' }, { value: '!=', label: '!= 다름' }]
                         }
                       />
+                    </div>
+                    <div className="flex-1 min-w-0">
                       {ctype === 'boolean' ? (
-                        <SelectBox
-                          value={c.value === true ? 'true' : 'false'}
-                          onChange={(v) => upd({ value: v === 'true' })}
-                          options={[{ value: 'true', label: '참(true)' }, { value: 'false', label: '거짓(false)' }]}
-                        />
+                        <SelectBox value={c.value === true ? 'true' : 'false'} onChange={(v) => upd({ value: v === 'true' })} options={[{ value: 'true', label: '참' }, { value: 'false', label: '거짓' }]} />
                       ) : ctype === 'enum' ? (
-                        <SelectBox
-                          value={typeof c.value === 'string' ? c.value : (selVar?.options?.[0] ?? '')}
-                          onChange={(v) => upd({ value: v })}
-                          options={(selVar?.options ?? []).length ? (selVar?.options ?? []).map((o) => ({ value: o, label: o })) : [{ value: '', label: '(선택지 없음)' }]}
-                        />
+                        <SelectBox value={typeof c.value === 'string' ? c.value : (selVar?.options?.[0] ?? '')} onChange={(v) => upd({ value: v })} options={(selVar?.options ?? []).length ? (selVar?.options ?? []).map((o) => ({ value: o, label: o })) : [{ value: '', label: '(없음)' }]} />
                       ) : ctype === 'color' ? (
-                        <div className="flex items-center gap-1.5 bg-surface border border-border rounded-xs px-2 py-0.5">
-                          <input type="color" value={typeof c.value === 'string' && /^#/.test(c.value) ? c.value : '#ffffff'} onChange={(e) => upd({ value: e.target.value })} className="w-5 h-5 cursor-pointer bg-transparent" />
-                          <span className="text-[10px] text-muted tabular-nums">{typeof c.value === 'string' && /^#/.test(c.value) ? c.value : '#ffffff'}</span>
+                        <div className="flex items-center gap-1 bg-surface border border-border rounded-xs px-1.5 py-0.5">
+                          <input type="color" value={typeof c.value === 'string' && /^#/.test(c.value) ? c.value : '#ffffff'} onChange={(e) => upd({ value: e.target.value })} className="w-5 h-5 cursor-pointer bg-transparent shrink-0" />
+                          <span className="text-[9px] text-muted tabular-nums truncate">{typeof c.value === 'string' && /^#/.test(c.value) ? c.value : '#ffffff'}</span>
                         </div>
                       ) : ctype === 'string' ? (
                         <input type="text" value={typeof c.value === 'string' ? c.value : ''} onChange={(e) => upd({ value: e.target.value })} placeholder="텍스트" className={inputCls} />
@@ -867,8 +866,8 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                         <input type="number" value={typeof c.value === 'number' ? c.value : 0} onChange={(e) => upd({ value: Number(e.target.value) })} className={inputCls} />
                       )}
                     </div>
+                    <button onClick={() => setNewConditions((cs) => cs.filter((_, j) => j !== i))} title="조건 삭제" className="shrink-0 p-1 rounded text-muted/50 hover:text-red-500 hover:bg-red-500/10"><X size={12} /></button>
                   </div>
-                  <button onClick={() => setNewConditions((cs) => cs.filter((_, j) => j !== i))} title="조건 삭제" className="p-1 mt-0.5 rounded text-muted/50 hover:text-red-500 hover:bg-red-500/10"><X size={12} /></button>
                 </div>
               );
             })}
@@ -1013,27 +1012,21 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               </div>
               <div className="grid grid-cols-2 gap-1.5">
                 {dlg.advance === 'auto' && (
-                  <label className="flex items-center gap-1.5 text-[10px] text-muted/70">
-                    <span className="shrink-0">간격(초)</span>
-                    <input
-                      type="number" min={0.5} step={0.5}
-                      value={dlg.autoSec ?? 2.5}
-                      onChange={(e) => setDlg({ autoSec: parseFloat(e.target.value) || 2.5 })}
-                      onBlur={pushHistory}
-                      className="w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground outline-none focus:border-primary/50"
-                    />
-                  </label>
+                  <LabeledNum label="간격(초)" value={dlg.autoSec ?? 2.5}
+                    onChange={(v) => setDlg({ autoSec: v })} onCommit={pushHistory}
+                    min={0.5} precision={1} dragStep={0.5} />
                 )}
-                <label className="flex items-center gap-1.5 text-[10px] text-muted/70">
-                  <span className="shrink-0">화자</span>
+                {/* 화자 — 텍스트라 드래그 아이콘 없이 LabeledNum과 같은 스타일 */}
+                <div>
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">화자</span>
                   <input
                     value={dlg.speaker ?? ''}
                     onChange={(e) => setDlg({ speaker: e.target.value })}
                     onBlur={pushHistory}
                     placeholder="이름(선택)"
-                    className="w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground placeholder:text-muted/40 outline-none focus:border-primary/50"
+                    className="w-full border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-primary bg-muted/5 dark:bg-muted/10"
                   />
-                </label>
+                </div>
               </div>
               <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
                 <Toggle value={dlg.typing !== false} onChange={(v) => { setDlg({ typing: v }); pushHistory(); }} />
