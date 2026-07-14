@@ -227,7 +227,13 @@ number 기반 + 뷰어 자동 감소 틱, 연산 start/pause/reset, 조건 `<= 0
 
 ### 진행 상태
 - [x] **Phase 1 — 2026-07-14 구현** (스키마+스토어+런타임 + Environment "Game Logic" 섹션). tsc 클린, 브라우저 실동작 확인 대기.
-- [~] **Phase 2 부분 — 2026-07-14** (액션 팔레트 확장: SceneLogicSection에 swap_model·play_sound 추가). **남음**: GNB Logic 전용 탭, EventsSection 폼 완전 일반화(obj 의존 제거), go_to_scene/spawn/move 등 나머지 액션.
+- [x] **Phase 2 — 2026-07-14 구현** (GNB Logic 탭 + 액션 팔레트 확장). **남음(선택)**: EventsSection 폼 완전 일반화(현재 SceneLogicSection 자체 완결로 대체), go_to_scene/move/focus 등 나머지 액션.
+
+### Phase 2 구현 내역 (2026-07-14)
+- **GNB 'Logic' 전용 탭**: `GnbTab`에 `'logic'` 추가, EditorGnb에 Cpu 아이콘 RailButton, LeftPanel이 `tab==='logic'`이면 신규 `panels/LogicPanel` 렌더(게임 변수 + 전역 규칙 + HUD 한 곳). **EnvironmentPanel에서 게임변수·HUD·SceneLogicSection 3블록(~290줄) 제거** → 게임 로직은 이제 Logic 탭이 단일 홈. 추출: `GameVariablesSection.tsx`·`HudSection.tsx`(EnvironmentPanel 인라인을 컴포넌트화, 스토어 직접 read) + 기존 `SceneLogicSection`. EnvironmentPanel 미사용 import/destructure 정리.
+- **액션 팔레트 확장**: SceneLogicSection에 swap_model·play_sound·spawn_object(타이머 적 스폰 등) 추가.
+- 검증: tsc 클린 + editor 컴파일 307. **브라우저 실동작 대기**(Logic 탭 렌더·변수/규칙/HUD 편집·스크롤).
+- **spawn `@변수` 완료(2026-07-14)**: `spawn_object` value에 선택적 3번째 세그먼트 `|모델소스` 추가(`@변수`(asset) 또는 에셋 id) → 스폰 클론의 `assetId` 교체. 런타임+EventsSection/SceneLogicSection 폼(모델 선택 드롭다운). "변수가 가리키는 모델을 스폰".
 
 ### Phase 1 구현 내역 (2026-07-14)
 - **스키마**(`scene.ts`): `ProjectSceneSchema.sceneEvents?: EventSchema[]` + normalizeSceneData 통과.

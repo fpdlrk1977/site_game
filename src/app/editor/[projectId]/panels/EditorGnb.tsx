@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
-import { Layers, Package, Settings, UserRound, Share2, Globe, LogOut, SlidersHorizontal, Sun, Moon } from 'lucide-react';
+import { Layers, Package, Cpu, Settings, UserRound, Share2, Globe, LogOut, SlidersHorizontal, Sun, Moon } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useDropdown } from '@/hooks/useDropdown';
 import { useSceneStore } from '@/store/sceneStore';
@@ -12,7 +12,7 @@ import { createBrowserSupabase } from '@/lib/supabase';
 import { ShareModal } from '@/app/dashboard/ShareModal';
 import { CustomDomainModal } from '@/app/dashboard/CustomDomainModal';
 
-export type GnbTab = 'objects' | 'assets';
+export type GnbTab = 'objects' | 'assets' | 'logic';
 
 interface Props {
   tab: GnbTab;
@@ -195,6 +195,12 @@ export function EditorGnb({ tab, panelOpen, onTabClick, projectName }: Props) {
         label="Assets"
         active={panelOpen && tab === 'assets'}
         onClick={() => onTabClick('assets')}
+      />
+      <RailButton
+        icon={<Cpu size={16} />}
+        label="Logic"
+        active={panelOpen && tab === 'logic'}
+        onClick={() => onTabClick('logic')}
       />
       <div className="flex-1" />
       <SettingsMenu projectName={projectName} />

@@ -3,11 +3,15 @@
 import { useSceneStore } from '@/store/sceneStore';
 import { HierarchyPanel } from './HierarchyPanel';
 import { AssetBrowser } from './AssetBrowser';
+import { LogicPanel } from './LogicPanel';
 import type { GnbTab } from './EditorGnb';
 
-// 콘텐츠(Objects 트리 / Assets 브라우저)는 GNB 레일에서 선택된 탭이 결정한다.
+// 콘텐츠(Objects 트리 / Assets 브라우저 / Game Logic)는 GNB 레일에서 선택된 탭이 결정한다.
 export function LeftPanel({ tab }: { tab: GnbTab }) {
   const { objects } = useSceneStore();
+
+  // Logic 탭은 자체 헤더/스크롤을 가진 전용 패널
+  if (tab === 'logic') return <LogicPanel />;
 
   return (
     <div className="flex flex-col overflow-hidden h-full">

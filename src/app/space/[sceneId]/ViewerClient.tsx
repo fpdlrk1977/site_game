@@ -597,15 +597,18 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         onVarsChanged();
       } else if (ev.action === 'spawn_object' && ev.value) {
         // value = "템플릿objectId|dx,dy,dz" — 템플릿을 복제 생성(원본 위치 + 오프셋). Phase 2.
-        const [templateId, offStr] = ev.value.split('|');
+        // value = "템플릿id|dx,dy,dz|모델소스?"  모델소스(선택): '@변수'(asset 변수) 또는 에셋 id → 스폰 모델 교체. 변수 Phase C.
+        const [templateId, offStr, modelSrc = ''] = ev.value.split('|');
         const tmpl = scene.objects.find((o) => o.id === templateId);
         if (tmpl) {
           const [dx, dy, dz] = (offStr ?? '').split(',').map((s) => parseFloat(s));
+          const swapAssetId = modelSrc.startsWith('@') ? String(varsRef.current[modelSrc.slice(1)] ?? '') : modelSrc;
           const clone: ObjectNodeSchema = {
             ...(structuredClone(tmpl) as ObjectNodeSchema),
             id: (crypto.randomUUID?.() ?? `spawn_${Date.now()}_${Math.random().toString(36).slice(2)}`),
             visible: true,
             parentId: null,
+            ...(swapAssetId ? { assetId: swapAssetId } : {}),
             position: {
               x: tmpl.position.x + (Number.isFinite(dx) ? dx : 0),
               y: tmpl.position.y + (Number.isFinite(dy) ? dy : 0),

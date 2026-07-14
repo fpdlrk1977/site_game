@@ -487,31 +487,44 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             );
           }
           if (newAction === 'spawn_object') {
-            // value = "템플릿id|dx,dy,dz"
-            const [tid = '', offStr = ''] = newValue.split('|');
+            // value = "템플릿id|dx,dy,dz|모델소스?"
+            const [tid = '', offStr = '', modelSrc = ''] = newValue.split('|');
             const [ox = '', oy = '', oz = ''] = offStr.split(',');
             const spawnTargets = objects.filter((o) => !o.isGroup);
             const inputCls = 'w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary';
-            const setSpawn = (id: string, x: string, y: string, z: string) => setNewValue(`${id}|${x || 0},${y || 0},${z || 0}`);
+            const setSpawn = (id: string, x: string, y: string, z: string, src: string) => setNewValue(`${id}|${x || 0},${y || 0},${z || 0}${src ? `|${src}` : ''}`);
+            const cur = tid || spawnTargets[0]?.id || '';
+            const assetVars = variables.filter((v) => v.type === 'asset');
+            const modelAssets = assets.filter((a) => a.type === 'model' || a.type === 'character' || !a.type);
             if (spawnTargets.length === 0) {
               return <p className="text-muted text-[10px] bg-surface border border-amber-500/40 rounded-xs px-2 py-1.5">생성할 오브젝트(템플릿)가 없어요. 먼저 오브젝트를 하나 만들어 두세요(원본은 숨겨두고 템플릿으로 씀).</p>;
             }
             return (
               <div className="space-y-1.5">
                 <SelectBox
-                  value={tid || spawnTargets[0].id}
-                  onChange={(id) => setSpawn(id, ox, oy, oz)}
+                  value={cur}
+                  onChange={(id) => setSpawn(id, ox, oy, oz, modelSrc)}
                   options={spawnTargets.map((o) => ({ value: o.id, label: o.name }))}
                 />
                 <div>
                   <span className="text-[10px] text-muted/50 block mb-0.5">위치 오프셋 (원본 기준 X, Y, Z)</span>
                   <div className="grid grid-cols-3 gap-1">
-                    <input type="number" step={0.5} value={ox} onChange={(e) => setSpawn(tid || spawnTargets[0].id, e.target.value, oy, oz)} placeholder="X" className={inputCls} />
-                    <input type="number" step={0.5} value={oy} onChange={(e) => setSpawn(tid || spawnTargets[0].id, ox, e.target.value, oz)} placeholder="Y" className={inputCls} />
-                    <input type="number" step={0.5} value={oz} onChange={(e) => setSpawn(tid || spawnTargets[0].id, ox, oy, e.target.value)} placeholder="Z" className={inputCls} />
+                    <input type="number" step={0.5} value={ox} onChange={(e) => setSpawn(cur, e.target.value, oy, oz, modelSrc)} placeholder="X" className={inputCls} />
+                    <input type="number" step={0.5} value={oy} onChange={(e) => setSpawn(cur, ox, e.target.value, oz, modelSrc)} placeholder="Y" className={inputCls} />
+                    <input type="number" step={0.5} value={oz} onChange={(e) => setSpawn(cur, ox, oy, e.target.value, modelSrc)} placeholder="Z" className={inputCls} />
                   </div>
                 </div>
-                <p className="text-muted/60 text-[10px]">선택 오브젝트의 <b>복사본</b>을 생성합니다. 원본을 숨겨(Visibility) 템플릿으로 쓰면 좋아요. (그룹·자식은 미지원 — 단일 오브젝트 권장)</p>
+                {(assetVars.length > 0 || modelAssets.length > 0) && (
+                  <div>
+                    <span className="text-[10px] text-muted/50 block mb-0.5">모델 (선택 — 변수로 다른 모델 스폰)</span>
+                    <SelectBox
+                      value={modelSrc}
+                      onChange={(s) => setSpawn(cur, ox, oy, oz, s)}
+                      options={[{ value: '', label: '(원본 모델 그대로)' }, ...assetVars.map((v) => ({ value: `@${v.name}`, label: `변수: ${v.name}` })), ...modelAssets.map((a) => ({ value: a.id, label: `모델: ${a.name}` }))]}
+                    />
+                  </div>
+                )}
+                <p className="text-muted/60 text-[10px]">선택 오브젝트의 <b>복사본</b>을 생성합니다. 모델을 지정하면 <b>@변수(asset)</b>가 가리키는 모델로 스폰. 원본을 숨겨 템플릿으로 쓰면 좋아요.</p>
               </div>
             );
           }

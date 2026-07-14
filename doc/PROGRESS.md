@@ -61,9 +61,10 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **변수 Phase C (asset 모델 변수 + swap_model)**: `GameVariable.type`에 `'asset'`(값=에셋 id). 액션 `swap_model`(value=`"대상id|소스"`, 소스 `@변수` 또는 에셋 id) → 런타임 `modelOverride`가 effectiveScene에서 assetId 교체. **`@변수` 간접지정 첫 도입**(오브젝트 참조 변수의 토대). 에디터: 변수 카드 asset=모델 드롭다운, EventsSection swap_model=대상+소스 2단.
 - **변수 Phase D (timer)**: `type:'timer'`(number 기반) — 런타임 1초 카운트다운(0 정지, 게임오버 시 멈춤), `timer<=0 → game_lose` 등 워처로. 에디터: 초 입력, 조건/연산은 number 취급.
 - **변수 Phase E (scope/지속성)**: `GameVariable.scope: scene|global|persistent`. global=sessionStorage(씬 이동 유지)·persistent=localStorage(최고점수·이어하기), 키 `p3v:{projectId}:{name}`. init 저장값 우선, onVarsChanged 저장, restart는 scene+global 리셋·persistent 유지. 에디터 변수 카드 '유지 범위' 드롭다운.
-- **게임 컨트롤러 Phase 2 부분**: SceneLogicSection 액션 팔레트 확장(swap_model·play_sound 추가). **남음**: GNB Logic 전용 탭·EventsSection 폼 일반화·나머지 액션(go_to_scene/spawn/move).
+- **게임 컨트롤러 Phase 2**: **GNB 'Logic' 전용 탭** 신설(EditorGnb Cpu 버튼 → LeftPanel이 신규 `panels/LogicPanel` 렌더 = 게임변수+전역규칙+HUD 한 곳). EnvironmentPanel에서 게임 로직 3블록 제거(추출: `GameVariablesSection`·`HudSection`·기존 `SceneLogicSection`) → 로직은 Logic 탭이 단일 홈. SceneLogicSection 액션에 swap_model·play_sound·spawn_object 추가.
+- **spawn `@변수`**: `spawn_object` value 3번째 세그먼트 `|모델소스`(@변수/에셋)로 스폰 클론 모델 교체.
 - **하위호환**: 전부 옵셔널 추가(normalize 통과). 기존 씬·이벤트 무변경.
-- **남은 로드맵**: 게임 컨트롤러 GNB 탭 + 폼 일반화 · spawn `@변수` · (변수 로드맵은 A~E 전부 완료).
+- **남은 로드맵(선택)**: EventsSection 폼 완전 일반화(현재 SceneLogicSection 자체완결로 대체됨) · 컨트롤러 나머지 액션(go_to_scene/move/focus). **변수 A~E·게임 컨트롤러 Phase 1~2 전부 완료.**
 
 ---
 

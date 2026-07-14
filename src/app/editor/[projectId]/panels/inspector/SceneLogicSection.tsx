@@ -34,6 +34,7 @@ const ACT_OPTIONS: { value: Act; label: string }[] = [
   { value: 'set_passable', label: '통과 가능' },
   { value: 'set_solid', label: '통과 불가' },
   { value: 'despawn_object', label: '오브젝트 제거' },
+  { value: 'spawn_object', label: '오브젝트 생성(스폰)' },
   { value: 'swap_model', label: '모델 교체' },
   { value: 'play_sound', label: '사운드 재생' },
 ];
@@ -53,7 +54,7 @@ function defaultCondition(v?: GameVariable): EventCondition {
   };
 }
 
-export function SceneLogicSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+export function SceneLogicSection() {
   const { sceneEvents, variables, objects, assets, addSceneEvent, updateSceneEvent, removeSceneEvent } = useSceneStore();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -115,18 +116,16 @@ export function SceneLogicSection({ open, onToggle }: { open: boolean; onToggle:
         <SectionHeader
           title="Game Logic"
           hint="오브젝트에 매달리지 않은 씬 전역 규칙. '점수 3이면 게이트 열림' 같은 공유 규칙을 한 곳에 모읍니다. 트리거: 시작하면 / N초마다 / 변수 바뀌면."
-          isOpen={open}
-          onToggle={onToggle}
         />
         <button
-          onClick={(e) => { e.stopPropagation(); if (!open) onToggle(); openAdd(); }}
+          onClick={openAdd}
           title="규칙 추가"
-          className="absolute top-2.5 right-3 p-1 rounded-xs text-muted/60 hover:text-primary hover:bg-primary/10 transition-colors"
+          className="absolute top-2.5 right-3 w-6 h-6 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-primary/10 transition-colors"
         >
-          <Plus size={14} />
+          <Plus size={15} />
         </button>
       </div>
-      {open && (
+      {(sceneEvents.length > 0 || showForm) && (
         <div className="px-3 pb-4 space-y-2">
           {/* 규칙 목록 (문장 카드) */}
           {sceneEvents.length > 0 && sceneEvents.map((ev) => {
@@ -147,10 +146,6 @@ export function SceneLogicSection({ open, onToggle }: { open: boolean; onToggle:
               </div>
             );
           })}
-
-          {sceneEvents.length === 0 && !showForm && (
-            <p className="text-[10px] text-muted/50">아직 전역 규칙이 없어요. <b>+</b>로 추가하세요. (예: 시작하면 팝업, 점수 도달 시 승리)</p>
-          )}
 
           {/* 추가/수정 폼 */}
           {showForm && (
@@ -287,6 +282,30 @@ export function SceneLogicSection({ open, onToggle }: { open: boolean; onToggle:
                 <input type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="메시지 (선택)" className={inputCls} />
               ) : act === 'show_popup' ? (
                 <textarea value={value} onChange={(e) => setValue(e.target.value)} placeholder="팝업에 표시할 내용/URL" rows={2} className={inputCls} />
+              ) : act === 'spawn_object' ? (
+                (() => {
+                  const [tid = '', offStr = '', modelSrc = ''] = value.split('|');
+                  const [ox = '', oy = '', oz = ''] = offStr.split(',');
+                  const targets = objects.filter((o) => !o.isGroup);
+                  const setSp = (id: string, x: string, y: string, z: string, src: string) => setValue(`${id}|${x || 0},${y || 0},${z || 0}${src ? `|${src}` : ''}`);
+                  const cur = tid || targets[0]?.id || '';
+                  const assetVars = variables.filter((v) => v.type === 'asset');
+                  const modelAssets = assets.filter((a) => a.type === 'model' || a.type === 'character' || !a.type);
+                  if (targets.length === 0) return <p className="text-[10px] text-amber-500/80">먼저 오브젝트를 하나 만들어 템플릿으로 쓰세요.</p>;
+                  return (
+                    <div className="space-y-1.5">
+                      <SelectBox value={cur} onChange={(id) => setSp(id, ox, oy, oz, modelSrc)} options={targets.map((o) => ({ value: o.id, label: o.name }))} placeholder="생성할 템플릿..." />
+                      <div className="grid grid-cols-3 gap-1">
+                        <input type="number" step={0.5} value={ox} onChange={(e) => setSp(cur, e.target.value, oy, oz, modelSrc)} placeholder="X" className={inputCls} />
+                        <input type="number" step={0.5} value={oy} onChange={(e) => setSp(cur, ox, e.target.value, oz, modelSrc)} placeholder="Y" className={inputCls} />
+                        <input type="number" step={0.5} value={oz} onChange={(e) => setSp(cur, ox, oy, e.target.value, modelSrc)} placeholder="Z" className={inputCls} />
+                      </div>
+                      {(assetVars.length > 0 || modelAssets.length > 0) && (
+                        <SelectBox value={modelSrc} onChange={(s) => setSp(cur, ox, oy, oz, s)} options={[{ value: '', label: '(원본 모델 그대로)' }, ...assetVars.map((v) => ({ value: `@${v.name}`, label: `변수: ${v.name}` })), ...modelAssets.map((a) => ({ value: a.id, label: `모델: ${a.name}` }))]} />
+                      )}
+                    </div>
+                  );
+                })()
               ) : act === 'play_sound' ? (
                 <input type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="오디오 URL" className={inputCls} />
               ) : act === 'swap_model' ? (

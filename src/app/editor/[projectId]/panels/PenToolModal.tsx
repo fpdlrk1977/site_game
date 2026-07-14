@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { PenTool, X, Check } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
+import { RangeSlider } from '@/components/ui/RangeSlider';
 
 const SIZE = 460;         // 캔버스(모달) 크기 ↑
 const CENTER = SIZE / 2;
@@ -349,11 +350,7 @@ export function PenToolModal() {
         </p>
 
         {mode === 'extrude' && (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-[10px] text-muted shrink-0">두께</span>
-            <input type="range" min={0.1} max={2} step={0.05} value={depth} onChange={(e) => setDepth(+e.target.value)} className="flex-1 accent-primary" />
-            <span className="text-[10px] text-muted tabular-nums w-8 text-right">{depth.toFixed(2)}</span>
-          </div>
+          <RangeSlider className="mt-2" label="두께" value={depth} onChange={setDepth} min={0.1} max={2} step={0.05} showValue precision={2} />
         )}
 
         <div className="flex gap-1.5 mt-3">

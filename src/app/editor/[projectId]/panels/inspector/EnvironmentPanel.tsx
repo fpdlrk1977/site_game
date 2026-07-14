@@ -27,9 +27,10 @@ import { useSceneStore } from "@/store/sceneStore";
 import { useToast } from "@/hooks/useToast";
 import { createBrowserSupabase } from "@/lib/supabase";
 import { SelectBox } from "@/components/ui/SelectBox";
+import { RangeSlider } from "@/components/ui/RangeSlider";
+import { InfoHint } from "@/components/ui/InfoHint";
 import { SectionHeader, GroupBox, LabeledNum, XYZRow, Toggle, NumInput } from "./ui";
-import { SceneLogicSection } from "./SceneLogicSection";
-import type { EnvSchema, HdrPreset, GroundPreset, PopupConfig, PostProcessPreset, GameVariable, HudElement } from "@/types/scene";
+import type { EnvSchema, HdrPreset, GroundPreset, PopupConfig, PostProcessPreset } from "@/types/scene";
 
 const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<EnvSchema> }[] = [
   // 기본값 복귀 — HDR/라이트/노출을 DEFAULT_ENVIRONMENT 상태로 되돌린다(무드 해제).
@@ -185,14 +186,6 @@ export function EnvironmentPanel() {
     pushHistory,
     assets,
     projectId,
-    variables,
-    addVariable,
-    updateVariable,
-    removeVariable,
-    hudElements,
-    addHudElement,
-    updateHudElement,
-    removeHudElement,
   } = useSceneStore();
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(true);
@@ -729,21 +722,22 @@ export function EnvironmentPanel() {
                 </div>
               </div>
             </div>
-            {/* 노출(Exposure) — NeutralToneMapping의 밝기. 1=기본. 씬 전체 톤 조절 */}
+            {/* 노출(Exposure) — 씬 전체 밝기. 1=기본. 안내는 아이콘 툴팁으로. */}
             <div className="pt-1">
-              <LabeledNum
-                label="Exposure"
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Exposure</span>
+                <InfoHint text="Overall scene brightness. Uses Linear tone mapping so colors render as set. If some areas blow out to white, lower the exposure." />
+              </div>
+              <RangeSlider
                 value={env.toneMappingExposure ?? 1}
                 onChange={(v) => updateEnvironment({ toneMappingExposure: v })}
                 onCommit={pushHistory}
                 min={0.3}
                 max={2}
+                step={0.02}
+                showValue
                 precision={2}
-                dragStep={0.02}
               />
-              <p className="text-[10px] text-muted/60 mt-1">
-                Overall scene brightness. Uses Linear tone mapping so colors render as set. If some areas blow out to white, lower the exposure.
-              </p>
             </div>
             {/* 접지 그림자 — 오브젝트가 바닥에 붙은 느낌. 기본 꺼짐, 켜서 확인 */}
             <label className="flex items-center justify-between cursor-pointer pt-2">
@@ -1375,296 +1369,7 @@ export function EnvironmentPanel() {
         )}
       </GroupBox>
 
-      {/* 게임 변수 — 점수·체력 등 상태. GAME_LOGIC.md Phase 1 */}
-      <GroupBox>
-        <div className="relative">
-          <SectionHeader
-            title="게임 변수"
-            hint="점수·체력·아이템 보유 같은 게임 상태값. 이벤트의 '변수 변경' 액션으로 값을 바꾸고, 이벤트 '조건'으로 값에 따라 발동을 걸 수 있어요. '변수 변경 시' 트리거로 '점수 10이 되면 문 열기' 같은 반응형 규칙도 가능. HUD를 켜면 뷰어 화면에 값이 표시됩니다."
-          />
-          <button
-            onClick={addVariable}
-            title="변수 추가"
-            className="absolute top-2.5 right-3 w-6 h-6 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-primary/10 transition-colors"
-          >
-            <Plus size={15} />
-          </button>
-        </div>
-        {variables.length > 0 && (
-          <div className="px-3 pb-4 space-y-2">
-            {variables.map((v) => (
-              <div key={v.id} className="bg-surface border border-border rounded-xs p-2 space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <input
-                    value={v.name}
-                    onChange={(e) => updateVariable(v.id, { name: e.target.value })}
-                    onBlur={pushHistory}
-                    placeholder="변수명 (예: score)"
-                    className="flex-1 bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <button
-                    onClick={() => removeVariable(v.id)}
-                    title="변수 삭제"
-                    className="p-1 rounded-xs text-muted/60 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <SelectBox
-                    value={v.type}
-                    onChange={(t) => {
-                      updateVariable(v.id, { type: t as GameVariable["type"] });
-                      pushHistory();
-                    }}
-                    options={[
-                      { value: "number", label: "숫자" },
-                      { value: "boolean", label: "참/거짓" },
-                      { value: "string", label: "텍스트" },
-                      { value: "enum", label: "선택지(상태)" },
-                      { value: "color", label: "색" },
-                      { value: "asset", label: "모델(에셋)" },
-                      { value: "timer", label: "타이머(카운트다운)" },
-                    ]}
-                  />
-                  {v.type === "boolean" ? (
-                    <SelectBox
-                      value={v.initial === true ? "true" : "false"}
-                      onChange={(b) => {
-                        updateVariable(v.id, { initial: b === "true" });
-                        pushHistory();
-                      }}
-                      options={[
-                        { value: "false", label: "초기: 거짓" },
-                        { value: "true", label: "초기: 참" },
-                      ]}
-                    />
-                  ) : (v.type === "number" || v.type === "timer") ? (
-                    <input
-                      type="number"
-                      value={typeof v.initial === "number" ? v.initial : 0}
-                      onChange={(e) => updateVariable(v.id, { initial: Number(e.target.value) })}
-                      onBlur={pushHistory}
-                      placeholder={v.type === "timer" ? "시작 초" : "초기값"}
-                      className="w-full bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  ) : v.type === "enum" ? (
-                    <SelectBox
-                      value={typeof v.initial === "string" ? v.initial : (v.options?.[0] ?? "")}
-                      onChange={(val) => { updateVariable(v.id, { initial: val }); pushHistory(); }}
-                      options={(v.options ?? []).length ? (v.options ?? []).map((o) => ({ value: o, label: `초기: ${o}` })) : [{ value: "", label: "(선택지 없음)" }]}
-                    />
-                  ) : v.type === "color" ? (
-                    <div className="flex items-center gap-1.5 bg-background border border-border rounded-xs px-2 py-0.5">
-                      <input
-                        type="color"
-                        value={typeof v.initial === "string" && v.initial ? v.initial : "#ffffff"}
-                        onChange={(e) => updateVariable(v.id, { initial: e.target.value })}
-                        onBlur={pushHistory}
-                        className="w-5 h-5 cursor-pointer bg-transparent"
-                      />
-                      <span className="text-[10px] text-muted tabular-nums">{typeof v.initial === "string" ? v.initial : "#ffffff"}</span>
-                    </div>
-                  ) : v.type === "asset" ? (
-                    <SelectBox
-                      value={typeof v.initial === "string" ? v.initial : ""}
-                      onChange={(val) => { updateVariable(v.id, { initial: val }); pushHistory(); }}
-                      options={assets.filter((a) => a.type === "model" || a.type === "character" || !a.type).length
-                        ? assets.filter((a) => a.type === "model" || a.type === "character" || !a.type).map((a) => ({ value: a.id, label: a.name }))
-                        : [{ value: "", label: "(모델 에셋 없음)" }]}
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={typeof v.initial === "string" ? v.initial : ""}
-                      onChange={(e) => updateVariable(v.id, { initial: e.target.value })}
-                      onBlur={pushHistory}
-                      placeholder="초기 텍스트"
-                      className="w-full bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  )}
-                </div>
-                {/* enum 선택지(상태) 목록 편집 */}
-                {v.type === "enum" && (
-                  <div className="space-y-1 pt-0.5">
-                    <span className="text-[10px] text-muted/60">선택지(상태) 목록</span>
-                    {(v.options ?? []).map((opt, oi) => (
-                      <div key={oi} className="flex items-center gap-1">
-                        <input
-                          value={opt}
-                          onChange={(e) => { const opts = [...(v.options ?? [])]; opts[oi] = e.target.value; updateVariable(v.id, { options: opts }); }}
-                          onBlur={pushHistory}
-                          placeholder={`상태 ${oi + 1} (예: locked)`}
-                          className="flex-1 bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                        <button
-                          onClick={() => { const opts = (v.options ?? []).filter((_, j) => j !== oi); updateVariable(v.id, { options: opts.length ? opts : [""] }); pushHistory(); }}
-                          title="선택지 삭제"
-                          className="p-1 rounded-xs text-muted/60 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => { updateVariable(v.id, { options: [...(v.options ?? []), ""] }); pushHistory(); }}
-                      className="text-[10px] text-primary hover:underline"
-                    >
-                      + 선택지 추가
-                    </button>
-                  </div>
-                )}
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-muted/60 shrink-0">유지 범위</span>
-                  <SelectBox
-                    value={v.scope ?? "scene"}
-                    onChange={(sc) => { updateVariable(v.id, { scope: sc as GameVariable["scope"] }); pushHistory(); }}
-                    options={[
-                      { value: "scene", label: "씬 (기본, 리셋)" },
-                      { value: "global", label: "전역 (씬 이동 유지)" },
-                      { value: "persistent", label: "저장 (최고점수 등)" },
-                    ]}
-                    fullWidth={false}
-                  />
-                </div>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-[10px] text-muted/60">화면 HUD에 표시</span>
-                  <Toggle
-                    value={v.showInHud ?? false}
-                    onChange={(on) => {
-                      updateVariable(v.id, { showInHud: on });
-                      pushHistory();
-                    }}
-                  />
-                </label>
-              </div>
-            ))}
-          </div>
-        )}
-      </GroupBox>
-
-      {/* HUD 위젯 — 변수를 텍스트/체력바/목숨으로 화면 표시. GAME_LOGIC.md Phase 2 */}
-      <GroupBox>
-        <div className="relative">
-          <SectionHeader
-            title="HUD (화면 표시)"
-            hint="게임 변수를 화면 구석에 텍스트·체력바·목숨 아이콘으로 표시합니다. 각 위젯을 변수에 연결하고 종류·위치·색을 정하세요. (변수의 '화면 HUD에 표시' 간단 텍스트와 별개로, 더 꾸민 위젯)"
-          />
-          <button
-            onClick={addHudElement}
-            disabled={variables.length === 0}
-            title="HUD 위젯 추가"
-            className="absolute top-2.5 right-3 w-6 h-6 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Plus size={15} />
-          </button>
-        </div>
-        {hudElements.length > 0 && (
-          <div className="px-3 pb-4 space-y-2">
-            {hudElements.map((el) => (
-              <div key={el.id} className="bg-surface border border-border rounded-xs p-2 space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <SelectBox
-                    value={el.variable || variables[0]?.name || ""}
-                    onChange={(name) => {
-                      updateHudElement(el.id, { variable: name });
-                      pushHistory();
-                    }}
-                    options={variables.length ? variables.map((v) => ({ value: v.name, label: v.name })) : [{ value: "", label: "(변수 없음)" }]}
-                  />
-                  <button
-                    onClick={() => removeHudElement(el.id)}
-                    title="위젯 삭제"
-                    className="p-1 rounded-xs text-muted/60 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <SelectBox
-                    value={el.kind}
-                    onChange={(k) => {
-                      updateHudElement(el.id, { kind: k as HudElement["kind"] });
-                      pushHistory();
-                    }}
-                    options={[
-                      { value: "text", label: "텍스트" },
-                      { value: "bar", label: "체력바" },
-                      { value: "lives", label: "목숨(아이콘)" },
-                    ]}
-                  />
-                  <SelectBox
-                    value={el.position}
-                    onChange={(p) => {
-                      updateHudElement(el.id, { position: p as HudElement["position"] });
-                      pushHistory();
-                    }}
-                    options={[
-                      { value: "top-left", label: "↖ 좌상" },
-                      { value: "top-center", label: "↑ 상단" },
-                      { value: "top-right", label: "↗ 우상" },
-                      { value: "bottom-left", label: "↙ 좌하" },
-                      { value: "bottom-center", label: "↓ 하단" },
-                      { value: "bottom-right", label: "↘ 우하" },
-                    ]}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-1.5 items-center">
-                  <input
-                    value={el.label ?? ""}
-                    onChange={(e) => updateHudElement(el.id, { label: e.target.value || undefined })}
-                    onBlur={pushHistory}
-                    placeholder="라벨(선택)"
-                    className="bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  {(el.kind === "bar" || el.kind === "lives") && (
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-muted/60 shrink-0">최대</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={el.max ?? (el.kind === "bar" ? 100 : 3)}
-                        onChange={(e) => updateHudElement(el.id, { max: Number(e.target.value) })}
-                        onBlur={pushHistory}
-                        className="w-full bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </div>
-                  )}
-                </div>
-                {(el.kind === "bar" || el.kind === "lives") && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted/60">색</span>
-                    <input
-                      type="color"
-                      value={el.color ?? "#ef4444"}
-                      onChange={(e) => updateHudElement(el.id, { color: e.target.value })}
-                      onBlur={pushHistory}
-                      className="w-8 h-6 rounded border border-border bg-transparent cursor-pointer"
-                    />
-                    {el.kind === "lives" && (
-                      <SelectBox
-                        value={el.icon ?? "heart"}
-                        onChange={(ic) => {
-                          updateHudElement(el.id, { icon: ic as HudElement["icon"] });
-                          pushHistory();
-                        }}
-                        options={[
-                          { value: "heart", label: "하트" },
-                          { value: "star", label: "별" },
-                          { value: "circle", label: "원" },
-                        ]}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </GroupBox>
-
-      {/* 게임 컨트롤러 — 씬 전역 로직 규칙. GAME_LOGIC.md 게임 컨트롤러 Phase 1 */}
-      <SceneLogicSection open={envOpen("gamelogic")} onToggle={() => envToggle("gamelogic")} />
+      {/* 게임 로직(게임 변수·전역 규칙·HUD)은 GNB 'Logic' 탭으로 이동 → panels/LogicPanel */}
 
       {/* 씬 메모 */}
       <GroupBox>

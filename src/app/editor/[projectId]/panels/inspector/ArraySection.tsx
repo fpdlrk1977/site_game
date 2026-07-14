@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { CircleDot, Grid2x2 } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { RangeSlider } from '@/components/ui/RangeSlider';
 import { SectionHeader, GroupBox, LabeledNum, XYZRow } from './ui';
 import type { ObjectNodeSchema } from '@/types/scene';
 
@@ -33,7 +35,7 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                   </button>
                 ))}
               </div>
-              <LabeledNum label="Count (incl. source)" value={arrayCount} onChange={(v) => setArrayCount(Math.max(2, Math.min(100, Math.round(v))))} onCommit={() => {}} min={2} max={100} precision={0} dragStep={1} />
+              <RangeSlider label="Count (incl. source)" value={arrayCount} onChange={(v) => setArrayCount(Math.max(2, Math.min(100, Math.round(v))))} min={2} max={100} step={1} showValue precision={0} />
               {arrayMode === 'linear' ? (
                 <XYZRow label="Spacing (m)" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
                   onChangeX={(v) => setArrayOffset((o) => ({ ...o, x: v }))}
@@ -57,29 +59,30 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                 </>
               )}
               {/* 위 설정을 공유하는 두 방식 — 한 번 복제(독립) vs 라이브 클로너(계속 편집) */}
-              <button
-                onClick={() => {
-                  arraySelected(arrayCount, arrayOffset, arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : null);
-                  addToast(`Created ${arrayCount - 1} independent copies`, 'success');
-                }}
-                className="w-full py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] font-medium transition-colors"
-              >
-<span className="inline-flex items-center gap-1.5">{arrayMode === 'radial' ? <CircleDot size={13} /> : <Grid2x2 size={13} />} Duplicate once ({arrayCount}, independent)</span>
-              </button>
-              {!obj.parentId && (
+              <Tooltip wide className="w-full" content="Creates independent objects now. The count can't be changed later (they become normal objects).">
                 <button
                   onClick={() => {
-                    makeCloner({ mode: arrayMode, count: arrayCount, offset: arrayOffset, ...(arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : {}) });
-                    addToast('Created a live cloner', 'success');
+                    arraySelected(arrayCount, arrayOffset, arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : null);
+                    addToast(`Created ${arrayCount - 1} independent copies`, 'success');
                   }}
-                  className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
+                  className="w-full py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] font-medium transition-colors"
                 >
-<span className="inline-flex items-center gap-1.5"><Grid2x2 size={13} /> Make live cloner ({arrayCount})</span>
+<span className="inline-flex items-center gap-1.5">{arrayMode === 'radial' ? <CircleDot size={13} /> : <Grid2x2 size={13} />} Duplicate once ({arrayCount}, independent)</span>
                 </button>
+              </Tooltip>
+              {!obj.parentId && (
+                <Tooltip wide className="w-full" content="Change count and spacing anytime, and editing the source updates all copies in real time.">
+                  <button
+                    onClick={() => {
+                      makeCloner({ mode: arrayMode, count: arrayCount, offset: arrayOffset, ...(arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : {}) });
+                      addToast('Created a live cloner', 'success');
+                    }}
+                    className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
+                  >
+<span className="inline-flex items-center gap-1.5"><Grid2x2 size={13} /> Make live cloner ({arrayCount})</span>
+                  </button>
+                </Tooltip>
               )}
-              <p className="text-[10px] text-muted/50">
-                <b>Duplicate once</b> = creates independent objects now (count can&apos;t change later). <b>Live cloner</b> = change count and spacing anytime, and editing the source updates them all.
-              </p>
             </div>
         </GroupBox>
   );

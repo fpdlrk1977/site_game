@@ -9,6 +9,7 @@ import { tryEmbedTextures } from '@/lib/glbEmbed';
 import { uploadGlbBlob, uploadAudioFile, uploadImageTexture } from '@/lib/uploadAsset';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { RangeSlider } from '@/components/ui/RangeSlider';
 import type { AssetRefSchema, ContentType, ParticlePreset, LightType, HdrPreset, MaterialOverride } from '@/types/scene';
 import {
   Package, PersonStanding, Music, Play, Square, X, Check, Plus, Type, Image as ImageIcon, Video,
@@ -548,14 +549,9 @@ export function AssetBrowser() {
                             { k: 'clearcoat', label: '코팅광택', def: 0 },
                             { k: 'transmission', label: '투과(유리)', def: 0 },
                           ] as const).map(({ k, label, def }) => (
-                            <label key={k} className="flex items-center gap-2 text-[10px] text-muted">
-                              <span className="w-14 shrink-0">{label}</span>
-                              <input type="range" min={0} max={1} step={0.02} value={m.material[k] ?? def}
-                                onChange={(e) => setM({ [k]: parseFloat(e.target.value) })}
-                                onMouseUp={pushHistory} onTouchEnd={pushHistory}
-                                className="flex-1 accent-primary" />
-                              <span className="w-7 text-right font-mono">{(m.material[k] ?? def).toFixed(2)}</span>
-                            </label>
+                            <RangeSlider key={k} label={label} value={m.material[k] ?? def}
+                              onChange={(v) => setM({ [k]: v })} onCommit={pushHistory}
+                              min={0} max={1} step={0.02} showValue precision={2} />
                           ))}
                           <label className="flex items-center gap-2 text-[10px] text-muted">
                             <span className="w-14 shrink-0">자체발광</span>
