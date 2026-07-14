@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { GlbClipPicker } from './GlbClipPicker';
-import { SectionHeader, GroupBox, Toggle, LabeledNum, XYZRow } from './ui';
+import { SectionHeader, GroupBox, Toggle, LabeledNum, LabeledText, XYZRow, TEXT_INPUT_CLASS } from './ui';
 import { DraggablePopup } from '@/components/ui/DraggablePopup';
 import type { ObjectNodeSchema, EventSchema, EventCondition, EventAction, DialogueConfig, PopupConfig, GameVariable } from '@/types/scene';
 
@@ -149,7 +149,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
     const gate = {
       condition: undefined as EventCondition | undefined,
       conditions: conds.length > 0 ? conds : undefined,
-      conditionLogic: conds.length > 1 ? newLogic : undefined,
+      conditionLogic: undefined, // 연결어는 각 조건의 logic(혼합)으로 저장 — 전역 로직 미사용
       elseAction: conds.length > 0 && newElse ? newElse.action : undefined,
       elseValue: conds.length > 0 && newElse ? newElse.value.trim() : undefined,
     };
@@ -372,7 +372,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             const setSV = (name: string, o: string, a: string) => setNewValue(`${name}|${o}|${a}`);
             const selVar = variables.find((v) => v.name === vn) ?? variables[0];
             const vtype = selVar?.type ?? 'number';
-            const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+            const inputCls = TEXT_INPUT_CLASS;
             if (variables.length === 0) {
               return (
                 <p className="text-muted text-[10px] bg-surface border border-amber-500/40 rounded-xs px-2 py-1.5">
@@ -484,7 +484,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             const [tid = '', offStr = '', modelSrc = ''] = newValue.split('|');
             const [ox = '', oy = '', oz = ''] = offStr.split(',');
             const spawnTargets = objects.filter((o) => !o.isGroup);
-            const inputCls = 'w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary';
+            const inputCls = TEXT_INPUT_CLASS;
             const setSpawn = (id: string, x: string, y: string, z: string, src: string) => setNewValue(`${id}|${x || 0},${y || 0},${z || 0}${src ? `|${src}` : ''}`);
             const cur = tid || spawnTargets[0]?.id || '';
             const assetVars = variables.filter((v) => v.type === 'asset');
@@ -529,7 +529,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   onChange={(e) => setNewValue(e.target.value)}
                   rows={5}
                   placeholder={"api.add('score', 1);\nif (api.get('score') >= 10) api.win('클리어!');"}
-                  className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] font-mono placeholder-muted/50 focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+                  className={`${TEXT_INPUT_CLASS} font-mono resize-y`}
                 />
                 <p className="text-muted/60 text-[10px] leading-relaxed">
                   사용: <b>api.get/set/add</b>(변수) · <b>api.show/hide</b>(id) · <b>api.despawn</b>(id) · <b>api.popup</b>(내용) · <b>api.sound</b>(url) · <b>api.win/lose</b>(메시지) · <b>self</b>(이 오브젝트). 제작자 자신의 코드가 뷰어에서 실행됩니다.
@@ -541,7 +541,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             const p = newPopup ?? {};
             const mode = p.mode ?? 'auto';
             const setP = (patch: Partial<PopupConfig>) => setNewPopup({ ...p, ...patch });
-            const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+            const inputCls = TEXT_INPUT_CLASS;
             return (
               <div className="space-y-2">
                 <SelectBox
@@ -617,7 +617,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     <span className="text-[10px] text-muted/50 block mb-1">배경색 (선택)</span>
                     <div className="flex items-center gap-1.5">
                       <input type="color" value={p.bg || '#ffffff'} onChange={(e) => setP({ bg: e.target.value })} className="w-7 h-7 rounded-xs border border-border bg-surface shrink-0 cursor-pointer" />
-                      <input type="text" value={p.bg ?? ''} onChange={(e) => setP({ bg: e.target.value })} placeholder="#ffffff (기본 흰색)" className={inputCls} />
+                      <input type="text" value={p.bg ?? '#ffffff'} onChange={(e) => setP({ bg: e.target.value })} className={inputCls} />
                     </div>
                   </label>
                   <label className="flex items-center justify-between cursor-pointer">
@@ -724,7 +724,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
                   placeholder="또는 https://... (mp3/wav/ogg) 직접 입력"
-                  className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                  className={TEXT_INPUT_CLASS}
                   onKeyDown={(e) => e.key === 'Enter' && addEvent()}
                 />
                 <p className="text-muted/50 text-[10px]">트리거 발동 시 오디오를 재생합니다. Audio 탭에서 올린 파일을 고르거나 URL을 직접 넣을 수 있어요. 재생 버튼으로 미리듣기.</p>
@@ -795,7 +795,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted/50 font-semibold tracking-wide">조건 — 참일 때만 발동</span>
               {newConditions.length > 1 && (
-                <span className="text-[9px] text-muted/40">조건 사이 <b className={newLogic === 'and' ? 'text-primary' : 'text-amber-600'}>{newLogic === 'and' ? 'AND' : 'OR'}</b> 배지를 눌러 전환</span>
+                <span className="text-[9px] text-muted/40">앞 <b className="text-primary">AND</b>/<b className="text-amber-600">OR</b> 배지로 연결 (왼→오 순서)</span>
               )}
             </div>
             {variables.length === 0 ? (
@@ -805,24 +805,21 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             ) : newConditions.map((c, i) => {
               const selVar = variables.find((v) => v.name === c.variable) ?? variables[0];
               const ctype = selVar?.type ?? 'number';
-              const inputCls = 'w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+              const inputCls = TEXT_INPUT_CLASS;
               const upd = (patch: Partial<EventCondition>) => setNewConditions((cs) => cs.map((x, j) => (j === i ? { ...x, ...patch } : x)));
               return (
-                <div key={i}>
-                  {/* 조건 사이 커넥터 — 전역 AND/OR를 눈에 보이게 + 클릭해 전환(색 구분) */}
+                <div key={i} className="flex items-center gap-1">
+                  {/* 연결어 배지 — 2번째 조건부터 행 앞에. 조건별 AND/OR(혼합 가능), 클릭해 전환 */}
                   {i > 0 && (
-                    <div className="flex justify-center py-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setNewLogic(newLogic === 'and' ? 'or' : 'and')}
-                        title="클릭해서 AND ↔ OR 전환 (모든 조건에 공통 적용)"
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold border transition-colors ${newLogic === 'and' ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/25' : 'bg-amber-500/15 text-amber-600 border-amber-500/40 hover:bg-amber-500/25'}`}
-                      >
-                        {newLogic === 'and' ? '그리고 · AND' : '또는 · OR'}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => upd({ logic: (c.logic ?? 'and') === 'and' ? 'or' : 'and' })}
+                      title="직전 조건과 AND/OR로 연결 (클릭해 전환)"
+                      className={`shrink-0 w-9 py-1.5 rounded-xs text-[9px] font-bold border transition-colors ${(c.logic ?? 'and') === 'and' ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/25' : 'bg-amber-500/15 text-amber-600 border-amber-500/40 hover:bg-amber-500/25'}`}
+                    >
+                      {(c.logic ?? 'and') === 'and' ? 'AND' : 'OR'}
+                    </button>
                   )}
-                  <div className="flex items-center gap-1">
                     <div className="flex-1 min-w-0">
                       <SelectBox
                         value={c.variable || variables[0].name}
@@ -867,7 +864,6 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                       )}
                     </div>
                     <button onClick={() => setNewConditions((cs) => cs.filter((_, j) => j !== i))} title="조건 삭제" className="shrink-0 p-1 rounded text-muted/50 hover:text-red-500 hover:bg-red-500/10"><X size={12} /></button>
-                  </div>
                 </div>
               );
             })}
@@ -894,7 +890,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     options={ELSE_ACTION_OPTIONS}
                   />
                   {(() => {
-                    const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
+                    const inputCls = TEXT_INPUT_CLASS;
                     if (OBJECT_TARGET_ACTIONS.has(newElse.action)) {
                       return <SelectBox value={newElse.value} onChange={(v) => setNewElse({ ...newElse, value: v })} options={objects.map((o) => ({ value: o.id, label: o.id === obj?.id ? `${o.name} (이 오브젝트)` : o.name }))} placeholder="대상 오브젝트..." />;
                     }
@@ -959,7 +955,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     updateObject(obj.id, { interactRange: v === '' ? undefined : Math.max(0.5, parseFloat(v)) });
                   }}
                   onBlur={pushHistory}
-                  className="flex-1 bg-surface border border-border rounded-xs px-2 py-1.5 text-[11px] text-foreground placeholder:text-muted/40 focus:border-primary/50 outline-none"
+                  className="flex-1 border border-border rounded-xs px-2 py-1.5 text-[11px] text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-primary bg-muted/5 dark:bg-muted/10"
                 />
                 {obj.interactRange != null && (
                   <button
@@ -983,7 +979,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                 onBlur={pushHistory}
                 rows={3}
                 placeholder={'한 줄에 문장 하나 (순서대로 표시)\n예: 안녕하세요!\n무엇을 도와드릴까요?'}
-                className="w-full bg-surface border border-border rounded-xs px-2 py-1.5 text-[11px] text-foreground placeholder:text-muted/40 focus:border-primary/50 outline-none resize-y leading-relaxed"
+                className={`${TEXT_INPUT_CLASS} resize-y leading-relaxed`}
               />
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
@@ -1016,17 +1012,8 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     onChange={(v) => setDlg({ autoSec: v })} onCommit={pushHistory}
                     min={0.5} precision={1} dragStep={0.5} />
                 )}
-                {/* 화자 — 텍스트라 드래그 아이콘 없이 LabeledNum과 같은 스타일 */}
-                <div>
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">화자</span>
-                  <input
-                    value={dlg.speaker ?? ''}
-                    onChange={(e) => setDlg({ speaker: e.target.value })}
-                    onBlur={pushHistory}
-                    placeholder="이름(선택)"
-                    className="w-full border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-primary bg-muted/5 dark:bg-muted/10"
-                  />
-                </div>
+                {/* 화자 — 공용 LabeledText (라벨 + 텍스트 입력) */}
+                <LabeledText label="화자" value={dlg.speaker ?? ''} onChange={(v) => setDlg({ speaker: v })} onCommit={pushHistory} placeholder="이름(선택)" />
               </div>
               <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
                 <Toggle value={dlg.typing !== false} onChange={(v) => { setDlg({ typing: v }); pushHistory(); }} />
@@ -1044,7 +1031,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     onChange={(e) => setDlg({ endButtonLabel: e.target.value })}
                     onBlur={pushHistory}
                     placeholder="확인 (기본)"
-                    className="w-full bg-surface border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground placeholder:text-muted/40 outline-none focus:border-primary/50"
+                    className={TEXT_INPUT_CLASS}
                   />
                 </label>
               )}
@@ -1069,9 +1056,12 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   : OBJECT_TARGET_ACTIONS.has(ev.action) ? objectName(ev.value)
                   : ev.value)
                 : '';
-              // 조건(단서) — 다중 조건 AND/OR 또는 레거시 단일 condition
+              // 조건(단서) — 혼합 AND/OR(조건별 logic) 또는 레거시 단일 condition. 각 조건 앞에 연결어를 끼워 표시.
               const conds = ev.conditions && ev.conditions.length ? ev.conditions : (ev.condition ? [ev.condition] : []);
-              const condText = conds.map((c) => `${c.variable} ${c.op} ${c.value}`).join(ev.conditionLogic === 'or' ? ' 또는 ' : ' 그리고 ');
+              const condText = conds.map((c, i) => {
+                const conn = i === 0 ? '' : ((c.logic ?? ev.conditionLogic ?? 'and') === 'or' ? '또는 ' : '그리고 ');
+                return `${conn}${c.variable} ${c.op} ${c.value}`;
+              }).join(' ');
               return (
               <div key={ev.id} className={`bg-surface border rounded-xs p-2.5 transition-colors ${editingId === ev.id ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border/80'}`}>
                 <div className="flex items-start justify-between gap-2">

@@ -176,6 +176,36 @@ export function LabeledNum({
   );
 }
 
+// ── 라벨 + 텍스트 입력 (LabeledNum의 텍스트 버전, 드래그 아이콘 없음) ──
+//   onChange=실시간, onCommit=blur(=pushHistory 등). 공용 인풋 스타일이라 매번 className 안 넣어도 됨.
+export const TEXT_INPUT_CLASS = 'w-full border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-primary bg-muted/5 dark:bg-muted/10';
+export function LabeledText({
+  label,
+  value,
+  onChange,
+  onCommit,
+  placeholder,
+}: {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  onCommit?: () => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      {label && <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">{label}</span>}
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onCommit}
+        placeholder={placeholder}
+        className={TEXT_INPUT_CLASS}
+      />
+    </div>
+  );
+}
+
 // ── XYZ 행 ─────────────────────────────────────────────────────
 export function XYZRow({
   label,

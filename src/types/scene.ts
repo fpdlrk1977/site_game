@@ -159,6 +159,9 @@ export interface EventCondition {
   variable: string; // GameVariable.name
   op: '==' | '!=' | '>' | '>=' | '<' | '<=' | 'contains'; // contains=문자열 포함
   value: number | boolean | string;
+  // 이 조건을 '직전 조건'과 잇는 연결어(2번째 조건부터 의미). 미설정 = 레거시 conditionLogic(전역) 폴백 → 'and'.
+  //   혼합 지원: 왼쪽→오른쪽 순서 평가 (A logic B logic C ...). 첫 조건의 logic은 무시.
+  logic?: 'and' | 'or';
 }
 
 // show_popup 팝업의 표시 방식/스타일 (Phase 1).

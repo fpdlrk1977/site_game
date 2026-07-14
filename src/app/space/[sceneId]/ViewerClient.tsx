@@ -390,7 +390,14 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   function evalGate(ev: EventSchema): boolean {
     const list = ev.conditions && ev.conditions.length > 0 ? ev.conditions : (ev.condition ? [ev.condition] : []);
     if (list.length === 0) return true;
-    return (ev.conditionLogic ?? 'and') === 'or' ? list.some(evalCondition) : list.every(evalCondition);
+    // 혼합 AND/OR — 왼쪽→오른쪽 순차 평가. 각 조건의 logic(직전과의 연결어), 없으면 레거시 전역 conditionLogic → 'and'.
+    let acc = evalCondition(list[0]);
+    for (let i = 1; i < list.length; i++) {
+      const connector = list[i].logic ?? ev.conditionLogic ?? 'and';
+      const cur = evalCondition(list[i]);
+      acc = connector === 'or' ? (acc || cur) : (acc && cur);
+    }
+    return acc;
   }
   // 값(리터럴 숫자) 또는 다른 변수명을 숫자로 해석 — 변수↔변수 연산 지원(Phase B).
   function resolveNum(raw: string): number {
