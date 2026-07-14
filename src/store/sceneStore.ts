@@ -18,6 +18,7 @@ import {
   GameVariable,
   HudElement,
   EventSchema,
+  AnimClip,
   MaterialOverride,
   DEFAULT_ENVIRONMENT,
   DEFAULT_PHYSICS,
@@ -59,6 +60,8 @@ interface HistoryEntry {
   hudElements?: HudElement[];
   // 씬 전역 규칙 스냅샷(게임 컨트롤러 액션만 채움). 미설정 = 안 바꿈.
   sceneEvents?: EventSchema[];
+  // 애니메이션 클립 스냅샷(애니 액션만 채움). 미설정 = 안 바꿈.
+  animClips?: AnimClip[];
 }
 
 interface SceneState {
@@ -78,6 +81,8 @@ interface SceneState {
   hudElements: HudElement[];
   // 게임 컨트롤러(씬 전역 로직) — 오브젝트에 매달리지 않은 규칙들. GAME_LOGIC.md.
   sceneEvents: EventSchema[];
+  // 사용자 저작 애니메이션 클립(키프레임). ANIMATION.md.
+  animClips: AnimClip[];
   selectedId: string | null;
   selectedIds: string[];
   // 그룹 격리(isolation) 스코프 — 더블클릭으로 '진입'한 그룹 id. 설정 시 단일 클릭이 이 그룹 안에서만
@@ -221,6 +226,10 @@ interface SceneActions {
   addSceneEvent: (ev: EventSchema) => void;
   updateSceneEvent: (id: string, patch: Partial<EventSchema>) => void;
   removeSceneEvent: (id: string) => void;
+  // ── 애니메이션 클립 ──
+  addAnimClip: (clip: AnimClip) => void;
+  updateAnimClip: (id: string, patch: Partial<AnimClip>) => void;
+  removeAnimClip: (id: string) => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -399,6 +408,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   variables: [],
   hudElements: [],
   sceneEvents: [],
+  animClips: [],
   selectedId: null,
   groupScope: null,
   transformMode: 'translate',
@@ -446,6 +456,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       variables: data.variables ?? [],
       hudElements: data.hudElements ?? [],
       sceneEvents: data.sceneEvents ?? [],
+      animClips: data.animClips ?? [],
       selectedId: null,
       selectedIds: [],
       groupScope: null,
@@ -1513,6 +1524,27 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     set({ sceneEvents: sceneEvents.filter((e) => e.id !== id), isModified: true, ...withHistory({ objects, environment, sceneEvents }, past) });
   },
 
+  // ── 애니메이션 클립 ── (ANIMATION.md Phase 1)
+  addAnimClip: (clip) => {
+    const { animClips, objects, environment, past } = get();
+    set({ animClips: [...animClips, clip], isModified: true, ...withHistory({ objects, environment, animClips }, past) });
+  },
+  updateAnimClip: (id, patch) => {
+    // 지연 커밋(_prevSnapshot) — 필드 편집 시 키 입력마다 undo 안 쌓임. 커밋은 pushHistory에서.
+    const { animClips, objects, environment, _prevSnapshot } = get();
+    if (!animClips.some((c) => c.id === id)) return;
+    set({
+      _prevSnapshot: _prevSnapshot ?? { objects, environment, animClips },
+      animClips: animClips.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      isModified: true,
+    });
+  },
+  removeAnimClip: (id) => {
+    const { animClips, objects, environment, past } = get();
+    if (!animClips.some((c) => c.id === id)) return;
+    set({ animClips: animClips.filter((c) => c.id !== id), isModified: true, ...withHistory({ objects, environment, animClips }, past) });
+  },
+
   updateEnvironment: (patch) => {
     const { environment, objects, _prevSnapshot } = get();
     set({
@@ -1529,7 +1561,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   undo: () => {
-    const { past, objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents, future } = get();
+    const { past, objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents, animClips, future } = get();
     if (past.length === 0) return;
     const prev = past[past.length - 1];
     set({
@@ -1541,15 +1573,16 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       variables: prev.variables ?? variables,
       hudElements: prev.hudElements ?? hudElements,
       sceneEvents: prev.sceneEvents ?? sceneEvents,
+      animClips: prev.animClips ?? animClips,
       past: past.slice(0, -1),
-      future: [{ objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents }, ...future],
+      future: [{ objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents, animClips }, ...future],
       isModified: true,
       _prevSnapshot: null,
     });
   },
 
   redo: () => {
-    const { past, objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents, future } = get();
+    const { past, objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents, animClips, future } = get();
     if (future.length === 0) return;
     const next = future[0];
     set({
@@ -1560,7 +1593,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       variables: next.variables ?? variables,
       hudElements: next.hudElements ?? hudElements,
       sceneEvents: next.sceneEvents ?? sceneEvents,
-      past: pushPast(past, { objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents }),
+      animClips: next.animClips ?? animClips,
+      past: pushPast(past, { objects, environment, prefabs, materialAssets, variables, hudElements, sceneEvents, animClips }),
       future: future.slice(1),
       isModified: true,
       _prevSnapshot: null,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { MobileControls } from './MobileControls';
@@ -8,7 +8,28 @@ import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
 import { effectiveDialogue } from './useObjectDialogue';
 import { Heart, Star, Circle, RotateCcw } from 'lucide-react';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3, GameVariable } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3, GameVariable, AnimKeyframe, AnimTrack } from '@/types/scene';
+
+// ── 애니 클립 키프레임 보간 (ANIMATION.md) — 순수 함수 ──
+function _lerp(a: number, b: number, f: number) { return a + (b - a) * f; }
+function _lerpVec(a: Vector3 | undefined, b: Vector3 | undefined, f: number): Vector3 | undefined {
+  if (!a) return b; if (!b) return a;
+  return { x: _lerp(a.x, b.x, f), y: _lerp(a.y, b.y, f), z: _lerp(a.z, b.z, f) };
+}
+type ClipSample = { position?: Vector3; rotation?: Vector3; scale?: Vector3 };
+function sampleTrack(track: AnimTrack, t: number, easing?: string): ClipSample {
+  const ks = track.keys;
+  if (!ks || ks.length === 0) return {};
+  const pick = (k: AnimKeyframe): ClipSample => ({ position: k.position, rotation: k.rotation, scale: k.scale });
+  if (t <= ks[0].time) return pick(ks[0]);
+  if (t >= ks[ks.length - 1].time) return pick(ks[ks.length - 1]);
+  let i = 0; while (i < ks.length - 1 && ks[i + 1].time <= t) i++;
+  const k0 = ks[i], k1 = ks[i + 1];
+  const span = k1.time - k0.time;
+  let f = span > 0 ? (t - k0.time) / span : 0;
+  if (easing === 'easeInOut') f = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+  return { position: _lerpVec(k0.position, k1.position, f), rotation: _lerpVec(k0.rotation, k1.rotation, f), scale: _lerpVec(k0.scale, k1.scale, f) };
+}
 
 // 이 액션들이 (플레이 모드에서) 발동되면 상호작용이 끝날 때까지(팝업 닫기/Esc) 캐릭터 이동을 잠근다.
 // 새로 "발동 중엔 못 움직이게" 하고 싶은 액션이 생기면 여기에 추가만 하면 자동 적용된다.
@@ -121,6 +142,27 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   const [passOverride, setPassOverride] = useState<Record<string, boolean>>({});
   // 런타임 모델 교체 오버라이드 (swap_model — 변수/에셋으로 오브젝트 모델 바꾸기) — objectId → assetId. 변수 Phase C.
   const [modelOverride, setModelOverride] = useState<Record<string, string>>({});
+  // 애니 클립 재생 오버라이드 (play_clip) — objectId → {position?,rotation?,scale?}. ANIMATION.md. 비파괴(rest 트랜스폼 위에 얹음).
+  const [clipOverride, setClipOverride] = useState<Record<string, ClipSample>>({});
+  const playingClips = useRef<Map<string, number>>(new Map()); // clipId → 시작시각(performance.now)
+  const clipRaf = useRef<number | null>(null);
+  const animClipsRef = useRef(scene.animClips); animClipsRef.current = scene.animClips; // 최신 클립(스테일 클로저 방지)
+  const tickClips = useCallback(() => {
+    const now = performance.now();
+    const clips = animClipsRef.current ?? [];
+    const ov: Record<string, ClipSample> = {};
+    for (const [clipId, startedAt] of Array.from(playingClips.current.entries())) {
+      const clip = clips.find((c) => c.id === clipId);
+      if (!clip) { playingClips.current.delete(clipId); continue; }
+      let t = (now - startedAt) / 1000;
+      if (clip.loop) { t = clip.duration > 0 ? t % clip.duration : 0; }
+      else if (t >= clip.duration) { t = clip.duration; playingClips.current.delete(clipId); } // 끝나면 마지막 포즈 유지
+      for (const tr of clip.tracks) ov[tr.objectId] = { ...ov[tr.objectId], ...sampleTrack(tr, t, clip.easing) };
+    }
+    setClipOverride((prev) => ({ ...prev, ...ov })); // 병합 — 끝난 클립의 마지막 포즈 유지
+    clipRaf.current = playingClips.current.size > 0 ? requestAnimationFrame(tickClips) : null;
+  }, []);
+  useEffect(() => () => { if (clipRaf.current != null) cancelAnimationFrame(clipRaf.current); }, []); // 언마운트 정리
   const passableIds = useMemo(() => {
     const s = new Set<string>();
     for (const id in passOverride) if (passOverride[id]) s.add(id);
@@ -273,7 +315,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     const hasMatRefs = !!matAssets && matAssets.length > 0 && scene.objects.some((o) => o.materialId);
     const hasSpawn = spawned.length > 0 || despawnedIds.size > 0;
     const hasModel = Object.keys(modelOverride).length > 0;
-    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0 && !hasMatRefs && !hasSpawn && !hasModel) return scene;
+    const hasClip = Object.keys(clipOverride).length > 0;
+    if (Object.keys(visOverride).length === 0 && Object.keys(posOverride).length === 0 && !hasMatRefs && !hasSpawn && !hasModel && !hasClip) return scene;
     const all = spawned.length > 0 ? [...scene.objects, ...spawned] : scene.objects;
     return {
       ...scene,
@@ -281,14 +324,17 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         .filter((o) => !despawnedIds.has(o.id))
         .map((o) => {
           const vis = o.id in visOverride ? visOverride[o.id] : o.visible;
-          const pos = posOverride[o.id] ?? o.position;
+          const co = clipOverride[o.id]; // 애니 클립 재생 중 트랜스폼(있는 속성만 덮음)
+          const pos = co?.position ?? posOverride[o.id] ?? o.position;
+          const rot = co?.rotation ?? o.rotation;
+          const scl = co?.scale ?? o.scale;
           const resolvedMat = hasMatRefs && o.materialId ? matAssets!.find((m) => m.id === o.materialId)?.material : undefined;
           const swapAsset = modelOverride[o.id]; // swap_model로 바뀐 모델 에셋 id
-          if (vis === o.visible && pos === o.position && !resolvedMat && !swapAsset) return o;
-          return { ...o, visible: vis, position: pos, ...(resolvedMat ? { material: resolvedMat } : {}), ...(swapAsset ? { assetId: swapAsset } : {}) };
+          if (vis === o.visible && pos === o.position && rot === o.rotation && scl === o.scale && !resolvedMat && !swapAsset) return o;
+          return { ...o, visible: vis, position: pos, rotation: rot, scale: scl, ...(resolvedMat ? { material: resolvedMat } : {}), ...(swapAsset ? { assetId: swapAsset } : {}) };
         }),
     };
-  }, [scene, visOverride, posOverride, spawned, despawnedIds, modelOverride]);
+  }, [scene, visOverride, posOverride, spawned, despawnedIds, modelOverride, clipOverride]);
   // move_object로 이동 중인 오브젝트 id 집합 — PlayCanvas가 그룹을 kinematic 강체로 라우팅(콜라이더 동반).
   const movedIds = useMemo(() => new Set(Object.keys(posOverride)), [posOverride]);
 
@@ -492,6 +538,9 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     setPassOverride({});
     setPosOverride({});
     setModelOverride({});
+    setClipOverride({});
+    playingClips.current.clear();
+    if (clipRaf.current != null) { cancelAnimationFrame(clipRaf.current); clipRaf.current = null; }
     posCurrent.current = {};
     moveAnims.current.clear();
     setGameResult(null);
@@ -629,6 +678,12 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         const [targetId, source = ''] = ev.value.split('|');
         const assetId = source.startsWith('@') ? String(varsRef.current[source.slice(1)] ?? '') : source;
         if (targetId && assetId) setModelOverride((m) => ({ ...m, [targetId]: assetId }));
+      } else if (ev.action === 'play_clip' && ev.value) {
+        // value = clipId — 사용자 저작 애니 클립 재생(키프레임 보간). ANIMATION.md.
+        if ((scene.animClips ?? []).some((c) => c.id === ev.value)) {
+          playingClips.current.set(ev.value, performance.now());
+          if (clipRaf.current == null) clipRaf.current = requestAnimationFrame(tickClips);
+        }
       } else if (ev.action === 'despawn_object') {
         // value = 대상 objectId (빈 값이면 자기 자신). Phase 2.
         const target = ev.value || obj.id;

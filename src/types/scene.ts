@@ -111,6 +111,7 @@ export type EventAction =
   | 'game_win'
   | 'game_lose'
   | 'swap_model'
+  | 'play_clip'
   | 'run_script';
 
 export interface EventSchema {
@@ -428,6 +429,29 @@ export interface ProjectSceneSchema {
   // 게임 컨트롤러(전역 로직) — 오브젝트에 매달리지 않은 씬 전역 규칙. scene_start/on_timer/variable_changed 트리거.
   //   EventSchema 재사용. 미설정 = 없음(하위호환). GAME_LOGIC.md '게임 컨트롤러' 참조.
   sceneEvents?: EventSchema[];
+  // 사용자 저작 애니메이션 클립(키프레임). 미설정 = 없음(하위호환). ANIMATION.md 참조. 이벤트 액션 play_clip으로 재생.
+  animClips?: AnimClip[];
+}
+
+// ── 애니메이션 클립(키프레임) — ANIMATION.md. 포즈=키 1개, 상태전환=키 2개, 타임라인=키 N개(같은 데이터). ──
+export interface AnimKeyframe {
+  time: number;        // 초(클립 시작 기준)
+  position?: Vector3;
+  rotation?: Vector3;  // 도(deg) — 에디터 회전과 동일 단위
+  scale?: Vector3;
+}
+export interface AnimTrack {
+  objectId: string;        // 대상 오브젝트(그룹 자식 포함)
+  keys: AnimKeyframe[];    // time 오름차순
+}
+export interface AnimClip {
+  id: string;
+  name: string;
+  duration: number;        // 초
+  loop?: boolean;
+  tracks: AnimTrack[];     // 오브젝트별 트랙(단일=1개)
+  rootId?: string | null;  // 스코프(그룹/프리팹 재사용용). 미설정/null=씬 전역
+  easing?: 'linear' | 'easeInOut'; // 클립 기본 이징(키별 곡선은 후속)
 }
 
 // HUD 위젯 — 게임 변수 하나를 화면에 시각화. (GAME_LOGIC.md Phase 2)
@@ -530,6 +554,7 @@ export function normalizeSceneData(
       variables: Array.isArray(raw.variables) ? (raw.variables as GameVariable[]) : undefined,
       hudElements: Array.isArray(raw.hudElements) ? (raw.hudElements as HudElement[]) : undefined,
       sceneEvents: Array.isArray(raw.sceneEvents) ? (raw.sceneEvents as EventSchema[]) : undefined,
+      animClips: Array.isArray(raw.animClips) ? (raw.animClips as AnimClip[]) : undefined,
     };
   }
   return makeEmptySceneData(projectId, sceneId);

@@ -52,6 +52,7 @@ const ACTION_LABELS: Record<string, string> = {
   game_win: '게임 승리',
   game_lose: '게임 오버',
   swap_model: '모델 교체',
+  play_clip: '애니 재생',
   run_script: '스크립트 실행',
 };
 
@@ -85,7 +86,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
   onToggle: () => void;
   onPreview: (p: { content: string; config?: PopupConfig }) => void;
 }) {
-  const { objects, assets, projectId, sceneId, environment, updateObject, pushHistory, variables } = useSceneStore();
+  const { objects, assets, projectId, sceneId, environment, updateObject, pushHistory, variables, animClips } = useSceneStore();
   const { addToast } = useToast();
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newTrigger, setNewTrigger] = useState<EventSchema['trigger']>('click');
@@ -279,6 +280,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               { value: 'spawn_object', label: '오브젝트 생성(스폰)' },
               { value: 'despawn_object', label: '오브젝트 제거(디스폰)' },
               { value: 'swap_model', label: '모델 교체' },
+              { value: 'play_clip', label: '애니 재생 (키프레임)' },
               { value: 'game_win', label: '게임 승리' },
               { value: 'game_lose', label: '게임 오버' },
               { value: 'run_script', label: '스크립트 실행 (고급)' },
@@ -360,6 +362,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             : newAction === 'set_variable' ? '변경할 변수'
             : newAction === 'spawn_object' ? '생성할 템플릿 오브젝트'
             : newAction === 'swap_model' ? '모델 교체 (대상 + 소스)'
+            : newAction === 'play_clip' ? '재생할 애니메이션'
             : newAction === 'game_win' || newAction === 'game_lose' ? '표시할 메시지 (선택)'
             : newAction === 'run_script' ? '자바스크립트 코드'
             : OBJECT_TARGET_ACTIONS.has(newAction) ? '대상 오브젝트'
@@ -477,6 +480,13 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                 />
                 <p className="text-muted/60 text-[10px]">대상의 모델을 <b>asset 변수</b>가 가리키는 것 또는 <b>선택한 에셋</b>으로 교체(플레이/뷰어). 변수(@)면 런타임 값 사용.</p>
               </div>
+            );
+          }
+          if (newAction === 'play_clip') {
+            return animClips.length === 0 ? (
+              <p className="text-muted text-[10px] bg-surface border border-amber-500/40 rounded-xs px-2 py-1.5">아직 애니메이션이 없어요. 오브젝트(또는 그룹) 선택 후 인스펙터 <b>Animation</b> 섹션에서 만드세요.</p>
+            ) : (
+              <SelectBox value={newValue} onChange={setNewValue} options={animClips.map((c) => ({ value: c.id, label: c.name }))} placeholder="재생할 애니 선택..." />
             );
           }
           if (newAction === 'spawn_object') {

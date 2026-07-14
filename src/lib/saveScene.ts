@@ -27,6 +27,7 @@ export function buildSceneData(): ProjectSceneSchema {
     variables: s.variables,
     hudElements: s.hudElements,
     sceneEvents: s.sceneEvents,
+    animClips: s.animClips,
   };
 }
 

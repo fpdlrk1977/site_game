@@ -13,6 +13,7 @@ import { SectionHeader, GroupBox } from './inspector/ui';
 import { EnvironmentPanel } from './inspector/EnvironmentPanel';
 import { GlbClipPicker, useGlbClipNames } from './inspector/GlbClipPicker';
 import { MotionSection } from './inspector/MotionSection';
+import { AnimationClipSection } from './inspector/AnimationClipSection';
 import { PhysicsSection } from './inspector/PhysicsSection';
 import { LightSection } from './inspector/LightSection';
 import { ContentSection } from './inspector/ContentSection';
@@ -68,7 +69,7 @@ function InspectorInner() {
   // 섹션 접기 상태 — 점진적 공개(STEP 3): 기본은 Transform·Material·Content·Geometry·Visibility만 펼치고
   // 고급 섹션(물리·모션·이벤트·파티클·서브디비전·애니메이션·배열)은 접어 둔다. 값이 있으면 헤더에 점(dot)으로 표시.
   const [collapsed, setCollapsed] = useState<Set<string>>(
-    new Set(['array', 'subdivision', 'particle', 'motion', 'events', 'animation']),
+    new Set(['array', 'subdivision', 'particle', 'motion', 'events', 'animation', 'animclip']),
   );
   const toggleSection = (key: string) =>
     setCollapsed((prev) => {
@@ -271,6 +272,9 @@ function InspectorInner() {
 
         {/* Motion — 앰비언트 애니메이션 (라이트 제외) */}
         {!obj.light && <MotionSection obj={obj} open={isOpen('motion')} onToggle={() => toggleSection('motion')} />}
+
+        {/* Animation — 사용자 저작 키프레임 클립 (라이트 제외, 그룹 포함). ANIMATION.md */}
+        {!obj.light && <AnimationClipSection obj={obj} open={isOpen('animclip')} onToggle={() => toggleSection('animclip')} />}
 
         {/* Animation — GLB 내장 클립을 트리거 없이 자동 재생(idle/앰비언트). GLB 오브젝트 전용 */}
         {!obj.isGroup && obj.assetId && animGlbUrl && animClips && animClips.length > 0 && (() => {

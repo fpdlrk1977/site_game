@@ -51,6 +51,20 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-14) — 🎬 애니메이션 저작 Phase 1 (기준: `doc/ANIMATION.md`)
+
+> 사용자가 임의 애니를 직접 저작(포즈/키프레임) → 하나의 재사용 오브젝트. **포즈=키프레임의 부분집합**이라 처음부터 키프레임 데이터로 설계(나중 타임라인은 얹기만). tsc 클린 + editor 307. **브라우저 실동작 대기.** 상세 = ANIMATION.md.
+
+- **전부 추가형·옵셔널(사이드이펙트 0)**: 기존 motion/move_object/animate_object·이벤트·렌더경로 무변경. 런타임은 활성 클립 있을 때만 동작.
+- **스키마**: `AnimClip{tracks:AnimTrack[], duration, loop, easing, rootId}`·`AnimKeyframe{time,position?,rotation?,scale?}` + `scene.animClips?` + 이벤트 액션 `play_clip`.
+- **스토어**: animClips CRUD + persist/undo/load (sceneEvents 패턴).
+- **런타임**(ViewerClient): `sampleTrack`(N키 보간), `clipOverride`+rAF `tickClips`, `play_clip` 핸들러, effectiveScene에 적용(pos/rot/scale 비파괴, override 패턴 재사용 → 그룹 자식도 자동). restartGame 초기화.
+- **에디터**: 신규 `AnimationClipSection`(인스펙터 Animation) — 클립 생성·**포즈 추가(현재 트랜스폼 캡처, 그룹이면 자식 함께)**·포즈 목록/삭제·시작포즈 복귀·길이/이징/loop. EventsSection `play_clip` 액션(클립 선택).
+- **저작 흐름**: 오브젝트 옮김 → 포즈 추가 반복 → Events `트리거→애니 재생(play_clip)` → ▶플레이/뷰어 재생.
+- **다음(ANIMATION.md 로드맵)**: Phase 2 다중오브젝트/격리 편집모드·계층 동기 · Phase 3 타임라인 UI·모드토글 · Phase 4 다듬기(회전 최단경로·에디터 미리보기·Prefab 통합).
+
+---
+
 ## ✅ 완료 (2026-07-14) — 🎮 변수 고도화 Phase A+B + 게임 컨트롤러 Phase 1 (기준: `doc/GAME_LOGIC.md`)
 
 > tsc 클린 + dev 컴파일(editor 307). **브라우저 실동작 확인 대기.** 상세·체크리스트는 GAME_LOGIC.md.
