@@ -46,6 +46,25 @@ const MATERIAL_PRESETS: { id: string; label: string; mat: Pick<MaterialOverride,
   { id: 'glow',    label: '네온(발광)', mat: { roughness: 0.5,  metalness: 0,   emissive: 'SELF'    }, swatch: 'linear-gradient(135deg,#fde68a,#f472b6)' },
 ];
 
+// 재질 속성(색/거칠기/금속성/발광)을 CSS 그라데이션으로 근사 — 원형 스와치가 실시간으로 재질 룩 반영.
+//   낮은 roughness=작고 밝은 하이라이트(반질), 높음=넓고 흐림(무광). 높은 metalness=강한 대비. 발광=중앙 글로우.
+function materialSwatchBg(mat: MaterialOverride): string {
+  const color = mat.color ?? '#a78bfa';
+  const rough = Math.min(1, Math.max(0, mat.roughness ?? 0.5));
+  const metal = Math.min(1, Math.max(0, mat.metalness ?? 0.1));
+  const emissive = mat.emissive && mat.emissive !== '#000000' && mat.emissive !== 'SELF' ? mat.emissive : null;
+  const specA = Math.max(0, Math.min(0.9, (1 - rough) * (0.5 + metal * 0.4) + 0.08));
+  const specR = 20 + rough * 38;
+  const shadowA = 0.12 + metal * 0.3;
+  const layers = [
+    `radial-gradient(circle at 33% 27%, rgba(255,255,255,${specA.toFixed(2)}), rgba(255,255,255,0) ${specR.toFixed(0)}%)`,
+    `radial-gradient(circle at 72% 80%, rgba(0,0,0,${shadowA.toFixed(2)}), rgba(0,0,0,0) 56%)`,
+  ];
+  if (emissive) layers.push(`radial-gradient(circle at 50% 48%, ${emissive}dd, ${emissive}00 68%)`);
+  layers.push(color);
+  return layers.join(', ');
+}
+
 // HDR 환경(IBL + 배경) 프리셋 타일 — 씬 전역 hdrPreset을 설정. 'none'=끄기(단색/하늘로 복귀).
 const HDR_TILES: { id: HdrPreset; label: string; icon: LucideIcon; swatch: string }[] = [
   { id: 'none',      label: '끄기',    icon: Ban,       swatch: 'linear-gradient(135deg,#e5e7eb,#cbd5e1)' },
@@ -529,9 +548,13 @@ export function AssetBrowser() {
                     return (
                     <div key={m.id} className="bg-background border border-border rounded-xs">
                       <div className="flex items-center gap-1.5 px-1.5 py-1">
-                        <input type="color" value={m.material.color ?? '#a78bfa'}
-                          onChange={(e) => setM({ color: e.target.value })} onBlur={pushHistory}
-                          title="색 편집(공유 반영)" className="w-6 h-6 shrink-0 rounded cursor-pointer border border-border" />
+                        <label title="색 편집(공유 반영)"
+                          className="relative w-3 h-3 shrink-0 rounded-full cursor-pointer border border-muted/60 ring-1 ring-black/10 overflow-hidden"
+                          style={{ background: materialSwatchBg(m.material) }}>
+                          <input type="color" value={m.material.color ?? '#a78bfa'}
+                            onChange={(e) => setM({ color: e.target.value })} onBlur={pushHistory}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        </label>
                         <input value={m.name} onChange={(e) => renameMaterialAsset(m.id, e.target.value)}
                           className="flex-1 min-w-0 bg-transparent text-[11px] text-foreground focus:outline-none" />
                         <button onClick={() => setExpandedMat(expanded ? null : m.id)}
