@@ -231,6 +231,10 @@ interface SceneActions {
   addAnimClip: (clip: AnimClip) => void;
   updateAnimClip: (id: string, patch: Partial<AnimClip>) => void;
   removeAnimClip: (id: string) => void;
+  // 에디터 미리보기(▶) — transient(저장/undo 무관)
+  animPreview: { clipId: string; startedAt: number } | null;
+  startAnimPreview: (clipId: string) => void;
+  stopAnimPreview: () => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -487,6 +491,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   hudElements: [],
   sceneEvents: [],
   animClips: [],
+  animPreview: null,
   selectedId: null,
   groupScope: null,
   transformMode: 'translate',
@@ -535,6 +540,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       hudElements: data.hudElements ?? [],
       sceneEvents: data.sceneEvents ?? [],
       animClips: bakeClipPivots(data.animClips ?? []), // 레거시 pivot 클립을 baked로 1회 통일(에디터=재생 일치)
+      animPreview: null,
       selectedId: null,
       selectedIds: [],
       groupScope: null,
@@ -1640,6 +1646,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     if (!animClips.some((c) => c.id === id)) return;
     set({ animClips: animClips.filter((c) => c.id !== id), isModified: true, ...withHistory({ objects, environment, animClips }, past) });
   },
+  // 에디터 미리보기(▶) — 클립을 뷰포트에서 재생. transient(저장/undo 무관). EditorCanvas ClipPreview가 구동.
+  startAnimPreview: (clipId) => set({ animPreview: { clipId, startedAt: performance.now() } }),
+  stopAnimPreview: () => set({ animPreview: null }),
 
   updateEnvironment: (patch) => {
     const { environment, objects, _prevSnapshot } = get();

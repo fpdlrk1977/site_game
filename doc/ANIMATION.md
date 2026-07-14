@@ -86,7 +86,10 @@ interface AnimClip {
   - **에디터**: `GizmoController` 회전모드 cLocal=경첩. `AnimationClipSection`은 피벗 변경 시 `setPivot`으로 키프레임 **재-bake(retroactive·가역)** → 나중에 축을 바꿔도 기존 포즈가 즉시 그 경첩으로 스윙. `goToPose`/노란 표식/기즈모 축 전부 일치. **이동/스케일 모드에선 여전히 중심**(회전만 경첩) → 일반 편집 자연스러움. tsc 클린. **브라우저 확인 대기.**
   - **동작 변화**: 피벗은 이제 "런타임 매직"이 아니라 **저작에 반영(baked)** — 예측가능. 축을 바꾸면 즉시 재-bake.
   - **후속 수정 2건(2026-07-14, 사용자 "중심으로 열리는 느낌")**: (a) **피벗 프리셋을 실제 로컬 bbox로** — 예전 `0.5×scale` 고정이라 GLB·비단위·원점≠중심 오브젝트는 모서리가 중심 쪽으로 당겨짐 → `localBBox×scale`로 진짜 모서리(`AnimationClipSection`). (b) **런타임 원호 복원** — baked 위치를 직선 보간하면 스윙 중 경첩이 중심으로 드리프트(현/chord). `ViewerClient` tickClips가 각 키의 **rest 위치(baked면 pivotOffset 제거)로 회전을 보간 → 매 프레임 pivotOffset 재적용**해 완벽한 원호(레거시 런타임과 동일 부드러움). 끝점은 baked 포즈와 정확히 일치. 결정적 테스트: 원호 6/6·bake 8/8·재bake 3/3. tsc 클린. **브라우저 확인 대기.**
-- [ ] **P2c 에디터 미리보기 ▶**
+- [x] **P2c 에디터 미리보기 ▶ (2026-07-14)**: 인스펙터 Animation 섹션에 **▶ 미리보기 / ■ 정지** 버튼 — 이벤트·플레이 모드 없이 뷰포트에서 바로 클립 재생(경첩 원호 포함). 정지/섹션 이탈 시 **원위치 복구(비파괴)**.
+  - **샘플링 공용화**: `src/lib/animSample.ts`(`sampleTrack`·`sampleClip` — 경첩 원호 로직 포함) 추출 → **ViewerClient(뷰어 재생)와 에디터 미리보기가 동일 코드 공유**(드리프트 방지). ViewerClient의 로컬 sampleTrack/pivotOffset/lerp 제거·`sampleClip`로 대체(로직 동일, tsc 클린).
+  - **구동**: 스토어 transient `animPreview{clipId,startedAt}`+`start/stopAnimPreview`(저장/undo 무관, loadScene서 리셋). `EditorCanvas`의 `ClipPreview`(Canvas 내부)가 useFrame으로 `sampleClip` → **오브젝트 Three ref 직접 구동**(기즈모와 동일 비파괴 패턴, 렌더/스토어 무변경). 종료 시 영향 오브젝트를 스토어 트랜스폼으로 복원. 회전은 `rotation.set(XYZ)`로 EditorObjectInstance와 동일 순서.
+  - 제약: 포즈 2개 미만이면 버튼 비활성. 미리보기 중 편집 비권장(테스트용). 그룹/멀티트랙도 track objectId별로 구동(P3 대비 이미 일반화). tsc 클린. **브라우저 확인 대기.**
 - [ ] P3 다중 오브젝트(다중 트랙·격리모드·계층 동기)
 - [ ] P4 타임라인 UI(모드 토글·이징 곡선)
 - [ ] P5 다듬기(최단경로·커스텀 피벗·GLB 통일)

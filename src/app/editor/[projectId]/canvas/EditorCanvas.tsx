@@ -13,6 +13,7 @@ import { pointerDownOnObjectRef } from "./boxSelectState";
 import { PostProcessingEffects } from "@/components/three/PostProcessingEffects";
 import { GroundPlane } from "@/components/three/GroundPlane";
 import { worldBBox } from "@/lib/objectBBox";
+import { sampleClip } from "@/lib/animSample";
 import { exportObjectsToGlb } from "@/lib/exportGlb";
 import { DefaultEnvironment } from "@/components/three/DefaultEnvironment";
 import { SceneToneMapping } from "@/components/three/SceneToneMapping";
@@ -209,6 +210,54 @@ function AnimPivotGizmo() {
       </mesh>
     </group>
   );
+}
+
+// 에디터 미리보기(▶) — animPreview가 켜지면 클립을 뷰포트에서 재생. 오브젝트 Three ref를 매 프레임 직접 구동
+//   (기즈모와 동일한 비파괴 방식 — 스토어/저장 무변경). 종료 시 스토어 트랜스폼으로 복원.
+function ClipPreview() {
+  const refsMap = useObjectRefs();
+  const animPreview = useSceneStore((s) => s.animPreview);
+  const stopAnimPreview = useSceneStore((s) => s.stopAnimPreview);
+  const affectedRef = useRef<Set<string>>(new Set());
+
+  // 미리보기 종료(animPreview=null) 시 영향받은 오브젝트를 스토어 값으로 복원(비파괴)
+  useEffect(() => {
+    if (animPreview) return;
+    const ids = affectedRef.current;
+    if (ids.size === 0) return;
+    const { objects } = useSceneStore.getState();
+    for (const id of ids) {
+      const ref = refsMap.current.get(id);
+      const o = objects.find((x) => x.id === id);
+      if (ref && o) {
+        ref.position.set(o.position.x, o.position.y, o.position.z);
+        ref.rotation.set(o.rotation.x * _ANIM_DEG, o.rotation.y * _ANIM_DEG, o.rotation.z * _ANIM_DEG);
+        ref.scale.set(o.scale.x, o.scale.y, o.scale.z);
+      }
+    }
+    affectedRef.current = new Set();
+  }, [animPreview, refsMap]);
+
+  useFrame(() => {
+    if (!animPreview) return;
+    const { animClips } = useSceneStore.getState();
+    const clip = animClips.find((c) => c.id === animPreview.clipId);
+    if (!clip) { stopAnimPreview(); return; }
+    let t = (performance.now() - animPreview.startedAt) / 1000;
+    if (clip.loop) t = clip.duration > 0 ? t % clip.duration : 0;
+    else if (t >= clip.duration) t = clip.duration; // 끝 포즈 유지(정지 버튼으로 종료·복원)
+    const samples = sampleClip(clip, t);
+    for (const id in samples) {
+      const ref = refsMap.current.get(id);
+      if (!ref) continue;
+      affectedRef.current.add(id);
+      const s = samples[id];
+      if (s.position) ref.position.set(s.position.x, s.position.y, s.position.z);
+      if (s.rotation) ref.rotation.set(s.rotation.x * _ANIM_DEG, s.rotation.y * _ANIM_DEG, s.rotation.z * _ANIM_DEG);
+      if (s.scale) ref.scale.set(s.scale.x, s.scale.y, s.scale.z);
+    }
+  });
+  return null;
 }
 
 // 씬 로드 직후 1회 자동 전체 맞춤 — 저장한 넓은 공간을 다시 열 때 카메라가 너무 가깝지 않도록
@@ -974,6 +1023,7 @@ export function EditorCanvas() {
 
           {/* 애니 회전 피벗(경첩) 표식 — 선택 오브젝트에 클립이 있을 때 축 위치 시각화 */}
           <AnimPivotGizmo />
+          <ClipPreview />
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 

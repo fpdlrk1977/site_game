@@ -9,37 +9,10 @@ import { PopupFrame } from '@/components/ui/PopupFrame';
 import { effectiveDialogue } from './useObjectDialogue';
 import { Heart, Star, Circle, RotateCcw } from 'lucide-react';
 import * as THREE from 'three';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3, GameVariable, AnimKeyframe, AnimTrack } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3, GameVariable } from '@/types/scene';
+import { sampleClip, type ClipSample } from '@/lib/animSample';
 
-// ── 애니 클립 키프레임 보간 (ANIMATION.md) — 순수 함수 ──
-const _DEG2RAD = Math.PI / 180;
-const _euler = new THREE.Euler();
-const _pv = new THREE.Vector3();
-// 회전 피벗 보정 오프셋 = pivot − R·pivot (그 점이 고정되도록 오브젝트 원점을 이동). 렌더는 안 건드리고 position만 보정.
-function pivotOffset(pivot: Vector3, rotDeg: Vector3): Vector3 {
-  _euler.set(rotDeg.x * _DEG2RAD, rotDeg.y * _DEG2RAD, rotDeg.z * _DEG2RAD, 'XYZ');
-  _pv.set(pivot.x, pivot.y, pivot.z).applyEuler(_euler);
-  return { x: pivot.x - _pv.x, y: pivot.y - _pv.y, z: pivot.z - _pv.z };
-}
-function _lerp(a: number, b: number, f: number) { return a + (b - a) * f; }
-function _lerpVec(a: Vector3 | undefined, b: Vector3 | undefined, f: number): Vector3 | undefined {
-  if (!a) return b; if (!b) return a;
-  return { x: _lerp(a.x, b.x, f), y: _lerp(a.y, b.y, f), z: _lerp(a.z, b.z, f) };
-}
-type ClipSample = { position?: Vector3; rotation?: Vector3; scale?: Vector3 };
-function sampleTrack(track: AnimTrack, t: number, easing?: string): ClipSample {
-  const ks = track.keys;
-  if (!ks || ks.length === 0) return {};
-  const pick = (k: AnimKeyframe): ClipSample => ({ position: k.position, rotation: k.rotation, scale: k.scale });
-  if (t <= ks[0].time) return pick(ks[0]);
-  if (t >= ks[ks.length - 1].time) return pick(ks[ks.length - 1]);
-  let i = 0; while (i < ks.length - 1 && ks[i + 1].time <= t) i++;
-  const k0 = ks[i], k1 = ks[i + 1];
-  const span = k1.time - k0.time;
-  let f = span > 0 ? (t - k0.time) / span : 0;
-  if (easing === 'easeInOut') f = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
-  return { position: _lerpVec(k0.position, k1.position, f), rotation: _lerpVec(k0.rotation, k1.rotation, f), scale: _lerpVec(k0.scale, k1.scale, f) };
-}
+// 애니 클립 키프레임 보간(경첩 원호 포함)은 공용 lib로 추출 — 뷰어/에디터 미리보기 공유(ANIMATION.md).
 
 // 이 액션들이 (플레이 모드에서) 발동되면 상호작용이 끝날 때까지(팝업 닫기/Esc) 캐릭터 이동을 잠근다.
 // 새로 "발동 중엔 못 움직이게" 하고 싶은 액션이 생기면 여기에 추가만 하면 자동 적용된다.
@@ -167,29 +140,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       let t = (now - startedAt) / 1000;
       if (clip.loop) { t = clip.duration > 0 ? t % clip.duration : 0; }
       else if (t >= clip.duration) { t = clip.duration; playingClips.current.delete(clipId); } // 끝나면 마지막 포즈 유지
-      for (const tr of clip.tracks) {
-        let s: ClipSample;
-        // 회전 피벗(경첩) — 완벽한 원호를 위해: 각 키의 rest 위치(baked면 pivotOffset 제거)로 회전을 보간한 뒤
-        //   보간된 회전으로 pivotOffset을 매 프레임 재계산해 더한다. (baked 위치를 직선 보간하면 경첩이
-        //   중심으로 드리프트하는 '현(chord)' 문제 → 여기서 원호로 복원. 레거시 미-baked는 keyPos가 곧 rest.)
-        if (clip.pivot) {
-          const pivot = clip.pivot;
-          const baked = clip.pivotBaked;
-          const restKeys = tr.keys.map((k) => {
-            if (!k.position || !k.rotation || !baked) return k;
-            const o = pivotOffset(pivot, k.rotation);
-            return { ...k, position: { x: k.position.x - o.x, y: k.position.y - o.y, z: k.position.z - o.z } };
-          });
-          s = sampleTrack({ ...tr, keys: restKeys }, t, clip.easing);
-          if (s.rotation && s.position) {
-            const off = pivotOffset(pivot, s.rotation);
-            s = { ...s, position: { x: s.position.x + off.x, y: s.position.y + off.y, z: s.position.z + off.z } };
-          }
-        } else {
-          s = sampleTrack(tr, t, clip.easing);
-        }
-        ov[tr.objectId] = { ...ov[tr.objectId], ...s };
-      }
+      const samples = sampleClip(clip, t); // 경첩 원호 포함 — 공용 lib
+      for (const id in samples) ov[id] = { ...ov[id], ...samples[id] };
     }
     setClipOverride((prev) => ({ ...prev, ...ov })); // 병합 — 끝난 클립의 마지막 포즈 유지
     clipRaf.current = playingClips.current.size > 0 ? requestAnimationFrame(tickClips) : null;

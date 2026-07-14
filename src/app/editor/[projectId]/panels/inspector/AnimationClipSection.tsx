@@ -4,8 +4,9 @@
 // 오브젝트(또는 그룹)를 원하는 자세로 옮긴 뒤 "포즈 추가"로 트랜스폼을 키프레임으로 캡처.
 // 재생은 이벤트 액션 play_clip으로(뷰어/플레이). 에디터 내 미리보기·타임라인은 Phase 2~3.
 
+import { useEffect } from 'react';
 import { MathUtils } from 'three';
-import { Film, Plus, Trash2, Undo2 } from 'lucide-react';
+import { Film, Plus, Trash2, Undo2, Play, Square } from 'lucide-react';
 import { pivotOffset } from '@/lib/animPivot';
 import { localBBox } from '@/lib/objectBBox';
 import { useSceneStore } from '@/store/sceneStore';
@@ -18,11 +19,21 @@ const snap = (o: ObjectNodeSchema): Omit<AnimKeyframe, 'time'> => ({
 });
 
 export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
-  const { animClips, objects, assets, addAnimClip, updateAnimClip, removeAnimClip, updateObject, pushHistory } = useSceneStore();
+  const { animClips, objects, assets, addAnimClip, updateAnimClip, removeAnimClip, updateObject, pushHistory,
+    animPreview, startAnimPreview, stopAnimPreview } = useSceneStore();
   const clip = animClips.find((c) => c.rootId === obj.id);
   // Phase 1: 선택 오브젝트 자체를 애니(그룹이면 그룹 전체가 하나로 회전/이동 — 경첩은 그룹 오프셋으로).
   //   자식 개별 애니(멀티트랙)는 Phase 2.
   const trackObjs = [obj];
+
+  // 이 섹션이 사라질 때(다른 오브젝트 선택 등) 진행 중이던 이 클립 미리보기 정지 → 뷰포트에 고아 재생 방지.
+  useEffect(() => {
+    const cid = clip?.id;
+    return () => {
+      const st = useSceneStore.getState();
+      if (cid && st.animPreview?.clipId === cid) st.stopAnimPreview();
+    };
+  }, [clip?.id]);
 
   const createClip = () => {
     const tracks = trackObjs.map((o) => ({ objectId: o.id, keys: [{ time: 0, ...snap(o) }] }));
@@ -152,6 +163,21 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
                 />
                 <button onClick={() => { if (confirm(`'${clip.name}' 애니메이션을 삭제할까요?`)) removeAnimClip(clip.id); }} title="애니 삭제" className="shrink-0 p-1 rounded-xs text-muted/60 hover:text-red-500 hover:bg-red-500/10 transition-colors"><Trash2 size={13} /></button>
               </div>
+
+              {/* 에디터 미리보기 ▶ — 뷰포트에서 바로 재생(이벤트/플레이 모드 불필요). 정지 시 원상복구. */}
+              {(() => {
+                const previewing = animPreview?.clipId === clip.id;
+                return (
+                  <button
+                    onClick={() => (previewing ? stopAnimPreview() : startAnimPreview(clip.id))}
+                    disabled={poseTimes.length < 2 && !previewing}
+                    className={`w-full py-1.5 rounded-xs text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${previewing ? 'bg-red-500/15 text-red-500 border border-red-500/40 hover:bg-red-500/25' : 'bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25'}`}
+                    title={poseTimes.length < 2 ? '포즈가 2개 이상이어야 재생할 수 있어요' : previewing ? '미리보기 정지(원위치 복구)' : '뷰포트에서 미리보기'}
+                  >
+                    {previewing ? <><Square size={12} /> 정지</> : <><Play size={12} /> 미리보기</>}
+                  </button>
+                );
+              })()}
 
               <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">포즈 (키프레임) · {trackObjs.length}개 오브젝트</span>
               <div className="space-y-1">
