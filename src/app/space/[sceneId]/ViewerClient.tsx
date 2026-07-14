@@ -26,7 +26,7 @@ const HUD_POS_CLS: Record<HudElement['position'], string> = {
   'bottom-center': 'bottom-3 left-1/2 -translate-x-1/2 items-center',
   'bottom-right': 'bottom-3 right-3 items-end',
 };
-function HudWidget({ el, value }: { el: HudElement; value: number | boolean | undefined }) {
+function HudWidget({ el, value }: { el: HudElement; value: number | boolean | string | undefined }) {
   const label = el.label || el.variable;
   const color = el.color || '#ef4444';
   const num = typeof value === 'number' ? value : 0;
@@ -59,7 +59,7 @@ function HudWidget({ el, value }: { el: HudElement; value: number | boolean | un
     </div>
   );
 }
-function HudWidgets({ elements, vars }: { elements: HudElement[]; vars: Record<string, number | boolean> }) {
+function HudWidgets({ elements, vars }: { elements: HudElement[]; vars: Record<string, number | boolean | string> }) {
   const positions = Array.from(new Set(elements.map((e) => e.position)));
   return (
     <>
@@ -204,8 +204,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
   // ── 게임 변수(상태) 런타임 — GAME_LOGIC.md Phase 1 ──
   // varsRef: 권위값(동기 읽기/쓰기). hudVars: 화면 HUD 재렌더용 미러. watcherState: variable_changed 엣지 감지.
-  const varsRef = useRef<Record<string, number | boolean>>({});
-  const [hudVars, setHudVars] = useState<Record<string, number | boolean>>({});
+  const varsRef = useRef<Record<string, number | boolean | string>>({});
+  const [hudVars, setHudVars] = useState<Record<string, number | boolean | string>>({});
   const watcherState = useRef<Record<string, boolean>>({}); // eventId → 직전 조건 평가값
   const evalDepth = useRef(0); // variable_changed 반응형 재진입 가드
   // Phase 2 — 런타임 스폰/디스폰·승패·재시작 상태
@@ -215,7 +215,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   const [runNonce, setRunNonce] = useState(0); // 재시작 시 bump → 변수/타이머/scene_start 초기화
   // 씬 로드/변수 정의 변경/재시작 시 initial로 초기화(런타임 값은 저장하지 않음).
   useEffect(() => {
-    const init: Record<string, number | boolean> = {};
+    const init: Record<string, number | boolean | string> = {};
     for (const v of scene.variables ?? []) init[v.name] = v.initial;
     varsRef.current = init;
     watcherState.current = {};
@@ -318,12 +318,14 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     if (cur === undefined) return false; // 미정의 변수 조건은 거짓
     const target = cond.value;
     switch (cond.op) {
-      case '==': return cur === target;
-      case '!=': return cur !== target;
+      // ==/!=는 문자열(string/enum/color)·숫자·불리언 공통. 타입 느슨 비교(에디터 값이 문자열일 수 있어 String 정규화).
+      case '==': return String(cur) === String(target);
+      case '!=': return String(cur) !== String(target);
       case '>': return Number(cur) > Number(target);
       case '>=': return Number(cur) >= Number(target);
       case '<': return Number(cur) < Number(target);
       case '<=': return Number(cur) <= Number(target);
+      case 'contains': return String(cur).includes(String(target)); // 문자열 포함
       default: return false;
     }
   }
@@ -333,9 +335,29 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     if (list.length === 0) return true;
     return (ev.conditionLogic ?? 'and') === 'or' ? list.some(evalCondition) : list.every(evalCondition);
   }
+  // 값(리터럴 숫자) 또는 다른 변수명을 숫자로 해석 — 변수↔변수 연산 지원(Phase B).
+  function resolveNum(raw: string): number {
+    const n = Number(raw);
+    if (Number.isFinite(n) && raw.trim() !== '') return n;
+    const other = varsRef.current[raw];
+    if (typeof other === 'number') return other;
+    if (typeof other === 'boolean') return other ? 1 : 0;
+    return 0;
+  }
   function applyVarOp(name: string, op: string, amountRaw: string) {
     const cur = varsRef.current[name];
     if (cur === undefined) return; // 정의되지 않은 변수는 무시
+    // 문자열/enum/color — set(교체) / append(이어붙이기) / next(enum 다음 상태)
+    if (typeof cur === 'string') {
+      if (op === 'append') { varsRef.current[name] = cur + amountRaw; return; }
+      if (op === 'next') {
+        const opts = scene.variables?.find((v) => v.name === name)?.options;
+        if (opts && opts.length) { const i = opts.indexOf(cur); varsRef.current[name] = opts[(i + 1) % opts.length]; }
+        return;
+      }
+      varsRef.current[name] = amountRaw; // set
+      return;
+    }
     if (typeof cur === 'boolean') {
       if (op === 'toggle') varsRef.current[name] = !cur;
       else if (op === 'set') varsRef.current[name] = amountRaw === 'true' || amountRaw === '1';
@@ -349,13 +371,21 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       varsRef.current[name] = Math.floor(Math.min(min, max) + Math.random() * (Math.abs(max - min) + 1));
       return;
     }
-    const amt = Number(amountRaw);
-    const a = Number.isFinite(amt) ? amt : 0;
+    if (op === 'clamp') {
+      // amountRaw = "min,max" — 현재값을 [min,max]로 제한(체력/골드 등)
+      const [loR, hiR] = amountRaw.split(',');
+      const lo = resolveNum(loR ?? ''); const hi = resolveNum(hiR ?? '');
+      varsRef.current[name] = Math.max(lo, Math.min(hi, cur));
+      return;
+    }
+    const a = resolveNum(amountRaw); // 리터럴 또는 변수 참조
     switch (op) {
       case 'set': varsRef.current[name] = a; break;
       case 'add': varsRef.current[name] = cur + a; break;
       case 'sub': varsRef.current[name] = cur - a; break;
       case 'mul': varsRef.current[name] = cur * a; break;
+      case 'div': varsRef.current[name] = a !== 0 ? cur / a : cur; break;
+      case 'mod': varsRef.current[name] = a !== 0 ? cur % a : cur; break;
       default: break; // toggle은 숫자에 무의미
     }
   }
@@ -408,7 +438,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   function runScript(code: string, self: ObjectNodeSchema) {
     const api = {
       get: (name: string) => varsRef.current[name],
-      set: (name: string, val: number | boolean) => { if (name in varsRef.current) { varsRef.current[name] = val; onVarsChanged(); } },
+      set: (name: string, val: number | boolean | string) => { if (name in varsRef.current) { varsRef.current[name] = val; onVarsChanged(); } },
       add: (name: string, delta: number) => { const c = varsRef.current[name]; if (typeof c === 'number') { varsRef.current[name] = c + Number(delta); onVarsChanged(); } },
       show: (id: string) => setVisOverride((v) => ({ ...v, [id]: true })),
       hide: (id: string) => setVisOverride((v) => ({ ...v, [id]: false })),

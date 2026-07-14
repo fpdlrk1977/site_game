@@ -13,7 +13,7 @@ import { SelectBox } from '@/components/ui/SelectBox';
 import { GlbClipPicker } from './GlbClipPicker';
 import { SectionHeader, GroupBox, Toggle, LabeledNum, XYZRow } from './ui';
 import { DraggablePopup } from '@/components/ui/DraggablePopup';
-import type { ObjectNodeSchema, EventSchema, EventCondition, EventAction, DialogueConfig, PopupConfig } from '@/types/scene';
+import type { ObjectNodeSchema, EventSchema, EventCondition, EventAction, DialogueConfig, PopupConfig, GameVariable } from '@/types/scene';
 
 const TRIGGER_LABELS: Record<EventSchema['trigger'], string> = {
   click: 'Click',
@@ -56,6 +56,19 @@ const ACTION_LABELS: Record<string, string> = {
 
 // value가 대상 objectId인 액션들 (에디터에서 오브젝트 선택 드롭다운 표시)
 const OBJECT_TARGET_ACTIONS = new Set(['show_object', 'hide_object', 'toggle_object', 'focus_object', 'set_passable', 'set_solid', 'toggle_collision', 'despawn_object']);
+
+// 게임 변수 타입 라벨 (드롭다운 표기용)
+const VAR_TYPE_LABEL: Record<string, string> = { number: '숫자', boolean: '참/거짓', string: '텍스트', enum: '선택', color: '색' };
+
+// 조건 추가 시 변수 타입에 맞는 기본 연산/값
+function defaultCondition(v?: GameVariable): EventCondition {
+  const t = v?.type;
+  return {
+    variable: v?.name ?? '',
+    op: t === 'number' ? '>=' : '==',
+    value: t === 'boolean' ? true : t === 'number' ? 0 : t === 'enum' ? (v?.options?.[0] ?? '') : t === 'color' ? '#ffffff' : '',
+  };
+}
 
 // else 분기에서 고를 수 있는 액션(간단 입력만 지원 — 팝업/스폰/스크립트 등 복합 입력은 제외).
 const ELSE_ACTION_OPTIONS: { value: string; label: string }[] = [
@@ -360,8 +373,8 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             // value = "변수명|연산|값"
             const [vn = '', op = 'add', amt = ''] = newValue.split('|');
             const setSV = (name: string, o: string, a: string) => setNewValue(`${name}|${o}|${a}`);
-            const selVar = variables.find((v) => v.name === vn);
-            const isBool = selVar?.type === 'boolean';
+            const selVar = variables.find((v) => v.name === vn) ?? variables[0];
+            const vtype = selVar?.type ?? 'number';
             const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
             if (variables.length === 0) {
               return (
@@ -374,22 +387,30 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               <div className="space-y-1.5">
                 <SelectBox
                   value={vn || variables[0].name}
-                  onChange={(name) => setSV(name, op, amt)}
-                  options={variables.map((v) => ({ value: v.name, label: `${v.name} (${v.type === 'boolean' ? '참/거짓' : '숫자'})` }))}
+                  onChange={(name) => {
+                    const nv = variables.find((v) => v.name === name);
+                    const defOp = nv?.type === 'number' ? 'add' : 'set'; // 숫자만 기본 더하기, 나머지는 설정
+                    setSV(name, defOp, '');
+                  }}
+                  options={variables.map((v) => ({ value: v.name, label: `${v.name} (${VAR_TYPE_LABEL[v.type] ?? v.type})` }))}
                 />
                 <div className="grid grid-cols-2 gap-1.5">
                   <SelectBox
                     value={op}
-                    onChange={(o) => setSV(vn || variables[0].name, o, o === 'random' ? '1,6' : amt)}
-                    options={isBool
-                      ? [{ value: 'set', label: '설정 =' }, { value: 'toggle', label: '토글(반전)' }]
-                      : [{ value: 'add', label: '더하기 +' }, { value: 'sub', label: '빼기 −' }, { value: 'set', label: '설정 =' }, { value: 'mul', label: '곱하기 ×' }, { value: 'random', label: '랜덤 🎲' }]}
+                    onChange={(o) => setSV(vn || variables[0].name, o, o === 'random' ? '1,6' : o === 'clamp' ? '0,100' : amt)}
+                    options={
+                      vtype === 'boolean' ? [{ value: 'set', label: '설정 =' }, { value: 'toggle', label: '토글(반전)' }]
+                      : vtype === 'string' ? [{ value: 'set', label: '설정 =' }, { value: 'append', label: '이어붙이기 +' }]
+                      : vtype === 'enum' ? [{ value: 'set', label: '설정 =' }, { value: 'next', label: '다음 상태 ▶' }]
+                      : vtype === 'color' ? [{ value: 'set', label: '설정 =' }]
+                      : [{ value: 'add', label: '더하기 +' }, { value: 'sub', label: '빼기 −' }, { value: 'set', label: '설정 =' }, { value: 'mul', label: '곱하기 ×' }, { value: 'div', label: '나누기 ÷' }, { value: 'mod', label: '나머지 %' }, { value: 'random', label: '랜덤 🎲' }, { value: 'clamp', label: '범위제한' }]
+                    }
                   />
-                  {op === 'toggle' ? (
+                  {(op === 'toggle' || op === 'next') ? (
                     <div className="text-[10px] text-muted/60 flex items-center px-1">값 불필요</div>
-                  ) : op === 'random' ? (
+                  ) : (op === 'random' || op === 'clamp') ? (
                     (() => {
-                      const [lo = '1', hi = '6'] = amt.split(',');
+                      const [lo = op === 'clamp' ? '0' : '1', hi = op === 'clamp' ? '100' : '6'] = amt.split(',');
                       return (
                         <div className="flex items-center gap-1">
                           <input type="number" value={lo} onChange={(e) => setSV(vn || variables[0].name, op, `${e.target.value},${hi}`)} placeholder="min" className={inputCls} />
@@ -398,23 +419,36 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                         </div>
                       );
                     })()
-                  ) : isBool ? (
+                  ) : vtype === 'boolean' ? (
                     <SelectBox
                       value={amt === 'true' ? 'true' : 'false'}
                       onChange={(a) => setSV(vn || variables[0].name, op, a)}
                       options={[{ value: 'true', label: '참(true)' }, { value: 'false', label: '거짓(false)' }]}
                     />
-                  ) : (
-                    <input
-                      type="number"
-                      value={amt}
-                      onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)}
-                      placeholder="값 (예: 1)"
-                      className={inputCls}
+                  ) : vtype === 'enum' ? (
+                    <SelectBox
+                      value={amt || selVar?.options?.[0] || ''}
+                      onChange={(a) => setSV(vn || variables[0].name, op, a)}
+                      options={(selVar?.options ?? []).length ? (selVar?.options ?? []).map((o) => ({ value: o, label: o })) : [{ value: '', label: '(선택지 없음)' }]}
                     />
+                  ) : vtype === 'color' ? (
+                    <div className="flex items-center gap-1.5 bg-surface border border-border rounded-xs px-2 py-0.5">
+                      <input type="color" value={/^#/.test(amt) ? amt : '#ffffff'} onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)} className="w-5 h-5 cursor-pointer bg-transparent" />
+                      <span className="text-[10px] text-muted tabular-nums">{/^#/.test(amt) ? amt : '#ffffff'}</span>
+                    </div>
+                  ) : vtype === 'string' ? (
+                    <input type="text" value={amt} onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)} placeholder="텍스트" className={inputCls} />
+                  ) : (
+                    <input type="text" inputMode="numeric" value={amt} onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)} placeholder="값 또는 변수명" className={inputCls} />
                   )}
                 </div>
-                <p className="text-muted/60 text-[10px]">예: 점수 +1 → <b>더하기·1</b> / 주사위 → <b>랜덤·1~6</b> (정수 랜덤)</p>
+                <p className="text-muted/60 text-[10px]">
+                  {vtype === 'number' ? <>예: 점수 +1 → <b>더하기·1</b> / 주사위 → <b>랜덤·1~6</b> / 다른 변수로 → <b>더하기·coins</b></>
+                    : vtype === 'enum' ? <>선택지 중 하나로 <b>설정</b>하거나 <b>다음 상태</b>로 순환</>
+                    : vtype === 'string' ? <>텍스트를 <b>설정</b>하거나 뒤에 <b>이어붙이기</b></>
+                    : vtype === 'color' ? <>색을 <b>설정</b> (HUD·재질 연결용)</>
+                    : <>참/거짓을 <b>설정</b>하거나 <b>토글(반전)</b></>}
+                </p>
               </div>
             );
           }
@@ -733,7 +767,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               </p>
             ) : newConditions.map((c, i) => {
               const selVar = variables.find((v) => v.name === c.variable) ?? variables[0];
-              const isBool = selVar.type === 'boolean';
+              const ctype = selVar?.type ?? 'number';
               const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5 text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
               const upd = (patch: Partial<EventCondition>) => setNewConditions((cs) => cs.map((x, j) => (j === i ? { ...x, ...patch } : x)));
               return (
@@ -741,23 +775,46 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   <div className="flex-1 space-y-1">
                     <SelectBox
                       value={c.variable || variables[0].name}
-                      onChange={(name) => upd({ variable: name })}
-                      options={variables.map((v) => ({ value: v.name, label: `${v.name} (${v.type === 'boolean' ? '참/거짓' : '숫자'})` }))}
+                      onChange={(name) => {
+                        const nv = variables.find((v) => v.name === name);
+                        const t = nv?.type;
+                        // 타입 바뀌면 연산/값을 호환되게 리셋
+                        const op: EventCondition['op'] = t === 'number' ? '>=' : '==';
+                        const value: EventCondition['value'] = t === 'boolean' ? true : t === 'number' ? 0 : t === 'enum' ? (nv?.options?.[0] ?? '') : t === 'color' ? '#ffffff' : '';
+                        upd({ variable: name, op, value });
+                      }}
+                      options={variables.map((v) => ({ value: v.name, label: `${v.name} (${VAR_TYPE_LABEL[v.type] ?? v.type})` }))}
                     />
                     <div className="grid grid-cols-2 gap-1">
                       <SelectBox
                         value={c.op}
                         onChange={(op) => upd({ op: op as EventCondition['op'] })}
-                        options={isBool
-                          ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }]
-                          : [{ value: '>=', label: '이상 ≥' }, { value: '>', label: '초과 >' }, { value: '==', label: '같음 ==' }, { value: '<=', label: '이하 ≤' }, { value: '<', label: '미만 <' }, { value: '!=', label: '다름 !=' }]}
+                        options={
+                          ctype === 'boolean' ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }]
+                          : ctype === 'string' ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }, { value: 'contains', label: '포함 ⊃' }]
+                          : (ctype === 'enum' || ctype === 'color') ? [{ value: '==', label: '같음 ==' }, { value: '!=', label: '다름 !=' }]
+                          : [{ value: '>=', label: '이상 ≥' }, { value: '>', label: '초과 >' }, { value: '==', label: '같음 ==' }, { value: '<=', label: '이하 ≤' }, { value: '<', label: '미만 <' }, { value: '!=', label: '다름 !=' }]
+                        }
                       />
-                      {isBool ? (
+                      {ctype === 'boolean' ? (
                         <SelectBox
                           value={c.value === true ? 'true' : 'false'}
                           onChange={(v) => upd({ value: v === 'true' })}
                           options={[{ value: 'true', label: '참(true)' }, { value: 'false', label: '거짓(false)' }]}
                         />
+                      ) : ctype === 'enum' ? (
+                        <SelectBox
+                          value={typeof c.value === 'string' ? c.value : (selVar?.options?.[0] ?? '')}
+                          onChange={(v) => upd({ value: v })}
+                          options={(selVar?.options ?? []).length ? (selVar?.options ?? []).map((o) => ({ value: o, label: o })) : [{ value: '', label: '(선택지 없음)' }]}
+                        />
+                      ) : ctype === 'color' ? (
+                        <div className="flex items-center gap-1.5 bg-surface border border-border rounded-xs px-2 py-0.5">
+                          <input type="color" value={typeof c.value === 'string' && /^#/.test(c.value) ? c.value : '#ffffff'} onChange={(e) => upd({ value: e.target.value })} className="w-5 h-5 cursor-pointer bg-transparent" />
+                          <span className="text-[10px] text-muted tabular-nums">{typeof c.value === 'string' && /^#/.test(c.value) ? c.value : '#ffffff'}</span>
+                        </div>
+                      ) : ctype === 'string' ? (
+                        <input type="text" value={typeof c.value === 'string' ? c.value : ''} onChange={(e) => upd({ value: e.target.value })} placeholder="텍스트" className={inputCls} />
                       ) : (
                         <input type="number" value={typeof c.value === 'number' ? c.value : 0} onChange={(e) => upd({ value: Number(e.target.value) })} className={inputCls} />
                       )}
@@ -769,7 +826,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             })}
             {variables.length > 0 && (
               <button
-                onClick={() => setNewConditions((cs) => [...cs, { variable: variables[0]?.name ?? '', op: '>=', value: 0 }])}
+                onClick={() => setNewConditions((cs) => [...cs, defaultCondition(variables[0])])}
                 className="text-[10px] text-primary hover:underline"
               >
                 + 조건 하나 더
@@ -808,7 +865,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
           </div>
         ) : (
           <button
-            onClick={() => setNewConditions([{ variable: variables[0]?.name ?? '', op: '>=', value: 0 }])}
+            onClick={() => setNewConditions([defaultCondition(variables[0])])}
             disabled={variables.length === 0}
             className="text-[10px] text-primary hover:underline disabled:text-muted/40 disabled:no-underline"
           >

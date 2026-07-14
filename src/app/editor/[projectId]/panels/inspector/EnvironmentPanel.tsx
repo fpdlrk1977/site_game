@@ -1419,6 +1419,9 @@ export function EnvironmentPanel() {
                     options={[
                       { value: "number", label: "숫자" },
                       { value: "boolean", label: "참/거짓" },
+                      { value: "string", label: "텍스트" },
+                      { value: "enum", label: "선택지(상태)" },
+                      { value: "color", label: "색" },
                     ]}
                   />
                   {v.type === "boolean" ? (
@@ -1433,7 +1436,7 @@ export function EnvironmentPanel() {
                         { value: "true", label: "초기: 참" },
                       ]}
                     />
-                  ) : (
+                  ) : v.type === "number" ? (
                     <input
                       type="number"
                       value={typeof v.initial === "number" ? v.initial : 0}
@@ -1442,8 +1445,64 @@ export function EnvironmentPanel() {
                       placeholder="초기값"
                       className="w-full bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
                     />
+                  ) : v.type === "enum" ? (
+                    <SelectBox
+                      value={typeof v.initial === "string" ? v.initial : (v.options?.[0] ?? "")}
+                      onChange={(val) => { updateVariable(v.id, { initial: val }); pushHistory(); }}
+                      options={(v.options ?? []).length ? (v.options ?? []).map((o) => ({ value: o, label: `초기: ${o}` })) : [{ value: "", label: "(선택지 없음)" }]}
+                    />
+                  ) : v.type === "color" ? (
+                    <div className="flex items-center gap-1.5 bg-background border border-border rounded-xs px-2 py-0.5">
+                      <input
+                        type="color"
+                        value={typeof v.initial === "string" && v.initial ? v.initial : "#ffffff"}
+                        onChange={(e) => updateVariable(v.id, { initial: e.target.value })}
+                        onBlur={pushHistory}
+                        className="w-5 h-5 cursor-pointer bg-transparent"
+                      />
+                      <span className="text-[10px] text-muted tabular-nums">{typeof v.initial === "string" ? v.initial : "#ffffff"}</span>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={typeof v.initial === "string" ? v.initial : ""}
+                      onChange={(e) => updateVariable(v.id, { initial: e.target.value })}
+                      onBlur={pushHistory}
+                      placeholder="초기 텍스트"
+                      className="w-full bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
                   )}
                 </div>
+                {/* enum 선택지(상태) 목록 편집 */}
+                {v.type === "enum" && (
+                  <div className="space-y-1 pt-0.5">
+                    <span className="text-[10px] text-muted/60">선택지(상태) 목록</span>
+                    {(v.options ?? []).map((opt, oi) => (
+                      <div key={oi} className="flex items-center gap-1">
+                        <input
+                          value={opt}
+                          onChange={(e) => { const opts = [...(v.options ?? [])]; opts[oi] = e.target.value; updateVariable(v.id, { options: opts }); }}
+                          onBlur={pushHistory}
+                          placeholder={`상태 ${oi + 1} (예: locked)`}
+                          className="flex-1 bg-background border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <button
+                          onClick={() => { const opts = (v.options ?? []).filter((_, j) => j !== oi); updateVariable(v.id, { options: opts.length ? opts : [""] }); pushHistory(); }}
+                          title="선택지 삭제"
+                          className="p-1 rounded-xs text-muted/60 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => { updateVariable(v.id, { options: [...(v.options ?? []), ""] }); pushHistory(); }}
+                      className="text-[10px] text-primary hover:underline"
+                    >
+                      + 선택지 추가
+                    </button>
+                  </div>
+                )}
                 <label className="flex items-center justify-between cursor-pointer">
                   <span className="text-[10px] text-muted/60">화면 HUD에 표시</span>
                   <Toggle

@@ -140,3 +140,47 @@ interface EventCondition {
 - **조건은 이벤트 게이트 방식**(별도 로직 노드 아님) — 기존 Events에 최소 침습으로 얹기. 반응형은 `variable_changed` 트리거로 해결.
 - **런타임 상태는 뷰어 로컬**(저장 안 함) — 게임 플레이 상태이지 씬 데이터가 아님. 씬엔 initial만 저장.
 - **엣지 감지**로 variable_changed 반응형의 중복 발동 방지.
+
+---
+
+## 🗺️ 변수 시스템 고도화 로드맵 (2026-07-14 수립 — 진행 중)
+
+> 사용자 요청: 변수 타입 확장(현재 number/boolean 2개) + asset(모델) 참조까지 포함한 통합 계획.
+> **추천 착수 순서대로 진행**(Claude 판단). 각 Phase 완료 시 이 문서 갱신.
+
+### Phase A — 타입 확장 기반 (string · enum · color) ⬅️ **먼저**
+셋이 같은 패턴(타입 추가 + 에디터 입력 + `==` 조건)이라 한 번에. `GameVariable.type` 유니온 확장 + `value: number|boolean|string` + 에디터 UI + `evalCondition`/`applyVarOp` 분기.
+- **string**: 값=텍스트, 조건 `==/!=/contains`, 연산 set·append
+- **enum** ⭐(상태머신): `GameVariable.options?: string[]`, 조건 `==` 드롭다운, 연산 set·"다음 상태"
+- **color**: 값=hex, 컬러픽커, 재질/HUD 색 연결
+- 난이도 낮~중, 리스크 낮음.
+
+### Phase B — number 활용도 강화 (A와 병행)
+`applyVarOp`/`evalCondition`만 손대면 됨. clamp(0~max)·div·mod + **변수↔변수 연산/비교**(`score = score + coins`, `score > highScore`). 난이도 낮음.
+
+### Phase C — asset(모델) 변수 + 소비 배선 🔑
+값 저장은 쉬우나 "변수가 가리키는 모델로 뭘 하기"가 새 배선. 여기서 **`@변수` 간접지정** 첫 도입.
+1. **asset 타입**: 값=에셋 id, 에디터=씬 에셋 드롭다운
+2. **소비 A — 모델 스왑**: 새 액션 `swap_model`(값=`대상|@변수`) → `effectiveScene`에 `modelOverride` 맵(기존 vis/pos Override와 동일 패턴)
+3. **소비 B — 변수 모델 스폰**: `spawn_object`가 `@변수` 해석 → 그 에셋으로 생성
+- 소비 A(스왑)가 B(스폰)보다 쉬움 → A 먼저. `@변수` 메커니즘은 후속 "오브젝트 참조 변수"의 토대.
+
+### Phase D — timer 타입
+number 기반 + 뷰어 자동 감소 틱, 연산 start/pause/reset, 조건 `<= 0`. 난이도 중.
+
+### Phase E — 스코프/지속성 (별도 스프린트, 최대 "확대" 레버)
+`GameVariable.scope: 'scene'|'global'|'persistent'`. global=씬 넘어 유지, persistent=localStorage(최고점수·이어하기). 멀티 씬·세이브/로드 전제. 난이도 높음.
+
+### 진행 상태
+- [x] **Phase A (string·enum·color) — 2026-07-14 구현**
+- [x] **Phase B (ops div/mod/clamp·변수↔변수 연산) — 2026-07-14 구현**
+- [ ] Phase C (asset 변수 + swap_model/spawn)
+- [ ] Phase D (timer)
+- [ ] Phase E (scope/persist)
+
+### Phase A+B 구현 내역 (2026-07-14) — tsc 클린, **브라우저 실동작 확인 대기**
+- **스키마**(`scene.ts`): `GameVariable.type`에 string·enum·color 추가, `initial: number|boolean|string`, `options?: string[]`(enum). `EventCondition.op`에 `contains`, `value: number|boolean|string`.
+- **스토어**(`sceneStore.ts` `updateVariable`): 타입 변경 시 initial 보정(string=''·color='#ffffff'·enum=options[0], 없으면 ['A','B'])+enum 옵션 편집 시 initial 목록 밖이면 첫 옵션.
+- **런타임**(`ViewerClient.tsx`): `varsRef`/`hudVars` 타입에 string. `evalCondition` ==/!=를 `String()` 정규화 + `contains`. `applyVarOp`: string 브랜치(set/append/next=enum 순환), 숫자에 div/mod/clamp 추가, **`resolveNum`으로 리터럴 또는 변수명 해석**(변수↔변수 연산). `api.set` 타입 string 포함.
+- **에디터**: EnvironmentPanel 변수 카드 = 타입 5종 드롭다운 + 타입별 초기값 입력(텍스트/컬러픽커/enum드롭다운) + enum 선택지 목록 편집. EventsSection = `VAR_TYPE_LABEL`·`defaultCondition` 헬퍼, set_variable 폼/조건 입력을 타입별로(숫자값 입력은 "값 또는 변수명" 텍스트라 변수참조 UI 노출).
+- **하위호환**: 기존 number/boolean 변수·조건 그대로 동작(normalizeSceneData는 variables 배열 통과).

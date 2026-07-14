@@ -156,8 +156,8 @@ export interface EventSchema {
 // 이벤트 조건 게이트 — 게임 변수 하나와 비교. (다중 조건 AND/OR는 후속)
 export interface EventCondition {
   variable: string; // GameVariable.name
-  op: '==' | '!=' | '>' | '>=' | '<' | '<=';
-  value: number | boolean;
+  op: '==' | '!=' | '>' | '>=' | '<' | '<=' | 'contains'; // contains=문자열 포함
+  value: number | boolean | string;
 }
 
 // show_popup 팝업의 표시 방식/스타일 (Phase 1).
@@ -436,11 +436,14 @@ export interface HudElement {
 }
 
 // 게임 변수(상태) 정의 — name이 참조 키(고유). 런타임 값은 뷰어 로컬(저장 안 함), 씬엔 initial만 저장.
+//   number=숫자 / boolean=참거짓 / string=텍스트 / enum=고정 선택지(options 중 하나) / color=hex 색.
+//   enum·color·string은 값이 전부 문자열(initial: string). (GAME_LOGIC.md 변수 고도화 로드맵 Phase A)
 export interface GameVariable {
   id: string;
   name: string;               // 참조 키 (예: 'score') — 조건/액션에서 이 이름으로 참조
-  type: 'number' | 'boolean'; // string은 후속
-  initial: number | boolean;
+  type: 'number' | 'boolean' | 'string' | 'enum' | 'color';
+  initial: number | boolean | string;
+  options?: string[];         // enum 전용 — 선택 가능한 상태 목록(예: locked/open)
   showInHud?: boolean;        // 뷰어 화면 HUD에 "이름: 값" 표시 여부
 }
 

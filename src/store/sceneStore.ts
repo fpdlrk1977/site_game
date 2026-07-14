@@ -1428,7 +1428,21 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         const next = { ...v, ...patch };
         if (patch.name !== undefined) next.name = patch.name.replace(/\s+/g, '');
         if (patch.type !== undefined && patch.type !== v.type) {
-          next.initial = patch.type === 'boolean' ? false : 0;
+          // 타입 변경 시 initial을 새 타입에 맞게 보정. enum은 옵션 목록도 준비.
+          const t = patch.type;
+          if (t === 'boolean') next.initial = false;
+          else if (t === 'number') next.initial = 0;
+          else if (t === 'string') next.initial = '';
+          else if (t === 'color') next.initial = '#ffffff';
+          else if (t === 'enum') {
+            if (!next.options || next.options.length === 0) next.options = ['A', 'B'];
+            next.initial = next.options[0];
+          }
+        }
+        // enum 옵션 편집 시 initial이 목록에 없으면 첫 옵션으로 맞춤.
+        if (patch.options !== undefined && next.type === 'enum') {
+          if (!next.options || next.options.length === 0) next.options = [''];
+          if (!next.options.includes(next.initial as string)) next.initial = next.options[0];
         }
         return next;
       }),
