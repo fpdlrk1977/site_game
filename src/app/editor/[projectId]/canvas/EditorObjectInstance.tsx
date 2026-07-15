@@ -548,6 +548,15 @@ export function EditorObjectInstance({ object }: Props) {
     [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
+  // triplanar wrap 모드용 로컬 bbox(한 장을 bbox 0~1로 정규화 투영).
+  const wrapBounds = useMemo(() => {
+    primGeom.computeBoundingBox();
+    const bb = primGeom.boundingBox!;
+    return {
+      min: [bb.min.x, bb.min.y, bb.min.z] as [number, number, number],
+      size: [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z] as [number, number, number],
+    };
+  }, [primGeom]);
 
   // 실제 지오메트리 bounding box(원시) — 선택/호버 가이드와 콜라이더 오버레이가 공유한다.
   // (돌출/로프트/평면처럼 한 축이 얇은 형상에서 고정 단위 박스 가이드가 과대 표시되던 문제 수정.
@@ -703,6 +712,10 @@ export function EditorObjectInstance({ object }: Props) {
             transmission={mat?.transmission}
             ior={mat?.ior}
             vertexColors={object.primitiveShape === 'voxel'}
+            textureMapping={mat?.textureMapping}
+            triplanarScale={mat?.triplanarScale}
+            wrapMin={wrapBounds.min}
+            wrapSize={wrapBounds.size}
           />
         </mesh>
       )}

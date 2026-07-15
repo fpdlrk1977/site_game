@@ -581,6 +581,16 @@ export function ViewerObject({
     [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions],
   );
   useEffect(() => () => primGeom?.dispose(), [primGeom]);
+  // triplanar wrap 모드용 로컬 bbox.
+  const wrapBounds = useMemo(() => {
+    if (!primGeom) return { min: [-0.5, -0.5, -0.5] as [number, number, number], size: [1, 1, 1] as [number, number, number] };
+    primGeom.computeBoundingBox();
+    const bb = primGeom.boundingBox!;
+    return {
+      min: [bb.min.x, bb.min.y, bb.min.z] as [number, number, number],
+      size: [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z] as [number, number, number],
+    };
+  }, [primGeom]);
 
   // 모션 회전 피벗(로컬 형상 중심) — 그룹은 원점이 중심과 어긋나 spin이 wobble → 중심 기준 회전.
   // 콜라이더 경로(PlayCanvas)와 동일한 보정을 시각(MotionGroup)에도 적용해 탐색/플레이 모드 일관.
@@ -870,6 +880,10 @@ export function ViewerObject({
         transmission={object.material?.transmission}
         ior={object.material?.ior}
         vertexColors={object.primitiveShape === 'voxel'}
+        textureMapping={object.material?.textureMapping}
+        triplanarScale={object.material?.triplanarScale}
+        wrapMin={wrapBounds.min}
+        wrapSize={wrapBounds.size}
       />
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>

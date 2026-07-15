@@ -51,6 +51,24 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-15) — 🖼️ 텍스처 Mapping 3종 (면마다 / Wrap 구면 / Pattern) (사용자 확인 완료)
+
+> 프리미티브 텍스처 투영 방식 선택. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("만족해").** 여러 차례 시행착오(triplanar bbox정규화→원통→구면) 끝에 **구면 투영**이 정답.
+
+- **목적**: 박스 등에 사진 한 장을 "구에 텍스처 넣은 것처럼 사방을 하나의 그림으로 감싸기". 기존 면별(6면 복제)과 별개 옵션.
+- **스키마**: `MaterialOverride.textureMapping?: 'face'|'wrap'|'pattern'` + `triplanarScale?`(pattern용). 옵셔널=기존 씬 무영향.
+- **PrimitiveMaterial `onBeforeCompile`**(표준·물리 재질 공통):
+  - **face**(기본): 기존 UV(면마다 한 장) + Tile repeat.
+  - **wrap**: **구면 투영** — 중심 기준 방향의 경도(atan)=U·위도(asin)=V. 앞=이미지 중앙, 옆=당겨짐, 위/아래=극점. 도형 무관. (원통·bbox정규화 방식은 6면 복제/캡 색칠 문제로 폐기.)
+  - **pattern**: triplanar 3축 타일 반복 + Pattern Scale 슬라이더.
+  - 값(mode/scale/bbox center·size)은 uniform으로 실시간 갱신(재컴파일 없음). **인스턴스별 고유 `customProgramCacheKey`**로 "일부 오브젝트 uniform 누락" 함정 회피. face↔triplanar 전환 시에만 key로 재마운트.
+  - 색공간=GPU sRGB 샘플러 자동 처리(face와 톤 동일).
+- **bbox 전달**: EditorObjectInstance·ViewerObject가 `primGeom.boundingBox`(로컬)에서 min/size 계산해 셰이더로 전달(에디터=게시 뷰어 동일).
+- **에디터 UI**: MaterialSection 텍스처 블록에 Mapping 드롭다운(3종) + pattern Scale + 모드별 안내. face일 때만 Tile repeat 노출.
+- **한계/후속**: wrap은 구면 특성상 뒷면 이음새·극점 모임 존재(구 텍스처와 동일). GLB·텍스트 콘텐츠 제외(프리미티브 전용). 감는 방향/시작위치 옵션은 미구현(요청 시).
+
+---
+
 ## ✅ 완료 (2026-07-15) — 🌑 그림자 농도(Shadow Density) 슬라이더 (사용자 확인 완료)
 
 > 씬 전역 태양 그림자 진하기 조절. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").**

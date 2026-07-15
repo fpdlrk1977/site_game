@@ -271,6 +271,12 @@ export interface MaterialOverride {
   textureUrl?: string;
   // 타일 반복 횟수(RepeatWrapping). 미설정=1×1(단일). x/y로 가로·세로 반복.
   textureRepeat?: { x: number; y: number };
+  // 텍스처 투영 방식. 'face'(미설정)=면마다 이미지 한 장(기존).
+  // 'wrap'=구면 투영 — 구에 텍스처 넣듯 한 장을 사방에 덮음(앞=중앙, 옆=당겨짐, 위/아래=극점).
+  // 'pattern'=무늬가 표면 전체에 이음새 없이 반복(triplanar 타일). 셰이더 onBeforeCompile 투영.
+  textureMapping?: 'face' | 'wrap' | 'pattern';
+  // pattern 모드 스케일 — 로컬 유닛당 반복 수. 미설정=1. 클수록 무늬가 작아지고 촘촘해짐.
+  triplanarScale?: number;
   // 물리 재질(MeshPhysicalMaterial) — 하나라도 >0이면 프리미티브가 physical 재질로 렌더. 전부 0/미설정이면 standard.
   clearcoat?: number;     // 0~1 투명 코팅 광택(자동차 도장·니스)
   sheen?: number;         // 0~1 천/벨벳 가장자리 광택

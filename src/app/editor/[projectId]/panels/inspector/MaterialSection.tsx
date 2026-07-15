@@ -9,6 +9,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { uploadImageTexture } from '@/lib/uploadAsset';
 import { TexturePicker } from '@/components/ui/TexturePicker';
+import { SelectBox } from '@/components/ui/SelectBox';
 import { InlineEditName } from '@/components/ui/InlineEditName';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
 import type { ObjectNodeSchema } from '@/types/scene';
@@ -189,20 +190,50 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                         {obj.material?.textureUrl && (
                           <>
                             <img src={obj.material.textureUrl} alt="texture" className="w-full h-16 object-cover rounded-xs border border-border" />
-                            <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
-                              <input type="checkbox" checked={!!obj.material?.textureRepeat}
-                                onChange={(e) => { updateObject(obj.id, { material: { ...obj.material, textureRepeat: e.target.checked ? { x: 2, y: 2 } : undefined } }); pushHistory(); }} />
-                              Tile repeat (pattern)
-                            </label>
-                            {obj.material?.textureRepeat && (
-                              <div className="flex gap-2">
-                                <LabeledNum label="Repeat X" value={obj.material.textureRepeat.x}
-                                  onChange={(v) => updateObject(obj.id, { material: { ...obj.material, textureRepeat: { x: Math.max(1, v), y: obj.material?.textureRepeat?.y ?? 1 } } })}
-                                  onCommit={pushHistory} min={1} max={20} precision={0} dragStep={1} />
-                                <LabeledNum label="Repeat Y" value={obj.material.textureRepeat.y}
-                                  onChange={(v) => updateObject(obj.id, { material: { ...obj.material, textureRepeat: { x: obj.material?.textureRepeat?.x ?? 1, y: Math.max(1, v) } } })}
-                                  onCommit={pushHistory} min={1} max={20} precision={0} dragStep={1} />
-                              </div>
+                            {/* Mapping — 면마다 / 보자기(한 장) / 무늬 반복 */}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Mapping</span>
+                              <SelectBox
+                                value={obj.material?.textureMapping ?? 'face'}
+                                onChange={(v) => { updateObject(obj.id, { material: { ...obj.material, textureMapping: v === 'face' ? undefined : (v as 'wrap' | 'pattern') } }); pushHistory(); }}
+                                options={[
+                                  { value: 'face', label: 'Per-face (면마다)' },
+                                  { value: 'wrap', label: 'Wrap (보자기·한 장)' },
+                                  { value: 'pattern', label: 'Pattern (무늬 반복)' },
+                                ]}
+                                fullWidth={false}
+                                gray
+                              />
+                            </div>
+                            {obj.material?.textureMapping === 'pattern' && (
+                              <>
+                                <LabeledNum label="Pattern Scale" value={obj.material?.triplanarScale ?? 1}
+                                  onChange={(v) => updateObject(obj.id, { material: { ...obj.material, triplanarScale: Math.max(0.05, v) } })}
+                                  onCommit={pushHistory} min={0.05} max={10} precision={2} dragStep={0.05} />
+                                <p className="text-[10px] text-muted/50">무늬가 표면 전체에 이음새 없이 반복돼요. 값이 클수록 무늬가 작아지고 촘촘해집니다.</p>
+                              </>
+                            )}
+                            {obj.material?.textureMapping === 'wrap' && (
+                              <p className="text-[10px] text-muted/50">구에 텍스처를 넣은 것처럼 한 장을 사방에 덮어요. 앞은 중앙, 옆은 당겨지고, 위/아래는 극점으로 모여 하나의 그림처럼 감쌉니다.</p>
+                            )}
+                            {(obj.material?.textureMapping ?? 'face') === 'face' && (
+                              <>
+                                <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
+                                  <input type="checkbox" checked={!!obj.material?.textureRepeat}
+                                    onChange={(e) => { updateObject(obj.id, { material: { ...obj.material, textureRepeat: e.target.checked ? { x: 2, y: 2 } : undefined } }); pushHistory(); }} />
+                                  Tile repeat (pattern)
+                                </label>
+                                {obj.material?.textureRepeat && (
+                                  <div className="flex gap-2">
+                                    <LabeledNum label="Repeat X" value={obj.material.textureRepeat.x}
+                                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, textureRepeat: { x: Math.max(1, v), y: obj.material?.textureRepeat?.y ?? 1 } } })}
+                                      onCommit={pushHistory} min={1} max={20} precision={0} dragStep={1} />
+                                    <LabeledNum label="Repeat Y" value={obj.material.textureRepeat.y}
+                                      onChange={(v) => updateObject(obj.id, { material: { ...obj.material, textureRepeat: { x: obj.material?.textureRepeat?.x ?? 1, y: Math.max(1, v) } } })}
+                                      onCommit={pushHistory} min={1} max={20} precision={0} dragStep={1} />
+                                  </div>
+                                )}
+                              </>
                             )}
                           </>
                         )}

@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import * as THREE from 'three';
+
+type MappingMode = 'face' | 'wrap' | 'pattern';
 
 interface Props {
   color: string;
@@ -19,13 +21,18 @@ interface Props {
   transmission?: number;
   ior?: number;
   vertexColors?: boolean; // 복셀 등 정점색 지오메트리 — 색을 정점에서 읽음(베이스 흰색)
+  // 텍스처 투영: 'face'=면마다 한 장(기본) · 'wrap'=한 장을 전체에 보자기처럼 · 'pattern'=무늬 반복(triplanar)
+  textureMapping?: MappingMode;
+  triplanarScale?: number;          // pattern 모드 반복 스케일(로컬 유닛당)
+  wrapMin?: [number, number, number];  // wrap 모드용 지오메트리 로컬 bbox 최소점
+  wrapSize?: [number, number, number]; // wrap 모드용 지오메트리 로컬 bbox 크기
 }
 
 // 프리미티브 표준 재질 — 색상 + 선택적 이미지 텍스처(map). 에디터/뷰어가 공유.
 // 텍스처 로딩을 비동기(비-Suspense)로 처리해 인라인 mesh에 Suspense 경계 없이도 안전하게 쓸 수 있다.
 export function PrimitiveMaterial({
   color, roughness, metalness, emissive, emissiveIntensity, wireframe, textureUrl, repeat, flatShading, side,
-  clearcoat, sheen, transmission, ior, vertexColors,
+  clearcoat, sheen, transmission, ior, vertexColors, textureMapping, triplanarScale, wrapMin, wrapSize,
 }: Props) {
   const [tex, setTex] = useState<THREE.Texture | null>(null);
   const rx = repeat?.x ?? 1;
@@ -47,6 +54,66 @@ export function PrimitiveMaterial({
     if (tex) { tex.repeat.set(rx, ry); tex.needsUpdate = true; }
   }, [tex, rx, ry]);
 
+  // ── Triplanar 투영(wrap/pattern) ── 면별 UV 대신 오브젝트 로컬 좌표를 3축으로 투영.
+  //   wrap  = bbox 기준 0~1로 정규화 → 한 장을 전체에 딱 한 번(보자기).
+  //   pattern = 로컬좌표×scale 반복 → 무늬가 표면 전체에 이음새 없이 타일.
+  //   값(mode/scale/bbox)은 uniform으로 갱신(재컴파일 없음). 켜고 끌 때만 key로 재마운트.
+  const triplanar = (textureMapping === 'wrap' || textureMapping === 'pattern') && !!tex;
+  // 재질 인스턴스별 고유 프로그램 캐시 키 — 여러 오브젝트가 프로그램을 공유하면 onBeforeCompile이
+  //   재호출되지 않아 uniform이 일부 재질에 안 걸리는 함정을 회피(인스턴스마다 컴파일 1회).
+  const uidRef = useRef(Math.random().toString(36).slice(2));
+  const stateRef = useRef({ mode: 0, scale: 1, min: [-0.5, -0.5, -0.5] as number[], size: [1, 1, 1] as number[] });
+  stateRef.current.mode = textureMapping === 'pattern' ? 1 : 0;
+  stateRef.current.scale = triplanarScale ?? 1;
+  stateRef.current.min = wrapMin ?? [-0.5, -0.5, -0.5];
+  stateRef.current.size = wrapSize ?? [1, 1, 1];
+  const shaderRef = useRef<{ uniforms: Record<string, { value: unknown }> } | null>(null);
+  useEffect(() => {
+    const s = shaderRef.current;
+    if (!s) return;
+    s.uniforms.uWrapMode.value = stateRef.current.mode;
+    s.uniforms.uTriScale.value = stateRef.current.scale;
+    (s.uniforms.uWrapMin.value as THREE.Vector3).fromArray(stateRef.current.min);
+    (s.uniforms.uWrapSize.value as THREE.Vector3).fromArray(stateRef.current.size);
+  }, [textureMapping, triplanarScale, wrapMin, wrapSize]);
+
+  const onBeforeCompile = useCallback((shader: THREE.WebGLProgramParametersWithUniforms) => {
+    shader.uniforms.uWrapMode = { value: stateRef.current.mode };
+    shader.uniforms.uTriScale = { value: stateRef.current.scale };
+    shader.uniforms.uWrapMin = { value: new THREE.Vector3().fromArray(stateRef.current.min) };
+    shader.uniforms.uWrapSize = { value: new THREE.Vector3().fromArray(stateRef.current.size) };
+    shaderRef.current = shader as unknown as { uniforms: Record<string, { value: unknown }> };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vTriPos = position;\n  vTriNormal = normal;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;\nuniform float uWrapMode;\nuniform float uTriScale;\nuniform vec3 uWrapMin;\nuniform vec3 uWrapSize;')
+      .replace('#include <map_fragment>', `
+        #ifdef USE_MAP
+          vec3 _n = normalize(vTriNormal);
+          if (uWrapMode < 0.5) {
+            // Wrap(보자기) — 구(Sphere)에 텍스처 넣은 것처럼 한 장을 구면 투영으로 사방에 덮음.
+            //   중심에서 각 지점 방향(경도=U, 위도=V)으로 매핑 → 앞=얼굴 중앙, 양옆=얼굴 양옆이 당겨지고,
+            //   위/아래는 극점으로 모여 '하나의 얼굴이 전체를 감싼' 모양. 도형 종류 무관(박스·구·실린더…).
+            vec3 _ctr = uWrapMin + uWrapSize * 0.5;
+            vec3 _d = normalize(vTriPos - _ctr);
+            float _u = atan(_d.x, _d.z) / 6.2831853 + 0.5;              // 경도 0..1
+            float _v = 0.5 - asin(clamp(_d.y, -1.0, 1.0)) / 3.14159265; // 위도 0(위)..1(아래)
+            diffuseColor *= texture2D(map, vec2(_u, _v));
+          } else {
+            // Pattern — triplanar 타일 반복.
+            vec3 _w = abs(_n); _w = pow(_w, vec3(4.0)); _w /= (_w.x + _w.y + _w.z + 1e-5);
+            vec4 _cx = texture2D(map, vTriPos.zy * uTriScale);
+            vec4 _cy = texture2D(map, vTriPos.xz * uTriScale);
+            vec4 _cz = texture2D(map, vTriPos.xy * uTriScale);
+            diffuseColor *= _cx * _w.x + _cy * _w.y + _cz * _w.z;
+          }
+        #endif
+      `);
+  }, []);
+  const triProps = triplanar ? { onBeforeCompile, customProgramCacheKey: () => `prim-tri-${uidRef.current}` } : {};
+  const triKey = triplanar ? 'tri' : 'face';
+
   // 텍스처/정점색이 있으면 베이스 색을 흰색으로 → 이미지·정점색이 재질 색에 물들지 않고 그대로 보임.
   const base = (tex || vertexColors) ? '#ffffff' : color;
   const t = transmission ?? 0;
@@ -57,9 +124,9 @@ export function PrimitiveMaterial({
   //   transmission을 transmissive 렌더 리스트로 분류해 뒤 씬 버퍼를 자동 샘플). thickness>0 + ior 필요.
   if (hasPhysical) {
     return (
-      // key에 재질 종류·flatShading 포함 → std↔physical 전환 시 재마운트(셰이더 재컴파일 안전).
+      // key에 재질 종류·flatShading·triplanar 포함 → 전환 시 재마운트(셰이더 재컴파일 안전).
       <meshPhysicalMaterial
-        key={`phys-${tex ? 'tex' : 'plain'}-${flatShading ? 'flat' : 'smooth'}-${vertexColors ? 'vc' : ''}`}
+        key={`phys-${tex ? 'tex' : 'plain'}-${flatShading ? 'flat' : 'smooth'}-${vertexColors ? 'vc' : ''}-${triKey}`}
         map={tex ?? undefined}
         color={base}
         vertexColors={vertexColors ?? false}
@@ -77,14 +144,15 @@ export function PrimitiveMaterial({
         transmission={t}
         thickness={t > 0 ? 1 : 0}
         ior={ior ?? 1.5}
+        {...triProps}
       />
     );
   }
 
   return (
-    // key: 텍스처 유무·flatShading 전환 시 재질을 새로 마운트해 셰이더 재컴파일 이슈 회피(flatShading은 런타임 변경 시 needsUpdate 필요).
+    // key: 텍스처 유무·flatShading·triplanar 전환 시 재질을 새로 마운트해 셰이더 재컴파일 이슈 회피.
     <meshStandardMaterial
-      key={`std-${tex ? 'tex' : 'plain'}-${flatShading ? 'flat' : 'smooth'}-${vertexColors ? 'vc' : ''}`}
+      key={`std-${tex ? 'tex' : 'plain'}-${flatShading ? 'flat' : 'smooth'}-${vertexColors ? 'vc' : ''}-${triKey}`}
       map={tex ?? undefined}
       color={base}
       vertexColors={vertexColors ?? false}
@@ -95,6 +163,7 @@ export function PrimitiveMaterial({
       wireframe={wireframe}
       flatShading={flatShading ?? false}
       side={side ?? THREE.FrontSide}
+      {...triProps}
     />
   );
 }
