@@ -248,6 +248,13 @@ interface SceneActions {
   poseEdit: { clipId: string; idx: number } | null;
   setPoseEdit: (clipId: string, idx: number | null) => void;
   goToPose: (clipId: string, idx: number) => void;
+  // 타임라인 트랙별 키 선택/편집 (per-track 독립 타이밍) — transient. keySel이 있으면 오토키가 그 키만 갱신.
+  keySel: { clipId: string; objectId: string; idx: number } | null;
+  goToKey: (clipId: string, objectId: string, idx: number) => void;
+  clearKeySel: () => void;
+  addKeyToTrack: (clipId: string, objectId: string, t: number) => void;
+  retimeKey: (clipId: string, objectId: string, idx: number, t: number) => void;
+  removeKey: (clipId: string, objectId: string, idx: number) => void;
   updateEnvironment: (patch: Partial<EnvSchema>) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -376,15 +383,30 @@ function pruneOrphanClips(animClips: AnimClip[], deleted: Set<string>): { clips:
   return { clips: changed ? clips : animClips, changed };
 }
 
-// 오토키(auto-key) — 편집 중 포즈(poseEdit)가 있고 방금 트랜스폼이 바뀐 오브젝트가 그 클립의 트랙이면,
-// 그 포즈의 키프레임을 오브젝트의 새 트랜스폼으로 자동 갱신한다("포즈 갱신" 자동화). objects는 '갱신 후' 배열.
-// 변경 없으면 null 반환(히스토리/리렌더 최소화). goToPose 경유 이동엔 발동하면 안 되므로 그 경로는 우회한다.
+// 오토키(auto-key) — 편집 중 대상 키를 방금 바뀐 오브젝트의 트랜스폼으로 자동 갱신. objects는 '갱신 후' 배열.
+//   keySel(타임라인 트랙별 선택)이 있으면 그 트랙의 그 키만 갱신(per-track 독립 타이밍).
+//   없으면 poseEdit(간단 모드 포즈)로 정렬 포즈 갱신. 변경 없으면 null(히스토리/리렌더 최소화). goToPose/goToKey는 우회.
 function autoKeyPose(
   poseEdit: { clipId: string; idx: number } | null,
+  keySel: { clipId: string; objectId: string; idx: number } | null,
   animClips: AnimClip[],
   objects: ObjectNodeSchema[],
   changedIds: string[],
 ): AnimClip[] | null {
+  const nearVec = (a: Vec3Schema | undefined, b: Vec3Schema) =>
+    !!a && Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6 && Math.abs(a.z - b.z) < 1e-6;
+  // ── 타임라인: 선택 키(트랙 하나)만 갱신 ──
+  if (keySel) {
+    if (!changedIds.includes(keySel.objectId)) return null;
+    const clip = animClips.find((c) => c.id === keySel.clipId);
+    const track = clip?.tracks.find((t) => t.objectId === keySel.objectId);
+    const o = objects.find((x) => x.id === keySel.objectId);
+    const k = track?.keys[keySel.idx];
+    if (!clip || !track || !o || !k) return null;
+    if (nearVec(k.position, o.position) && nearVec(k.rotation, o.rotation) && nearVec(k.scale, o.scale)) return null;
+    const tracks = clip.tracks.map((t) => (t.objectId !== keySel.objectId ? t : { ...t, keys: t.keys.map((kk, i) => (i === keySel.idx ? { ...kk, position: { ...o.position }, rotation: { ...o.rotation }, scale: { ...o.scale } } : kk)) }));
+    return animClips.map((c) => (c.id === clip.id ? { ...c, tracks } : c));
+  }
   if (!poseEdit) return null;
   const clip = animClips.find((c) => c.id === poseEdit.clipId);
   if (!clip) return null;
@@ -538,6 +560,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   animScrub: null,
   animMode: 'simple',
   poseEdit: null,
+  keySel: null,
   selectedId: null,
   groupScope: null,
   transformMode: 'translate',
@@ -589,6 +612,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       animPreview: null,
       animScrub: null,
       poseEdit: null,
+      keySel: null,
       selectedId: null,
       selectedIds: [],
       groupScope: null,
@@ -975,7 +999,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   updateObject: (id, patch) => {
-    const { objects, environment, prefabs, animClips, poseEdit, _prevSnapshot } = get();
+    const { objects, environment, prefabs, animClips, poseEdit, keySel, _prevSnapshot } = get();
     const target = objects.find((o) => o.id === id);
     // 프리팹 인스턴스 노드를 편집하면, 바뀐 필드가 속한 override 그룹을 기록 → 동기화 시 그 그룹은 원본을 안 따른다.
     let overridePatch: Partial<ObjectNodeSchema> | null = null;
@@ -992,7 +1016,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const newObjects = objects.map((o) => (o.id === id ? { ...o, ...patch, ...overridePatch } : o));
     // 오토키 — 트랜스폼 편집 시 편집 중 포즈가 있으면 그 포즈 키프레임에 자동 반영.
     const isTransform = 'position' in patch || 'rotation' in patch || 'scale' in patch;
-    const ak = isTransform ? autoKeyPose(poseEdit, animClips, newObjects, [id]) : null;
+    const ak = isTransform ? autoKeyPose(poseEdit, keySel, animClips, newObjects, [id]) : null;
     set({
       _prevSnapshot: _prevSnapshot ?? { objects, environment, ...(ak ? { animClips } : {}) },
       objects: newObjects,
@@ -1002,14 +1026,14 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   commitTransforms: (updates) => {
-    const { objects, environment, animClips, poseEdit, past } = get();
+    const { objects, environment, animClips, poseEdit, keySel, past } = get();
     const map = new Map(updates.map((u) => [u.id, u]));
     const newObjects = objects.map((o) => {
       const u = map.get(o.id);
       return u ? { ...o, position: { ...u.position }, rotation: { ...u.rotation }, scale: { ...u.scale } } : o;
     });
     // 오토키 — 편집 중 포즈가 있으면 옮긴 오브젝트를 그 포즈 키프레임에 자동 반영(objects·animClips 원자 커밋).
-    const ak = autoKeyPose(poseEdit, animClips, newObjects, updates.map((u) => u.id));
+    const ak = autoKeyPose(poseEdit, keySel, animClips, newObjects, updates.map((u) => u.id));
     set({
       objects: newObjects,
       ...(ak ? { animClips: ak } : {}),
@@ -1732,7 +1756,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   stopAnimPreview: () => set({ animPreview: null }),
   setAnimScrub: (clipId, t) => set({ animScrub: t == null ? null : { clipId, t }, ...(t == null ? {} : { animPreview: null }) }),
   setAnimMode: (m) => set({ animMode: m }),
-  setPoseEdit: (clipId, idx) => set({ poseEdit: idx == null ? null : { clipId, idx } }),
+  setPoseEdit: (clipId, idx) => set({ poseEdit: idx == null ? null : { clipId, idx }, keySel: null }),
   // 포즈로 이동 — 모든 트랙 오브젝트를 그 키프레임으로. objects를 직접 세팅(updateObject 우회 → 오토키 무발동).
   //   이 포즈를 '편집 중 포즈'로 지정 → 이후 오브젝트를 옮기면 오토키가 이 포즈에 반영.
   goToPose: (clipId, idx) => {
@@ -1748,10 +1772,64 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         return k ? { ...o, ...(k.position ? { position: { ...k.position } } : {}), ...(k.rotation ? { rotation: { ...k.rotation } } : {}), ...(k.scale ? { scale: { ...k.scale } } : {}) } : o;
       }),
       poseEdit: { clipId, idx },
+      keySel: null,
       isModified: true,
       _prevSnapshot: null,
       ...withHistory({ objects, environment }, past),
     });
+  },
+  clearKeySel: () => set({ keySel: null }),
+  // 타임라인: 특정 트랙의 특정 키로 이동 — 그 오브젝트만 그 키 값으로. keySel 지정(오토키가 이 키만 갱신), poseEdit 해제.
+  goToKey: (clipId, objectId, idx) => {
+    const { animClips, objects, environment, past } = get();
+    const track = animClips.find((c) => c.id === clipId)?.tracks.find((t) => t.objectId === objectId);
+    const k = track?.keys[idx];
+    if (!k) return;
+    set({
+      objects: objects.map((o) => (o.id === objectId ? { ...o, ...(k.position ? { position: { ...k.position } } : {}), ...(k.rotation ? { rotation: { ...k.rotation } } : {}), ...(k.scale ? { scale: { ...k.scale } } : {}) } : o)),
+      keySel: { clipId, objectId, idx },
+      poseEdit: null,
+      isModified: true,
+      _prevSnapshot: null,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+  // 타임라인: 한 트랙에만 키 추가(현재 트랜스폼 캡처, 시간 t). 그 키를 선택.
+  addKeyToTrack: (clipId, objectId, t) => {
+    const { animClips, objects, environment, past } = get();
+    const clip = animClips.find((c) => c.id === clipId);
+    const o = objects.find((x) => x.id === objectId);
+    if (!clip || !o) return;
+    const time = Math.round(Math.max(0, t) * 100) / 100;
+    const tracks = clip.tracks.map((tr) => tr.objectId !== objectId ? tr
+      : { ...tr, keys: [...tr.keys.filter((k) => Math.abs(k.time - time) > 1e-3), { time, position: { ...o.position }, rotation: { ...o.rotation }, scale: { ...o.scale } }].sort((a, b) => a.time - b.time) });
+    const dur = Math.max(0.1, ...tracks.flatMap((tr) => tr.keys.map((k) => k.time)));
+    const idx = tracks.find((tr) => tr.objectId === objectId)!.keys.findIndex((k) => Math.abs(k.time - time) < 1e-3);
+    set({ animClips: animClips.map((c) => (c.id === clipId ? { ...c, tracks, duration: dur } : c)), keySel: { clipId, objectId, idx }, poseEdit: null, isModified: true, ...withHistory({ objects, environment, animClips }, past) });
+  },
+  // 타임라인: 한 트랙 키 시간 이동(이웃 사이 클램프). 지연 커밋(드래그) — 호출부 pushHistory로 확정.
+  retimeKey: (clipId, objectId, idx, t) => {
+    const { animClips, objects, environment, _prevSnapshot } = get();
+    const clip = animClips.find((c) => c.id === clipId);
+    const track = clip?.tracks.find((tr) => tr.objectId === objectId);
+    if (!clip || !track || !track.keys[idx]) return;
+    const times = track.keys.map((k) => k.time);
+    const lo = idx > 0 ? times[idx - 1] + 0.01 : 0;
+    const hi = idx < times.length - 1 ? times[idx + 1] - 0.01 : Infinity;
+    const nt = Math.round(Math.min(hi, Math.max(lo, t)) * 100) / 100;
+    const tracks = clip.tracks.map((tr) => tr.objectId !== objectId ? tr : { ...tr, keys: tr.keys.map((k, i) => (i === idx ? { ...k, time: nt } : k)) });
+    const dur = Math.max(0.1, ...tracks.flatMap((tr) => tr.keys.map((k) => k.time)));
+    set({ _prevSnapshot: _prevSnapshot ?? { objects, environment, animClips }, animClips: animClips.map((c) => (c.id === clipId ? { ...c, tracks, duration: dur } : c)), isModified: true });
+  },
+  // 타임라인: 한 트랙 키 삭제(트랙 최소 1키 유지).
+  removeKey: (clipId, objectId, idx) => {
+    const { animClips, objects, environment, past } = get();
+    const clip = animClips.find((c) => c.id === clipId);
+    const track = clip?.tracks.find((tr) => tr.objectId === objectId);
+    if (!clip || !track || track.keys.length <= 1) return;
+    const tracks = clip.tracks.map((tr) => tr.objectId !== objectId ? tr : { ...tr, keys: tr.keys.filter((_, i) => i !== idx) });
+    const dur = Math.max(0.1, ...tracks.flatMap((tr) => tr.keys.map((k) => k.time)));
+    set({ animClips: animClips.map((c) => (c.id === clipId ? { ...c, tracks, duration: dur } : c)), keySel: null, isModified: true, ...withHistory({ objects, environment, animClips }, past) });
   },
 
   updateEnvironment: (patch) => {

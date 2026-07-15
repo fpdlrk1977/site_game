@@ -9,9 +9,8 @@ import { useRef, useState, useEffect } from 'react';
 import { Play, Square, Repeat, Plus, SkipBack } from 'lucide-react';
 import { useSceneStore, CHARACTER_PREVIEW_ID } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
-import type { ObjectNodeSchema, AnimKeyframe, EasingType } from '@/types/scene';
+import type { EasingType } from '@/types/scene';
 
-const snap = (o: ObjectNodeSchema): Omit<AnimKeyframe, 'time'> => ({ position: { ...o.position }, rotation: { ...o.rotation }, scale: { ...o.scale } });
 const EASE_OPTS: { value: EasingType; label: string }[] = [
   { value: 'linear', label: '일정' }, { value: 'easeInOut', label: '부드럽게' }, { value: 'easeIn', label: '천천히 시작' },
   { value: 'easeOut', label: '천천히 끝' }, { value: 'backOut', label: '살짝 뒤로' }, { value: 'bounceOut', label: '튕김' },
@@ -24,20 +23,19 @@ const fmtTick = (t: number): string => {
   if (t >= 60) { const m = Math.floor(t / 60); const s = Math.round((t % 60) * 100) / 100; const ss = Number.isInteger(s) ? String(s).padStart(2, '0') : s.toFixed(2).padStart(5, '0'); return `${m}:${ss}`; }
   return `${Math.round(t * 100) / 100}s`;
 };
-const eqV = (a: { x: number; y: number; z: number } | undefined, b: { x: number; y: number; z: number }) =>
-  !a || (Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3 && Math.abs(a.z - b.z) < 1e-3);
 
 export function TimelinePanel() {
   const {
     animMode, animClips, selectedId, objects, animScrub, setAnimScrub,
-    animPreview, startAnimPreview, stopAnimPreview, poseEdit, setPoseEdit, goToPose,
+    animPreview, startAnimPreview, stopAnimPreview, keySel, goToKey, clearKeySel,
+    addKeyToTrack, retimeKey, removeKey,
     updateAnimClip, pushHistory, selectObject, addTrackToClip,
   } = useSceneStore();
   const areaRef = useRef<HTMLDivElement>(null);   // 고정폭 레인 영역(px↔시간 기준)
-  const dragRef = useRef<{ mode: 'scrub' | 'key' | 'pan'; idx?: number; startX: number; startVal: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{ mode: 'scrub' | 'key' | 'pan'; objectId?: string; idx?: number; startX: number; startVal: number; moved: boolean } | null>(null);
   const viewRef = useRef({ start: 0, dur: 5, cw: 600 });  // 네이티브 휠 핸들러가 현재 창을 읽기 위한 ref
   const delPoseRef = useRef<(() => void) | null>(null);   // 선택 키프레임 삭제(Del 키) — 렌더마다 갱신
-  const [ctx, setCtx] = useState<{ x: number; y: number; t: number } | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; t: number; objectId: string } | null>(null);
   const [playT, setPlayT] = useState<number | null>(null);
   const [viewStart, setViewStart] = useState(0);  // 창 시작 시간(초)
   const [viewDur, setViewDur] = useState(5);      // 창이 담는 시간(초)
@@ -109,58 +107,38 @@ export function TimelinePanel() {
   if (animMode !== 'timeline' || !clip) return null;
 
   viewRef.current = { start: viewStart, dur: viewDur, cw: containerW };
-  const poseTimes = (clip.tracks[0]?.keys ?? []).map((k) => k.time);
   const pxPerSec = containerW / viewDur;
   const pxAt = (t: number) => (t - viewStart) * pxPerSec; // 창 기준 px 위치(레인 폭 고정)
 
-  let curPoseIdx = -1;
-  if (poseEdit?.clipId === clip.id && poseEdit.idx < poseTimes.length) curPoseIdx = poseEdit.idx;
-  else {
-    const rt = clip.tracks[0];
-    const ro = rt && objects.find((o) => o.id === rt.objectId);
-    curPoseIdx = rt && ro ? rt.keys.findIndex((k) => eqV(k.position, ro.position) && eqV(k.rotation, ro.rotation) && eqV(k.scale, ro.scale)) : -1;
-  }
+  const trackedIds = new Set(clip.tracks.map((t) => t.objectId));
+  const addable = objects.filter((o) => o.parentId == null && o.id !== CHARACTER_PREVIEW_ID && !trackedIds.has(o.id));
+
+  // 선택된 키(트랙별). keySel.
+  const sel = keySel?.clipId === clip.id ? keySel : null;
+  const selTrack = sel ? clip.tracks.find((t) => t.objectId === sel.objectId) : undefined;
+  const selKey = selTrack?.keys[sel!.idx];
+  const totalKeys = clip.tracks.reduce((n, t) => n + t.keys.length, 0);
+  // 버튼/눈금자 우클릭 대상 트랙 — 타임라인에서 선택된 오브젝트(트랙), 없으면 root.
+  const rootObjId = clip.tracks[0]?.objectId;
+  const targetObjId = (selectedId && trackedIds.has(selectedId)) ? selectedId : rootObjId;
 
   const scrubbing = animScrub?.clipId === clip.id;
   const previewing = animPreview?.clipId === clip.id;
-  const readoutT = scrubbing ? animScrub!.t : (playT != null ? playT : (curPoseIdx >= 0 ? poseTimes[curPoseIdx] : 0));
+  const readoutT = scrubbing ? animScrub!.t : (playT != null ? playT : (selKey ? selKey.time : 0));
   const headT = scrubbing ? animScrub!.t : (playT != null ? playT : null);
 
-  // ── 포즈 연산 ──
-  const addPoseAt = (rawT: number) => {
-    const time = Math.round(Math.max(0, rawT) * 100) / 100;
-    const tracks = clip.tracks.map((tr) => {
-      const o = objects.find((x) => x.id === tr.objectId);
-      const last = tr.keys[tr.keys.length - 1];
-      const base = o ? snap(o) : (last ? { position: last.position, rotation: last.rotation, scale: last.scale } : { position: undefined, rotation: undefined, scale: undefined });
-      const keys = [...tr.keys.filter((k) => Math.abs(k.time - time) > 1e-3), { time, ...base }].sort((a, b) => a.time - b.time);
-      return { ...tr, keys };
-    });
-    const dur = Math.max(0.1, ...tracks.flatMap((tr) => tr.keys.map((k) => k.time)));
-    updateAnimClip(clip.id, { tracks, duration: dur });
-    pushHistory();
-    setPoseEdit(clip.id, tracks[0].keys.findIndex((k) => Math.abs(k.time - time) < 1e-3));
+  // ── 트랙별 키 연산 (per-track) ── 추가/이동/삭제/오토키가 '그 트랙 하나'에만 작용.
+  const addKeyEnd = () => {
+    if (!targetObjId) return;
+    const tr = clip.tracks.find((t) => t.objectId === targetObjId);
+    const end = tr && tr.keys.length ? Math.max(...tr.keys.map((k) => k.time)) + 1 : 1;
+    addKeyToTrack(clip.id, targetObjId, end);
   };
-  const addPoseEnd = () => addPoseAt(Math.max(0, ...poseTimes) + 1);
-  const removePose = (i: number) => {
-    if (poseTimes.length <= 1) return;
-    const tracks = clip.tracks.map((t) => ({ ...t, keys: t.keys.filter((_, ki) => ki !== i) }));
-    const dur = Math.max(0.1, ...tracks.flatMap((t) => t.keys.map((k) => k.time)));
-    updateAnimClip(clip.id, { tracks, duration: dur });
-    pushHistory();
-    setPoseEdit(clip.id, null);
-  };
-  const setKeyEasing = (i: number, ez: string) => {
+  const setSelKeyEasing = (ez: string) => {
+    if (!sel) return;
     const val = (ez || undefined) as EasingType | undefined;
-    updateAnimClip(clip.id, { tracks: clip.tracks.map((tr) => ({ ...tr, keys: tr.keys.map((k, ki) => (ki === i ? { ...k, easing: val } : k)) })) });
+    updateAnimClip(clip.id, { tracks: clip.tracks.map((tr) => tr.objectId !== sel.objectId ? tr : { ...tr, keys: tr.keys.map((k, ki) => (ki === sel.idx ? { ...k, easing: val } : k)) }) });
     pushHistory();
-  };
-  const retime = (i: number, val: number) => {
-    const lo = i > 0 ? poseTimes[i - 1] + 0.01 : 0;
-    const hi = i < poseTimes.length - 1 ? poseTimes[i + 1] - 0.01 : Infinity;
-    const t = Math.round(Math.min(hi, Math.max(lo, val)) * 100) / 100;
-    const tracks = clip.tracks.map((tr) => ({ ...tr, keys: tr.keys.map((k, ki) => (ki === i ? { ...k, time: t } : k)) }));
-    updateAnimClip(clip.id, { tracks, duration: Math.max(0.1, ...tracks.flatMap((tr) => tr.keys.map((k) => k.time))) });
   };
 
   // ── 포인터 ── 시간 = viewStart + (x)/pxPerSec
@@ -172,12 +150,12 @@ export function TimelinePanel() {
     if (e.button !== 0) return;
     dragRef.current = { mode: 'scrub', startX: e.clientX, startVal: 0, moved: false };
     (e.target as Element).setPointerCapture?.(e.pointerId);
-    setAnimScrub(clip.id, Math.max(0, Math.min(viewStart + viewDur, tFromX(e.clientX)))); // 창 끝까지 커서 따라감(끝 지나면 마지막 포즈 유지)
+    setAnimScrub(clip.id, Math.max(0, Math.min(viewStart + viewDur, tFromX(e.clientX))));
   };
-  const beginKey = (e: React.PointerEvent, idx: number) => {
+  const beginKey = (e: React.PointerEvent, objectId: string, idx: number) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    dragRef.current = { mode: 'key', idx, startX: e.clientX, startVal: 0, moved: false };
+    dragRef.current = { mode: 'key', objectId, idx, startX: e.clientX, startVal: 0, moved: false };
     (e.target as Element).setPointerCapture?.(e.pointerId);
   };
   const beginPan = (e: React.PointerEvent) => {
@@ -190,21 +168,18 @@ export function TimelinePanel() {
     if (!d) { setHoverT(tFromX(e.clientX)); return; }
     if (Math.abs(e.clientX - d.startX) > 2) d.moved = true;
     if (d.mode === 'scrub') setAnimScrub(clip.id, Math.max(0, Math.min(viewStart + viewDur, tFromX(e.clientX))));
-    else if (d.mode === 'key' && d.moved && d.idx != null) retime(d.idx, tFromX(e.clientX));
-    else if (d.mode === 'pan') setViewStart(Math.max(0, d.startVal - (e.clientX - d.startX) / pxPerSec)); // 잡고 끌기(오른쪽=과거)
+    else if (d.mode === 'key' && d.moved && d.idx != null && d.objectId) retimeKey(clip.id, d.objectId, d.idx, tFromX(e.clientX));
+    else if (d.mode === 'pan') setViewStart(Math.max(0, d.startVal - (e.clientX - d.startX) / pxPerSec));
   };
   const onUp = (e: React.PointerEvent) => {
     const d = dragRef.current; if (!d) return;
     (e.target as Element).releasePointerCapture?.(e.pointerId);
     if (d.mode === 'scrub') setAnimScrub(clip.id, null);
-    else if (d.mode === 'key') { if (d.moved) pushHistory(); else if (d.idx != null) goToPose(clip.id, d.idx); }
+    else if (d.mode === 'key') { if (d.moved) pushHistory(); else if (d.idx != null && d.objectId) { goToKey(clip.id, d.objectId, d.idx); selectObject(d.objectId); } }
     dragRef.current = null;
   };
-  const onCtx = (e: React.MouseEvent) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, t: tFromX(e.clientX) }); };
+  const onCtx = (e: React.MouseEvent, objectId: string) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, t: tFromX(e.clientX), objectId }); };
   const goHome = () => setViewStart(0);
-
-  const trackedIds = new Set(clip.tracks.map((t) => t.objectId));
-  const addable = objects.filter((o) => o.parentId == null && o.id !== CHARACTER_PREVIEW_ID && !trackedIds.has(o.id));
 
   // 눈금 — 보이는 창 [viewStart, viewStart+viewDur]만. 간격은 nice-step(~60px). 개수 항상 바운드.
   const tickStep = NICE_STEPS.find((s) => s * pxPerSec >= 44) ?? NICE_STEPS[NICE_STEPS.length - 1];
@@ -216,25 +191,24 @@ export function TimelinePanel() {
   }
   const visKey = (t: number) => t >= viewStart - viewDur * 0.05 && t <= viewEnd + viewDur * 0.05; // 창 근처만 그림
 
-  // Del 대상 — 명시적으로 클릭 선택한 키프레임만(트랜스폼 일치 폴백 제외 → 오브젝트 삭제와 안 헷갈림).
-  const explicitPose = poseEdit?.clipId === clip.id && poseEdit.idx < poseTimes.length ? poseEdit.idx : -1;
-  delPoseRef.current = explicitPose >= 0 && poseTimes.length > 1 ? () => removePose(explicitPose) : null;
+  // Del 대상 — 선택한 키프레임(그 트랙 하나). 트랙 최소 1키는 removeKey가 지킴.
+  delPoseRef.current = sel && selTrack && selTrack.keys.length > 1 ? () => removeKey(clip.id, sel.objectId, sel.idx) : null;
 
   return (
     <div className="w-full h-full flex flex-col text-foreground select-none">
       {/* 트랜스포트 바 */}
       <div className="flex items-center gap-2 px-3 h-9 border-b border-border shrink-0">
         <button onClick={goHome} title="처음으로 (0s)" className="w-7 h-7 rounded-xs flex items-center justify-center border border-border bg-background text-muted hover:text-foreground"><SkipBack size={12} /></button>
-        <button onClick={() => (previewing ? stopAnimPreview() : startAnimPreview(clip.id))} disabled={poseTimes.length < 2 && !previewing}
+        <button onClick={() => (previewing ? stopAnimPreview() : startAnimPreview(clip.id))} disabled={totalKeys < 2 && !previewing}
           title={previewing ? '정지' : '재생'} className={`w-7 h-7 rounded-xs flex items-center justify-center transition-colors disabled:opacity-40 ${previewing ? 'bg-red-500/15 text-red-500' : 'bg-primary text-white hover:bg-primary/90'}`}>{previewing ? <Square size={12} /> : <Play size={12} />}</button>
         <button onClick={() => { updateAnimClip(clip.id, { loop: !clip.loop }); pushHistory(); }} title="반복(loop)"
           className={`w-7 h-7 rounded-xs flex items-center justify-center border transition-colors ${clip.loop ? 'bg-primary/15 text-primary border-primary/40' : 'bg-background text-muted border-border hover:text-foreground'}`}><Repeat size={12} /></button>
         <span className="font-mono text-[11px] tabular-nums ml-1">{fmtTick(readoutT)}<span className="text-muted"> / {fmtTick(clip.duration)}</span></span>
-        <div className="flex-1 min-w-0 text-center truncate text-[11px] text-muted">{clip.name} · {poseTimes.length} keys · <span className="text-muted/60">휠=줌, 눈금자 드래그=이동, ◆선택 후 Del=삭제</span></div>
-        <button onClick={addPoseEnd} title="끝에 키프레임 추가 · 눈금자 우클릭=원하는 시간에" className="h-7 px-2.5 rounded-xs bg-primary/15 text-primary border border-primary/30 text-[11px] font-medium hover:bg-primary/25 flex items-center gap-1"><Plus size={12} /> 키프레임</button>
-        {curPoseIdx >= 0 && curPoseIdx < poseTimes.length - 1 && (
-          <div className="w-32 shrink-0" title={`포즈 ${curPoseIdx + 1}→${curPoseIdx + 2} 구간 곡선`}>
-            <SelectBox value={clip.tracks[0]?.keys[curPoseIdx]?.easing ?? ''} onChange={(e) => setKeyEasing(curPoseIdx, e)}
+        <div className="flex-1 min-w-0 text-center truncate text-[11px] text-muted">{clip.name} · {totalKeys} keys · <span className="text-muted/60">트랙별 키 · ◆선택 후 Del=삭제 · 레인 우클릭=키 추가</span></div>
+        <button onClick={addKeyEnd} title="선택 트랙 끝에 키 추가 · 레인 우클릭=원하는 시간에" className="h-7 px-2.5 rounded-xs bg-primary/15 text-primary border border-primary/30 text-[11px] font-medium hover:bg-primary/25 flex items-center gap-1"><Plus size={12} /> 키프레임</button>
+        {sel && selTrack && sel.idx < selTrack.keys.length - 1 && (
+          <div className="w-32 shrink-0" title="선택 키 → 다음 키 구간 곡선">
+            <SelectBox value={selKey?.easing ?? ''} onChange={(e) => setSelKeyEasing(e)}
               options={[{ value: '', label: '구간: 기본' }, ...EASE_OPTS.map((o) => ({ value: o.value, label: `구간: ${o.label}` }))]} />
           </div>
         )}
@@ -271,7 +245,7 @@ export function TimelinePanel() {
         {/* 레인 영역 — 고정폭. 눈금자=팬, 레인=스크럽. 보이는 것만 그림. */}
         <div ref={areaRef} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onPointerLeave={() => setHoverT(null)} className="flex-1 relative overflow-hidden min-w-0">
           {/* 눈금자(드래그=팬) */}
-          <div onPointerDown={beginPan} onContextMenu={onCtx} className="h-6 relative border-b border-border cursor-grab active:cursor-grabbing bg-muted/[0.03]">
+          <div onPointerDown={beginPan} onContextMenu={(e) => targetObjId && onCtx(e, targetObjId)} className="h-6 relative border-b border-border cursor-grab active:cursor-grabbing bg-muted/[0.03]">
             {ticks.map((tk) => (
               <div key={tk} className="absolute top-0 h-full border-l border-primary/15 pointer-events-none" style={{ left: `${pxAt(tk)}px` }}>
                 <span className="absolute top-1 left-1 text-[9px] font-mono text-muted/60 whitespace-nowrap">{fmtTick(tk)}</span>
@@ -279,18 +253,21 @@ export function TimelinePanel() {
             ))}
           </div>
           {/* 레인(드래그=스크럽) */}
-          <div onPointerDown={beginScrub} onContextMenu={onCtx} className="absolute left-0 right-0 cursor-crosshair" style={{ top: 24, bottom: 0 }}>
+          <div onPointerDown={beginScrub} className="absolute left-0 right-0 cursor-crosshair" style={{ top: 24, bottom: 0 }}>
             {clip.tracks.map((t) => {
-              const sel = t.objectId === selectedId;
+              const rowSel = t.objectId === selectedId;
               return (
-                <div key={t.objectId} className={`h-7 relative border-b border-border/50 ${sel ? 'bg-amber-500/10' : ''}`}>
+                <div key={t.objectId} onContextMenu={(e) => onCtx(e, t.objectId)} className={`h-7 relative border-b border-border/50 ${rowSel ? 'bg-amber-500/10' : ''}`}>
                   <div className="absolute left-0 right-0 top-1/2 h-px bg-primary/15" />
-                  {t.keys.map((k, i) => visKey(k.time) && (
-                    <button key={i} onPointerDown={(e) => beginKey(e, i)}
-                      title={`포즈 ${i + 1} · ${fmtTick(k.time)} (클릭=이동, 드래그=시간)`}
-                      className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rotate-45 rounded-[1px] cursor-grab active:cursor-grabbing ${i === curPoseIdx ? 'bg-amber-500' : 'bg-primary border border-primary/60 hover:brightness-110'}`}
-                      style={{ left: `${pxAt(k.time)}px`, ...(i === curPoseIdx ? { boxShadow: '0 0 0 3px rgba(245,166,35,.25)' } : {}) }} />
-                  ))}
+                  {t.keys.map((k, i) => visKey(k.time) && (() => {
+                    const isSelKey = keySel?.clipId === clip.id && keySel.objectId === t.objectId && keySel.idx === i;
+                    return (
+                      <button key={i} onPointerDown={(e) => beginKey(e, t.objectId, i)}
+                        title={`키 ${i + 1} · ${fmtTick(k.time)} (클릭=이동, 드래그=시간)`}
+                        className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rotate-45 rounded-[1px] cursor-grab active:cursor-grabbing ${isSelKey ? 'bg-amber-500' : 'bg-primary border border-primary/60 hover:brightness-110'}`}
+                        style={{ left: `${pxAt(k.time)}px`, ...(isSelKey ? { boxShadow: '0 0 0 3px rgba(245,166,35,.25)' } : {}) }} />
+                    );
+                  })())}
                 </div>
               );
             })}
@@ -315,8 +292,8 @@ export function TimelinePanel() {
         <>
           <div className="fixed inset-0 z-[100]" onPointerDown={() => setCtx(null)} onContextMenu={(e) => { e.preventDefault(); setCtx(null); }} />
           <div className="fixed z-[101] bg-surface border border-border rounded-sm shadow-float py-1 text-[11px]" style={{ left: ctx.x, top: ctx.y }}>
-            <button onClick={() => { addPoseAt(ctx.t); setCtx(null); }} className="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary flex items-center gap-1.5">
-              <Plus size={12} /> 여기에 키프레임 추가 <span className="text-muted font-mono">{fmtTick(ctx.t)}</span>
+            <button onClick={() => { addKeyToTrack(clip.id, ctx.objectId, ctx.t); setCtx(null); }} className="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary flex items-center gap-1.5">
+              <Plus size={12} /> 여기에 키 추가 <span className="text-muted font-mono">{fmtTick(ctx.t)}</span>
             </button>
           </div>
         </>

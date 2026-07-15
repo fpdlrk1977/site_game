@@ -154,11 +154,11 @@ function SizeField({
   return (
     <label className="block">
       <span className="text-[10px] text-muted/50 block mb-1">{label}</span>
-      <div className="flex gap-1">
-        <div className="flex-1">
+      <div className="flex gap0">
+        <div className="flex-1 [&_input]:rounded-r-none">
           <NumInput value={num} onChange={(n) => emit(n, unit)} onCommit={onCommit} min={0} precision={0} dragStep={5} prefix={false} />
         </div>
-        <div className="w-14 shrink-0">
+        <div className="w-14 shrink-0 [&>button]:rounded-l-none [&>button]:gap-0 [&>button]:w-auto">
           <SelectBox
             value={unit}
             onChange={(u) => {
@@ -170,7 +170,7 @@ function SizeField({
               { value: "vw", label: "vw" },
               { value: "vh", label: "vh" },
             ]}
-            className="px-2 py-1 text-[11px] border border-border rounded-xs bg-muted/5 dark:bg-muted/10"
+            className="px-2 py-1 text-[11px] border border-border rounded-xs text-muted/80 dark:bg-muted/10"
           />
         </div>
       </div>
@@ -188,7 +188,7 @@ export function EnvironmentPanel() {
     projectId,
   } = useSceneStore();
   const { addToast } = useToast();
-  const [notesOpen, setNotesOpen] = useState(true);
+  const [notesOpen, setNotesOpen] = useState(false);
   // 표시용(보여주기만) 섹션의 화살표 접기 상태 — enable 스위치 섹션(Ground/Fog/Player)은 제외.
   const [envCollapsed, setEnvCollapsed] = useState<Set<string>>(new Set(["interaction", "post", "frame", "popup", "gamelogic"]));
   const envToggle = (k: string) =>
@@ -309,6 +309,38 @@ export function EnvironmentPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto">
+
+      {/* Frame — 게시 뷰어 고정 화면 비율 */}
+      <GroupBox>
+        <SectionHeader
+          title="Frame"
+          hint="게시된 뷰어의 고정 화면 비율. '자유'는 브라우저를 꽉 채우고, 비율을 정하면 그 틀로 레터박스(가운데 정렬 + 배경 여백)해요. 에디터엔 미반영 — 게시/공유 화면에 적용됩니다."
+          isOpen={envOpen("frame")}
+          onToggle={() => envToggle("frame")}
+        />
+        {envOpen("frame") && (
+          <div className="px-3 pb-4">
+            <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">화면 비율</span>
+            <SelectBox
+              value={String(env.frameAspect && env.frameAspect > 0 ? env.frameAspect : 0)}
+              onChange={(v) => {
+                const n = Number(v);
+                updateEnvironment({ frameAspect: n > 0 ? n : undefined });
+                pushHistory();
+              }}
+              options={[
+                { value: "0", label: "자유 (브라우저 채움)" },
+                { value: String(16 / 9), label: "16:9 (가로 와이드)" },
+                { value: String(4 / 3), label: "4:3 (가로)" },
+                { value: "1", label: "1:1 (정사각)" },
+                { value: String(9 / 16), label: "9:16 (세로 모바일)" },
+                { value: String(3 / 4), label: "3:4 (세로)" },
+              ]}
+            />
+          </div>
+        )}
+      </GroupBox>
+
       {/* Sky */}
       <GroupBox>
         <SectionHeader title="Sky" isOpen={envOpen("sky")} onToggle={() => envToggle("sky")} />
@@ -1339,36 +1371,7 @@ export function EnvironmentPanel() {
         )}
       </GroupBox>
 
-      {/* Frame — 게시 뷰어 고정 화면 비율 */}
-      <GroupBox>
-        <SectionHeader
-          title="Frame"
-          hint="게시된 뷰어의 고정 화면 비율. '자유'는 브라우저를 꽉 채우고, 비율을 정하면 그 틀로 레터박스(가운데 정렬 + 배경 여백)해요. 에디터엔 미반영 — 게시/공유 화면에 적용됩니다."
-          isOpen={envOpen("frame")}
-          onToggle={() => envToggle("frame")}
-        />
-        {envOpen("frame") && (
-          <div className="px-3 pb-4">
-            <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">화면 비율</span>
-            <SelectBox
-              value={String(env.frameAspect && env.frameAspect > 0 ? env.frameAspect : 0)}
-              onChange={(v) => {
-                const n = Number(v);
-                updateEnvironment({ frameAspect: n > 0 ? n : undefined });
-                pushHistory();
-              }}
-              options={[
-                { value: "0", label: "자유 (브라우저 채움)" },
-                { value: String(16 / 9), label: "16:9 (가로 와이드)" },
-                { value: String(4 / 3), label: "4:3 (가로)" },
-                { value: "1", label: "1:1 (정사각)" },
-                { value: String(9 / 16), label: "9:16 (세로 모바일)" },
-                { value: String(3 / 4), label: "3:4 (세로)" },
-              ]}
-            />
-          </div>
-        )}
-      </GroupBox>
+      
 
       {/* 게임 로직(게임 변수·전역 규칙·HUD)은 GNB 'Logic' 탭으로 이동 → panels/LogicPanel */}
 

@@ -231,7 +231,7 @@ export function XYZRow({
   return (
     <div className="space-y-1">
       <span className="text-[10px] font-semibold text-muted/50 tracking-wide">{label}</span>
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-3 gap-2">
         {[
           { axis: "X", val: x, change: onChangeX },
           { axis: "Y", val: y, change: onChangeY },

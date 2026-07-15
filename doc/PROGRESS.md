@@ -51,6 +51,18 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-15) — 🎬 타임라인 ② per-트랙 독립 타이밍 (기준: `doc/ANIMATION.md`)
+
+> 접속 끊겨 중단됐던 작업 재개·완료. **사용자 브라우저 확인 완료("잘된거 같아").** tsc 클린(새 에러 0). 상세 = ANIMATION.md.
+
+- **목적**: 타임라인 키 추가/이동/삭제/오토키가 **정렬 포즈(모든 트랙 공유 시간)가 아니라 '그 트랙 하나'에만** 작용 → 트랙마다 키를 서로 다른 시간에 자유 배치(진짜 트랙별 타이밍).
+- **스토어**(`sceneStore.ts`): transient `keySel:{clipId,objectId,idx}` + 액션 `goToKey`/`clearKeySel`/`addKeyToTrack`/`retimeKey`(이웃 클램프·지연 커밋)/`removeKey`(트랙 최소 1키 유지). **오토키 확장**: `autoKeyPose(poseEdit, keySel, …)` — keySel 있으면 그 트랙의 그 키만 갱신, 없으면 기존 poseEdit 정렬포즈 폴백. `updateObject`/`commitTransforms`가 keySel 전달. goToPose/setPoseEdit는 keySel 해제(모드 배타).
+- **TimelinePanel.tsx**: `poseTimes`/`curPoseIdx`(공유 시간축) 제거 → `keySel`/`selTrack`/`selKey`/`totalKeys`/`targetObjId` 기반. **중단 지점이던 렌더 JSX**(눈금자/레인 우클릭·트랙 행·키 렌더·컨텍스트 메뉴)를 새 시그니처로 마무리: 우클릭 대상=행별 `onCtx(e,objectId)`(눈금자는 `targetObjId`=선택 트랙||root), `beginKey(e,objectId,idx)`, 키 하이라이트=keySel 매칭, 키 클릭=goToKey+selectObject, 컨텍스트 메뉴=`addKeyToTrack`. 죽은 코드(`snap`/`eqV`) 정리.
+- **간단 모드 무영향**: poseEdit/goToPose/setPoseEdit는 스토어에 그대로 유지(`AnimationClipSection` 계속 사용). 런타임(`sampleTrack`)은 트랙별 키를 이미 독립 샘플 → 변경 불필요.
+- **남음(선택)**: 격리 편집모드 · P5 다듬기(회전 최단경로·커스텀 피벗·GLB 통일).
+
+---
+
 ## ✅ 완료 (2026-07-14) — 🎬 애니메이션 저작 Phase 1 (기준: `doc/ANIMATION.md`)
 
 > 사용자가 임의 애니를 직접 저작(포즈/키프레임) → 하나의 재사용 오브젝트. **포즈=키프레임의 부분집합**이라 처음부터 키프레임 데이터로 설계(나중 타임라인은 얹기만). tsc 클린 + editor 307. **브라우저 실동작 대기.** 상세 = ANIMATION.md.
