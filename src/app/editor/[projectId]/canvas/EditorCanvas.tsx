@@ -413,7 +413,7 @@ function SelectionOverlay({
   const bounds = useMemo(() => {
     // matrixAutoUpdate는 true로 둔다 — Box3Helper.updateMatrixWorld가 box로부터 position/scale을 세팅한 뒤
     // updateMatrix()로 행렬에 합성돼야 실제 박스가 union 영역을 따라간다(false면 원점 단위박스로 고정되는 버그).
-    const h = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color("#22d3ee"));
+    const h = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color("#0D99FF")); // 매 프레임 색 재설정됨(2+ 주황 / 그룹 파랑)
     const m = h.material as THREE.LineBasicMaterial;
     m.transparent = true;
     m.opacity = 0.9;
@@ -426,7 +426,7 @@ function SelectionOverlay({
   const preview = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
-    const m = new THREE.LineBasicMaterial({ color: "#a78bfa", transparent: true, opacity: 0.9, depthTest: false });
+    const m = new THREE.LineBasicMaterial({ color: "#0D99FF", transparent: true, opacity: 0.9, depthTest: false });
     const ls = new THREE.LineSegments(g, m);
     ls.renderOrder = 999;
     ls.frustumCulled = false;
@@ -439,8 +439,8 @@ function SelectionOverlay({
 
     // ② 선택 바운더리. 드래그 중에도 실시간으로 따라오도록 '라이브 Three 객체(ref)'로 계산한다
     //    (worldBBox는 스키마 기반이라 기즈모 드래그 중엔 커밋 전까지 안 움직임 → 마우스 뗄 때 튀던 문제).
-    //    - 2개 이상 선택: 청록(#22d3ee) 묶음 박스
-    //    - 그룹 1개 선택: 그룹은 자체 아웃라인이 없으므로 보라(#7c3aed) 박스로 선택 표시(단일 오브젝트 가이드와 통일)
+    //    - 2개 이상 선택: 주황(#ff7a0d) 묶음 가이드라인
+    //    - 그룹 1개 선택: 그룹은 자체 아웃라인이 없으므로 파랑(#0D99FF) 박스로 선택 표시(단일 오브젝트 가이드와 통일)
     const single = selectedIds.length === 1 ? objects.find((o) => o.id === selectedIds[0]) : undefined;
     const showBounds = selectedIds.length >= 2 || single?.isGroup === true;
     if (showBounds) {
@@ -458,7 +458,7 @@ function SelectionOverlay({
       }
       if (!box.isEmpty()) {
         bounds.visible = true;
-        (bounds.material as THREE.LineBasicMaterial).color.set(selectedIds.length >= 2 ? "#22d3ee" : "#3a82ed");
+        (bounds.material as THREE.LineBasicMaterial).color.set(selectedIds.length >= 2 ? "#ff7a0d" : "#0D99FF");
         bounds.box.copy(box);
         bounds.updateMatrixWorld(true);
       } else {
@@ -1086,8 +1086,8 @@ export function EditorCanvas() {
               top: selBox.top,
               width: selBox.width,
               height: selBox.height,
-              border: "1.5px solid #7c3aed",
-              background: "rgba(124, 58, 237, 0.08)",
+              border: "1.5px solid #0D99FF",
+              background: "rgba(13, 153, 255, 0.08)",
               pointerEvents: "none",
               boxSizing: "border-box",
             }}

@@ -14,7 +14,8 @@ import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
 import type { ObjectNodeSchema } from '@/types/scene';
 
 export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
-  const { updateObject, pushHistory, projectId, addAsset, assets, materialAssets, addMaterialAsset, renameMaterialAsset, detachMaterial } = useSceneStore();
+  const { updateObject, pushHistory, projectId, addAsset, assets, materialAssets, addMaterialAsset, renameMaterialAsset, detachMaterial, openVoxelEdit } = useSceneStore();
+  const isVoxel = obj.primitiveShape === 'voxel'; // 복셀은 칸마다 정점색 → material.color 무의미(복셀 수정에서 변경)
   const { addToast } = useToast();
   const [objTexUploading, setObjTexUploading] = useState(false);
   const objTexInputRef = useRef<HTMLInputElement>(null);
@@ -64,6 +65,16 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 <div className='flex gap-2'>
                   <div className='flex-1'>
                     <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Color</span>
+                    {isVoxel ? (
+                      <div>
+                        <div title="복셀은 칸마다 색이 정해져 있어요. 색은 '복셀 수정'에서 바꿔주세요."
+                          className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10 opacity-50 cursor-not-allowed">
+                          <input type="color" value="#ffffff" disabled className="w-5 h-5 cursor-not-allowed" />
+                          <input type="text" value="#ffffff" disabled className="w-full px-2.5 py-1 text-[11px] text-foreground bg-transparent cursor-not-allowed" />
+                        </div>
+                        <button onClick={() => openVoxelEdit(obj.id)} className="text-[10px] text-primary/80 hover:text-primary mt-1 transition-colors">복셀 수정 열기 →</button>
+                      </div>
+                    ) : (
                     <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                       <input
                         type="color"
@@ -80,6 +91,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                       className="w-full px-2.5 py-1  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
+                    )}
                   </div>
 
                   <div className='flex-1'>

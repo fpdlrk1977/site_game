@@ -67,8 +67,9 @@ export function GlbObject({ url, selected, hovered = false, onClick, onDoubleCli
       mats.forEach((mat) => {
         const m = mat as THREE.MeshStandardMaterial;
         if (m.emissive !== undefined) {
-          m.emissive.set(selected ? '#3730a3' : hovered ? '#3730a3' : '#000000');
-          m.emissiveIntensity = selected ? 0.4 : hovered ? 0.2 : 0;
+          // 선택 시엔 틴트 없이 원래 색을 보이게(외곽선 box3Helper로만 표시). 호버는 옅은 글로우 유지.
+          m.emissive.set(hovered ? '#3730a3' : '#000000');
+          m.emissiveIntensity = hovered ? 0.2 : 0;
         }
         m.wireframe = wireframe;
       });
@@ -99,7 +100,7 @@ export function GlbObject({ url, selected, hovered = false, onClick, onDoubleCli
         onPointerOut={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onHoverChange?.(false); }}
       />
       {(selected || hovered) && (
-        <box3Helper args={[bbox, new THREE.Color(selected ? '#7c3aed' : '#a78bfa')]} />
+        <box3Helper args={[bbox, new THREE.Color('#0D99FF')]} />
       )}
       {/* 콜라이더 가이드 — 실제 모델 바운딩박스 크기·중심에 맞춤 (녹색=솔리드, 파랑=센서) */}
       {colliderGuide && (

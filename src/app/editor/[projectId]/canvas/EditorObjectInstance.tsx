@@ -32,6 +32,38 @@ interface Props {
 // 콜라이더 시각화 — 실제 지오메트리 bbox 기준으로 크기·중심을 맞춘다(고정 단위 박스 X).
 // box/구체는 bbox=1이라 기존(1.02/0.51)과 픽셀상 동일하고, 돌출/로프트 등 얇은 형상만 실제 크기로 축소된다.
 // (에디터 전용 시각화 — 런타임 콜라이더엔 영향 없음.)
+
+// 선택/호버 외곽선 — boxGeometry + wireframe은 면마다 삼각형 대각선이 보이므로,
+// EdgesGeometry(실제 모서리만)로 그려 대각선을 없앤다. (박스=12개 변, 평면=4개 변)
+function EdgeBox({ size, center, color }: { size: [number, number, number]; center: [number, number, number]; color: string }) {
+  const geo = useMemo(() => {
+    const box = new THREE.BoxGeometry(size[0], size[1], size[2]);
+    const edges = new THREE.EdgesGeometry(box);
+    box.dispose();
+    return edges;
+  }, [size]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return (
+    <lineSegments geometry={geo} position={center}>
+      <lineBasicMaterial color={color} />
+    </lineSegments>
+  );
+}
+function EdgePlane({ size, color }: { size: number; color: string }) {
+  const geo = useMemo(() => {
+    const p = new THREE.PlaneGeometry(size, size);
+    const edges = new THREE.EdgesGeometry(p);
+    p.dispose();
+    return edges;
+  }, [size]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return (
+    <lineSegments geometry={geo}>
+      <lineBasicMaterial color={color} />
+    </lineSegments>
+  );
+}
+
 function ColliderOverlay({ object, size, center }: { object: ObjectNodeSchema; size: [number, number, number]; center: [number, number, number] }) {
   if (!object.physics.enabled) return null;
   const isSensor = object.physics.isSensor;
@@ -270,7 +302,7 @@ function LightObjectInstance({ object }: Props) {
       {isSelected && (
         <mesh>
           <sphereGeometry args={[0.4, 8, 8]} />
-          <meshBasicMaterial color="#7c3aed" wireframe />
+          <meshBasicMaterial color="#0D99FF" wireframe />
         </mesh>
       )}
     </group>
@@ -561,7 +593,7 @@ export function EditorObjectInstance({ object }: Props) {
         {isSelected && (
           <mesh onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}>
             <sphereGeometry args={[0.3, 8, 8]} />
-            <meshBasicMaterial color="#7c3aed" wireframe transparent opacity={0.6} />
+            <meshBasicMaterial color="#0D99FF" wireframe transparent opacity={0.6} />
           </mesh>
         )}
         {!isSelected && (
@@ -603,8 +635,8 @@ export function EditorObjectInstance({ object }: Props) {
                   color={color}
                   roughness={roughness}
                   metalness={metalness}
-                  emissive={isSelected ? '#4338ca' : emissive}
-                  emissiveIntensity={isSelected ? 0.4 : (emissive !== '#000000' ? 1 : 0)}
+                  emissive={emissive}
+                  emissiveIntensity={emissive !== '#000000' ? 1 : 0}
                   wireframe={wireframeMode}
                 />
               </Text3D>
@@ -613,14 +645,11 @@ export function EditorObjectInstance({ object }: Props) {
         ) : (
           <mesh>
             <planeGeometry args={[1, 1]} />
-            <meshBasicMaterial color={isSelected ? '#7c3aed' : hovered ? '#4338ca' : '#334155'} />
+            <meshBasicMaterial color="#334155" />
           </mesh>
         )}
         {(isSelected || hovered) && (
-          <mesh>
-            <planeGeometry args={[1.05, 1.05]} />
-            <meshBasicMaterial color={isSelected ? '#7c3aed' : '#a78bfa'} wireframe />
-          </mesh>
+          <EdgePlane size={1.05} color="#0D99FF" />
         )}
         <ColliderOverlay object={object} size={bbox.size} center={bbox.center} />
       </group>
@@ -663,8 +692,8 @@ export function EditorObjectInstance({ object }: Props) {
             roughness={roughness}
             metalness={metalness}
             wireframe={wireframeMode}
-            emissive={isSelected ? '#4338ca' : emissive}
-            emissiveIntensity={isSelected ? 0.4 : (emissive !== '#000000' ? 1 : 0)}
+            emissive={emissive}
+            emissiveIntensity={emissive !== '#000000' ? 1 : 0}
             textureUrl={mat?.textureUrl}
             repeat={mat?.textureRepeat}
             flatShading={rdFlat}
@@ -678,10 +707,7 @@ export function EditorObjectInstance({ object }: Props) {
         </mesh>
       )}
       {!assetRef && (isSelected || hovered) && (
-        <mesh position={bbox.center}>
-          <boxGeometry args={[bbox.size[0] * 1.04, bbox.size[1] * 1.04, bbox.size[2] * 1.04]} />
-          <meshBasicMaterial color={isSelected ? '#7c3aed' : '#a78bfa'} wireframe />
-        </mesh>
+        <EdgeBox size={[bbox.size[0] * 1.04, bbox.size[1] * 1.04, bbox.size[2] * 1.04]} center={bbox.center} color="#0D99FF" />
       )}
       {/* 콜라이더 시각화 — 에디터 전용 (GLB는 GlbObject가 실제 바운딩박스 기준으로 그림) */}
       {!assetRef && <ColliderOverlay object={object} size={bbox.size} center={bbox.center} />}

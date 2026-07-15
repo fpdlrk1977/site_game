@@ -53,8 +53,9 @@ function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
       mats.forEach((mat) => {
         const m = mat as THREE.MeshStandardMaterial;
         if (m.emissive !== undefined) {
-          m.emissive.set(isSelected ? "#3730a3" : "#000000");
-          m.emissiveIntensity = isSelected ? 0.4 : 0;
+          // 선택해도 틴트 없이 원래 색 유지(선택 표시는 아래 box3Helper 외곽선만).
+          m.emissive.set("#000000");
+          m.emissiveIntensity = 0;
         }
       });
     });
@@ -76,7 +77,7 @@ function CharacterPreviewInner({ url, scale }: { url: string; scale: number }) {
           pointerDownOnObjectRef.current = true;
         }}
       />
-      {isSelected && <box3Helper args={[bbox, new THREE.Color("#cfcfcf")]} />}
+      {isSelected && <box3Helper args={[bbox, new THREE.Color("#0D99FF")]} />}
     </group>
   );
 }

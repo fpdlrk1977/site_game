@@ -51,6 +51,18 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-15) — 🎨 선택 하이라이트 틴트 제거 + 가이드 색상/토큰 (사용자 확인 완료)
+
+> 에디터 캔버스 색/선택 표현 손질. tsc 클린 + `✓ Compiled`. **사용자 확인 완료.**
+
+- **선택 시 색 틴트 제거(모든 선택 가능 요소)**: 선택하면 오브젝트에 indigo emissive가 입혀져 원래 색을 보려면 해제해야 하던 불편 → **선택 emissive 틴트 전부 제거**, 선택 표시는 **외곽선(와이어박스/box3Helper)만**. 대상: 프리미티브(`EditorObjectInstance` PrimitiveMaterial `emissive={emissive}`)·텍스트 콘텐츠(Text3D)·GLB(`GlbObject` 클론 재질 emissive)·캐릭터 프리뷰(`CharacterPreview`)·이미지/영상 placeholder 평면(선택 violet 채움 → 상시 `#334155`). **주의(과거 함정)**: `replace_all`이 들여쓰기 다른 실제 프리미티브 경로(666줄)를 놓쳐 텍스트 경로만 바뀌었던 적 있음 → 두 번째 패스로 프리미티브도 수정(호버 옅은 글로우는 GLB만 유지).
+- **선택 가이드 색상 변경**: 단일 선택/호버 와이어박스(기존 보라 `#7c3aed`/`#a78bfa`, 드래그 마퀴 3D 프리뷰+DOM 사각형 포함, 그룹 1개 박스, 캐릭터 프리뷰) → **`#0D99FF`(파랑)**. 2개 이상 묶음 가이드라인(`EditorCanvas:461` 기존 청록 `#22d3ee`) → **`#ff7a0d`(주황)**.
+- **globals.css 포인트/선택 토큰 추가**: `--accent:#0092b8`(포인트 컬러 사이언, 이전 세션) + `--select:#0D99FF`·`--select-multi:#ff7a0d`(이번). Light/Dark 공통 + `@theme inline`에 `--color-accent`/`--color-select`/`--color-select-multi` 매핑(→ `bg-accent`·`text-select` 등). **3D 캔버스는 Three.js라 hex 리터럴 하드코딩(토큰 자동연동 X)** — 토큰은 나중 DOM/Tailwind UI용. (후속 후보: 색 공용 상수 파일로 뽑아 캔버스가 import하도록 통합.)
+- **안 건드린 것**: `#a78bfa` 오브젝트 기본 색상 폴백(가이드 아님, 실제 오브젝트/컬러픽커 기본색)·펜툴 모달 2D 그리기 보라선(별개 도구 UI).
+- **선택 와이어박스 면 대각선 제거(2026-07-15, 사용자 확인 완료)**: `boxGeometry`/`planeGeometry` + `wireframe`은 각 면이 삼각형 2개라 **면을 가로지르는 대각선(삼각형 경계)**이 보였음 → **`EdgesGeometry`(실제 모서리만)로 교체**. 신규 헬퍼 `EdgeBox`(박스 12모서리)·`EdgePlane`(평면 4변) — 지오메트리 useMemo + dispose. 적용: 프리미티브 선택/호버 박스·이미지/영상 콘텐츠 박스. GLB(`box3Helper`)·2+묶음/드래그 마퀴는 이미 모서리/선분이라 무변. **유지(의도)**: 파티클/라이트 선택 **구**(sphere wireframe — Edges로 바꾸면 hard edge 없어 선이 사라져 표식 소멸)·라이트 spot **콘**(방향 표식, 선택 박스 아님).
+
+---
+
 ## ✅ 완료 (2026-07-15) — 🧊 복셀 툴 개선 3종 (사용자 확인 완료)
 
 > `VoxelToolModal.tsx` 단독 변경. tsc 클린 + `✓ Compiled`. **사용자 브라우저 확인 완료("잘된다").**
@@ -58,7 +70,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **① Ctrl+Z가 에디터 undo로 새던 문제 수정**: 모달은 Escape만 캡처하고 Ctrl+Z는 window **버블 단계**의 `EditorClient` 전역 핸들러(undo)로 흘러갔음. → 모달 전용 **로컬 undo/redo 히스토리**(`undoRef`/`redoRef`, 최근 200단계, `voxelsRef` 미러로 스냅샷) + 키다운을 **캡처 단계**에서 처리해 `Ctrl+Z`·`Ctrl+Shift+Z`/`Ctrl+Y`를 `stopImmediatePropagation`으로 가로챔(에디터로 전파 차단). 한 획(드래그)=1단계, shift직선/아래복사/전체채색/전체지우기/그리드변경도 각각 되돌림 대상. 모달 열 때 스택 초기화.
 - **② Shift+클릭 직선 일괄 채우기**: 마지막 찍은 칸(`lastCellRef`) 기억 → shift+클릭 시 두 칸 사이 **직선 경로(Bresenham `lineCells`)** 를 한 번의 `setVoxels`로 일괄 채움(`applyCells`). 좌클릭=칠하기/우클릭=지우기 직선. 레이어(높이 Y) 전환·undo 시 기준점 리셋(다른 평면 오작동 방지).
 - **③ 생성 후 색상 변경**: 툴바 **"전체 채색" 버튼** 추가 — 배치된 모든 칸을 현재 선택 색으로 일괄 재채색(다시 만들 필요 없음). 참고: 새 색 선택 후 **기존 칸 클릭 = 그 칸만 재채색**은 원래 동작(칠하기가 덮어씀). 재편집은 오브젝트 리스트 우클릭 "복셀 수정"으로 진입.
-- **미해결(의도적)**: Inspector 색상 피커로 복셀 오브젝트 색 변경은 **정점색이 지오메트리에 구워지고 `vertexColors=true`면 베이스색을 흰색 강제**하는 구조라 무시됨(그대로 둠). 원하면 별도 방식(전체 틴트 or 지오메트리 재빌드) 협의 후 작업.
+- **④ Inspector Material Color 복셀 안내 처리(2026-07-15, 사용자 확인 완료)**: 복셀은 정점색이 지오메트리에 구워지고 `vertexColors=true`면 베이스색을 흰색 강제 → Inspector 색상 피커가 무의미. **틴트/재빌드 대신 오해 제거 방식 채택**(사용자 결정): `MaterialSection`에서 `obj.primitiveShape==='voxel'`이면 Color 스와치(#fff)+hex 텍스트 레이아웃은 **유지하되 disabled**(반투명)+**툴팁**("색은 '복셀 수정'에서 변경") + **"복셀 수정 열기 →" 버튼**(`openVoxelEdit`). Emissive·거칠기·금속성 등 복셀에도 유효한 건 그대로. 색 변경 경로 = 모달의 "전체 채색"/칸별 재클릭.
 
 ---
 
