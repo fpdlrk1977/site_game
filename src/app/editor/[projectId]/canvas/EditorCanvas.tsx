@@ -960,6 +960,7 @@ export function EditorCanvas() {
             intensity={environment.lights.directionalIntensity}
             color={environment.lights.directionalColor ?? "#ffffff"}
             castShadow
+            shadow-intensity={environment.lights.shadowIntensity ?? 1}
             shadow-mapSize={[2048, 2048]}
             shadow-bias={-0.0004}
             shadow-normalBias={0.03}

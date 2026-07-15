@@ -200,8 +200,10 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
     setShowAddEvent(true);
   };
 
-  const cancelEventForm = () => {
-    setShowAddEvent(false);
+  // 폼 필드를 신규 기본값으로 전부 초기화(editingId 포함). 편집→추가 전환 시 이전 값이 남지 않게.
+  const resetNewEvent = () => {
+    setNewTrigger('click');
+    setNewAction('show_popup');
     setNewValue('');
     setNewPopup(undefined);
     setNewConditions([]);
@@ -209,6 +211,11 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
     setNewElse(undefined);
     setNewTimer({ everySec: 3 });
     setEditingId(null);
+  };
+
+  const cancelEventForm = () => {
+    setShowAddEvent(false);
+    resetNewEvent();
   };
 
   const removeEvent = (id: string) => {
@@ -1136,7 +1143,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
 
             {/* '이벤트 추가' 버튼 — 폼은 좁은 패널 대신 팝업 모달로 열린다(아래 portal) */}
             <button
-              onClick={() => { setEditingId(null); setNewValue(''); setShowAddEvent(true); }}
+              onClick={() => { resetNewEvent(); setShowAddEvent(true); }}
               className="w-full py-1.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background  text-[11px] transition-all cursor-pointer"
             >
               이벤트 추가

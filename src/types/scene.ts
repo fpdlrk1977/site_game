@@ -51,6 +51,8 @@ export interface EnvSchema {
     directionalIntensity: number;
     // 방향광(태양) 색. 미설정 = 흰색('#ffffff', 기존 동작). warm/cool 무드의 핵심.
     directionalColor?: string;
+    // 그림자 농도(directionalLight.shadow.intensity, 0~1). 1=진함, 0.5=옅음, 0=그림자 없음. 미설정=1(기존 동작).
+    shadowIntensity?: number;
   };
   playerCharacterId?: string;
   playerCharacterScale?: number;

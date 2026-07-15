@@ -771,6 +771,23 @@ export function EnvironmentPanel() {
                 precision={2}
               />
             </div>
+            {/* 그림자 농도 — 태양(directionalLight) 그림자 진하기(shadow.intensity). 1=진함·0.5=옅음·0=없음. */}
+            <div className="pt-1">
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Shadow Density</span>
+                <InfoHint text="Darkness of the sun's cast shadows. 1 = dark, 0.5 = soft/faint, 0 = no shadow. Per-object shadows are on/off only; this controls the whole scene." />
+              </div>
+              <RangeSlider
+                value={env.lights.shadowIntensity ?? 1}
+                onChange={(v) => updateEnvironment({ lights: { ...env.lights, shadowIntensity: v } })}
+                onCommit={pushHistory}
+                min={0}
+                max={1}
+                step={0.05}
+                showValue
+                precision={2}
+              />
+            </div>
             {/* 접지 그림자 — 오브젝트가 바닥에 붙은 느낌. 기본 꺼짐, 켜서 확인 */}
             <label className="flex items-center justify-between cursor-pointer pt-2">
               <span className="text-[10px] font-semibold text-muted/70">Contact Shadows</span>

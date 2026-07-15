@@ -51,6 +51,35 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-15) — 🌑 그림자 농도(Shadow Density) 슬라이더 (사용자 확인 완료)
+
+> 씬 전역 태양 그림자 진하기 조절. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").**
+
+- **배경**: 오브젝트별 Cast Shadow는 on/off만 가능(표준 shadow mapping은 오브젝트별 농도 불가). 대신 **씬 전역** `directionalLight.shadow.intensity`(three r185 지원, 0~1)로 그림자 진하기 조절 가능 → 1=진함·0.5=옅음·0=없음.
+- **스키마**: `EnvSchema.lights.shadowIntensity?`(옵셔널, 미설정=1 → 기존 씬 룩 무영향). `environment`는 normalize에서 통째 통과라 자동 보존.
+- **렌더**: EditorCanvas·ViewerCanvas 태양 directionalLight에 `shadow-intensity={env.lights.shadowIntensity ?? 1}` 배선(에디터=게시 동일). PlayCanvas는 전역 태양 없음(뷰어 조명 사용)이라 무변.
+- **UI**: EnvironmentPanel ▸ Lights ▸ **Shadow Density** RangeSlider(0~1, step 0.05) + 툴팁("per-object는 on/off, 이건 씬 전체"). Exposure 아래·Contact Shadows 위 배치.
+
+---
+
+## ✅ 완료 (2026-07-15) — 🐛 Events 폼 편집→추가 전환 시 이전 값 잔존 수정 (사용자 확인 완료)
+
+> `EventsSection.tsx`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("좋아").**
+
+- **버그**: 기존 이벤트 **편집**(연필) 클릭 → `startEdit`가 폼 전 필드(트리거·액션·값·팝업·조건·로직·else·타이머+editingId)를 채움. 그 상태로 **"이벤트 추가"** 클릭 시 버튼이 `editingId`·`value`만 초기화하고 **트리거·액션·팝업·조건·타이머는 잔존** → 추가 폼이 기본값이 아닌 **직전 편집 이벤트 설정**으로 열림. (`cancelEventForm`도 트리거·액션 초기화 누락이던 동일 결함.)
+- **수정**: 전 필드를 신규 기본값(트리거 `click`·액션 `show_popup`·값/팝업/조건/else 비움·타이머 3초·editingId null)으로 되돌리는 **`resetNewEvent()`** 헬퍼 신설 → "이벤트 추가" 버튼과 `cancelEventForm`이 공통 사용.
+
+---
+
+## ✅ 완료 (2026-07-15) — 🧩 Subdivision 패널 UI 개편 (스위치 + 1/2/3 버튼, 사용자 확인 완료)
+
+> `SubdivisionSection.tsx` 재작성 + `InspectorPanel` 호출부 prop 정리. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").**
+
+- **배경**: subdivision 레벨은 Loop subdivision **반복 횟수(정수)**라 소수점 없음(레벨마다 삼각형 4배). max 3은 성능 보호용 소프트 캡(라이브러리 한계 아님). 슬라이더가 과함 → 정수 단계에 맞는 UI로.
+- **변경**: 화살표 접기(`open`/`onToggle`) → **헤더 스위치**(Physics 섹션 패턴 = `SectionHeader`(화살표 없음) + `absolute top-3 right-4` Toggle). 스위치 ON=**기본 레벨 1** 자동 지정, OFF=0(원본). 본문은 `RangeSlider` → **1/2/3 버튼 행**(현재 레벨 강조 primary). 호출부 `<SubdivisionSection obj={obj} />`로 단순화(open/onToggle 제거). `RangeSlider` import 제거.
+
+---
+
 ## ✅ 완료 (2026-07-15) — 🎨 선택 하이라이트 틴트 제거 + 가이드 색상/토큰 (사용자 확인 완료)
 
 > 에디터 캔버스 색/선택 표현 손질. tsc 클린 + `✓ Compiled`. **사용자 확인 완료.**

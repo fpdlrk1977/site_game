@@ -248,7 +248,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
         <TransformSection obj={obj} open={isOpen('transform')} onToggle={() => toggleSection('transform')} />
 
         {/* Subdivision — 표면 세분화. 모든 프리미티브 */}
-        {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && <SubdivisionSection obj={obj} open={isOpen('subdivision')} onToggle={() => toggleSection('subdivision')} />}
+        {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && <SubdivisionSection obj={obj} />}
 
         {/* Geometry — 프리미티브 확장 파라미터(둥근 박스·각뿔대·로프트) */}
         {(obj.primitiveShape === 'box' || obj.primitiveShape === 'frustum' || obj.primitiveShape === 'loft') && <GeometrySection obj={obj} open={isOpen('geometry')} onToggle={() => toggleSection('geometry')} />}
