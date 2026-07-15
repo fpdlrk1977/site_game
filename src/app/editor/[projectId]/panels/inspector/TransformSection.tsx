@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { ArrowDownToLine } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
+import { useEditorPrefsStore, SIZE_UNIT_FACTOR, SIZE_UNITS } from '@/store/editorPrefsStore';
 import { worldBBox, localBBox } from '@/lib/objectBBox';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { SectionHeader, GroupBox, XYZRow, LiveTransformRows } from './ui';
@@ -12,6 +13,10 @@ import type { ObjectNodeSchema } from '@/types/scene';
 
 export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { objects, assets, updateObject, pushHistory } = useSceneStore();
+  const sizeUnit = useEditorPrefsStore((s) => s.sizeUnit);
+  const setSizeUnit = useEditorPrefsStore((s) => s.setSizeUnit);
+  const uf = SIZE_UNIT_FACTOR[sizeUnit]; // m→표시단위 배율 (m=1, cm=100, mm=1000)
+  const sizeDp = sizeUnit === 'm' ? 3 : sizeUnit === 'cm' ? 1 : 0; // 표시 소수 자리
   // 그룹 자식의 position은 부모 기준 로컬 좌표라 음수 y가 정상 — 최상위 오브젝트만 바닥(y=0) 클램프
   // (GizmoController의 skipYClamp와 동일한 규칙)
   const setPos = (axis: 'x' | 'y' | 'z', v: number) =>
@@ -45,26 +50,43 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
             <div className="px-3 pb-4 space-y-1">
               {/* 기즈모 드래그 중 라이브 채널로 실시간 갱신(캔버스 리렌더 없이 이 서브트리만) */}
               <LiveTransformRows obj={obj} setPos={setPos} setRot={setRot} setScl={setScl} onCommit={pushHistory} />
-              {/* 실측 크기(m) — 지오메트리 로컬 bbox × 스케일. 입력 시 역산해 스케일을 맞춘다.
-                  단, 로컬 크기가 1인 모양(박스·구체·원기둥·각뿔대 등)은 크기=스케일이라 중복 → 숨김.
-                  로컬 크기가 1이 아닌 모양(평면·돌출·로프트)에서만 표시해 '실측'이 의미 있게 한다. */}
+              {/* 실측 크기 — 지오메트리 로컬 bbox × 스케일(미터). mm/cm/m 단위 토글로 표시/입력 환산.
+                  모든 프리미티브에 표시(박스·구체·원기둥 포함) — 물리적 크기를 직관적으로 맞추기 위함.
+                  입력값은 현재 단위 → 미터로 되돌린 뒤 스케일로 역산(저장 데이터는 항상 미터/스케일). */}
               {obj.primitiveShape && !obj.content && !obj.assetId && (() => {
                 const lb = localBBox(objects, assets, obj.id);
                 const ls = lb && !lb.isEmpty() ? lb.getSize(new THREE.Vector3()) : new THREE.Vector3(1, 1, 1);
-                const nonUnit = Math.abs(ls.x - 1) > 0.01 || Math.abs(ls.y - 1) > 0.01 || Math.abs(ls.z - 1) > 0.01;
-                if (!nonUnit) return null; // 박스류(크기=스케일)는 숨김
-                const setSize = (axis: 'x' | 'y' | 'z', v: number) => setScl(axis, Math.max(0.001, v) / (ls[axis] || 1));
+                // 입력값 v(현재 단위) → 미터(v/uf) → 스케일 역산
+                const setSize = (axis: 'x' | 'y' | 'z', v: number) => setScl(axis, Math.max(0.001, v / uf) / (ls[axis] || 1));
+                const disp = (axis: 'x' | 'y' | 'z') => +(ls[axis] * obj.scale[axis] * uf).toFixed(sizeDp);
                 return (
                   <XYZRow
-                    label="Size (m)"
-                    x={+(ls.x * obj.scale.x).toFixed(3)}
-                    y={+(ls.y * obj.scale.y).toFixed(3)}
-                    z={+(ls.z * obj.scale.z).toFixed(3)}
+                    label={`Size (${sizeUnit})`}
+                    labelExtra={
+                      <div className="flex items-center gap-0.5 rounded-xs bg-background/60 p-0.5">
+                        {SIZE_UNITS.map((u) => (
+                          <button
+                            key={u}
+                            onClick={() => setSizeUnit(u)}
+                            title={`Show size in ${u}`}
+                            className={`px-1.5 py-0.5 rounded-[4px] text-[9px] font-semibold leading-none transition-colors cursor-pointer ${
+                              u === sizeUnit ? 'bg-primary text-white' : 'text-muted/70 hover:text-foreground'
+                            }`}
+                          >
+                            {u}
+                          </button>
+                        ))}
+                      </div>
+                    }
+                    x={disp('x')}
+                    y={disp('y')}
+                    z={disp('z')}
                     onChangeX={(v) => setSize('x', v)}
                     onChangeY={(v) => setSize('y', v)}
                     onChangeZ={(v) => setSize('z', v)}
                     onCommit={pushHistory}
-                    dragStep={0.1}
+                    dragStep={0.1 * uf}
+                    min={0.001 * uf}
                   />
                 );
               })()}

@@ -52,6 +52,8 @@ export function NumInput({
   const isFocused = useRef(false);
   const isDragging = useRef(false);
   const dragOrigin = useRef({ x: 0, val: 0 });
+  // 화살표 키로 눌러 값이 바뀐 뒤, 키를 뗄 때 한 번만 커밋(홀드 반복=undo 1회).
+  const pendingKeyCommit = useRef(false);
   // RAF ref: throttles Zustand store updates to once-per-frame to avoid
   // "Maximum update depth exceeded" when pointermove fires faster than React
   // can process SyncLane renders (especially with DevTools open).
@@ -108,6 +110,29 @@ export function NumInput({
     onCommit();
   };
 
+  // 화살표 ↑/↓ = dragStep 만큼 증감(Shift=×10, Alt=÷10). 텍스트 캐럿 이동/스크롤은 막는다.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const step = dragStep * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1);
+    const cur = (() => {
+      const n = parseFloat(local);
+      return isNaN(n) ? value : n;
+    })();
+    const newVal = clamp(round(cur + (e.key === "ArrowUp" ? step : -step)));
+    if (newVal === cur) return;
+    setLocal(fmt(newVal, precision));
+    onChange(newVal);
+    pendingKeyCommit.current = true;
+  };
+  const onKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    if (pendingKeyCommit.current) {
+      pendingKeyCommit.current = false;
+      onCommit();
+    }
+  };
+
   return (
     <div className="relative flex items-center">
       <input
@@ -123,6 +148,8 @@ export function NumInput({
           // (표시값은 그대로 두고 blur 시점에 정리)
           if (!isNaN(n)) onChange(clamp(n));
         }}
+        onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
         onBlur={() => {
           isFocused.current = false;
           let n = parseFloat(local);
@@ -209,6 +236,7 @@ export function LabeledText({
 // ── XYZ 행 ─────────────────────────────────────────────────────
 export function XYZRow({
   label,
+  labelExtra,
   x,
   y,
   z,
@@ -217,8 +245,11 @@ export function XYZRow({
   onChangeZ,
   onCommit,
   dragStep = 0.1,
+  min,
+  max,
 }: {
   label: string;
+  labelExtra?: ReactNode;
   x: number;
   y: number;
   z: number;
@@ -227,10 +258,16 @@ export function XYZRow({
   onChangeZ: (v: number) => void;
   onCommit: () => void;
   dragStep?: number;
+  // 세 축 공통 하한/상한(음수 방지 등). 미지정=제한 없음.
+  min?: number;
+  max?: number;
 }) {
   return (
     <div className="space-y-1">
-      <span className="text-[10px] font-semibold text-muted/50 tracking-wide">{label}</span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold text-muted/50 tracking-wide">{label}</span>
+        {labelExtra}
+      </div>
       <div className="grid grid-cols-3 gap-2">
         {[
           { axis: "X", val: x, change: onChangeX },
@@ -239,7 +276,7 @@ export function XYZRow({
         ].map(({ axis, val, change }) => (
           <div key={axis} className="relative">
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted/70 pointer-events-none z-10">{axis}</span>
-            <NumInput value={val} onChange={change} onCommit={onCommit} dragStep={dragStep} prefix={true} />
+            <NumInput value={val} onChange={change} onCommit={onCommit} dragStep={dragStep} min={min} max={max} prefix={true} />
           </div>
         ))}
       </div>
@@ -302,6 +339,7 @@ export function LiveTransformRows({
         onChangeZ={(v) => setScl("z", v)}
         onCommit={onCommit}
         dragStep={0.05}
+        min={0.001}
       />
     </>
   );

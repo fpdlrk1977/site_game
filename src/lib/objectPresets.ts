@@ -68,7 +68,7 @@ export const OBJECT_PRESETS: ObjectPreset[] = [
       rotation: { x: 90, y: 0, z: 0 }, // 세워 동전처럼
       scale: { x: 0.55, y: 0.08, z: 0.55 },
       motion: { type: 'spin', axis: 'z', speed: 3 }, // 세운 상태 수직축 회전 → 반짝
-      physics: { enabled: true, colliderType: 'cylinder', isSensor: true }, // 통과 트리거
+      physics: { enabled: true, colliderType: 'hull', isSensor: true }, // 통과 트리거
       events: [
         { trigger: 'area_enter', action: 'set_variable', value: 'score|add|1' },
         { trigger: 'area_enter', action: 'hide_object', value: PRESET_SELF },

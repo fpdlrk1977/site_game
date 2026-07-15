@@ -221,8 +221,10 @@ export interface PrimitiveGeom {
   profileRaw?: { x: number; y: number }[];
   // 펜툴 재편집용 — 스무딩(곡선) 여부.
   profileSmooth?: boolean;
-  // voxel: 복셀 셀 목록(1×1×1 큐브). live 렌더(정점색) + 모달 재편집. primitiveShape==='voxel'과 짝.
+  // voxel: 복셀 셀 목록(정수 그리드 큐브). live 렌더(정점색) + 모달 재편집. primitiveShape==='voxel'과 짝.
   voxels?: { x: number; y: number; z: number; color: string }[];
+  // voxel: 한 칸의 로컬 크기(미터). 미설정=1. 0.5/0.25면 같은 발판에서 더 촘촘한(고해상도) 복셀.
+  cellSize?: number;
   // 표면 세분화(Loop Subdivision) 레벨 — 0=원본, 1~3=면을 쪼개 부드러운 유기적 곡면으로. 성능상 3까지.
   subdivisions?: number;
 }

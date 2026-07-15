@@ -11,7 +11,8 @@ import { useToast } from '@/hooks/useToast';
 import type { Voxel } from '@/lib/voxelGeometry';
 
 const SIZE = 340;                       // 2D 페인터 픽셀(고정) — 칸 크기는 그리드 수에 맞춰 자동 조정
-const GRID_SIZES = [8, 16, 24, 32];     // 사용자가 고를 수 있는 그리드 한 변(칸 수)
+const GRID_SIZES = [8, 16, 24, 32, 48, 64]; // 사용자가 고를 수 있는 그리드 한 변(칸 수)
+const CELL_SIZES = [1, 0.5, 0.25];      // 한 칸의 로컬 크기(미터) — 작을수록 같은 발판에서 더 촘촘(고해상도)
 
 const PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#ffffff', '#94a3b8', '#1f2937', '#000000'];
 
@@ -54,8 +55,27 @@ export function VoxelToolModal() {
   const [color, setColor] = useState('#22c55e');
   const [layer, setLayer] = useState(0);      // 현재 Y 레이어
   const [gridN, setGridN] = useState(16);     // 그리드 한 변(칸 수) — 사용자 선택
+  const [cellSize, setCellSize] = useState(1); // 한 칸의 로컬 크기(미터) — 고해상도용
   const CELL = SIZE / gridN;                  // 칸 픽셀(그리드 수에 맞춰 자동)
   const paintMode = useRef<'paint' | 'erase' | null>(null); // 드래그 중 동작(좌=칠하기, 우=지우기)
+
+  // ── 2D 페인터 확대/이동(viewBox) ── 휠=확대(커서 기준) · Space/가운데버튼 드래그=이동 ──
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [view, setView] = useState({ x: 0, y: 0, w: SIZE, h: SIZE }); // 보이는 영역(base 좌표)
+  const viewRef = useRef(view);
+  useEffect(() => { viewRef.current = view; }, [view]);
+  const [spaceHeld, setSpaceHeld] = useState(false); // Space 눌림(커서 표시용)
+  const spaceRef = useRef(false);
+  const panRef = useRef<{ px: number; py: number; vx: number; vy: number } | null>(null);
+  const resetView = () => setView({ x: 0, y: 0, w: SIZE, h: SIZE });
+  // 화면 클릭 좌표(clientX/Y) → 그리드 칸 번호. viewBox(확대/이동)를 반영해 환산.
+  const clientToCell = (clientX: number, clientY: number) => {
+    const r = svgRef.current?.getBoundingClientRect();
+    if (!r) return { gx: -1, gz: -1 };
+    const bx = view.x + ((clientX - r.left) / r.width) * view.w;
+    const bz = view.y + ((clientY - r.top) / r.height) * view.h;
+    return { gx: Math.floor(bx / CELL), gz: Math.floor(bz / CELL) };
+  };
 
   // ── 로컬 undo/redo (모달 전용) — Ctrl+Z가 에디터가 아니라 여기서 먹게 ──
   const voxelsRef = useRef(voxels);           // 최신 voxels 미러(스냅샷용)
@@ -71,6 +91,7 @@ export function VoxelToolModal() {
   const changeGrid = (n: number) => {
     pushUndo();
     setGridN(n);
+    resetView();
     setVoxels((prev) => {
       const next: Record<string, string> = {};
       for (const [k, c] of Object.entries(prev)) {
@@ -103,16 +124,18 @@ export function VoxelToolModal() {
   useEffect(() => {
     if (!open) return;
     const { voxelEditId, objects } = useSceneStore.getState();
-    const evox = voxelEditId ? objects.find((o) => o.id === voxelEditId)?.geom?.voxels : null;
+    const eobj = voxelEditId ? objects.find((o) => o.id === voxelEditId) : null;
+    const evox = eobj?.geom?.voxels;
     if (evox && evox.length) {
       const dict: Record<string, string> = {};
       let maxCoord = 0;
       for (const v of evox) { dict[key(v.x, v.y, v.z)] = v.color; maxCoord = Math.max(maxCoord, v.x, v.z); }
       const g = GRID_SIZES.find((n) => maxCoord < n) ?? GRID_SIZES[GRID_SIZES.length - 1]; // 좌표가 다 들어가는 최소 그리드
-      setVoxels(dict); setGridN(g); setLayer(0); setPanelPos(null);
+      setVoxels(dict); setGridN(g); setCellSize(eobj?.geom?.cellSize ?? 1); setLayer(0); setPanelPos(null);
     } else {
-      setVoxels({}); setLayer(0); setGridN(16); setPanelPos(null);
+      setVoxels({}); setLayer(0); setGridN(16); setCellSize(1); setPanelPos(null);
     }
+    resetView();
     undoRef.current = []; redoRef.current = []; lastCellRef.current = null; // 히스토리 초기화
   }, [open]);
 
@@ -121,14 +144,43 @@ export function VoxelToolModal() {
     // 캡처 단계에서 처리 → Ctrl+Z가 window 버블 단계의 에디터 undo로 새는 것을 막음.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); setOpen(false); return; }
+      if (e.key === ' ') { if (!spaceRef.current) { spaceRef.current = true; setSpaceHeld(true); } e.preventDefault(); return; } // Space=이동 모드(버튼 활성/스크롤 방지)
       const ctrl = e.ctrlKey || e.metaKey;
       const z = e.key === 'z' || e.key === 'Z';
       if (ctrl && z && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); doUndo(); return; }
       if (ctrl && ((z && e.shiftKey) || e.key === 'y' || e.key === 'Y')) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); doRedo(); return; }
     };
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === ' ') { spaceRef.current = false; setSpaceHeld(false); } };
     window.addEventListener('keydown', onKey, { capture: true });
-    return () => window.removeEventListener('keydown', onKey, { capture: true });
+    window.addEventListener('keyup', onKeyUp, { capture: true });
+    return () => { window.removeEventListener('keydown', onKey, { capture: true }); window.removeEventListener('keyup', onKeyUp, { capture: true }); };
   }, [open, setOpen]);
+
+  // 휠 확대(커서 기준) — React onWheel은 passive라 preventDefault가 안 먹어(페이지 스크롤됨) 네이티브 non-passive로 붙인다.
+  useEffect(() => {
+    if (!open) return;
+    const el = svgRef.current;
+    if (!el) return;
+    const cellPx = SIZE / gridN;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const rx = (e.clientX - r.left) / r.width;   // 화면 내 비율 0~1
+      const rz = (e.clientY - r.top) / r.height;
+      const v = viewRef.current;
+      const cx = v.x + rx * v.w;                    // 커서의 base 좌표(확대 고정점)
+      const cz = v.y + rz * v.h;
+      const factor = e.deltaY < 0 ? 0.85 : 1 / 0.85; // 휠 위=확대
+      const minW = Math.max(cellPx * 2, SIZE / 40);
+      const nw = Math.min(SIZE, Math.max(minW, v.w * factor));
+      const nh = nw;                                // 정사각 유지
+      const nvx = Math.min(SIZE - nw, Math.max(0, cx - rx * nw)); // 그리드 밖 방지
+      const nvz = Math.min(SIZE - nh, Math.max(0, cz - rz * nh));
+      setView({ x: nvx, y: nvz, w: nw, h: nh });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [open, gridN]);
 
   if (!open) return null;
 
@@ -190,6 +242,48 @@ export function VoxelToolModal() {
     });
   };
 
+  const onSvgDown = (e: React.MouseEvent) => {
+    // 이동(pan): 가운데버튼 또는 Space+드래그
+    if (e.button === 1 || spaceRef.current) {
+      e.preventDefault();
+      panRef.current = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y };
+      return;
+    }
+    if (e.button !== 0 && e.button !== 2) return;
+    e.preventDefault();
+    const { gx, gz } = clientToCell(e.clientX, e.clientY);
+    if (gx < 0 || gz < 0 || gx >= gridN || gz >= gridN) return;
+    const m: 'paint' | 'erase' = e.button === 2 ? 'erase' : 'paint';
+    pushUndo();
+    if (e.shiftKey && lastCellRef.current) {
+      applyCells(lineCells(lastCellRef.current.x, lastCellRef.current.z, gx, gz), m);
+      paintMode.current = null; // 라인은 원샷
+    } else {
+      paintMode.current = m;
+      paintCell(gx, gz, m);
+    }
+    lastCellRef.current = { x: gx, z: gz };
+  };
+  const onSvgMove = (e: React.MouseEvent) => {
+    if (panRef.current) {
+      const r = svgRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const dx = ((e.clientX - panRef.current.px) / r.width) * view.w;
+      const dz = ((e.clientY - panRef.current.py) / r.height) * view.h;
+      const nvx = Math.min(SIZE - view.w, Math.max(0, panRef.current.vx - dx));
+      const nvz = Math.min(SIZE - view.h, Math.max(0, panRef.current.vy - dz));
+      setView((v) => ({ ...v, x: nvx, y: nvz }));
+      return;
+    }
+    if (paintMode.current) {
+      const { gx, gz } = clientToCell(e.clientX, e.clientY);
+      if (gx < 0 || gz < 0 || gx >= gridN || gz >= gridN) return;
+      paintCell(gx, gz, paintMode.current);
+      lastCellRef.current = { x: gx, z: gz };
+    }
+  };
+  const onSvgUp = () => { paintMode.current = null; panRef.current = null; };
+
   const count = Object.keys(voxels).length;
 
   // B안: GLB 굽기·업로드 없이 live 프리미티브(primitiveShape 'voxel')로 생성/재편집.
@@ -200,10 +294,10 @@ export function VoxelToolModal() {
       return { x, y, z, color: c };
     });
     if (editId) {
-      updateVoxelObject(editId, vox);
+      updateVoxelObject(editId, vox, cellSize);
       addToast(`복셀 수정됨 (${vox.length}칸)`, 'success');
     } else {
-      addVoxelObject(vox);
+      addVoxelObject(vox, cellSize);
       addToast(`복셀 생성 (${vox.length}칸)`, 'success');
     }
     setOpen(false);
@@ -222,7 +316,7 @@ export function VoxelToolModal() {
     <>
       <div
         ref={panelRef}
-        className="fixed z-50 bg-surface border border-border rounded-sm shadow-2xl p-4 w-[720px] max-w-[95vw]"
+        className="fixed z-50 bg-surface border border-border rounded-sm shadow-2xl p-4 w-[740px] max-w-[95vw]"
         style={panelPos ? { left: panelPos.x, top: panelPos.y } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
       >
         <div className="flex items-center justify-between mb-2.5 cursor-move select-none" onMouseDown={onHeaderDown}>
@@ -261,6 +355,14 @@ export function VoxelToolModal() {
             options={GRID_SIZES.map((n) => ({ value: String(n), label: `${n}×${n}` }))}
             fullWidth={false}
           />
+          {/* 셀 해상도 — 한 칸의 로컬 크기(작을수록 촘촘) */}
+          <span className="text-[11px] text-muted" title="한 칸의 크기(m). 작을수록 같은 발판에서 더 촘촘한 고해상도 복셀.">해상도</span>
+          <SelectBox
+            value={String(cellSize)}
+            onChange={(v) => setCellSize(Number(v))}
+            options={CELL_SIZES.map((s) => ({ value: String(s), label: s === 1 ? '1 (기본)' : `${s} 칸` }))}
+            fullWidth={false}
+          />
           <div className="flex-1" />
           <button onClick={recolorAll} disabled={count === 0}
             className="px-2 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
@@ -270,12 +372,17 @@ export function VoxelToolModal() {
 
         <div className="flex gap-3">
           {/* 2D 그리드 페인터(현재 레이어) */}
-          <div className="shrink-0">
+          <div className="shrink-0" style={{ width: SIZE }}>
+            <div className="rounded-xs border border-border overflow-hidden bg-background" style={{ width: SIZE, height: SIZE }}>
             <svg
-              width={SIZE} height={SIZE}
-              className="rounded-xs border border-border bg-background touch-none select-none text-foreground"
-              onMouseLeave={() => { paintMode.current = null; }}
-              onMouseUp={() => { paintMode.current = null; }}
+              ref={svgRef}
+              viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+              className="block w-full h-full touch-none select-none text-foreground"
+              style={{ cursor: spaceHeld || panRef.current ? 'grab' : 'crosshair' }}
+              onMouseDown={onSvgDown}
+              onMouseMove={onSvgMove}
+              onMouseLeave={onSvgUp}
+              onMouseUp={onSvgUp}
               onContextMenu={(e) => e.preventDefault()}
             >
               {/* 아래 어느 층이든 블록이 있는 칸(발자국) — 옅은 음영 */}
@@ -308,37 +415,15 @@ export function VoxelToolModal() {
                   </g>
                 );
               })}
-              {/* 히트 영역(투명) — 클릭·드래그 페인팅 */}
-              {Array.from({ length: gridN }).map((_, gx) =>
-                Array.from({ length: gridN }).map((_, gz) => (
-                  <rect
-                    key={`h${gx}-${gz}`}
-                    x={gx * CELL} y={gz * CELL} width={CELL} height={CELL}
-                    fill="transparent"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      const m = e.button === 2 ? 'erase' : 'paint';
-                      pushUndo();
-                      if (e.shiftKey && lastCellRef.current) {
-                        // shift+클릭 = 마지막 찍은 칸부터 여기까지 직선 일괄
-                        applyCells(lineCells(lastCellRef.current.x, lastCellRef.current.z, gx, gz), m);
-                        paintMode.current = null; // 라인은 원샷(드래그 아님)
-                      } else {
-                        paintMode.current = m;
-                        paintCell(gx, gz, m);
-                      }
-                      lastCellRef.current = { x: gx, z: gz };
-                    }}
-                    onMouseEnter={() => { if (paintMode.current) { paintCell(gx, gz, paintMode.current); lastCellRef.current = { x: gx, z: gz }; } }}
-                  />
-                )),
-              )}
+              {/* 클릭/드래그 페인팅은 svg 레벨 핸들러(onSvgDown/Move) + clientToCell이 담당 —
+                  칸마다 투명 rect를 깔던 방식을 없애 고해상도(64칸)에서도 가볍고 확대/이동과 호환. */}
             </svg>
-            <p className="text-[10px] text-muted/70 mt-1 text-center">좌클릭 칠하기 · 우클릭 지우기 · Shift+클릭=직선 · Ctrl+Z 되돌리기 · 점선=아래층</p>
+            </div>
+            <p className="text-[10px] text-muted/70 mt-1 text-center">좌클릭 칠하기 · 우클릭 지우기 · Shift+클릭=직선 · 휠=확대 · Space/가운데버튼=이동 · Ctrl+Z 되돌리기</p>
           </div>
 
-          {/* 3D 미리보기 */}
-          <div className="flex-1 rounded-xs border border-border overflow-hidden bg-background" style={{ height: SIZE }}>
+          {/* 3D 미리보기 — 2D 페인터와 동일한 정사각형(SIZE×SIZE) */}
+          <div className="shrink-0 rounded-xs border border-border overflow-hidden bg-background" style={{ width: SIZE, height: SIZE }}>
             <Canvas shadows camera={{ position: [gridN * 0.85, gridN * 0.75, gridN * 0.85], fov: 45 }}>
               <ambientLight intensity={0.6} />
               <directionalLight position={[10, 20, 10]} intensity={1.4} castShadow />

@@ -10,7 +10,7 @@ import type { ObjectNodeSchema } from '@/types/scene';
 
 export function MotionSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { updateObject, pushHistory } = useSceneStore();
-  const hasMotion = !!obj.motion && obj.motion.type !== 'none';
+  const hasMotion = !!obj.motion;
   return (
           <GroupBox>
           <SectionHeader title="Motion" hint="Ambient animation that always plays in the viewer. Float / Spin / Pulse / Orbit / Wander (roams freely within an area like a hot-air balloon). Visual-only by default; turn on 'With collider' to make it a real moving obstacle in play mode." isOpen={open} onToggle={onToggle} dot={hasMotion} />

@@ -14,8 +14,8 @@ export interface VoxelBakeResult {
 
 // 복셀 목록 → GLB. 각 복셀은 [x,x+1]×[y,y+1]×[z,z+1] 단위 큐브. 대상 없으면 null.
 // (복셀 B안 전환 후 live 렌더가 기본. 이 GLB 굽기는 .glb 내보내기 등 후속 용도로 유지.)
-export async function buildVoxelGlb(voxels: Voxel[]): Promise<VoxelBakeResult | null> {
-  const merged = buildVoxelGeometry(voxels);
+export async function buildVoxelGlb(voxels: Voxel[], cellSize = 1): Promise<VoxelBakeResult | null> {
+  const merged = buildVoxelGeometry(voxels, cellSize);
   if (!merged) return null;
 
   const mesh = new THREE.Mesh(

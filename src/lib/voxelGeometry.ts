@@ -7,14 +7,16 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 export interface Voxel { x: number; y: number; z: number; color: string }
 
 // 복셀 목록 → 병합 지오메트리(X/Z 중심 정렬 + 바닥 y=0). 정점색(선형). 대상 없으면 null.
-export function buildVoxelGeometry(voxels: Voxel[] | undefined): THREE.BufferGeometry | null {
+// cellSize: 한 칸의 로컬 크기(미터). 미설정=1. 정수 셀 좌표에 곱해 촘촘한(고해상도) 복셀 지원.
+export function buildVoxelGeometry(voxels: Voxel[] | undefined, cellSize = 1): THREE.BufferGeometry | null {
   if (!voxels || voxels.length === 0) return null;
+  const s = cellSize > 0 ? cellSize : 1;
 
   const geoms: THREE.BufferGeometry[] = [];
   const c = new THREE.Color();
   for (const v of voxels) {
-    const g = new THREE.BoxGeometry(1, 1, 1);
-    g.translate(v.x + 0.5, v.y + 0.5, v.z + 0.5); // 셀 좌표 = 큐브 최소 모서리
+    const g = new THREE.BoxGeometry(s, s, s);
+    g.translate((v.x + 0.5) * s, (v.y + 0.5) * s, (v.z + 0.5) * s); // 셀 좌표 = 큐브 최소 모서리
     c.set(v.color);
     const lin = c.clone().convertSRGBToLinear(); // sRGB 입력 → 선형(정점색 공간)
     const n = g.attributes.position.count;

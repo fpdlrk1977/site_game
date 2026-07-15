@@ -166,9 +166,9 @@ interface SceneActions {
   penToolEditId: string | null;
   openPenToolEdit: (id: string) => void;
   setVoxelToolOpen: (open: boolean) => void;
-  /** 복셀 오브젝트 — live 프리미티브(primitiveShape 'voxel'). 생성/재편집(B안). */
-  addVoxelObject: (voxels: { x: number; y: number; z: number; color: string }[], placeAt?: PlaceXZ) => void;
-  updateVoxelObject: (id: string, voxels: { x: number; y: number; z: number; color: string }[]) => void;
+  /** 복셀 오브젝트 — live 프리미티브(primitiveShape 'voxel'). 생성/재편집(B안). cellSize=한 칸 크기(미터, 미설정=1). */
+  addVoxelObject: (voxels: { x: number; y: number; z: number; color: string }[], cellSize?: number, placeAt?: PlaceXZ) => void;
+  updateVoxelObject: (id: string, voxels: { x: number; y: number; z: number; color: string }[], cellSize?: number) => void;
   voxelEditId: string | null;
   openVoxelEdit: (id: string) => void;
   setEditorPlaying: (v: boolean) => void;
@@ -775,13 +775,13 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   setVoxelToolOpen: (open) => set(open ? { voxelToolOpen: true } : { voxelToolOpen: false, voxelEditId: null }),
   openVoxelEdit: (id) => set({ voxelEditId: id, voxelToolOpen: true }),
 
-  addVoxelObject: (voxels, placeAt) => {
+  addVoxelObject: (voxels, cellSize, placeAt) => {
     objectCounter += 1;
     // 지오메트리는 X/Z 중심·바닥 y=0 정렬이라 position.y=0이면 지면에 앉는다(바닥 스냅 불필요).
     const obj = makeBaseObject({
       name: `복셀 ${objectCounter}`,
       primitiveShape: 'voxel',
-      geom: { voxels },
+      geom: cellSize && cellSize !== 1 ? { voxels, cellSize } : { voxels },
       material: { color: '#ffffff', roughness: 0.75, metalness: 0 },
       position: { x: placeAt?.x ?? 0, y: 0, z: placeAt?.z ?? 0 },
     });
@@ -795,12 +795,12 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
-  updateVoxelObject: (id, voxels) => {
+  updateVoxelObject: (id, voxels, cellSize) => {
     const { objects, environment, past } = get();
     const target = objects.find((o) => o.id === id);
     if (!target) return;
     set({
-      objects: objects.map((o) => (o.id === id ? { ...o, geom: { ...o.geom, voxels } } : o)),
+      objects: objects.map((o) => (o.id === id ? { ...o, geom: { ...o.geom, voxels, cellSize: cellSize && cellSize !== 1 ? cellSize : undefined } } : o)),
       isModified: true,
       ...withHistory({ objects, environment }, past),
     });

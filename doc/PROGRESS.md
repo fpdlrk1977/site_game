@@ -51,6 +51,39 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-15) — 🧊 복셀 해상도(cellSize) + 2D 페인터 확대/이동 + 3D 박스 정사각형 (사용자 확인 완료)
+
+> 스키마·`voxelGeometry`·`primitiveGeometry`·`voxelModel`·`sceneStore`·`VoxelToolModal`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").** B안(같은 발판, 고해상도) 채택 — A안(균일 축소)은 오브젝트 Scale/Size와 동일해 가치 낮아 제외. C안(칸 크기 혼용)은 데이터/UI 재설계라 보류.
+
+- **Phase 1 — 셀 해상도(cellSize)**: `PrimitiveGeom.cellSize?`(옵셔널, 미설정=1) 추가 → 한 칸의 로컬 크기(미터). `buildVoxelGeometry(voxels, cellSize=1)`가 BoxGeometry(s)+좌표×s로 촘촘한 복셀 생성. `primitiveGeomKey`에 cellSize 포함, `voxelModel.buildVoxelGlb`도 미러. 스토어 `addVoxelObject(voxels, cellSize?, placeAt?)`/`updateVoxelObject(id, voxels, cellSize?)` — cellSize≠1일 때만 geom에 저장(하위호환). 모달: **해상도 드롭다운(1 기본/0.5칸/0.25칸)** + **그리드 프리셋 48·64 추가**, 재편집 시 cellSize 로드. **핵심 판단**: cellSize는 정수 셀 그리드에 곱만 하므로 페인터 로직 무변경 → 저위험.
+- **Phase 2 — 2D 페인터 확대/이동**: **휠=커서 기준 확대**(viewBox 폭 축소+커서 고정, 그리드 밖 클램프) + **Space/가운데버튼 드래그=이동**(좌=칠하기·우=지우기 유지). **칸별 투명 rect 격자(gridN² 개)를 제거**하고 **svg 레벨 핸들러(onSvgDown/Move) + `clientToCell`(clientXY→viewBox 반영→칸 번호 환산)** 로 전환 → 64칸에서도 가볍고 확대/이동과 호환. **함정**: React `onWheel`은 passive라 preventDefault 무효(페이지 스크롤) → **네이티브 `addEventListener('wheel', …, {passive:false})`** effect로 붙임(viewRef로 최신 view 참조). Space는 캡처 keydown/keyup으로 spaceRef+커서 표시.
+- **3D 미리보기 박스 정사각형화**: 2D는 `shrink-0`(고정 340) / 3D는 `flex-1`(가변 폭)이라 3D만 가로가 늘어남 → 3D를 **동일한 340×340 div 래퍼**로 통일(패널 폭 720→740). 추가로 **좌측 컬럼 폭도 SIZE(340)로 고정** — 긴 안내 문구(`<p>`)가 shrink-0 컬럼을 박스보다 넓게 늘리던 것 수정(진짜 원인). svg는 width 속성 대신 래퍼 div 안에서 `w-full h-full`.
+- **미해결(사용자 `[나중에 질문]` 표시)**: 복셀/돌출/회전체에서 subdivision 조절 시 Transform의 Size 행이 생겼다 없어지며 패널이 흔들림 — 후속.
+
+---
+
+## ✅ 완료 (2026-07-15) — ⌨️ 숫자 입력 화살표 키 증감 + 음수 방지 감사 (사용자 확인 완료)
+
+> 공용 `ui.tsx`(`NumInput`/`XYZRow`) + `TransformSection`. tsc 클린 + `✓ Compiled`(editor 200). **사용자 확인 완료("잘되네").**
+
+- **화살표 키 ↑/↓ 증감**: 공용 `NumInput`(드래그 스크럽 text input)에 `onKeyDown`/`onKeyUp` 추가 → **모든 숫자 입력에 일괄 적용**(Transform·재질·조명·물리·파티클·환경 등, `NumInput`을 쓰는 `LabeledNum`/`XYZRow` 전부). 1회 증감 = 각 필드 **`dragStep`**(드래그 1px과 동일), **Shift=×10 / Alt=÷10**. `clamp`(min/max)·`round`(precision) 재사용. **히스토리는 keyup에 1회 커밋**(`pendingKeyCommit` ref → 홀드 반복=undo 1개). 캐럿 이동/스크롤 막음(preventDefault).
+- **음수 입력 방지 감사**: 전체 숫자 입력 감사 → **`LabeledNum` 기반은 이미 전부 `min` 지정**(재질/조명/물리/지오메트리/파티클/환경 — perl로 min 없는 블록 0개 확인)이라 음수 불가. **`XYZRow`만 min 미전달**이던 것 → `XYZRow`에 옵셔널 `min?`/`max?` prop 추가(3축 공통, `NumInput`으로 전달). 적용: **Scale `min={0.001}`**(음수/0=degenerate·뒤집힘 방지)·**Size `min={0.001*uf}`**(단위 환산 하한). Position(X/Z 음수 정상·Y는 `setPos`가 root만 store 클램프)·Rotation·이벤트/배열 오프셋은 음수가 정상이라 미적용. min 클램프는 타이핑·드래그·화살표 모든 경로 일관.
+
+---
+
+## ✅ 완료 (2026-07-15) — 📏 Size(m) 단위 토글 mm/cm/m + 모든 프리미티브 노출 + tsc 에러 2건 수정
+
+> `TransformSection` + 공용 `ui.tsx XYZRow` + 신규 `store/editorPrefsStore.ts`. tsc 클린 + `✓ Compiled`(editor 200). **사용자 확인 완료("잘된다").**
+
+- **선행: tsc 에러 2건 수정**(PROGRESS 기록은 "tsc 클린"이었으나 실제로 남아있던 것): ① `objectPresets.ts` 동전 프리셋 `colliderType:'cylinder'`(ColliderType에 없음) → `'hull'`. ② `MotionSection.tsx` `hasMotion = !!obj.motion && obj.motion.type !== 'none'`(MotionConfig.type에 'none' 없어 오버랩 에러) → `!!obj.motion`.
+- **Size 단위 토글**: Transform ▸ Size 라벨 옆 **mm/cm/m 3버튼**(활성=`bg-primary text-white`, 기존 토글 패턴). 클릭 시 input 표시/입력 숫자가 그 단위로 환산(예 0.5m 박스 → m:0.5·cm:50·mm:500). **저장 데이터는 항상 미터/스케일 불변** — 입력값 v(현재 단위)→미터(v/uf)→스케일 역산, 표시=`ls×scale×uf`. `dragStep=0.1×uf`(물리적 드래그량 일정), 소수자리 m=3·cm=1·mm=0.
+- **적용 범위(사용자 확정)**: **Size에만** 적용. Position(길이지만 배치 개념)·Rotation(각도)·Scale(배율)은 무변경(차원이 달라 단위 개념 없음). `XYZRow`에 옵셔널 `labelExtra?:ReactNode` prop 추가(라벨 우측 토글 자리) — 다른 행 무영향.
+- **Size 노출 확대(사용자 확정)**: 기존엔 로컬 크기≠1 모양(평면·돌출·로프트)에만 표시하고 박스·구체·원기둥은 숨겼으나(size=scale 중복 이유) → **모든 프리미티브에 표시**(단위 토글로 크기 감을 주려면 기본 도형에도 필요). `nonUnit` 게이트 제거.
+- **단위 지속성**: 신규 `editorPrefsStore`(zustand persist, `park3d-editor-prefs` localStorage) — 오브젝트 전환·새로고침에도 선택 단위 유지. 씬 데이터 아님(기기/세션 취향). `SIZE_UNIT_FACTOR`/`SIZE_UNITS` export.
+- **제약**: 프리미티브 전용(GLB·콘텐츠 제외, 기존과 동일). Position 단위 토글은 미구현(요청 시 별도 토글 추가 가능).
+
+---
+
 ## ✅ 완료 (2026-07-15) — 📋 오브젝트 Ctrl+C / Ctrl+V 복사·붙여넣기 (사용자 확인 완료)
 
 > `sceneStore` + `EditorClient`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료.** 기존 Ctrl+D(복제)와 별개.

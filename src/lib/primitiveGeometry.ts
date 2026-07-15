@@ -112,7 +112,7 @@ function buildBaseGeometry(
     case 'plane':
       return new THREE.PlaneGeometry(1, 1);
     case 'voxel':
-      return buildVoxelGeometry(geom?.voxels) ?? new THREE.BoxGeometry(1, 1, 1);
+      return buildVoxelGeometry(geom?.voxels, geom?.cellSize) ?? new THREE.BoxGeometry(1, 1, 1);
     default:
       return new THREE.BoxGeometry(1, 1, 1);
   }
@@ -128,5 +128,5 @@ export function profileSig(geom?: PrimitiveGeom): string {
 }
 
 export function primitiveGeomKey(shape: PrimitiveShape | undefined, geom?: PrimitiveGeom): string {
-  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}|${voxelSig(geom?.voxels)}`;
+  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}|${voxelSig(geom?.voxels)}|${geom?.cellSize ?? 1}`;
 }
