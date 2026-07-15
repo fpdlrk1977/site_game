@@ -183,6 +183,10 @@ interface SceneActions {
   setObjectLocked: (id: string, locked: boolean) => void;
   moveObject: (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   duplicateSelected: () => void;
+  // 오브젝트 클립보드(Ctrl+C/V) — transient(저장 안 함, 세션 유지=씬 넘어 붙여넣기 가능). 붙여넣기는 항상 최상위(root).
+  clipboard: { objects: ObjectNodeSchema[]; clips: AnimClip[] } | null;
+  copySelection: () => void;
+  pasteClipboard: () => void;
   // 선택 오브젝트를 count개(원본 포함)로 배열 복제. linear=offset 간격 나열(울타리·기둥), radial=중심 기준 원형 배치(시계 숫자·원형 테이블 의자).
   arraySelected: (count: number, offset: { x: number; y: number; z: number }, radial?: { radius: number; axis: 'x' | 'y' | 'z' } | null) => void;
   groupSelected: () => void;
@@ -570,6 +574,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   snapRotate: 15,
   objectSnap: false,
   selectedIds: [],
+  clipboard: null,
   focusTarget: null,
   focusAllRequest: null,
   focusSelectedRequest: null,
@@ -1243,6 +1248,81 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         ...withHistory({ objects, environment, animClips }, past),
       });
     }
+  },
+
+  // Ctrl+C — 선택 오브젝트(그룹이면 하위 계층 포함)를 클립보드에 스냅샷. 루트는 월드 좌표로 baking(parentId=null)해
+  //   나중에 항상 최상위로 붙여넣어도 제자리에 놓이게 한다. 다중 선택 시 각 선택 루트만(자손 중복 방지) 담는다.
+  copySelection: () => {
+    const { selectedIds, selectedId, objects, animClips } = get();
+    const ids = selectedIds.length ? selectedIds : (selectedId ? [selectedId] : []);
+    if (!ids.length) return;
+    const idSet = new Set(ids);
+    const hasSelectedAncestor = (o: ObjectNodeSchema): boolean => {
+      let p = o.parentId;
+      while (p) { if (idSet.has(p)) return true; p = objects.find((x) => x.id === p)?.parentId ?? null; }
+      return false;
+    };
+    const roots = ids
+      .map((id) => objects.find((o) => o.id === id))
+      .filter((o): o is ObjectNodeSchema => !!o && !hasSelectedAncestor(o));
+    if (!roots.length) return;
+    const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+    const clipObjects: ObjectNodeSchema[] = [];
+    for (const root of roots) {
+      const wm = computeWorldMatrix(objects, root.id);
+      const wp = new Vector3(), wq = new Quaternion(), ws = new Vector3();
+      wm.decompose(wp, wq, ws);
+      const we = new Euler().setFromQuaternion(wq);
+      clipObjects.push({
+        ...clone(root),
+        parentId: null,
+        position: { x: wp.x, y: wp.y, z: wp.z },
+        rotation: { x: we.x * RAD2DEG_M, y: we.y * RAD2DEG_M, z: we.z * RAD2DEG_M },
+        scale: { x: ws.x, y: ws.y, z: ws.z },
+      });
+      const collect = (parentId: string): void => {
+        for (const child of objects.filter((o) => o.parentId === parentId)) {
+          clipObjects.push(clone(child));
+          if (child.isGroup) collect(child.id);
+        }
+      };
+      collect(root.id);
+    }
+    const copiedIds = new Set(clipObjects.map((o) => o.id));
+    const clips = animClips
+      .filter((c) => (c.rootId ? copiedIds.has(c.rootId) : false) || c.tracks.some((t) => copiedIds.has(t.objectId)))
+      .map(clone);
+    set({ clipboard: { objects: clipObjects, clips } });
+  },
+
+  // Ctrl+V — 클립보드를 새 ID로 리맵해 항상 최상위(root)에 붙여넣기(+1 오프셋). 애니 클립도 함께 복제·리맵. 붙여넣은 것 선택.
+  pasteClipboard: () => {
+    const { clipboard, objects, environment, animClips, past } = get();
+    if (!clipboard || !clipboard.objects.length) return;
+    const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+    const idMap = new Map<string, string>();
+    for (const o of clipboard.objects) idMap.set(o.id, MathUtils.generateUUID());
+    const posDelta = new Map<string, { x: number; y: number; z: number }>();
+    const newObjs: ObjectNodeSchema[] = clipboard.objects.map((o) => {
+      const n: ObjectNodeSchema = { ...clone(o), id: idMap.get(o.id)!, parentId: o.parentId ? (idMap.get(o.parentId) ?? null) : null };
+      if (n.parentId === null) {
+        n.position = { ...n.position, x: n.position.x + 1 };
+        n.name = `${n.name} 복사`;
+        posDelta.set(o.id, { x: 1, y: 0, z: 0 });
+      }
+      return n;
+    });
+    const { clips: dupClips, clipIdMap } = dupAnimClips(clipboard.clips, idMap, posDelta);
+    const remapped = remapPlayClipEvents(newObjs, clipIdMap);
+    const newRootIds = newObjs.filter((o) => o.parentId === null).map((o) => o.id);
+    set({
+      objects: [...objects, ...remapped],
+      animClips: dupClips.length ? [...animClips, ...dupClips] : animClips,
+      selectedId: newRootIds[0] ?? null,
+      selectedIds: newRootIds,
+      isModified: true,
+      ...withHistory({ objects, environment, animClips }, past),
+    });
   },
 
   arraySelected: (count, offset, radial) => {

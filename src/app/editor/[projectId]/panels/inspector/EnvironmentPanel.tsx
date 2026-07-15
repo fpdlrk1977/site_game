@@ -19,6 +19,7 @@ import {
   Gem,
   Droplet,
   Palette,
+  Image as ImageIcon,
   Trash2,
   Plus,
 } from "lucide-react";
@@ -439,7 +440,6 @@ export function EnvironmentPanel() {
         </div>
         {env.ground?.enabled && (
           <div className="px-3 pb-3 space-y-2">
-            {/* 프리셋 */}
             {(() => {
               const GROUND_PRESETS: { id: GroundPreset; label: string; icon: LucideIcon }[] = [
                 { id: "grass", label: "Grass", icon: Sprout },
@@ -447,83 +447,88 @@ export function EnvironmentPanel() {
                 { id: "sand", label: "Sand", icon: Waves },
                 { id: "stone", label: "Stone", icon: Gem },
                 { id: "water", label: "Water", icon: Droplet },
-                { id: "custom", label: "Custom", icon: Palette },
+                { id: "color", label: "Color", icon: Palette },
+                { id: "texture", label: "Texture", icon: ImageIcon },
               ];
-              const current = env.ground!.preset ?? "custom";
+              // 레거시 'custom'/미설정은 textureUrl 유무로 texture/color로 표시(하위호환).
+              const raw = env.ground!.preset ?? "custom";
+              const mode = raw === "custom" ? (env.ground!.textureUrl ? "texture" : "color") : raw;
               return (
-                <SelectBox
-                  value={current}
-                  onChange={(v) => {
-                    updateEnvironment({ ground: { ...env.ground!, preset: v as GroundPreset } });
-                    pushHistory();
-                  }}
-                  options={GROUND_PRESETS.map(({ id, label, icon: Icon }) => ({ value: id, label, icon: <Icon size={14} /> }))}
-                />
+                <>
+                  {/* 프리셋 */}
+                  <SelectBox
+                    value={mode}
+                    onChange={(v) => {
+                      updateEnvironment({ ground: { ...env.ground!, preset: v as GroundPreset } });
+                      pushHistory();
+                    }}
+                    options={GROUND_PRESETS.map(({ id, label, icon: Icon }) => ({ value: id, label, icon: <Icon size={14} /> }))}
+                  />
+                  {/* Color 모드 — 컬러 선택 필드 */}
+                  {mode === "color" && (
+                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                      <input
+                        type="color"
+                        value={env.ground!.color}
+                        onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
+                        onBlur={pushHistory}
+                        className="w-5 h-5 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={env.ground!.color}
+                        onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
+                        onBlur={pushHistory}
+                        className="flex-1 px-2.5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  )}
+                  {/* Texture 모드 — 업로드 버튼 / 미리보기 */}
+                  {mode === "texture" && (
+                    <div className="space-y-2">
+                      {env.ground!.textureUrl ? (
+                        <div className="relative rounded-xs overflow-hidden border border-border group">
+                          <img src={env.ground!.textureUrl} alt="ground texture" className="w-full h-16 object-cover" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                            <button
+                              onClick={() => groundTexInputRef.current?.click()}
+                              className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-primary/80 transition-colors"
+                            >
+                              Replace
+                            </button>
+                            <button
+                              onClick={() => {
+                                const { textureUrl: _removed, ...rest } = env.ground!;
+                                updateEnvironment({ ground: rest });
+                                pushHistory();
+                              }}
+                              className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-danger/80 transition-colors"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => groundTexInputRef.current?.click()}
+                          disabled={groundTexUploading}
+                          className="w-full py-2.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {groundTexUploading ? "Uploading..." : "Upload texture image\nJPG · PNG · WEBP"}
+                        </button>
+                      )}
+                      <input
+                        ref={groundTexInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handleGroundTexUpload}
+                      />
+                    </div>
+                  )}
+                </>
               );
             })()}
-            {/* 직접 설정 시 텍스처 업로드 + 컬러 피커 */}
-            {(env.ground.preset ?? "custom") === "custom" && (
-              <div className="space-y-2">
-                {/* 텍스처 미리보기 or 업로드 버튼 */}
-                {env.ground.textureUrl ? (
-                  <div className="relative rounded-xs overflow-hidden border border-border group">
-                    <img src={env.ground.textureUrl} alt="ground texture" className="w-full h-16 object-cover" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                      <button
-                        onClick={() => groundTexInputRef.current?.click()}
-                        className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-primary/80 transition-colors"
-                      >
-                        Replace
-                      </button>
-                      <button
-                        onClick={() => {
-                          const { textureUrl: _removed, ...rest } = env.ground!;
-                          updateEnvironment({ ground: rest });
-                          pushHistory();
-                        }}
-                        className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-danger/80 transition-colors"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => groundTexInputRef.current?.click()}
-                    disabled={groundTexUploading}
-                    className="w-full py-2.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {groundTexUploading ? "Uploading..." : "Upload texture image\nJPG · PNG · WEBP"}
-                  </button>
-                )}
-                <input
-                  ref={groundTexInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={handleGroundTexUpload}
-                />
-                {/* 텍스처 없을 때 단색 폴백 컬러 */}
-                {!env.ground.textureUrl && (
-                  <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
-                    <input
-                      type="color"
-                      value={env.ground.color}
-                      onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="w-5 h-5 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={env.ground.color}
-                      onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="flex-1 px-2.5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
       </GroupBox>

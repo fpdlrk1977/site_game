@@ -44,6 +44,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     setTransformMode, requestFocus, requestFocusAll, requestFocusSelected, requestCameraView,
     groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark,
     copyObjectProperties, pasteObjectProperties,
+    copySelection, pasteClipboard,
     editorPlaying, setEditorPlaying,
     animMode, selectedId, animClips,
   } = useSceneStore();
@@ -122,6 +123,8 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       if (ctrl && e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
       if (ctrl && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ'))) { e.preventDefault(); redo(); return; }
       if (ctrl && e.code === 'KeyD') { e.preventDefault(); duplicateSelected(); return; }
+      if (ctrl && !e.shiftKey && e.code === 'KeyC') { e.preventDefault(); copySelection(); return; }   // 오브젝트 복사(Ctrl+Shift+C=속성 복사와 구분)
+      if (ctrl && !e.shiftKey && e.code === 'KeyV') { e.preventDefault(); pasteClipboard(); return; }   // 오브젝트 붙여넣기(항상 최상위)
       if (ctrl && e.shiftKey && e.code === 'KeyG') { e.preventDefault(); ungroupSelected(); return; }
       if (ctrl && e.code === 'KeyG') { e.preventDefault(); groupSelected(); return; }
       if (ctrl && e.shiftKey && e.code === 'KeyC') { e.preventDefault(); copyObjectProperties(); return; }
@@ -148,7 +151,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, deleteSelected, duplicateSelected, duplicateInPlace, setTransformMode, requestFocus, requestFocusAll, requestFocusSelected, requestCameraView, groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark, copyObjectProperties, pasteObjectProperties]);
+  }, [undo, redo, deleteSelected, duplicateSelected, duplicateInPlace, setTransformMode, requestFocus, requestFocusAll, requestFocusSelected, requestCameraView, groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark, copyObjectProperties, pasteObjectProperties, copySelection, pasteClipboard]);
 
   if (isMobile) {
     return (

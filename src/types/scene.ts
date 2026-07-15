@@ -5,7 +5,8 @@ export interface Vector3 {
 }
 
 export type HdrPreset = 'none' | 'sunset' | 'dawn' | 'night' | 'warehouse' | 'forest' | 'apartment' | 'studio' | 'city' | 'park' | 'lobby';
-export type GroundPreset = 'custom' | 'grass' | 'dirt' | 'sand' | 'stone' | 'water';
+// 'color'=단색 / 'texture'=업로드 이미지. 'custom'은 레거시(=textureUrl 있으면 texture, 없으면 color로 취급).
+export type GroundPreset = 'custom' | 'color' | 'texture' | 'grass' | 'dirt' | 'sand' | 'stone' | 'water';
 
 export interface EnvSchema {
   sky: { type: 'color' | 'hdr' | 'sky'; value: string };

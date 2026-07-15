@@ -28,7 +28,7 @@ function WaterPlane({ positionY }: { positionY: number }) {
 }
 
 // ── 텍스처 바닥 ───────────────────────────────────────────────────────────────
-function TexturedGround({ preset, positionY }: { preset: Exclude<GroundPreset, 'custom' | 'water'>; positionY: number }) {
+function TexturedGround({ preset, positionY }: { preset: Exclude<GroundPreset, 'custom' | 'color' | 'texture' | 'water'>; positionY: number }) {
   const { map, normalMap, roughness, metalness } = useMemo(
     () => getGroundTexture(preset),
     [preset],
@@ -72,8 +72,10 @@ interface Props {
 export function GroundPlane({ preset = 'custom', color, textureUrl, positionY = 0 }: Props) {
   if (preset === 'water') return <WaterPlane positionY={positionY} />;
 
-  if (preset === 'custom') {
-    if (textureUrl) {
+  // color=단색 / texture=이미지 / custom(레거시)=textureUrl 있으면 이미지, 없으면 단색.
+  if (preset === 'custom' || preset === 'color' || preset === 'texture') {
+    const useTexture = preset !== 'color' && !!textureUrl;
+    if (useTexture) {
       return (
         <Suspense fallback={
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, positionY, 0]} receiveShadow>

@@ -51,6 +51,27 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-15) — 📋 오브젝트 Ctrl+C / Ctrl+V 복사·붙여넣기 (사용자 확인 완료)
+
+> `sceneStore` + `EditorClient`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료.** 기존 Ctrl+D(복제)와 별개.
+
+- **Ctrl+C**: 선택 오브젝트(그룹=하위 계층 포함, 다중 선택 지원)를 클립보드에 스냅샷. 각 선택 '루트'만(자손 중복 방지). **루트는 월드 좌표로 baking**(`computeWorldMatrix`→decompose, `parentId=null`) → 그룹 안 자식을 복사해도 root로 붙일 때 제자리.
+- **Ctrl+V**: 새 UUID로 리맵해 **항상 최상위(root)** 에 붙여넣기(+1 x 오프셋, 붙여넣은 것 자동 선택). `dupAnimClips`/`remapPlayClipEvents` 재사용 → 애니 클립·play_clip 이벤트도 복제·리맵. 단일 undo.
+- **배선**: 스토어 `clipboard`(transient·세션 유지=씬 넘어 붙여넣기 가능) + `copySelection`/`pasteClipboard`. `EditorClient` 전역 키핸들러에 `Ctrl+C`/`Ctrl+V`(shift 없음 — Ctrl+Shift+C/V=속성 복사와 구분, 입력창에선 무시해 텍스트 복붙 유지). 트리·뷰포트 공통.
+- **제약**: 크로스-씬 붙여넣기 시 GLB/텍스처 등 에셋 참조는 대상 씬에 그 에셋이 있어야 표시(assetId만 참조).
+
+---
+
+## ✅ 완료 (2026-07-15) — 🟫 Ground 프리셋 Color/Texture 분리 (사용자 확인 완료)
+
+> `EnvironmentPanel` + `scene.ts` + `GroundPlane`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료.**
+
+- **변경**: Ground 드롭다운에서 기존 "Custom"(텍스처+컬러 혼합) 제거 → **Color**(단색)·**Texture**(이미지) 두 옵션으로 분리. 최종: Grass/Dirt/Sand/Stone/Water/**Color**/**Texture**. Color 선택=컬러 필드만, Texture 선택=업로드 버튼/미리보기만 노출(모드별 하나씩).
+- **스키마**: `GroundPreset`에 `'color'|'texture'` 추가(`'custom'`은 레거시 유지). **하위호환**: preset='custom'/미설정 → textureUrl 있으면 Texture, 없으면 Color로 표시(derive). 기존 씬 룩 무변.
+- **렌더**: `GroundPlane`이 color=단색 / texture=이미지(없으면 단색 폴백) / custom(레거시)=textureUrl 유무 처리. `TexturedGround` Exclude 타입에 color/texture 추가. 아이콘 Color=Palette·Texture=Image.
+
+---
+
 ## ✅ 완료 (2026-07-15) — 🖼️ 텍스처 Mapping 3종 (면마다 / Wrap 구면 / Pattern) (사용자 확인 완료)
 
 > 프리미티브 텍스처 투영 방식 선택. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("만족해").** 여러 차례 시행착오(triplanar bbox정규화→원통→구면) 끝에 **구면 투영**이 정답.
