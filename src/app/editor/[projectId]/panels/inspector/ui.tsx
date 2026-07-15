@@ -325,8 +325,41 @@ export function SectionHeader({
   dot?: boolean;
 }) {
   const collapsible = onToggle !== undefined;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const prevOpen = useRef(isOpen);
+  // 접힌 섹션을 펼치면(닫힘→열림) 스크롤 컨테이너에서 그 섹션이 보이도록 스크롤.
+  //   - 섹션이 컨테이너에 다 들어가면 아래 끝까지 드러나게(헤더는 유지)
+  //   - 컨테이너보다 크면 헤더를 상단에 붙여(그만큼만 내려) 최대한 드러냄
+  useEffect(() => {
+    if (isOpen && !prevOpen.current && rootRef.current) {
+      const header = rootRef.current;
+      const section = header.parentElement; // GroupBox(헤더+본문)
+      // 스크롤 가능한 조상 찾기
+      let container: HTMLElement | null = header.parentElement;
+      while (container) {
+        const oy = getComputedStyle(container).overflowY;
+        if ((oy === "auto" || oy === "scroll") && container.scrollHeight > container.clientHeight) break;
+        container = container.parentElement;
+      }
+      if (container && section) {
+        requestAnimationFrame(() => {
+          const c = container!.getBoundingClientRect();
+          const s = section.getBoundingClientRect();
+          const h = header.getBoundingClientRect();
+          if (s.bottom > c.bottom) {
+            const alignBottom = s.bottom - c.bottom;   // 섹션 끝을 컨테이너 끝에 맞춤
+            const alignHeaderTop = h.top - c.top - 4;  // 헤더를 상단에 붙임(과도 방지 캡)
+            const delta = Math.min(alignBottom, Math.max(0, alignHeaderTop));
+            if (delta > 1) container!.scrollBy({ top: delta, behavior: "smooth" });
+          }
+        });
+      }
+    }
+    prevOpen.current = isOpen;
+  }, [isOpen]);
   return (
     <div
+      ref={rootRef}
       onClick={onToggle}
       className={`flex items-center gap-2 px-3 py-3 text-[11px] font-semibold text-muted tracking-wide bg-surface/40 select-none ${collapsible ? "cursor-pointer hover:text-foreground transition-colors" : ""}`}
     >

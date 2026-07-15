@@ -20,6 +20,7 @@
     --foreground: #16141E;
     --muted:      #6C6979;
     --primary:    #6A4DFF;
+    --accent:     #0092b8;   /* 포인트 컬러(사이언) — 원하는 부분에만 bg-accent/text-accent 등으로 적용 */
     --success:    #22C55E;
     --warning:    #F59E0B;
     --danger:     #EF4444;
@@ -36,6 +37,7 @@
     --foreground: #EDEBF4;
     --muted:      #8E8B9E;
     --primary:    #7C6CFF;
+    --accent:     #0092b8;   /* 포인트 컬러(사이언) — 라이트와 동일 */
     --glass:      rgba(22,20,30,.82);
   }
 }
@@ -54,6 +56,7 @@
   --color-foreground: var(--foreground);
   --color-muted:      var(--muted);
   --color-primary:    var(--primary);
+  --color-accent:     var(--accent);
   --color-glass:      var(--glass);
   --color-success:    var(--success);
   --color-warning:    var(--warning);

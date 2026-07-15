@@ -57,8 +57,19 @@ export function VoxelToolModal() {
   const CELL = SIZE / gridN;                  // 칸 픽셀(그리드 수에 맞춰 자동)
   const paintMode = useRef<'paint' | 'erase' | null>(null); // 드래그 중 동작(좌=칠하기, 우=지우기)
 
+  // ── 로컬 undo/redo (모달 전용) — Ctrl+Z가 에디터가 아니라 여기서 먹게 ──
+  const voxelsRef = useRef(voxels);           // 최신 voxels 미러(스냅샷용)
+  useEffect(() => { voxelsRef.current = voxels; }, [voxels]);
+  const undoRef = useRef<Record<string, string>[]>([]);
+  const redoRef = useRef<Record<string, string>[]>([]);
+  const lastCellRef = useRef<{ x: number; z: number } | null>(null); // shift 직선용 마지막 찍은 칸
+  const pushUndo = () => { undoRef.current.push({ ...voxelsRef.current }); if (undoRef.current.length > 200) undoRef.current.shift(); redoRef.current = []; };
+  const doUndo = () => { const p = undoRef.current.pop(); if (p === undefined) return; redoRef.current.push({ ...voxelsRef.current }); setVoxels(p); lastCellRef.current = null; };
+  const doRedo = () => { const n = redoRef.current.pop(); if (n === undefined) return; undoRef.current.push({ ...voxelsRef.current }); setVoxels(n); lastCellRef.current = null; };
+
   // 그리드 크기 변경 — 줄이면 범위 밖 복셀은 버린다
   const changeGrid = (n: number) => {
+    pushUndo();
     setGridN(n);
     setVoxels((prev) => {
       const next: Record<string, string> = {};
@@ -102,11 +113,19 @@ export function VoxelToolModal() {
     } else {
       setVoxels({}); setLayer(0); setGridN(16); setPanelPos(null);
     }
+    undoRef.current = []; redoRef.current = []; lastCellRef.current = null; // 히스토리 초기화
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); } };
+    // 캡처 단계에서 처리 → Ctrl+Z가 window 버블 단계의 에디터 undo로 새는 것을 막음.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setOpen(false); return; }
+      const ctrl = e.ctrlKey || e.metaKey;
+      const z = e.key === 'z' || e.key === 'Z';
+      if (ctrl && z && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); doUndo(); return; }
+      if (ctrl && ((z && e.shiftKey) || e.key === 'y' || e.key === 'Y')) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); doRedo(); return; }
+    };
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, [open, setOpen]);
@@ -123,9 +142,44 @@ export function VoxelToolModal() {
     });
   };
 
+  // 여러 칸 일괄 적용(직선 라인용) — 한 번의 setVoxels로 배치.
+  const applyCells = (cells: { x: number; z: number }[], mode: 'paint' | 'erase') => {
+    setVoxels((prev) => {
+      const next = { ...prev };
+      for (const c of cells) {
+        if (c.x < 0 || c.z < 0 || c.x >= gridN || c.z >= gridN) continue;
+        const k = key(c.x, layer, c.z);
+        if (mode === 'erase') delete next[k]; else next[k] = color;
+      }
+      return next;
+    });
+  };
+  // 두 칸 사이 직선 경로의 칸들(Bresenham) — shift+클릭 일괄 채우기.
+  const lineCells = (x0: number, z0: number, x1: number, z1: number) => {
+    const cells: { x: number; z: number }[] = [];
+    const dx = Math.abs(x1 - x0), dz = Math.abs(z1 - z0);
+    const sx = x0 < x1 ? 1 : -1, sz = z0 < z1 ? 1 : -1;
+    let err = dx - dz, x = x0, z = z0;
+    for (;;) {
+      cells.push({ x, z });
+      if (x === x1 && z === z1) break;
+      const e2 = 2 * err;
+      if (e2 > -dz) { err -= dz; x += sx; }
+      if (e2 < dx) { err += dx; z += sz; }
+    }
+    return cells;
+  };
+  // 배치된 모든 복셀을 현재 색으로 일괄 재채색(재편집 시 색만 바꾸고 싶을 때).
+  const recolorAll = () => {
+    if (Object.keys(voxelsRef.current).length === 0) return;
+    pushUndo();
+    setVoxels((prev) => { const n: Record<string, string> = {}; for (const k of Object.keys(prev)) n[k] = color; return n; });
+  };
+
   // 아래층(y=layer-1)을 현재층에 그대로 복사 — 똑같이 쌓기(기둥·벽) 한 번에
   const copyBelow = () => {
     if (layer === 0) return;
+    pushUndo();
     setVoxels((prev) => {
       const next = { ...prev };
       for (const [k, c] of Object.entries(prev)) {
@@ -192,9 +246,9 @@ export function VoxelToolModal() {
           <div className="w-px h-5 bg-border/60" />
           {/* 레이어 */}
           <span className="text-[11px] text-muted">높이 Y</span>
-          <button onClick={() => setLayer((l) => Math.max(0, l - 1))} className="w-6 h-6 rounded-xs bg-background text-muted hover:text-foreground flex items-center justify-center"><Minus size={13} /></button>
+          <button onClick={() => { lastCellRef.current = null; setLayer((l) => Math.max(0, l - 1)); }} className="w-6 h-6 rounded-xs bg-background text-muted hover:text-foreground flex items-center justify-center"><Minus size={13} /></button>
           <span className="text-[11px] font-mono text-foreground w-5 text-center">{layer}</span>
-          <button onClick={() => setLayer((l) => l + 1)} className="w-6 h-6 rounded-xs bg-background text-muted hover:text-foreground flex items-center justify-center"><Plus size={13} /></button>
+          <button onClick={() => { lastCellRef.current = null; setLayer((l) => l + 1); }} className="w-6 h-6 rounded-xs bg-background text-muted hover:text-foreground flex items-center justify-center"><Plus size={13} /></button>
           <button onClick={copyBelow} disabled={layer === 0 || below1.size === 0}
             className="px-2 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
             title="바로 아래층을 현재층에 그대로 복사(기둥·벽 쌓기)">아래 복사</button>
@@ -208,7 +262,10 @@ export function VoxelToolModal() {
             fullWidth={false}
           />
           <div className="flex-1" />
-          <button onClick={() => { setVoxels({}); setLayer(0); }} className="px-2 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px]">전체 지우기</button>
+          <button onClick={recolorAll} disabled={count === 0}
+            className="px-2 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+            title="배치된 모든 칸을 현재 색으로 다시 칠하기(색만 변경)">전체 채색</button>
+          <button onClick={() => { pushUndo(); lastCellRef.current = null; setVoxels({}); setLayer(0); }} className="px-2 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px]">전체 지우기</button>
         </div>
 
         <div className="flex gap-3">
@@ -258,13 +315,26 @@ export function VoxelToolModal() {
                     key={`h${gx}-${gz}`}
                     x={gx * CELL} y={gz * CELL} width={CELL} height={CELL}
                     fill="transparent"
-                    onMouseDown={(e) => { e.preventDefault(); const m = e.button === 2 ? 'erase' : 'paint'; paintMode.current = m; paintCell(gx, gz, m); }}
-                    onMouseEnter={() => { if (paintMode.current) paintCell(gx, gz, paintMode.current); }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const m = e.button === 2 ? 'erase' : 'paint';
+                      pushUndo();
+                      if (e.shiftKey && lastCellRef.current) {
+                        // shift+클릭 = 마지막 찍은 칸부터 여기까지 직선 일괄
+                        applyCells(lineCells(lastCellRef.current.x, lastCellRef.current.z, gx, gz), m);
+                        paintMode.current = null; // 라인은 원샷(드래그 아님)
+                      } else {
+                        paintMode.current = m;
+                        paintCell(gx, gz, m);
+                      }
+                      lastCellRef.current = { x: gx, z: gz };
+                    }}
+                    onMouseEnter={() => { if (paintMode.current) { paintCell(gx, gz, paintMode.current); lastCellRef.current = { x: gx, z: gz }; } }}
                   />
                 )),
               )}
             </svg>
-            <p className="text-[10px] text-muted/70 mt-1 text-center">좌클릭 칠하기 · 우클릭 지우기 · 점선=아래층(위에 쌓으면 정렬)</p>
+            <p className="text-[10px] text-muted/70 mt-1 text-center">좌클릭 칠하기 · 우클릭 지우기 · Shift+클릭=직선 · Ctrl+Z 되돌리기 · 점선=아래층</p>
           </div>
 
           {/* 3D 미리보기 */}

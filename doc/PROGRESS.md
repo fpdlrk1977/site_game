@@ -51,6 +51,26 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-15) — 🧊 복셀 툴 개선 3종 (사용자 확인 완료)
+
+> `VoxelToolModal.tsx` 단독 변경. tsc 클린 + `✓ Compiled`. **사용자 브라우저 확인 완료("잘된다").**
+
+- **① Ctrl+Z가 에디터 undo로 새던 문제 수정**: 모달은 Escape만 캡처하고 Ctrl+Z는 window **버블 단계**의 `EditorClient` 전역 핸들러(undo)로 흘러갔음. → 모달 전용 **로컬 undo/redo 히스토리**(`undoRef`/`redoRef`, 최근 200단계, `voxelsRef` 미러로 스냅샷) + 키다운을 **캡처 단계**에서 처리해 `Ctrl+Z`·`Ctrl+Shift+Z`/`Ctrl+Y`를 `stopImmediatePropagation`으로 가로챔(에디터로 전파 차단). 한 획(드래그)=1단계, shift직선/아래복사/전체채색/전체지우기/그리드변경도 각각 되돌림 대상. 모달 열 때 스택 초기화.
+- **② Shift+클릭 직선 일괄 채우기**: 마지막 찍은 칸(`lastCellRef`) 기억 → shift+클릭 시 두 칸 사이 **직선 경로(Bresenham `lineCells`)** 를 한 번의 `setVoxels`로 일괄 채움(`applyCells`). 좌클릭=칠하기/우클릭=지우기 직선. 레이어(높이 Y) 전환·undo 시 기준점 리셋(다른 평면 오작동 방지).
+- **③ 생성 후 색상 변경**: 툴바 **"전체 채색" 버튼** 추가 — 배치된 모든 칸을 현재 선택 색으로 일괄 재채색(다시 만들 필요 없음). 참고: 새 색 선택 후 **기존 칸 클릭 = 그 칸만 재채색**은 원래 동작(칠하기가 덮어씀). 재편집은 오브젝트 리스트 우클릭 "복셀 수정"으로 진입.
+- **미해결(의도적)**: Inspector 색상 피커로 복셀 오브젝트 색 변경은 **정점색이 지오메트리에 구워지고 `vertexColors=true`면 베이스색을 흰색 강제**하는 구조라 무시됨(그대로 둠). 원하면 별도 방식(전체 틴트 or 지오메트리 재빌드) 협의 후 작업.
+
+---
+
+## ✅ 완료 (2026-07-15) — 🧭 접이식 섹션 펼칠 때 자동 스크롤 (사용자 확인 완료)
+
+> `inspector/ui.tsx`의 공용 `SectionHeader` 단독 변경 → Inspector·Environment·Logic 등 **모든 접이식 섹션에 일괄 적용**. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").**
+
+- **문제**: 스크롤 컨테이너 아래쪽의 접힌 섹션을 펼치면 본문이 컨테이너 밖(아래)에 렌더돼 안 보이고, 사용자가 직접 스크롤해야 보였음.
+- **수정**: `SectionHeader`에 `rootRef`+`prevOpen` ref로 **닫힘→열림 전환 감지** → 스크롤 가능한 조상(`overflow-y auto/scroll` && `scrollHeight>clientHeight`)을 찾아 `requestAnimationFrame`(본문 렌더 후) 시점에 섹션을 드러냄: **섹션이 컨테이너에 다 들어가면** 끝까지 보이게(헤더 유지), **컨테이너보다 크면** 헤더를 상단에 붙여 그만큼만(`Math.min(alignBottom, alignHeaderTop)`) `scrollBy({behavior:'smooth'})`. 이미 다 보이면 무동작, 마운트 시 기본 열린 섹션도 무동작(사용자 조작 전환만).
+
+---
+
 ## ✅ 완료 (2026-07-15) — 🎬 타임라인 ② per-트랙 독립 타이밍 (기준: `doc/ANIMATION.md`)
 
 > 접속 끊겨 중단됐던 작업 재개·완료. **사용자 브라우저 확인 완료("잘된거 같아").** tsc 클린(새 에러 0). 상세 = ANIMATION.md.
