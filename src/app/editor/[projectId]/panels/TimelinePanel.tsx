@@ -9,6 +9,7 @@ import { useRef, useState, useEffect } from 'react';
 import { Play, Square, Repeat, Plus, SkipBack } from 'lucide-react';
 import { useSceneStore, CHARACTER_PREVIEW_ID } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { EasingType } from '@/types/scene';
 
 const EASE_OPTS: { value: EasingType; label: string }[] = [
@@ -287,16 +288,13 @@ export function TimelinePanel() {
         </div>
       </div>
 
-      {/* 우클릭 컨텍스트 메뉴 */}
+      {/* 우클릭 컨텍스트 메뉴 — 공통 ContextMenu(위치·클램핑·바깥클릭/Esc 닫기) */}
       {ctx && (
-        <>
-          <div className="fixed inset-0 z-[100]" onPointerDown={() => setCtx(null)} onContextMenu={(e) => { e.preventDefault(); setCtx(null); }} />
-          <div className="fixed z-[101] bg-surface border border-border rounded-sm shadow-float py-1 text-[11px]" style={{ left: ctx.x, top: ctx.y }}>
-            <button onClick={() => { addKeyToTrack(clip.id, ctx.objectId, ctx.t); setCtx(null); }} className="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary flex items-center gap-1.5">
-              <Plus size={12} /> 여기에 키 추가 <span className="text-muted font-mono">{fmtTick(ctx.t)}</span>
-            </button>
-          </div>
-        </>
+        <ContextMenu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)} className="text-[11px]">
+          <button onClick={() => { addKeyToTrack(clip.id, ctx.objectId, ctx.t); setCtx(null); }} className="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary flex items-center gap-1.5">
+            <Plus size={12} /> 여기에 키 추가 <span className="text-muted font-mono">{fmtTick(ctx.t)}</span>
+          </button>
+        </ContextMenu>
       )}
     </div>
   );

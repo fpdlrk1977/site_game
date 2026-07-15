@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Box, Circle, Cylinder, Cone, Hexagon, Square, Folder, Type, Image as ImageIcon, Play,
   Package, Sparkles, Grid2x2, CircleDot, ChevronDown, ChevronRight,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSceneStore, isDescendant } from '@/store/sceneStore';
+import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ObjectNodeSchema } from '@/types/scene';
 
 type DropPos = 'before' | 'after' | 'inside';
@@ -77,21 +78,6 @@ function HierarchyItem({
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
   const inputRef = useRef<HTMLInputElement>(null);
-  // 컨텍스트 메뉴는 마우스 포인터 위치에 fixed로 뜬다. 렌더 후 크기를 재 뷰포트 밖으로 나가면 되접는다.
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [menuStyle, setMenuStyle] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
-  useLayoutEffect(() => {
-    if (!menuOpen || !menuPos) return;
-    let left = menuPos.x + 2; // 포인터 오른쪽
-    let top = menuPos.y;
-    const el = menuRef.current;
-    if (el) {
-      const r = el.getBoundingClientRect();
-      if (left + r.width > window.innerWidth - 4) left = menuPos.x - r.width - 2; // 오른쪽 넘치면 왼쪽으로 뒤집기
-      if (top + r.height > window.innerHeight - 4) top = window.innerHeight - r.height - 4;
-    }
-    setMenuStyle({ left: Math.max(4, left), top: Math.max(4, top) });
-  }, [menuOpen, menuPos]);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(obj.id) : selectedId === obj.id;
   const hasChildren = obj.isGroup;
   // 조상(부모 체인) 중 잠긴 게 있으면 이 행의 잠금은 조상에서 내려온 것 → 개별 해제 불가(버튼 disabled).
@@ -236,10 +222,9 @@ function HierarchyItem({
         </div>
       </div>
 
-      {/* 컨텍스트 메뉴 — 백드롭 없이(다른 행 우클릭 시 그 행 메뉴로 전환되도록) 패널이 바깥클릭 닫기 담당.
-          data-ctx-menu: 패널의 바깥클릭 리스너가 메뉴 내부 클릭을 무시하는 표식. */}
+      {/* 컨텍스트 메뉴 — 공통 ContextMenu(위치·클램핑·바깥클릭/Esc 닫기). 백드롭 없이 다른 행 우클릭 시 자연 전환. */}
       {menuOpen && menuPos && (
-        <div ref={menuRef} data-ctx-menu style={{ position: 'fixed', left: menuStyle.left, top: menuStyle.top }} className="w-44 bg-surface border border-border rounded-xs shadow-2xl shadow-black/30 z-50 py-1 overflow-hidden">
+        <ContextMenu x={menuPos.x} y={menuPos.y} onClose={onCloseMenu} className="w-44">
           {!obj.isGroup && (
             <button
               onClick={() => { onCloseMenu(); setEditing(true); }}
@@ -288,7 +273,7 @@ function HierarchyItem({
             <X size={13} /> 삭제
             <span className="ml-auto text-muted/60 text-[10px]">Del</span>
           </button>
-        </div>
+        </ContextMenu>
       )}
     </div>
   );
@@ -301,27 +286,6 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   // 컨텍스트 메뉴는 패널 레벨에서 단일 관리(한 번에 하나) — 다른 행 우클릭 시 그 행으로 전환.
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
-
-  // 바깥 클릭/우클릭/스크롤/Esc 시 메뉴 닫기(메뉴 내부 클릭은 무시). 백드롭 대신 이 리스너가 담당해
-  // 다른 행 우클릭이 백드롭에 막히지 않고 그 행 메뉴로 넘어가게 한다.
-  useEffect(() => {
-    if (!openMenuId) return;
-    const onDown = (e: MouseEvent) => {
-      if ((e.target as Element | null)?.closest?.('[data-ctx-menu]')) return; // 메뉴 내부 클릭은 유지
-      setOpenMenuId(null);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenuId(null); };
-    const onScroll = () => setOpenMenuId(null);
-    // mousedown은 우클릭(다른 행)보다 먼저 발생해 현재 메뉴를 닫고, 이어 그 행 onContextMenu가 새로 연다.
-    window.addEventListener('mousedown', onDown);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [openMenuId]);
 
   // 선택된 오브젝트가 그룹 안에 있으면 조상 그룹들을 전부 펼쳐 트리에서 보이게 한다.
   // (뷰포트에서 자식을 더블클릭해 드릴인 선택하면, 중첩이면 부모+상위 그룹이 모두 펼쳐짐)

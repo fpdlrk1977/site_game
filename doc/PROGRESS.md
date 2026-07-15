@@ -51,6 +51,31 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-15) — 🧩 공통 DropdownMenu 컴포넌트(버튼 액션 메뉴) + GNB 적용
+
+> 신규 `src/components/ui/DropdownMenu.tsx` + `EditorGnb` 리팩터. tsc 클린 + `✓ Compiled`. **브라우저 실동작 확인 대기.** ([[feedback_extract_reusable_shared_components]])
+
+- **배경**: "버튼 액션 메뉴"(값 선택 SelectBox와 별개)가 화면마다 제각각 — GNB·SceneSwitcher는 `useDropdown` 훅(위치·바깥클릭·Esc) 사용하나 **createPortal+패널 div 마크업을 매번 반복**, ViewportFloatingToolbar는 `useDropdown`도 안 쓰고 자체 `openMenu` union+rootRef 바깥클릭.
+- **공통 컴포넌트 `DropdownMenu`**: `useDropdown` 위에 **createPortal + 패널 컨테이너**를 감싼 컨테이너형(값 목록 아님). props `{trigger, children, placement, panelClassName}`. trigger=render-prop `({open,toggle,close,ref})`, children=자유 콘텐츠 또는 `({close})=>…`. 패널 기본 스타일(`bg-surface border rounded-xs shadow-dropdown`)은 공통, **폭/여백은 `panelClassName`으로 화면별 override**(SelectBox 트리거 className과 같은 철학).
+- **적용 — EditorGnb**(Settings·Account): 각 메뉴의 `useDropdown`+createPortal 블록 → `<DropdownMenu placement="right" panelClassName="w-48/w-52 py-1" trigger=…>…</DropdownMenu>`. Account 이메일 로드는 트리거 `onClick`에서 `!open`일 때 호출(기존 open-time 로드 동작 보존). 미사용 `useDropdown`/`createPortal` import 정리.
+- **의도적 제외**: **SceneSwitcher**는 `useListNav`(키보드 목록 탐색)+panelRef 스크롤이 얽힌 **값 선택기**라 단순 액션 메뉴 아님 → 옮기면 기능 깨짐(유지). SelectBox/TexturePicker도 값 선택기(유지).
+- **ViewportFloatingToolbar는 A안(그대로 유지)로 결정**(사용자): 툴바는 한 파일 자기완결(중복 아님)이고, 옮기면 스냅/정렬 메뉴가 중앙정렬→좌측정렬로 이동하는 **시각적 사이드이펙트** 위험 + 도형 스플릿버튼 앵커 이슈 → 이득 대비 리스크로 미적용. `DropdownMenu`는 향후 새 버튼 메뉴용으로 확보.
+- **확인 필요**(브라우저): GNB 우측 Settings/Account 메뉴 — 열림/닫힘/위치(트리거 오른쪽)/바깥클릭·Esc, 테마 토글·Share·도메인·이메일 표시·로그아웃.
+
+---
+
+## ✅ 완료 (2026-07-15) — 🧩 공통 ContextMenu 컴포넌트 추출(중복 제거)
+
+> 신규 `src/components/ui/ContextMenu.tsx` + `HierarchyPanel`·`TimelinePanel` 리팩터. tsc 클린 + `✓ Compiled`. **브라우저 실동작 확인 대기.** (사용자 원칙: 재사용 가능 UI는 공통 컴포넌트로 → [[feedback_extract_reusable_shared_components]])
+
+- **배경**: 컨텍스트(우클릭) 메뉴가 공통이 아니라 `HierarchyPanel`(포인터 위치+뷰포트 클램핑+data-ctx-menu 바깥클릭/Esc/스크롤 닫기)·`TimelinePanel`(포인터 위치+전체화면 백드롭 닫기)에 각각 인라인 중복.
+- **공통 컴포넌트 `ContextMenu`**: props `{x, y, onClose, children, className?}`. 담당 = **fixed 배치 + 뷰포트 클램핑(넘치면 좌/상 되접기, useLayoutEffect)** + **바깥 mousedown/스크롤/Esc 닫기(data-ctx-menu 표식으로 내부 클릭 무시, 백드롭 없음 → 다른 대상 우클릭 시 자연 전환)** + 컨테이너 스타일(`bg-surface border rounded-xs shadow z-[101]`). 호출부는 트리거(onContextMenu→좌표 state)와 메뉴 항목(children)만 소유.
+- **TimelinePanel**: `<>백드롭+메뉴 div</>` → `<ContextMenu x y onClose className="text-[11px]">…</ContextMenu>`. 덤으로 클램핑·Esc 획득.
+- **HierarchyPanel**: HierarchyItem의 menuRef/menuStyle/클램핑 `useLayoutEffect` 제거 + 패널 레벨 바깥클릭 `useEffect` 제거 → `<ContextMenu x={menuPos.x} y={menuPos.y} onClose={onCloseMenu} className="w-44">…</ContextMenu>`. 우클릭 시 selectObject·행 전환 등 트리거 동작은 그대로. 미사용 `useLayoutEffect` import 정리.
+- **효과**: 위치·클램핑·닫기 로직 단일화. 앞으로 새 화면의 우클릭 메뉴는 이 컴포넌트만 사용. **확인 필요**(브라우저): 트리 우클릭 메뉴 위치/뷰포트 되접기/다른 행 전환/Esc·바깥클릭 닫기, 타임라인 우클릭 '키 추가'.
+
+---
+
 ## ✅ 완료 (2026-07-15) — 🧊 복셀 해상도(cellSize) + 2D 페인터 확대/이동 + 3D 박스 정사각형 (사용자 확인 완료)
 
 > 스키마·`voxelGeometry`·`primitiveGeometry`·`voxelModel`·`sceneStore`·`VoxelToolModal`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").** B안(같은 발판, 고해상도) 채택 — A안(균일 축소)은 오브젝트 Scale/Size와 동일해 가치 낮아 제외. C안(칸 크기 혼용)은 데이터/UI 재설계라 보류.

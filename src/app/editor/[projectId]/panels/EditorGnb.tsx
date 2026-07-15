@@ -2,10 +2,9 @@
 
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { createPortal } from 'react-dom';
 import { Layers, Package, Cpu, Settings, UserRound, Share2, Globe, LogOut, SlidersHorizontal, Sun, Moon } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { useDropdown } from '@/hooks/useDropdown';
+import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { useSceneStore } from '@/store/sceneStore';
 import { useThemeStore } from '@/store/themeStore';
 import { createBrowserSupabase } from '@/lib/supabase';
@@ -59,14 +58,12 @@ const MENU_ITEM_CLASS =
 
 // ── 설정 메뉴 ───────────────────────────────────────────────────
 function SettingsMenu({ projectName }: { projectName: string }) {
-  const { open, toggle, close, triggerRef, panelRef, panelStyle } = useDropdown({ placement: 'right' });
   const { theme, toggleTheme } = useThemeStore();
   const { projectId, sceneId } = useSceneStore();
   const [shareData, setShareData] = useState<{ isPublished: boolean } | null>(null);
   const [domainData, setDomainData] = useState<{ currentDomain: string | null } | null>(null);
 
   const openShare = async () => {
-    close();
     if (!sceneId) return;
     const { data } = await createBrowserSupabase()
       .from('scenes').select('is_published').eq('id', sceneId).single();
@@ -74,7 +71,6 @@ function SettingsMenu({ projectName }: { projectName: string }) {
   };
 
   const openDomain = async () => {
-    close();
     if (!projectId) return;
     const { data } = await createBrowserSupabase()
       .from('projects').select('custom_domain').eq('id', projectId).single();
@@ -83,34 +79,30 @@ function SettingsMenu({ projectName }: { projectName: string }) {
 
   return (
     <>
-      <RailButton
-        buttonRef={triggerRef}
-        icon={<Settings size={16} />}
-        label="Settings"
-        active={open}
-        onClick={toggle}
-      />
-      {open && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={panelRef}
-          style={panelStyle}
-          className="w-48 bg-surface border border-border rounded-xs shadow-dropdown py-1 overflow-hidden"
-        >
-          <div className="px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider">Settings</div>
-          <button onClick={() => { toggleTheme(); close(); }} className={MENU_ITEM_CLASS}>
-            <span className="w-4 flex items-center justify-center text-muted">{theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}</span>
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          </button>
-          <div className="border-t border-border my-1" />
-          <button onClick={openShare} className={MENU_ITEM_CLASS}>
-            <Share2 size={13} className="text-muted" /> Share / Embed
-          </button>
-          <button onClick={openDomain} className={MENU_ITEM_CLASS}>
-            <Globe size={13} className="text-muted" /> Custom domain
-          </button>
-        </div>,
-        document.body,
-      )}
+      <DropdownMenu
+        placement="right"
+        panelClassName="w-48 py-1"
+        trigger={({ open, toggle, ref }) => (
+          <RailButton buttonRef={ref} icon={<Settings size={16} />} label="Settings" active={open} onClick={toggle} />
+        )}
+      >
+        {({ close }) => (
+          <>
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider">Settings</div>
+            <button onClick={() => { toggleTheme(); close(); }} className={MENU_ITEM_CLASS}>
+              <span className="w-4 flex items-center justify-center text-muted">{theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}</span>
+              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </button>
+            <div className="border-t border-border my-1" />
+            <button onClick={() => { close(); openShare(); }} className={MENU_ITEM_CLASS}>
+              <Share2 size={13} className="text-muted" /> Share / Embed
+            </button>
+            <button onClick={() => { close(); openDomain(); }} className={MENU_ITEM_CLASS}>
+              <Globe size={13} className="text-muted" /> Custom domain
+            </button>
+          </>
+        )}
+      </DropdownMenu>
 
       {shareData && sceneId && (
         <ShareModal
@@ -134,33 +126,31 @@ function SettingsMenu({ projectName }: { projectName: string }) {
 
 // ── 회원정보 메뉴 ───────────────────────────────────────────────
 function AccountMenu() {
-  const { open, openMenu, close, triggerRef, panelRef, panelStyle } = useDropdown({ placement: 'right' });
   const [email, setEmail] = useState<string | null>(null);
 
-  const handleToggle = async () => {
-    if (open) { close(); return; }
-    openMenu();
-    if (email === null) {
-      const { data: { user } } = await createBrowserSupabase().auth.getUser();
-      setEmail(user?.email ?? '');
-    }
+  // 이메일은 처음 열 때 한 번 로드(이전과 동일). 트리거 열림 시점에 호출.
+  const loadEmail = async () => {
+    if (email !== null) return;
+    const { data: { user } } = await createBrowserSupabase().auth.getUser();
+    setEmail(user?.email ?? '');
   };
 
   return (
-    <>
-      <RailButton
-        buttonRef={triggerRef}
-        icon={<UserRound size={16} />}
-        label="Account"
-        active={open}
-        onClick={handleToggle}
-      />
-      {open && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={panelRef}
-          style={panelStyle}
-          className="w-52 bg-surface border border-border rounded-xs shadow-dropdown py-1 overflow-hidden"
-        >
+    <DropdownMenu
+      placement="right"
+      panelClassName="w-52 py-1"
+      trigger={({ open, toggle, ref }) => (
+        <RailButton
+          buttonRef={ref}
+          icon={<UserRound size={16} />}
+          label="Account"
+          active={open}
+          onClick={() => { if (!open) loadEmail(); toggle(); }}
+        />
+      )}
+    >
+      {({ close }) => (
+        <>
           <div className="px-3 py-2 border-b border-border/60">
             <p className="text-[10px] text-muted">Signed in as</p>
             <p className="text-xs text-foreground truncate">{email ?? '...'}</p>
@@ -173,10 +163,9 @@ function AccountMenu() {
               <LogOut size={13} /> Sign out
             </button>
           </form>
-        </div>,
-        document.body,
+        </>
       )}
-    </>
+    </DropdownMenu>
   );
 }
 
