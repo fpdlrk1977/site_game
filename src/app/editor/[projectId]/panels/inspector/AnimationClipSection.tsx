@@ -281,18 +281,23 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
                 </>
               )}
 
-              <p className="text-[10px] text-muted/60 pt-1">총 길이 <b className="text-foreground font-mono">{clip.duration}s</b> <span className="text-muted/40">— 마지막 포즈 시간으로 자동</span></p>
-              <div className="grid grid-cols-2 gap-1.5">
-                <div>
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">이징(곡선)</span>
-                  <SelectBox value={clip.easing ?? 'easeInOut'} onChange={(e) => { updateAnimClip(clip.id, { easing: e as AnimClip['easing'] }); pushHistory(); }}
-                    options={[{ value: 'linear', label: '일정' }, { value: 'easeInOut', label: '부드럽게' }, { value: 'easeIn', label: '천천히 시작' }, { value: 'easeOut', label: '천천히 끝' }, { value: 'backOut', label: '살짝 뒤로' }, { value: 'bounceOut', label: '튕김' }]} />
-                </div>
-                <label className="flex items-center justify-between cursor-pointer self-end pb-1.5">
-                  <span className="text-[10px] font-semibold text-muted/60">반복(loop)</span>
-                  <Toggle value={clip.loop === true} onChange={(v) => { updateAnimClip(clip.id, { loop: v }); pushHistory(); }} />
-                </label>
-              </div>
+              {/* 총 길이·이징·반복은 간단 모드에서만 — 타임라인 모드는 하단 트랜스포트에 있음(중복 제거). */}
+              {animMode === 'simple' && (
+                <>
+                  <p className="text-[10px] text-muted/60 pt-1">총 길이 <b className="text-foreground font-mono">{clip.duration}s</b> <span className="text-muted/40">— 마지막 포즈 시간으로 자동</span></p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">이징(곡선)</span>
+                      <SelectBox value={clip.easing ?? 'easeInOut'} onChange={(e) => { updateAnimClip(clip.id, { easing: e as AnimClip['easing'] }); pushHistory(); }}
+                        options={[{ value: 'linear', label: '일정' }, { value: 'easeInOut', label: '부드럽게' }, { value: 'easeIn', label: '천천히 시작' }, { value: 'easeOut', label: '천천히 끝' }, { value: 'backOut', label: '살짝 뒤로' }, { value: 'bounceOut', label: '튕김' }]} />
+                    </div>
+                    <label className="flex items-center justify-between cursor-pointer self-end pb-1.5">
+                      <span className="text-[10px] font-semibold text-muted/60">반복(loop)</span>
+                      <Toggle value={clip.loop === true} onChange={(v) => { updateAnimClip(clip.id, { loop: v }); pushHistory(); }} />
+                    </label>
+                  </div>
+                </>
+              )}
               {!obj.isGroup && (
                 <div className="pt-0.5">
                   <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">회전축 (경첩) · <span className="text-primary">{obj.name}</span></span>
