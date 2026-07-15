@@ -4,7 +4,7 @@ import { useRef, useLayoutEffect, useMemo, useEffect, useState, Suspense } from 
 import * as THREE from 'three';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import { Text3D, Center, Line } from '@react-three/drei';
-import { createPrimitiveGeometry, primitiveGeomKey, profileSig } from '@/lib/primitiveGeometry';
+import { createPrimitiveGeometry, createRoundedBoxDims, primitiveGeomKey, profileSig } from '@/lib/primitiveGeometry';
 import { voxelSig } from '@/lib/voxelGeometry';
 import { primLocalBboxCache } from '@/lib/primBboxCache';
 import { effectiveMaterial } from '@/lib/effectiveMaterial';
@@ -541,11 +541,20 @@ export function EditorObjectInstance({ object }: Props) {
   const rdCast = object.render?.castShadow ?? false;
   const rdReceive = object.render?.receiveShadow ?? false;
 
+  // 둥근 박스(box+cornerRadius>0)는 '실제 치수'로 굽고 메쉬에 역스케일(1/scale)을 걸어 group.scale과 상쇄.
+  // → group.scale(=object.scale)은 그대로라 기즈모·objectBBox·Size 무변경, 최종 렌더만 균일한 모서리.
+  // 격리 테스트(/test/rounded-box)로 정육면체·직사각형·납작판 전부 정상 확인.
+  const isRoundedBox = !object.assetId && object.primitiveShape === 'box' && (object.geom?.cornerRadius ?? 0) > 0;
+  const sX = Math.max(0.001, object.scale.x), sY = Math.max(0.001, object.scale.y), sZ = Math.max(0.001, object.scale.z);
+
   // 프리미티브 지오메트리(둥근 박스·각뿔대 등 확장 파라미터 반영). 파라미터 바뀌면 재생성·이전 것 dispose.
   const primGeom = useMemo(
-    () => createPrimitiveGeometry(object.primitiveShape, object.geom),
+    () => isRoundedBox
+      ? createRoundedBoxDims(sX, sY, sZ, object.geom?.cornerRadius ?? 0, object.geom?.cornerSegments ?? 4, object.geom?.subdivisions ?? 0)
+      : createPrimitiveGeometry(object.primitiveShape, object.geom),
     // profileSig/voxelSig는 내용을 반영 → 펜툴·복셀 재편집으로 데이터가 바뀌면 지오메트리 재생성.
-    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions],
+    // 둥근 박스는 치수(scale)에도 의존 → 크기 커밋(마우스업) 시 재생성돼 모서리가 균일해진다.
+    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions, isRoundedBox, sX, sY, sZ],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
   // triplanar wrap 모드용 로컬 bbox(한 장을 bbox 0~1로 정규화 투영).
@@ -562,6 +571,9 @@ export function EditorObjectInstance({ object }: Props) {
   // (돌출/로프트/평면처럼 한 축이 얇은 형상에서 고정 단위 박스 가이드가 과대 표시되던 문제 수정.
   //  normalizeUnit이 최대 변만 1로 맞춰 다른 축은 <1이 되므로.) box/구체는 bbox=1이라 무변화.
   const bbox = useMemo(() => {
+    // 둥근 박스는 지오메트리가 실제 치수(메쉬 1/scale 역스케일)라, 가이드/캐시는 단위 박스로 둔다
+    // → group 스케일과 곱하면 실제 크기 → objectBBox·정렬·바닥스냅이 기존과 동일하게 동작.
+    if (isRoundedBox) return { size: [1, 1, 1] as [number, number, number], center: [0, 0, 0] as [number, number, number] };
     primGeom.computeBoundingBox();
     const b = primGeom.boundingBox;
     if (!b) return { size: [1, 1, 1] as [number, number, number], center: [0, 0, 0] as [number, number, number] };
@@ -573,7 +585,7 @@ export function EditorObjectInstance({ object }: Props) {
       ] as [number, number, number],
       center: [(b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2] as [number, number, number],
     };
-  }, [primGeom]);
+  }, [primGeom, isRoundedBox]);
 
   // 프리미티브/콘텐츠의 실제 로컬 bbox를 캐시 → objectBBox.localBBox가 읽어 드래그 아웃라인·정렬·바닥
   // 스냅이 실제 크기를 쓴다(예전엔 단위 큐브 가정). GLB/라이트/파티클은 제외(각자 경로).
@@ -689,6 +701,8 @@ export function EditorObjectInstance({ object }: Props) {
       ) : (
         <mesh
           geometry={primGeom}
+          // 둥근 박스: 지오메트리가 실제 치수라 group.scale을 상쇄하는 역스케일(1/scale). 비-둥근은 명시적 [1,1,1](R3F 미리셋 함정 회피).
+          scale={isRoundedBox ? [1 / sX, 1 / sY, 1 / sZ] : [1, 1, 1]}
           onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
           onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
           onPointerOver={handlePointerOver}

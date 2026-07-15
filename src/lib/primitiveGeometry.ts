@@ -67,6 +67,27 @@ function makeLoft(sections: number[] | undefined): THREE.BufferGeometry {
   return g;
 }
 
+// 둥근 박스를 '실제 치수(dims)'로 굽는다 — 비균일 스케일로 늘리면 둥근 모서리가 타원으로 찌그러지는 문제 해결.
+// 렌더 쪽에서 mesh에 1/scale 역스케일을 걸어 group.scale과 상쇄 → group.scale(=object.scale)은 그대로라 기즈모/bbox 무변경.
+// 반경은 '짧은 변 기준 절대값'(cornerRadius 0~0.5 × 최소 변)이라 가로세로 비율과 무관하게 모든 모서리가 균일하게 둥글다.
+export function createRoundedBoxDims(
+  sx: number, sy: number, sz: number,
+  cornerRadius: number, cornerSegments = 4, subdivisions = 0,
+): THREE.BufferGeometry {
+  const w = Math.max(0.001, sx), h = Math.max(0.001, sy), d = Math.max(0.001, sz);
+  const seg = Math.max(1, Math.round(cornerSegments));
+  const rMax = Math.min(w, h, d) / 2;
+  const radius = Math.min(Math.min(Math.max(cornerRadius, 0), 0.5) * Math.min(w, h, d), rMax * 0.999);
+  const base: THREE.BufferGeometry = new RoundedBoxGeometry(w, h, d, seg, radius);
+  const level = Math.max(0, Math.min(3, Math.round(subdivisions)));
+  if (level > 0) {
+    const subdivided = LoopSubdivision.modify(base, level, { split: true, uvSmooth: false });
+    base.dispose();
+    return subdivided;
+  }
+  return base;
+}
+
 // 프리미티브 오브젝트의 지오메트리를 생성. 기본 크기는 기존 인라인 값과 동일(단위 박스·r0.5 구 등).
 // subdivisions>0이면 Loop Subdivision으로 면을 쪼개 부드러운 유기적 곡면으로 만든다(블렌더 Subdivision Surface).
 export function createPrimitiveGeometry(

@@ -51,6 +51,25 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료·헤드리스 검증 (2026-07-16) — 🟦 둥근 박스 직사각형 모서리 균일화 (비균일 스케일 왜곡 수정)
+
+> `primitiveGeometry`(신규 `createRoundedBoxDims`) + `EditorObjectInstance` + `ViewerObject` + `InstancedPrimitives`. tsc 클린 + `✓ Compiled`. **헤드리스 스크린샷 검증 + 사용자 확인 완료("잘되는거 같아").** (직전 "얇은 판" 회귀는 편집 중 HMR 중간상태였고 하드리프레시로 해소.)
+
+- **문제**: 박스를 비균일 스케일(예 3:1)로 직사각형 만들고 `cornerRadius`↑ 하면 둥근 모서리가 타원으로 찌그러짐(1×1×1 단위 박스에 굽고 스케일로 늘려서 — 사진 늘리기). 정육면체는 정상.
+- **해결(역스케일 트릭)**: 둥근 박스(`box`+`cornerRadius>0`)만 지오메트리를 **실치수(object.scale)로 굽고 메쉬에 `1/scale` 역스케일**을 걸어 group.scale과 상쇄 → **group.scale(=object.scale) 그대로**라 기즈모·objectBBox·Size·바닥스냅·정렬 **전부 무변경**, 최종 렌더만 균일한 모서리. 드래그 중엔 늘어나 보이다 놓으면(스토어 커밋) 재생성돼 균일.
+- **반경**: `cornerRadius(0~0.5)×최소 변` = 짧은 변 기준 절대 반경 → 비율 무관 균일. **정육면체(scale 1,1,1)는 이전과 100% 동일**(기존 씬 무변).
+- **1차 시도 회귀 원인 규명**: "얇은 판" 증상은 **여러 파일 연속 편집 중 HMR 중간상태**(메쉬 역스케일 적용됐는데 지오메트리 아직 단위)였음. 신규 **`/test/rounded-box`** 페이지 + 헤드리스 Edge 스크린샷으로 **정육면체·3×1×1·납작판(3,0.15,3)·0.3×1.5×3 전부 균일·정상** 확인([[project_e2e_play_mode_testing]] 방식). 재적용 시 비-둥근 박스 메쉬에 명시적 `scale=[1,1,1]`(R3F `undefined` 미리셋 함정 회피) 추가.
+- **구현 상세**: 신규 `createRoundedBoxDims(sx,sy,sz,cornerRadius,seg,subdivisions)`(RoundedBoxGeometry 실치수+subdivision). 둥근 박스는 가이드/캐시 bbox를 **단위 박스로 고정**(group 스케일과 곱해 실제 크기 → objectBBox 무변경). 인스턴싱은 scale별 고유 지오메트리라 배칭 제외.
+- **남은 확인(에디터 실사용)**: 기즈모 스케일 드래그(놓으면 균일)·Size 필드·선택 외곽선·게시 뷰어·subdivision 병용. **미해결(사용자 `[나중에 질문]`)**: subdivision 조절 시 Size 행 깜빡임은 별건.
+
+- **문제(사용자 보고)**: 박스를 비균일 스케일(예: 3:1)로 직사각형을 만들고 `cornerRadius`를 올리면, 정사각형은 잘 되는데 **직사각형은 둥근 모서리가 타원으로 찌그러져** 긴 쪽이 덜 둥글고 각져 보임. 원인 = 둥근 모서리를 **1×1×1 단위 박스에 굽고 비균일 스케일로 늘려서**(사진 늘리기와 동일).
+- **해결 방식(사용자 확정, 옵션 A)**: 둥근 박스(`box`+`cornerRadius>0`)만 **지오메트리를 실제 치수(object.scale)로 굽고, 메쉬에 역스케일 `1/scale`을 걸어 group.scale과 상쇄**. → **group.scale(=object.scale)은 그대로**라 기즈모·objectBBox·Size·바닥스냅·정렬 **전부 무변경**, 최종 렌더만 균일한 모서리. **드래그 중엔 늘어나 보이다가 놓으면(스토어 커밋) 재생성돼 균일**해짐(기즈모 경로 안 깨는 핵심 트릭).
+- **반경 의미**: `cornerRadius(0~0.5) × 최소 변` = 짧은 변 기준 절대 반경 → 비율 무관 균일. **정육면체(scale 1,1,1)는 이전과 100% 동일**(기존 씬 무변). 비균일이던 기존 둥근 박스만 균일하게 바뀜(=의도된 수정).
+- **구현**: 신규 `createRoundedBoxDims(sx,sy,sz,cornerRadius,seg,subdivisions)`(three RoundedBoxGeometry 실치수+subdivision). 에디터/뷰어: `isRoundedBox`면 이 지오메트리 사용 + 메쉬 `scale={[1/s...]}`, 가이드/캐시 bbox는 **단위 박스로 고정**(group 스케일과 곱해 실제 크기 → objectBBox 무변경). 인스턴싱: 둥근 박스는 scale별 고유 지오메트리라 **배칭 제외**(getInstancedIds 두 루프).
+- **확인 필요(브라우저)**: ①직사각형 둥근 박스 모서리 균일 ②정육면체는 기존과 동일 ③기즈모 스케일 드래그(놓으면 균일)·Size 필드·바닥스냅·정렬·선택 가이드 정상 ④뷰어(게시)에서 동일 ⑤subdivision 함께 쓸 때 ⑥성능(둥근 박스 다수). **미해결(사용자 `[나중에 질문]`)**: subdivision 조절 시 Size 행 깜빡임은 별건.
+
+---
+
 ## ✅ 완료 (2026-07-15) — 🧩 공통 DropdownMenu 컴포넌트(버튼 액션 메뉴) + GNB 적용
 
 > 신규 `src/components/ui/DropdownMenu.tsx` + `EditorGnb` 리팩터. tsc 클린 + `✓ Compiled`. **브라우저 실동작 확인 대기.** ([[feedback_extract_reusable_shared_components]])

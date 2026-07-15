@@ -16,7 +16,7 @@ import { localCenter } from "@/lib/objectBBox";
 import { PrimitiveMaterial } from "@/components/three/PrimitiveMaterial";
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
-import { createPrimitiveGeometry, profileSig } from "@/lib/primitiveGeometry";
+import { createPrimitiveGeometry, createRoundedBoxDims, profileSig } from "@/lib/primitiveGeometry";
 import { voxelSig } from "@/lib/voxelGeometry";
 
 const DEG2RAD = Math.PI / 180;
@@ -576,9 +576,15 @@ export function ViewerObject({
 
   // 프리미티브 지오메트리(둥근 박스·각뿔대 등 확장 파라미터 반영). GLB/콘텐츠/라이트/파티클은 null.
   const isPrimitive = !object.assetId && !object.content && !object.light && !object.particle;
+  // 둥근 박스는 에디터와 동일하게 실치수로 굽고 메쉬에 1/scale 역스케일 → 균일한 모서리.
+  const isRoundedBox = isPrimitive && object.primitiveShape === 'box' && (object.geom?.cornerRadius ?? 0) > 0;
+  const rbX = Math.max(0.001, object.scale.x), rbY = Math.max(0.001, object.scale.y), rbZ = Math.max(0.001, object.scale.z);
   const primGeom = useMemo(
-    () => (isPrimitive ? createPrimitiveGeometry(object.primitiveShape, object.geom) : null),
-    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions],
+    () => !isPrimitive ? null
+      : isRoundedBox
+        ? createRoundedBoxDims(rbX, rbY, rbZ, object.geom?.cornerRadius ?? 0, object.geom?.cornerSegments ?? 4, object.geom?.subdivisions ?? 0)
+        : createPrimitiveGeometry(object.primitiveShape, object.geom),
+    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions, isRoundedBox, rbX, rbY, rbZ],
   );
   useEffect(() => () => primGeom?.dispose(), [primGeom]);
   // triplanar wrap 모드용 로컬 bbox.
@@ -853,6 +859,8 @@ export function ViewerObject({
   const primMesh = (
     <mesh
       geometry={primGeom ?? undefined}
+      // 둥근 박스: 실치수 지오메트리라 그룹 scale을 상쇄하는 역스케일(1/scale). 비-둥근은 명시적 [1,1,1].
+      scale={isRoundedBox ? [1 / rbX, 1 / rbY, 1 / rbZ] : [1, 1, 1]}
       castShadow={rdCast}
       receiveShadow={rdReceive}
       onPointerOver={(e) => {
