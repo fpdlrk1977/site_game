@@ -21,7 +21,8 @@ const snap = (o: ObjectNodeSchema): Omit<AnimKeyframe, 'time'> => ({
 
 export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { animClips, objects, assets, addAnimClip, updateAnimClip, removeAnimClip, addTrackToClip, removeTrackFromClip,
-    selectObject, pushHistory, animPreview, startAnimPreview, stopAnimPreview, poseEdit, setPoseEdit, goToPose } = useSceneStore();
+    selectObject, pushHistory, animPreview, startAnimPreview, stopAnimPreview, poseEdit, setPoseEdit, goToPose,
+    animMode, setAnimMode } = useSceneStore();
   // 선택 오브젝트가 root이거나 트랙 중 하나면 이 클립을 편집한다(다중 트랙 오브젝트 어디서든 접근 가능).
   const clip = animClips.find((c) => c.rootId === obj.id || c.tracks.some((t) => t.objectId === obj.id));
   const myTrack = clip?.tracks.find((t) => t.objectId === obj.id);
@@ -201,7 +202,8 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
                 );
               })()}
 
-              {/* 트랙(오브젝트) 목록 — 여러 오브젝트를 한 애니로. 이름 클릭=선택(포즈/경첩 편집), 여러 개면 제거 가능. */}
+              {/* 트랙(오브젝트) 목록 — 간단 모드 전용(타임라인 모드는 하단 라벨 컬럼이 담당). */}
+              {animMode === 'simple' && (
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">오브젝트 (트랙) · {trackObjs.length}개</span>
                 <div className="space-y-1">
@@ -229,37 +231,62 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
                   <p className="text-[9.5px] text-amber-600/80 dark:text-amber-500/80 leading-snug mt-1.5">추가한 오브젝트는 처음엔 <b>정지 상태</b>예요. 각 포즈를 클릭(편집 중)한 뒤 그 오브젝트를 원하는 자세로 놓으면 <b>자동으로 그 포즈에 반영</b>됩니다.</p>
                 )}
               </div>
+              )}
 
-              <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">포즈 (키프레임)</span>
-              <div className="space-y-1">
-                {poseTimes.map((t, i) => (
-                  <div key={i} className={`flex items-center gap-2 rounded-xs px-2 py-1 border transition-colors ${i === curPoseIdx ? 'bg-primary/10 border-primary/50' : 'bg-surface border-border'}`}>
-                    <button onClick={() => toPose(i)} title="이 포즈로 이동 — 이 포즈를 편집 중으로. 이후 오브젝트를 옮기면 자동 반영됩니다." className="flex items-center gap-2 flex-1 min-w-0 text-left group/pose">
-                      <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0 transition-colors ${i === curPoseIdx ? 'bg-primary text-white' : 'bg-primary/15 text-primary group-hover/pose:bg-primary group-hover/pose:text-white'}`}>{i + 1}</span>
-                      <span className={`text-[11px] transition-colors ${i === curPoseIdx ? 'text-primary font-medium' : 'text-foreground group-hover/pose:text-primary'}`}>포즈 {i + 1}{i === curPoseIdx ? ' · 현재' : ''}</span>
-                    </button>
-                    <input
-                      type="number" min={0} step={0.1} value={t}
-                      onChange={(e) => setPoseTime(i, parseFloat(e.target.value) || 0)} onBlur={pushHistory}
-                      title="이 포즈가 재생되는 시간(초)"
-                      className="w-12 bg-background border border-border rounded-xs px-1.5 py-0.5 text-[10px] text-foreground tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <span className="text-[9px] text-muted/50 -ml-1">s</span>
-                    {poseTimes.length > 1 && <button onClick={() => removePose(i)} title="포즈 삭제" className="text-muted/50 hover:text-red-500 shrink-0"><Trash2 size={11} /></button>}
-                  </div>
+              {/* 저작 모드 토글 — 간단(포즈 리스트, 초보) / 타임라인(시간축·스크럽, 고급). 같은 데이터, 표현만 전환. */}
+              <div className="flex items-center gap-1 p-0.5 rounded-xs bg-background border border-border">
+                {(['simple', 'timeline'] as const).map((m) => (
+                  <button key={m} onClick={() => setAnimMode(m)}
+                    className={`flex-1 py-1 rounded-[4px] text-[10px] font-medium transition-colors ${animMode === m ? 'bg-primary text-white' : 'text-muted hover:text-foreground'}`}>
+                    {m === 'simple' ? '간단' : '타임라인'}
+                  </button>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button onClick={addPose} className="py-1.5 rounded-xs bg-primary/15 text-primary border border-primary/30 text-[10.5px] font-medium hover:bg-primary/25 transition-colors flex items-center justify-center gap-1"><Plus size={12} /> 포즈 추가</button>
-                <button onClick={toFirstPose} title="오브젝트를 첫 포즈로 되돌림" className="py-1.5 rounded-xs bg-surface border border-border text-muted text-[10.5px] hover:text-foreground transition-colors flex items-center justify-center gap-1"><Undo2 size={12} /> 시작으로</button>
-              </div>
-              <p className="text-[10px] text-muted/50 leading-snug">포즈를 클릭하면 그 포즈가 <b>편집 중</b>(하이라이트)이 되고, 이후 오브젝트를 옮기면 <b>자동으로 그 포즈에 반영</b>됩니다. 여러 오브젝트를 함께 옮겨 <b>포즈 추가</b>하면 새 포즈가 생겨요. 각 오브젝트를 선택해 <b>회전축(경첩)</b>도 따로 정할 수 있어요.</p>
+
+              {animMode === 'timeline' ? (
+                <p className="text-[10px] text-amber-600/90 dark:text-amber-500/90 bg-amber-500/10 border border-amber-500/25 rounded-xs px-2 py-1.5 leading-snug">
+                  포즈 편집은 화면 <b>하단 타임라인</b>에서 — 키프레임(◆) 클릭=이동, 드래그=시간, 빈 곳 드래그=스크럽. 여기선 트랙·회전축·이징만 설정하세요.
+                </p>
+              ) : (
+                <>
+                  {/* 간단(포즈 리스트) — 초보용 순서 목록 */}
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">포즈 (키프레임)</span>
+                  <div className="space-y-1">
+                    {poseTimes.map((t, i) => (
+                      <div key={i} className={`flex items-center gap-2 rounded-xs px-2 py-1 border transition-colors ${i === curPoseIdx ? 'bg-primary/10 border-primary/50' : 'bg-surface border-border'}`}>
+                        <button onClick={() => toPose(i)} title="이 포즈로 이동 — 이 포즈를 편집 중으로. 이후 오브젝트를 옮기면 자동 반영됩니다." className="flex items-center gap-2 flex-1 min-w-0 text-left group/pose">
+                          <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0 transition-colors ${i === curPoseIdx ? 'bg-primary text-white' : 'bg-primary/15 text-primary group-hover/pose:bg-primary group-hover/pose:text-white'}`}>{i + 1}</span>
+                          <span className={`text-[11px] transition-colors ${i === curPoseIdx ? 'text-primary font-medium' : 'text-foreground group-hover/pose:text-primary'}`}>포즈 {i + 1}{i === curPoseIdx ? ' · 현재' : ''}</span>
+                        </button>
+                        <input
+                          type="number" min={0} step={0.1} value={t}
+                          onChange={(e) => setPoseTime(i, parseFloat(e.target.value) || 0)} onBlur={pushHistory}
+                          title="이 포즈가 재생되는 시간(초)"
+                          className="w-12 bg-background border border-border rounded-xs px-1.5 py-0.5 text-[10px] text-foreground tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <span className="text-[9px] text-muted/50 -ml-1">s</span>
+                        {poseTimes.length > 1 && <button onClick={() => removePose(i)} title="포즈 삭제" className="text-muted/50 hover:text-red-500 shrink-0"><Trash2 size={11} /></button>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {animMode === 'simple' && (
+                <>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button onClick={addPose} className="py-1.5 rounded-xs bg-primary/15 text-primary border border-primary/30 text-[10.5px] font-medium hover:bg-primary/25 transition-colors flex items-center justify-center gap-1"><Plus size={12} /> 포즈 추가</button>
+                    <button onClick={toFirstPose} title="오브젝트를 첫 포즈로 되돌림" className="py-1.5 rounded-xs bg-surface border border-border text-muted text-[10.5px] hover:text-foreground transition-colors flex items-center justify-center gap-1"><Undo2 size={12} /> 시작으로</button>
+                  </div>
+                  <p className="text-[10px] text-muted/50 leading-snug">포즈를 클릭하면 그 포즈가 <b>편집 중</b>(하이라이트)이 되고, 이후 오브젝트를 옮기면 <b>자동으로 그 포즈에 반영</b>됩니다. 여러 오브젝트를 함께 옮겨 <b>포즈 추가</b>하면 새 포즈가 생겨요.</p>
+                </>
+              )}
 
               <p className="text-[10px] text-muted/60 pt-1">총 길이 <b className="text-foreground font-mono">{clip.duration}s</b> <span className="text-muted/40">— 마지막 포즈 시간으로 자동</span></p>
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">이징</span>
-                  <SelectBox value={clip.easing ?? 'easeInOut'} onChange={(e) => { updateAnimClip(clip.id, { easing: e as AnimClip['easing'] }); pushHistory(); }} options={[{ value: 'easeInOut', label: '부드럽게' }, { value: 'linear', label: '일정하게' }]} />
+                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">이징(곡선)</span>
+                  <SelectBox value={clip.easing ?? 'easeInOut'} onChange={(e) => { updateAnimClip(clip.id, { easing: e as AnimClip['easing'] }); pushHistory(); }}
+                    options={[{ value: 'linear', label: '일정' }, { value: 'easeInOut', label: '부드럽게' }, { value: 'easeIn', label: '천천히 시작' }, { value: 'easeOut', label: '천천히 끝' }, { value: 'backOut', label: '살짝 뒤로' }, { value: 'bounceOut', label: '튕김' }]} />
                 </div>
                 <label className="flex items-center justify-between cursor-pointer self-end pb-1.5">
                   <span className="text-[10px] font-semibold text-muted/60">반복(loop)</span>

@@ -434,11 +434,13 @@ export interface ProjectSceneSchema {
 }
 
 // ── 애니메이션 클립(키프레임) — ANIMATION.md. 포즈=키 1개, 상태전환=키 2개, 타임라인=키 N개(같은 데이터). ──
+export type EasingType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'backOut' | 'bounceOut';
 export interface AnimKeyframe {
   time: number;        // 초(클립 시작 기준)
   position?: Vector3;
   rotation?: Vector3;  // 도(deg) — 에디터 회전과 동일 단위
   scale?: Vector3;
+  easing?: EasingType; // 이 키 → 다음 키 구간의 이징(미설정 시 클립 기본 easing 폴백)
 }
 export interface AnimTrack {
   objectId: string;        // 대상 오브젝트(그룹 자식 포함)
@@ -454,7 +456,7 @@ export interface AnimClip {
   loop?: boolean;
   tracks: AnimTrack[];     // 오브젝트별 트랙(단일=1개)
   rootId?: string | null;  // 스코프(그룹/프리팹 재사용용). 미설정/null=씬 전역
-  easing?: 'linear' | 'easeInOut'; // 클립 기본 이징(키별 곡선은 후속)
+  easing?: EasingType; // 클립 기본 이징(키별 override는 AnimKeyframe.easing)
   // 회전 피벗(경첩) — 오브젝트 스케일드-로컬 오프셋(0.5×scale=모서리). 미설정=중심 회전.
   //   에디터 기즈모가 이 점을 기준으로 회전 → position+rotation이 함께 저장(baked)되어 에디터=재생 일치.
   pivot?: Vector3;

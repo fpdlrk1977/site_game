@@ -9,6 +9,7 @@ import { ViewportToolbar } from './panels/ViewportToolbar';
 import { EditorGnb, type GnbTab } from './panels/EditorGnb';
 import { LeftPanel } from './panels/LeftPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
+import { TimelinePanel } from './panels/TimelinePanel';
 import { EditorEmptyState } from './panels/EditorEmptyState';
 import { EditorOnboarding } from './EditorOnboarding';
 import { ViewportStatusBar } from './canvas/ViewportStatusBar';
@@ -44,7 +45,13 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark,
     copyObjectProperties, pasteObjectProperties,
     editorPlaying, setEditorPlaying,
+    animMode, selectedId, animClips,
   } = useSceneStore();
+
+  // 하단 타임라인(고급 모드) 표시 여부 — 선택 오브젝트에 클립이 있고 타임라인 모드일 때.
+  const timelineOpen = animMode === 'timeline'
+    && !editorPlaying
+    && animClips.some((c) => c.rootId === selectedId || c.tracks.some((t) => t.objectId === selectedId));
 
   // 플레이 시작 시점의 편집 상태를 스냅샷으로 굳혀 뷰어에 전달(항상 play 모드로 시작).
   const playScene = useMemo(() => {
@@ -163,6 +170,10 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
   const overlayLeft = leftOpen ? leftPanelX + leftW + gap : leftPanelX; // 자유 캔버스 좌측 경계
   const overlayRight = edge + inspW + gap;    // 자유 캔버스 우측 경계 = 308
   const panelShell = 'rounded-sm bg-surface border border-border overflow-hidden';
+  // 하단 타임라인이 열리면 사이드 패널/오버레이 바닥을 그만큼 올린다(전체폭 바닥 패널 공간 확보).
+  const TIMELINE_H = 172;
+  const bottomInset = timelineOpen ? TIMELINE_H + gap : 0;
+  const panelBottom = edge + bottomInset;
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-canvas">
@@ -178,7 +189,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
           자식 오버레이의 기존 top-3/right-3/bottom-3 좌표는 이 컨테이너 기준으로 그대로 동작. */}
       <div
         className="absolute z-10 pointer-events-none"
-        style={{ top: panelTop - gap, bottom: edge, left: overlayLeft, right: overlayRight, transition: 'left .18s ease' }}
+        style={{ top: panelTop - gap, bottom: panelBottom, left: overlayLeft, right: overlayRight, transition: 'left .18s ease, bottom .18s ease' }}
       >
         <ViewportFloatingToolbar />
         <ViewportOrientationGizmo />
@@ -191,13 +202,13 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       </div>
 
       {/* Floating GNB rail */}
-      <div className={`absolute left-3 bottom-3 w-12 z-30 ${panelShell}`} style={{ top: panelTop }}>
+      <div className={`absolute left-3 w-12 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
         <EditorGnb tab={gnbTab} panelOpen={leftOpen} onTabClick={handleGnbTabClick} projectName={projectName} />
       </div>
 
       {/* Floating left panel (Objects / Assets) */}
       {leftOpen && (
-        <div className={`absolute bottom-3 w-60 z-30 ${panelShell}`} style={{ top: panelTop, left: leftPanelX }}>
+        <div className={`absolute w-60 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom, left: leftPanelX }}>
           <LeftPanel tab={gnbTab} />
         </div>
       )}
@@ -213,9 +224,16 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       </button>
 
       {/* Floating inspector */}
-      <div className={`absolute right-3 bottom-3 w-72 z-30 ${panelShell}`} style={{ top: panelTop }}>
+      <div className={`absolute right-3 w-72 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
         <InspectorPanel />
       </div>
+
+      {/* Floating bottom timeline (advanced mode) — 전체폭 바닥 패널 */}
+      {timelineOpen && (
+        <div className={`absolute left-3 right-3 z-30 ${panelShell}`} style={{ bottom: edge, height: TIMELINE_H }}>
+          <TimelinePanel />
+        </div>
+      )}
 
       {/* 인에디터 플레이 — 편집 중 씬을 뷰어로 전체 오버레이 구동 */}
       {editorPlaying && playScene && (

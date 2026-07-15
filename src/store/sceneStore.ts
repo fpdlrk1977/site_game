@@ -238,6 +238,12 @@ interface SceneActions {
   animPreview: { clipId: string; startedAt: number } | null;
   startAnimPreview: (clipId: string) => void;
   stopAnimPreview: () => void;
+  // 타임라인 스크럽 — 재생헤드를 특정 시간 t로. 뷰포트가 그 시점 보간 상태를 비파괴로 표시(P4). transient.
+  animScrub: { clipId: string; t: number } | null;
+  setAnimScrub: (clipId: string, t: number | null) => void;
+  // 애니 저작 UI 모드 — 'simple'(포즈 리스트, 초보) / 'timeline'(시간축, 고급). UI 선호(저장 안 함).
+  animMode: 'simple' | 'timeline';
+  setAnimMode: (m: 'simple' | 'timeline') => void;
   // 지금 편집 중인 포즈(하이라이트·오토키 대상) — transient. 오브젝트 이동/선택전환에도 유지.
   poseEdit: { clipId: string; idx: number } | null;
   setPoseEdit: (clipId: string, idx: number | null) => void;
@@ -529,6 +535,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   sceneEvents: [],
   animClips: [],
   animPreview: null,
+  animScrub: null,
+  animMode: 'simple',
   poseEdit: null,
   selectedId: null,
   groupScope: null,
@@ -579,6 +587,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       sceneEvents: data.sceneEvents ?? [],
       animClips: normalizeClipPivots(data.animClips ?? []), // 레거시 pivot→트랙별 이전 + baked 통일(에디터=재생 일치)
       animPreview: null,
+      animScrub: null,
       poseEdit: null,
       selectedId: null,
       selectedIds: [],
@@ -1719,8 +1728,10 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
   // 에디터 미리보기(▶) — 클립을 뷰포트에서 재생. transient(저장/undo 무관). EditorCanvas ClipPreview가 구동.
-  startAnimPreview: (clipId) => set({ animPreview: { clipId, startedAt: performance.now() } }),
+  startAnimPreview: (clipId) => set({ animPreview: { clipId, startedAt: performance.now() }, animScrub: null }),
   stopAnimPreview: () => set({ animPreview: null }),
+  setAnimScrub: (clipId, t) => set({ animScrub: t == null ? null : { clipId, t }, ...(t == null ? {} : { animPreview: null }) }),
+  setAnimMode: (m) => set({ animMode: m }),
   setPoseEdit: (clipId, idx) => set({ poseEdit: idx == null ? null : { clipId, idx } }),
   // 포즈로 이동 — 모든 트랙 오브젝트를 그 키프레임으로. objects를 직접 세팅(updateObject 우회 → 오토키 무발동).
   //   이 포즈를 '편집 중 포즈'로 지정 → 이후 오브젝트를 옮기면 오토키가 이 포즈에 반영.

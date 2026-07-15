@@ -12,7 +12,18 @@ function lerpVec(a: Vector3 | undefined, b: Vector3 | undefined, f: number): Vec
   return { x: lerp(a.x, b.x, f), y: lerp(a.y, b.y, f), z: lerp(a.z, b.z, f) };
 }
 
-/** 한 트랙을 시간 t에서 샘플(선형/easeInOut 보간). */
+// 이징 함수 — 진행도 f(0~1)를 곡선 적용. 미지정/미지원은 linear(identity).
+const EASE: Record<string, (f: number) => number> = {
+  linear: (f) => f,
+  easeIn: (f) => f * f,
+  easeOut: (f) => 1 - (1 - f) * (1 - f),
+  easeInOut: (f) => (f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2),
+  backOut: (f) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(f - 1, 3) + c1 * Math.pow(f - 1, 2); },
+  bounceOut: (f) => { const n1 = 7.5625, d1 = 2.75; if (f < 1 / d1) return n1 * f * f; if (f < 2 / d1) { f -= 1.5 / d1; return n1 * f * f + 0.75; } if (f < 2.5 / d1) { f -= 2.25 / d1; return n1 * f * f + 0.9375; } f -= 2.625 / d1; return n1 * f * f + 0.984375; },
+};
+function applyEase(name: string | undefined, f: number): number { const fn = name ? EASE[name] : undefined; return fn ? fn(f) : f; }
+
+/** 한 트랙을 시간 t에서 샘플. 구간 이징 = 그 구간 시작 키의 easing ?? 클립 기본 easing. */
 export function sampleTrack(track: AnimTrack, t: number, easing?: string): ClipSample {
   const ks = track.keys;
   if (!ks || ks.length === 0) return {};
@@ -23,7 +34,7 @@ export function sampleTrack(track: AnimTrack, t: number, easing?: string): ClipS
   const k0 = ks[i], k1 = ks[i + 1];
   const span = k1.time - k0.time;
   let f = span > 0 ? (t - k0.time) / span : 0;
-  if (easing === 'easeInOut') f = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+  f = applyEase(k0.easing ?? easing, f); // 키별 override 우선, 없으면 클립 기본
   return { position: lerpVec(k0.position, k1.position, f), rotation: lerpVec(k0.rotation, k1.rotation, f), scale: lerpVec(k0.scale, k1.scale, f) };
 }
 

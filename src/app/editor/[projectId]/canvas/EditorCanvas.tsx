@@ -221,12 +221,14 @@ function AnimPivotGizmo() {
 function ClipPreview() {
   const refsMap = useObjectRefs();
   const animPreview = useSceneStore((s) => s.animPreview);
+  const animScrub = useSceneStore((s) => s.animScrub);
   const stopAnimPreview = useSceneStore((s) => s.stopAnimPreview);
   const affectedRef = useRef<Set<string>>(new Set());
+  const isActive = !!animPreview || !!animScrub;
 
-  // 미리보기 종료(animPreview=null) 시 영향받은 오브젝트를 스토어 값으로 복원(비파괴)
+  // 미리보기/스크럽 종료(둘 다 null) 시 영향받은 오브젝트를 스토어 값으로 복원(비파괴)
   useEffect(() => {
-    if (animPreview) return;
+    if (isActive) return;
     const ids = affectedRef.current;
     if (ids.size === 0) return;
     const { objects } = useSceneStore.getState();
@@ -240,16 +242,22 @@ function ClipPreview() {
       }
     }
     affectedRef.current = new Set();
-  }, [animPreview, refsMap]);
+  }, [isActive, refsMap]);
 
   useFrame(() => {
-    if (!animPreview) return;
-    const { animClips } = useSceneStore.getState();
-    const clip = animClips.find((c) => c.id === animPreview.clipId);
-    if (!clip) { stopAnimPreview(); return; }
-    let t = (performance.now() - animPreview.startedAt) / 1000;
-    if (clip.loop) t = clip.duration > 0 ? t % clip.duration : 0;
-    else if (t >= clip.duration) t = clip.duration; // 끝 포즈 유지(정지 버튼으로 종료·복원)
+    const { animClips, animPreview: ap, animScrub: as } = useSceneStore.getState();
+    if (!ap && !as) return;
+    const clipId = as ? as.clipId : ap!.clipId; // 스크럽 우선(고정 시간), 아니면 재생(경과 시간)
+    const clip = animClips.find((c) => c.id === clipId);
+    if (!clip) { if (ap) stopAnimPreview(); return; }
+    let t: number;
+    if (as) {
+      t = Math.max(0, Math.min(clip.duration, as.t));
+    } else {
+      t = (performance.now() - ap!.startedAt) / 1000;
+      if (clip.loop) t = clip.duration > 0 ? t % clip.duration : 0;
+      else if (t >= clip.duration) t = clip.duration; // 끝 포즈 유지(정지 버튼으로 종료·복원)
+    }
     const samples = sampleClip(clip, t);
     for (const id in samples) {
       const ref = refsMap.current.get(id);
