@@ -386,11 +386,14 @@ export interface PrefabSchema {
 
 // 클로너(비파괴 배열) 설정 — 이 그룹은 소스 1개를 count개로 실시간 복제 배치한다.
 export interface ClonerConfig {
-  mode: 'linear' | 'radial';
-  count: number;                 // 원본 포함 총 개수
-  offset: Vector3;               // linear: 복제 간 간격
+  mode: 'linear' | 'grid' | 'radial';
+  count: number;                 // 원본 포함 총 개수(linear/radial). grid는 cols*rows로 결정.
+  offset: Vector3;               // linear: 복제 간 간격. grid: x=열 간격·z=행 간격.
   radius?: number;               // radial: 반경
   axis?: 'x' | 'y' | 'z';        // radial: 원이 도는 축
+  cols?: number;                 // grid: 열(가로) 개수
+  rows?: number;                 // grid: 행(세로) 개수
+  rotStep?: number;              // 복제마다 Y축 회전 증분(도) — 나선/트위스트
 }
 
 export interface MotionConfig {

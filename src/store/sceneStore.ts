@@ -37,7 +37,7 @@ import {
   rebuildPrefabFromInstance,
   overrideGroupsFromPatch,
 } from '@/lib/prefab';
-import { regenerateCloner, clonerPlacement, DEFAULT_CLONER } from '@/lib/cloner';
+import { regenerateCloner, clonerPlacement, clonerCount, clonerRotYDeg, DEFAULT_CLONER } from '@/lib/cloner';
 import type { ClonerConfig } from '@/types/scene';
 
 // 배치 모드 — add 버튼 클릭 시 즉시 생성하지 않고, 뷰포트에서 클릭한 위치에 생성한다.
@@ -189,8 +189,8 @@ interface SceneActions {
   clipboard: { objects: ObjectNodeSchema[]; clips: AnimClip[] } | null;
   copySelection: () => void;
   pasteClipboard: () => void;
-  // 선택 오브젝트를 count개(원본 포함)로 배열 복제. linear=offset 간격 나열(울타리·기둥), radial=중심 기준 원형 배치(시계 숫자·원형 테이블 의자).
-  arraySelected: (count: number, offset: { x: number; y: number; z: number }, radial?: { radius: number; axis: 'x' | 'y' | 'z' } | null) => void;
+  // 선택 오브젝트를 배열 복제(원본 유지). linear=직선 나열·grid=격자·radial=원형. rotStep으로 복제마다 회전 증분.
+  arraySelected: (cfg: ClonerConfig) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
   /** 선택 오브젝트를 '클로너 그룹'으로 감싼다(비파괴 배열). config 미지정 시 기본값. */
@@ -1329,34 +1329,24 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
-  arraySelected: (count, offset, radial) => {
+  arraySelected: (cfg) => {
     const { selectedId, objects, environment, past } = get();
-    if (!selectedId || count < 2) return;
+    if (!selectedId) return;
     const src = objects.find((o) => o.id === selectedId);
     if (!src) return;
+    const total = clonerCount(cfg);
+    if (total < 2) return;
 
     const additions: ObjectNodeSchema[] = [];
     const newIds: string[] = [];
 
-    // radial: 원 위의 각 위치(중심 기준 오프셋). axis=원이 도는 축(원 평면의 법선).
-    const ringOffset = (theta: number) => {
-      const r = radial!.radius, c = Math.cos(theta) * r, s = Math.sin(theta) * r;
-      if (radial!.axis === 'x') return { x: 0, y: c, z: s };
-      if (radial!.axis === 'z') return { x: c, y: s, z: 0 };
-      return { x: c, y: 0, z: s }; // y(기본): XZ 평면
-    };
-    // 원본을 각도 0에 두고 중심을 역산 → 원본은 제자리, 나머지가 원을 그린다.
-    const o0 = radial ? ringOffset(0) : null;
-    const center = o0 ? { x: src.position.x - o0.x, y: src.position.y - o0.y, z: src.position.z - o0.z } : null;
-
-    for (let i = 1; i < count; i++) {
-      let pos: { x: number; y: number; z: number };
-      if (radial && center) {
-        const off = ringOffset((2 * Math.PI / count) * i);
-        pos = { x: center.x + off.x, y: center.y + off.y, z: center.z + off.z };
-      } else {
-        pos = { x: src.position.x + offset.x * i, y: src.position.y + offset.y * i, z: src.position.z + offset.z * i };
-      }
+    // 공용 placement 재사용 — 원본은 제자리(placement(0) 기준 상대). rotStep으로 복제마다 회전.
+    const p0 = clonerPlacement(cfg, 0);
+    for (let i = 1; i < total; i++) {
+      const pi = clonerPlacement(cfg, i);
+      const pos = { x: src.position.x + pi.x - p0.x, y: src.position.y + pi.y - p0.y, z: src.position.z + pi.z - p0.z };
+      const rotY = clonerRotYDeg(cfg, i);
+      const rotation = rotY ? { x: src.rotation.x, y: src.rotation.y + rotY, z: src.rotation.z } : src.rotation;
 
       if (src.isGroup) {
         // 중첩 그룹 포함 전체 하위 계층 재귀 복제 (duplicateSelected와 동일 패턴)
@@ -1373,14 +1363,14 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         const newGroupId = MathUtils.generateUUID();
         idMap.set(src.id, newGroupId);
         collectAll(src.id);
-        additions.push({ ...src, id: newGroupId, name: `${src.name} ${i}`, position: pos });
+        additions.push({ ...src, id: newGroupId, name: `${src.name} ${i}`, position: pos, rotation });
         for (const o of newDescendants) {
           additions.push({ ...o, parentId: idMap.get(o.parentId!) ?? o.parentId });
         }
         newIds.push(newGroupId);
       } else {
         const id = MathUtils.generateUUID();
-        additions.push({ ...src, id, name: `${src.name} ${i}`, position: pos, parentId: src.parentId });
+        additions.push({ ...src, id, name: `${src.name} ${i}`, position: pos, rotation, parentId: src.parentId });
         newIds.push(id);
       }
     }

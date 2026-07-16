@@ -1,89 +1,123 @@
 'use client';
 
-// Array / Cloner 섹션 — 선택 오브젝트를 N개 복제 배치(선형/원형) 또는 라이브 클로너 생성.
-// 자체 로컬 상태(개수/간격/모드/반경/축) 소유.
+// Array / Cloner 섹션 — 선택 오브젝트를 N개 복제 배치(직선/격자/원형 + 회전 증분) 또는 라이브 클로너 생성.
+// 자체 로컬 상태(개수/간격/모드/반경/축/열·행/회전) 소유. 배치 로직은 lib/cloner의 공용 함수를 스토어가 재사용.
 import { useState } from 'react';
-import { CircleDot, Grid2x2 } from 'lucide-react';
+import { CircleDot, Grid2x2, Rows3 } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { RangeSlider } from '@/components/ui/RangeSlider';
 import { SectionHeader, GroupBox, LabeledNum, XYZRow } from './ui';
-import type { ObjectNodeSchema } from '@/types/scene';
+import type { ObjectNodeSchema, ClonerConfig } from '@/types/scene';
 
 export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { arraySelected, makeCloner } = useSceneStore();
   const { addToast } = useToast();
   const [arrayCount, setArrayCount] = useState(5);
   const [arrayOffset, setArrayOffset] = useState({ x: 2, y: 0, z: 0 });
-  const [arrayMode, setArrayMode] = useState<'linear' | 'radial'>('linear');
+  const [arrayMode, setArrayMode] = useState<'linear' | 'grid' | 'radial'>('linear');
   const [arrayRadius, setArrayRadius] = useState(3);
   const [arrayAxis, setArrayAxis] = useState<'x' | 'y' | 'z'>('y');
+  const [gridCols, setGridCols] = useState(4);
+  const [gridRows, setGridRows] = useState(3);
+  const [rotStep, setRotStep] = useState(0);
+
+  const total = arrayMode === 'grid' ? gridCols * gridRows : arrayCount;
+  const cfg = (): ClonerConfig => ({
+    mode: arrayMode,
+    count: arrayCount,
+    offset: arrayOffset,
+    ...(arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : {}),
+    ...(arrayMode === 'grid' ? { cols: gridCols, rows: gridRows } : {}),
+    ...(rotStep ? { rotStep } : {}),
+  });
+
   return (
         <GroupBox>
-          <SectionHeader title="Array / Cloner" hint="Duplicate the selected object multiple times. Linear = evenly spaced (fences, pillars, stairs), Radial = arranged in a circle around a center (clock numbers, chairs around a round table). Count includes the source; undo (Ctrl+Z) works. Make it a 'Live cloner' to change count and spacing later in real time." isOpen={open} onToggle={onToggle} />
+          <SectionHeader title="Array / Cloner" hint="Duplicate the selected object multiple times. Linear = evenly spaced (fences, stairs), Grid = rows × columns (floor tiles, seats), Radial = arranged in a circle. Rotation step twists each copy (spiral). Count includes the source; undo works. Make it a 'Live cloner' to change settings later in real time." isOpen={open} onToggle={onToggle} />
             <div className="px-3 pb-4 space-y-2">
               {/* 모드 토글 */}
-              <div className="grid grid-cols-2 gap-1">
-                {(['linear', 'radial'] as const).map((m) => (
+              <div className="grid grid-cols-3 gap-1">
+                {(['linear', 'grid', 'radial'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setArrayMode(m)}
                     className={`py-1 rounded-xs text-[10px] transition-colors ${arrayMode === m ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
                   >
-                    {m === 'linear' ? 'Linear' : 'Radial'}
+                    {m === 'linear' ? 'Linear' : m === 'grid' ? 'Grid' : 'Radial'}
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 mb-1">
-                              <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Count (incl. source)</span>
-                            </div>
-              <RangeSlider value={arrayCount} onChange={(v) => setArrayCount(Math.max(1, Math.min(100, Math.round(v))))} min={1} max={100} step={1} showValue precision={0} />
-              {arrayMode === 'linear' ? (
-                <XYZRow label="Spacing (m)" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
-                  onChangeX={(v) => setArrayOffset((o) => ({ ...o, x: v }))}
-                  onChangeY={(v) => setArrayOffset((o) => ({ ...o, y: v }))}
-                  onChangeZ={(v) => setArrayOffset((o) => ({ ...o, z: v }))}
-                  onCommit={() => {}} dragStep={0.5}
-                />
+
+              {arrayMode === 'grid' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <LabeledNum label="Columns" value={gridCols} onChange={(v) => setGridCols(Math.max(1, Math.min(50, Math.round(v))))} onCommit={() => {}} min={1} max={50} precision={0} dragStep={1} />
+                    <LabeledNum label="Rows" value={gridRows} onChange={(v) => setGridRows(Math.max(1, Math.min(50, Math.round(v))))} onCommit={() => {}} min={1} max={50} precision={0} dragStep={1} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <LabeledNum label="Col spacing (m)" value={arrayOffset.x} onChange={(v) => setArrayOffset((o) => ({ ...o, x: v }))} onCommit={() => {}} precision={2} dragStep={0.25} />
+                    <LabeledNum label="Row spacing (m)" value={arrayOffset.z} onChange={(v) => setArrayOffset((o) => ({ ...o, z: v }))} onCommit={() => {}} precision={2} dragStep={0.25} />
+                  </div>
+                  <p className="text-[10px] text-muted/50">{gridCols} × {gridRows} = {total} (incl. source)</p>
+                </>
               ) : (
                 <>
-                  <LabeledNum label="Radius (m)" value={arrayRadius} onChange={(v) => setArrayRadius(Math.max(0.1, v))} onCommit={() => {}} min={0.1} max={100} precision={2} dragStep={0.25} />
-                  <div>
-                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Rotation axis</span>
-                    <div className="grid grid-cols-3 gap-1">
-                      {(['x', 'y', 'z'] as const).map((ax) => (
-                        <button key={ax} onClick={() => setArrayAxis(ax)}
-                          className={`py-1 rounded-xs text-[10px] uppercase transition-colors ${arrayAxis === ax ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
-                        >{ax}{ax === 'y' ? ' (floor)' : ''}</button>
-                      ))}
-                    </div>
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Count (incl. source)</span>
                   </div>
+                  <RangeSlider value={arrayCount} onChange={(v) => setArrayCount(Math.max(1, Math.min(100, Math.round(v))))} min={1} max={100} step={1} showValue precision={0} />
+                  {arrayMode === 'linear' ? (
+                    <XYZRow label="Spacing (m)" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
+                      onChangeX={(v) => setArrayOffset((o) => ({ ...o, x: v }))}
+                      onChangeY={(v) => setArrayOffset((o) => ({ ...o, y: v }))}
+                      onChangeZ={(v) => setArrayOffset((o) => ({ ...o, z: v }))}
+                      onCommit={() => {}} dragStep={0.5}
+                    />
+                  ) : (
+                    <>
+                      <LabeledNum label="Radius (m)" value={arrayRadius} onChange={(v) => setArrayRadius(Math.max(0.1, v))} onCommit={() => {}} min={0.1} max={100} precision={2} dragStep={0.25} />
+                      <div>
+                        <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Rotation axis</span>
+                        <div className="grid grid-cols-3 gap-1">
+                          {(['x', 'y', 'z'] as const).map((ax) => (
+                            <button key={ax} onClick={() => setArrayAxis(ax)}
+                              className={`py-1 rounded-xs text-[10px] uppercase transition-colors ${arrayAxis === ax ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
+                            >{ax}{ax === 'y' ? ' (floor)' : ''}</button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
+
+              {/* 회전 증분 — 복제마다 Y축 회전(도). 나선 계단·트위스트. 모든 모드 공통. */}
+              <LabeledNum label="Rotation step (°/copy)" value={rotStep} onChange={setRotStep} onCommit={() => {}} min={-180} max={180} precision={1} dragStep={1} />
+
               {/* 위 설정을 공유하는 두 방식 — 한 번 복제(독립) vs 라이브 클로너(계속 편집) */}
-              
               <Tooltip wide className="w-full" content="Creates independent objects now. The count can't be changed later (they become normal objects).">
                 <button
                   onClick={() => {
-                    arraySelected(arrayCount, arrayOffset, arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : null);
-                    addToast(`Created ${arrayCount - 1} independent copies`, 'success');
+                    arraySelected(cfg());
+                    addToast(`Created ${total - 1} independent copies`, 'success');
                   }}
                   className="w-full py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] font-medium transition-colors"
                 >
-<span className="inline-flex items-center gap-1.5">{arrayMode === 'radial' ? <CircleDot size={13} /> : <Grid2x2 size={13} />} Duplicate once ({arrayCount}, independent)</span>
+                  <span className="inline-flex items-center gap-1.5">{arrayMode === 'radial' ? <CircleDot size={13} /> : arrayMode === 'grid' ? <Grid2x2 size={13} /> : <Rows3 size={13} />} Duplicate once ({total}, independent)</span>
                 </button>
               </Tooltip>
               {!obj.parentId && (
                 <Tooltip wide className="w-full" content="Change count and spacing anytime, and editing the source updates all copies in real time.">
                   <button
                     onClick={() => {
-                      makeCloner({ mode: arrayMode, count: arrayCount, offset: arrayOffset, ...(arrayMode === 'radial' ? { radius: arrayRadius, axis: arrayAxis } : {}) });
+                      makeCloner(cfg());
                       addToast('Created a live cloner', 'success');
                     }}
                     className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
                   >
-<span className="inline-flex items-center gap-1.5"><Grid2x2 size={13} /> Make live cloner ({arrayCount})</span>
+                    <span className="inline-flex items-center gap-1.5"><Grid2x2 size={13} /> Make live cloner ({total})</span>
                   </button>
                 </Tooltip>
               )}
