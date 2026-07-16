@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { LoopSubdivision } from 'three-subdivide';
-import { buildVoxelGeometry, voxelSig } from './voxelGeometry';
+import { buildVoxelGeometry, voxelSig, voxelSkinsSig } from './voxelGeometry';
 import type { PrimitiveShape, PrimitiveGeom } from '@/types/scene';
 
 // 지오메트리를 원점 중심 + 최대 변 1로 정규화(프리미티브 단위 박스 관례에 맞춤 → bbox/바닥스냅/기즈모 일관).
@@ -133,7 +133,7 @@ function buildBaseGeometry(
     case 'plane':
       return new THREE.PlaneGeometry(1, 1);
     case 'voxel':
-      return buildVoxelGeometry(geom?.voxels, geom?.cellSize) ?? new THREE.BoxGeometry(1, 1, 1);
+      return buildVoxelGeometry(geom?.voxels, geom?.cellSize, !!(geom?.voxelSkins && geom.voxelSkins.length)) ?? new THREE.BoxGeometry(1, 1, 1);
     default:
       return new THREE.BoxGeometry(1, 1, 1);
   }
@@ -149,5 +149,5 @@ export function profileSig(geom?: PrimitiveGeom): string {
 }
 
 export function primitiveGeomKey(shape: PrimitiveShape | undefined, geom?: PrimitiveGeom): string {
-  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}|${voxelSig(geom?.voxels)}|${geom?.cellSize ?? 1}`;
+  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}|${voxelSig(geom?.voxels)}|${geom?.cellSize ?? 1}|${voxelSkinsSig(geom?.voxelSkins)}`;
 }

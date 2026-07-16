@@ -8,6 +8,7 @@ import { Boxes, X, Plus, Minus } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { useToast } from '@/hooks/useToast';
+import { uploadImageTexture } from '@/lib/uploadAsset';
 import type { Voxel } from '@/lib/voxelGeometry';
 
 const SIZE = 340;                       // 2D 페인터 픽셀(고정) — 칸 크기는 그리드 수에 맞춰 자동 조정
@@ -20,22 +21,70 @@ const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
 
 // 복셀 3D 미리보기 — 개별 큐브 메쉬(수백 개까지 무난). 그리드 중심(gridN/2) 고정 + 바닥 y=0.
 // (bbox 중심으로 옮기면 블록 추가 때마다 모델이 움직여 헷갈림 → 그리드 기준 고정)
-function VoxelPreview({ voxels, layer, gridN }: { voxels: Record<string, string>; layer: number; gridN: number }) {
+// 3D 클릭 빌드: 면 좌클릭=그 방향에 인접 복셀 추가 · 우클릭=그 복셀 삭제 · 바닥 좌클릭=y=0에 추가.
+function VoxelPreview({ voxels, layer, gridN, skinUrl, skins, onAdd, onRemove }: {
+  voxels: Record<string, string>; layer: number; gridN: number; skinUrl?: string; skins?: { color: string; texUrl: string }[];
+  onAdd: (x: number, y: number, z: number) => void; onRemove: (x: number, y: number, z: number) => void;
+}) {
   const half = gridN / 2;
+  // 필요한 텍스처 URL 전부 로드해 map(url→texture). 큐브별로 색→URL 해석해 적용.
+  const urlKey = `${skinUrl ?? ''}|${(skins ?? []).map((s) => s.texUrl).join(',')}`;
+  const [texMap, setTexMap] = useState<Record<string, THREE.Texture>>({});
+  useEffect(() => {
+    const urls = new Set<string>();
+    if (skinUrl) urls.add(skinUrl);
+    (skins ?? []).forEach((s) => urls.add(s.texUrl));
+    if (urls.size === 0) { setTexMap({}); return; }
+    let cancelled = false;
+    const loader = new THREE.TextureLoader();
+    const map: Record<string, THREE.Texture> = {};
+    let left = urls.size;
+    urls.forEach((u) => loader.load(u, (t) => { if (cancelled) { t.dispose(); return; } t.colorSpace = THREE.SRGBColorSpace; map[u] = t; if (--left === 0) setTexMap({ ...map }); else setTexMap({ ...map }); }));
+    return () => { cancelled = true; Object.values(map).forEach((t) => t.dispose()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlKey]);
+  const colorUrl = useMemo(() => new Map((skins ?? []).map((s) => [s.color, s.texUrl] as const)), [urlKey]);
   const items = useMemo(() => Object.entries(voxels).map(([k, color]) => {
     const [x, y, z] = k.split(',').map(Number);
     return { x, y, z, color };
   }), [voxels]);
   return (
     <group>
-      {items.map((v) => (
-        <mesh key={`${v.x},${v.y},${v.z}`} position={[v.x + 0.5 - half, v.y + 0.5, v.z + 0.5 - half]} castShadow receiveShadow>
+      {items.map((v) => {
+        const u = colorUrl.get(v.color) ?? skinUrl;   // 색별 스킨 > 단일 스킨
+        const t = u ? texMap[u] : undefined;
+        return (
+        <mesh
+          key={`${v.x},${v.y},${v.z}`}
+          position={[v.x + 0.5 - half, v.y + 0.5, v.z + 0.5 - half]}
+          castShadow receiveShadow
+          onClick={(e) => {
+            e.stopPropagation();
+            const n = e.face?.normal;
+            if (!n) return;
+            onAdd(v.x + Math.round(n.x), v.y + Math.round(n.y), v.z + Math.round(n.z)); // 클릭한 면 방향에 추가
+          }}
+          onContextMenu={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); onRemove(v.x, v.y, v.z); }}
+        >
           <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial color={v.color} roughness={0.75} metalness={0} />
+          <meshStandardMaterial map={t ?? undefined} color={t ? '#ffffff' : v.color} roughness={0.75} metalness={0} />
         </mesh>
-      ))}
+        );
+      })}
+      {/* 바닥 클릭 평면 — 빈 바닥 좌클릭 시 y=0에 복셀 추가(투명·레이캐스트만) */}
+      <mesh
+        position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}
+        onClick={(e) => {
+          e.stopPropagation();
+          const cx = Math.floor(e.point.x + half), cz = Math.floor(e.point.z + half);
+          onAdd(cx, 0, cz);
+        }}
+      >
+        <planeGeometry args={[gridN, gridN]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
       {/* 현재 편집 층 표시 — 지금 칠하는 높이(Y)의 바닥면을 반투명 판으로 */}
-      <mesh position={[0, layer + 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, layer + 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
         <planeGeometry args={[gridN, gridN]} />
         <meshBasicMaterial color="#8b5cf6" transparent opacity={0.14} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
@@ -58,6 +107,39 @@ export function VoxelToolModal() {
   const [cellSize, setCellSize] = useState(1); // 한 칸의 로컬 크기(미터) — 고해상도용
   const CELL = SIZE / gridN;                  // 칸 픽셀(그리드 수에 맞춰 자동)
   const paintMode = useRef<'paint' | 'erase' | null>(null); // 드래그 중 동작(좌=칠하기, 우=지우기)
+  // 스킨 텍스처(마인크래프트 블록) — 있으면 면마다 이미지 표시(칸 색 대신). material.textureUrl로 저장.
+  const projectId = useSceneStore((s) => s.projectId);
+  const [skinUrl, setSkinUrl] = useState<string | undefined>(undefined);
+  const [skinUploading, setSkinUploading] = useState(false);
+  const skinInputRef = useRef<HTMLInputElement>(null);
+  const handleSkinUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !projectId) return;
+    if (file.size > 8 * 1024 * 1024) { addToast('이미지가 너무 큽니다(최대 8MB).', 'error'); return; }
+    setSkinUploading(true);
+    try {
+      const asset = await uploadImageTexture(file, projectId);
+      setSkinUrl(asset.dracoUrl);
+    } catch { addToast('스킨 업로드 실패', 'error'); }
+    finally { setSkinUploading(false); }
+  };
+  // 색별 스킨(색→텍스처) — 진짜 여러 텍스처. 지정 색은 그 이미지, 나머지는 단일 스킨/색.
+  const [skins, setSkins] = useState<{ color: string; texUrl: string }[]>([]);
+  const perColorInputRef = useRef<HTMLInputElement>(null);
+  const perColorTargetRef = useRef<string | null>(null);
+  const handlePerColorUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    const col = perColorTargetRef.current; perColorTargetRef.current = null;
+    if (!file || !projectId || !col) return;
+    if (file.size > 8 * 1024 * 1024) { addToast('이미지가 너무 큽니다(최대 8MB).', 'error'); return; }
+    try {
+      const asset = await uploadImageTexture(file, projectId);
+      setSkins((prev) => [...prev.filter((s) => s.color !== col), { color: col, texUrl: asset.dracoUrl }]);
+    } catch { addToast('스킨 업로드 실패', 'error'); }
+  };
+  const pickPerColor = (col: string) => { perColorTargetRef.current = col; perColorInputRef.current?.click(); };
+  const removePerColor = (col: string) => setSkins((prev) => prev.filter((s) => s.color !== col));
 
   // ── 2D 페인터 확대/이동(viewBox) ── 휠=확대(커서 기준) · Space/가운데버튼 드래그=이동 ──
   const svgRef = useRef<SVGSVGElement>(null);
@@ -131,9 +213,9 @@ export function VoxelToolModal() {
       let maxCoord = 0;
       for (const v of evox) { dict[key(v.x, v.y, v.z)] = v.color; maxCoord = Math.max(maxCoord, v.x, v.z); }
       const g = GRID_SIZES.find((n) => maxCoord < n) ?? GRID_SIZES[GRID_SIZES.length - 1]; // 좌표가 다 들어가는 최소 그리드
-      setVoxels(dict); setGridN(g); setCellSize(eobj?.geom?.cellSize ?? 1); setLayer(0); setPanelPos(null);
+      setVoxels(dict); setGridN(g); setCellSize(eobj?.geom?.cellSize ?? 1); setSkinUrl(eobj?.material?.textureUrl); setSkins(eobj?.geom?.voxelSkins ?? []); setLayer(0); setPanelPos(null);
     } else {
-      setVoxels({}); setLayer(0); setGridN(16); setCellSize(1); setPanelPos(null);
+      setVoxels({}); setLayer(0); setGridN(16); setCellSize(1); setSkinUrl(undefined); setSkins([]); setPanelPos(null);
     }
     resetView();
     undoRef.current = []; redoRef.current = []; lastCellRef.current = null; // 히스토리 초기화
@@ -228,6 +310,22 @@ export function VoxelToolModal() {
     setVoxels((prev) => { const n: Record<string, string> = {}; for (const k of Object.keys(prev)) n[k] = color; return n; });
   };
 
+  // 3D 클릭 빌드 — 면 클릭 시 인접 칸에 현재 색으로 추가(그리드 범위 내). 이미 있으면 무시.
+  const addVoxelAt = (x: number, y: number, z: number) => {
+    if (x < 0 || z < 0 || x >= gridN || z >= gridN || y < 0 || y > gridN) return;
+    const k = key(x, y, z);
+    if (voxelsRef.current[k]) return;
+    pushUndo();
+    setVoxels((prev) => ({ ...prev, [k]: color }));
+  };
+  // 3D 우클릭 삭제.
+  const removeVoxelAt = (x: number, y: number, z: number) => {
+    const k = key(x, y, z);
+    if (!voxelsRef.current[k]) return;
+    pushUndo();
+    setVoxels((prev) => { const n = { ...prev }; delete n[k]; return n; });
+  };
+
   // 아래층(y=layer-1)을 현재층에 그대로 복사 — 똑같이 쌓기(기둥·벽) 한 번에
   const copyBelow = () => {
     if (layer === 0) return;
@@ -293,11 +391,14 @@ export function VoxelToolModal() {
       const [x, y, z] = k.split(',').map(Number);
       return { x, y, z, color: c };
     });
+    // 색별 스킨은 실제 사용 중인 색만 남긴다(지운 색 매핑 제거).
+    const usedColors = new Set(Object.values(voxels));
+    const usedSkins = skins.filter((s) => usedColors.has(s.color));
     if (editId) {
-      updateVoxelObject(editId, vox, cellSize);
+      updateVoxelObject(editId, vox, cellSize, skinUrl, usedSkins);
       addToast(`복셀 수정됨 (${vox.length}칸)`, 'success');
     } else {
-      addVoxelObject(vox, cellSize);
+      addVoxelObject(vox, cellSize, skinUrl, usedSkins);
       addToast(`복셀 생성 (${vox.length}칸)`, 'success');
     }
     setOpen(false);
@@ -363,6 +464,19 @@ export function VoxelToolModal() {
             options={CELL_SIZES.map((s) => ({ value: String(s), label: s === 1 ? '1 (기본)' : `${s} 칸` }))}
             fullWidth={false}
           />
+          <div className="w-px h-5 bg-border/60" />
+          {/* 스킨 텍스처(블록 이미지) — 있으면 면마다 이미지, 칸 색은 무시 */}
+          <span className="text-[11px] text-muted" title="블록 이미지를 각 면에 입혀요(마인크래프트 블록). 있으면 칸 색은 무시됩니다.">스킨</span>
+          <input ref={skinInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleSkinUpload} />
+          {skinUrl ? (
+            <div className="flex items-center gap-1">
+              <img src={skinUrl} alt="skin" className="w-6 h-6 rounded-xs object-cover border border-border" />
+              <button onClick={() => setSkinUrl(undefined)} className="px-1.5 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px]" title="스킨 제거(칸 색으로 복귀)">×</button>
+            </div>
+          ) : (
+            <button onClick={() => skinInputRef.current?.click()} disabled={skinUploading}
+              className="px-2 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px] disabled:opacity-40">{skinUploading ? '올리는 중…' : '＋ 이미지'}</button>
+          )}
           <div className="flex-1" />
           <button onClick={recolorAll} disabled={count === 0}
             className="px-2 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
@@ -422,8 +536,9 @@ export function VoxelToolModal() {
             <p className="text-[10px] text-muted/70 mt-1 text-center">좌클릭 칠하기 · 우클릭 지우기 · Shift+클릭=직선 · 휠=확대 · Space/가운데버튼=이동 · Ctrl+Z 되돌리기</p>
           </div>
 
-          {/* 3D 미리보기 — 2D 페인터와 동일한 정사각형(SIZE×SIZE) */}
-          <div className="shrink-0 rounded-xs border border-border overflow-hidden bg-background" style={{ width: SIZE, height: SIZE }}>
+          {/* 3D 미리보기 — 2D 페인터와 동일한 정사각형(SIZE×SIZE) + 3D 클릭 빌드 */}
+          <div className="shrink-0">
+          <div className="rounded-xs border border-border overflow-hidden bg-background" style={{ width: SIZE, height: SIZE }}>
             <Canvas shadows camera={{ position: [gridN * 0.85, gridN * 0.75, gridN * 0.85], fov: 45 }}>
               <ambientLight intensity={0.6} />
               <directionalLight position={[10, 20, 10]} intensity={1.4} castShadow />
@@ -434,11 +549,47 @@ export function VoxelToolModal() {
                 infiniteGrid fadeDistance={gridN * 3} fadeStrength={1.5}
                 position={[0, 0, 0]}
               />
-              <VoxelPreview voxels={voxels} layer={layer} gridN={gridN} />
+              <VoxelPreview voxels={voxels} layer={layer} gridN={gridN} skinUrl={skinUrl} skins={skins} onAdd={addVoxelAt} onRemove={removeVoxelAt} />
               <OrbitControls makeDefault enablePan={false} target={[0, gridN / 4, 0]} />
             </Canvas>
           </div>
+          <p className="text-[10px] text-muted/70 mt-1 text-center">3D: 면 좌클릭=붙이기 · 우클릭=지우기 · 바닥 클릭=바닥에 놓기 · 드래그=회전</p>
+          </div>
         </div>
+
+        {/* 색별 스킨 — 사용 중인 색마다 텍스처 지정(진짜 여러 텍스처). 단일 스킨보다 우선 적용. */}
+        {(() => {
+          const usedColors = [...new Set(Object.values(voxels))];
+          if (usedColors.length === 0) return null;
+          const skinMap = new Map(skins.map((s) => [s.color, s.texUrl]));
+          return (
+            <div className="mt-3 pt-3 border-t border-border/60">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-[11px] text-muted">색별 스킨</span>
+                <span className="text-[10px] text-muted/50">각 색에 이미지를 지정하면 블록마다 다른 텍스처</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {usedColors.map((c) => {
+                  const u = skinMap.get(c);
+                  return (
+                    <div key={c} className="flex items-center gap-1 rounded-xs border border-border p-1">
+                      <span className="w-4 h-4 rounded-sm shrink-0" style={{ background: c }} />
+                      {u ? (
+                        <>
+                          <img src={u} alt="skin" className="w-5 h-5 rounded-sm object-cover" />
+                          <button onClick={() => removePerColor(c)} className="text-muted hover:text-foreground text-[12px] px-0.5" title="제거">×</button>
+                        </>
+                      ) : (
+                        <button onClick={() => pickPerColor(c)} className="text-[10px] text-muted hover:text-foreground px-1">＋이미지</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <input ref={perColorInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePerColorUpload} />
+            </div>
+          );
+        })()}
 
         {/* 푸터 */}
         <div className="flex items-center gap-2 mt-3">

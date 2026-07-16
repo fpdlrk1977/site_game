@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import { Text3D, Center, Line } from '@react-three/drei';
 import { createPrimitiveGeometry, createRoundedBoxDims, primitiveGeomKey, profileSig } from '@/lib/primitiveGeometry';
-import { voxelSig } from '@/lib/voxelGeometry';
+import { voxelSig, voxelSkinsSig } from '@/lib/voxelGeometry';
+import { useVoxelSkinMaterials } from '@/components/three/useVoxelSkinMaterials';
 import { primLocalBboxCache } from '@/lib/primBboxCache';
 import { effectiveMaterial } from '@/lib/effectiveMaterial';
 import { useShallow } from 'zustand/react/shallow';
@@ -554,9 +555,14 @@ export function EditorObjectInstance({ object }: Props) {
       : createPrimitiveGeometry(object.primitiveShape, object.geom),
     // profileSig/voxelSig는 내용을 반영 → 펜툴·복셀 재편집으로 데이터가 바뀌면 지오메트리 재생성.
     // 둥근 박스는 치수(scale)에도 의존 → 크기 커밋(마우스업) 시 재생성돼 모서리가 균일해진다.
-    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions, isRoundedBox, sX, sY, sZ],
+    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), voxelSkinsSig(object.geom?.voxelSkins), object.geom?.subdivisions, isRoundedBox, sX, sY, sZ],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
+  // 복셀 색별 스킨(재질 배열) — 그룹 지오메트리의 색 순서에 매칭. skins 없으면 null(기존 경로).
+  const voxelSkinMats = useVoxelSkinMaterials(
+    (primGeom as THREE.BufferGeometry).userData?.voxelGroupColors as string[] | undefined,
+    object.geom?.voxelSkins,
+  );
   // triplanar wrap 모드용 로컬 bbox(한 장을 bbox 0~1로 정규화 투영).
   const wrapBounds = useMemo(() => {
     primGeom.computeBoundingBox();
@@ -703,6 +709,7 @@ export function EditorObjectInstance({ object }: Props) {
           geometry={primGeom}
           // 둥근 박스: 지오메트리가 실제 치수라 group.scale을 상쇄하는 역스케일(1/scale). 비-둥근은 명시적 [1,1,1](R3F 미리셋 함정 회피).
           scale={isRoundedBox ? [1 / sX, 1 / sY, 1 / sZ] : [1, 1, 1]}
+          {...(voxelSkinMats ? { material: voxelSkinMats } : {})}
           onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
           onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
           onPointerOver={handlePointerOver}
@@ -710,6 +717,7 @@ export function EditorObjectInstance({ object }: Props) {
           castShadow={rdCast}
           receiveShadow={rdReceive}
         >
+          {!voxelSkinMats && (
           <PrimitiveMaterial
             color={color}
             roughness={roughness}
@@ -725,12 +733,13 @@ export function EditorObjectInstance({ object }: Props) {
             sheen={mat?.sheen}
             transmission={mat?.transmission}
             ior={mat?.ior}
-            vertexColors={object.primitiveShape === 'voxel'}
+            vertexColors={object.primitiveShape === 'voxel' && !mat?.textureUrl}
             textureMapping={mat?.textureMapping}
             triplanarScale={mat?.triplanarScale}
             wrapMin={wrapBounds.min}
             wrapSize={wrapBounds.size}
           />
+          )}
         </mesh>
       )}
       {!assetRef && (isSelected || hovered) && (

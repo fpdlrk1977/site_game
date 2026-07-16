@@ -51,6 +51,19 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-16) — 🧊 복셀 후속: 3D 클릭 빌드 + 단일 스킨 + 색별 텍스처(멀티 스킨) (사용자 확인 완료)
+
+> `VoxelToolModal` + `voxelGeometry` + `primitiveGeometry` + `sceneStore`(add/updateVoxelObject) + `EditorObjectInstance` + `ViewerObject` + 신규 `useVoxelSkinMaterials`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘동작한다").**
+
+- **3D 클릭 빌드(마인크래프트식)**: 복셀 모달 3D 프리뷰에서 **면 좌클릭=인접 복셀 추가**(`e.face.normal`로 방향 계산)·**우클릭=삭제**·**빈 바닥 좌클릭=y=0 추가**(투명 클릭 평면). 드래그=OrbitControls 회전(클릭과 자연 분리). 범위 밖·중복 무시, 각 조작 pushUndo. 편집 층 판은 `raycast={()=>null}`. 2D 페인터는 그대로(추가 방식).
+- **단일 스킨**: 모달 툴바 "스킨" 업로드 → `material.textureUrl`로 저장 → 복셀 지오메트리의 면별 UV로 **모든 면에 한 장**. 렌더에서 `vertexColors = voxel && !textureUrl`로 색 틴트 없이 순수 텍스처. (Inspector Material Texture로도 동일.)
+- **색별 텍스처(멀티 스킨, 진짜 여러 텍스처)**: `PrimitiveGeom.voxelSkins?: {color,texUrl}[]`. 있으면 `buildVoxelGeometry(grouped=true)`가 **색별 그룹(mergeGeometries useGroups)** 지오메트리 + `userData.voxelGroupColors`. 신규 훅 **`useVoxelSkinMaterials`**가 그룹 색 순서에 맞춰 **재질 배열**(매핑 색=텍스처·나머지=단색, 텍스처 async 로드/dispose). 에디터·뷰어 프리미티브 메쉬가 `voxelSkins` 있으면 `material={배열}`, 없으면 기존 `PrimitiveMaterial`(단일 메쉬 유지 → bbox/콜라이더 무영향). 우선순위: **색별 > 단일 스킨 > 칸 색**.
+- **모달 UI**: "색별 스킨" 섹션(사용 중인 색마다 스와치+이미지 지정/제거) + 3D 프리뷰 WYSIWYG(색→URL 해석해 큐브별 텍스처). 저장 시 실제 사용 색만 유지.
+- **배선**: `primitiveGeomKey`/memo deps에 `voxelSkinsSig` 추가(매핑 변경 시 재생성). `add/updateVoxelObject`에 `skinUrl`·`voxelSkins` 인자. 재편집 로드.
+- **로드맵**: 복셀 후속(텍스처 스킨·3D 면클릭) 완료.
+
+---
+
 ## ✅ 완료 (2026-07-16) — 🔢 배열(Array/Cloner) 툴 후속: Grid·회전 증분·나선 계단·미니 프리뷰·LinkToggle (사용자 확인 완료)
 
 > `scene.ts`(ClonerConfig) + `lib/cloner` + `sceneStore`(arraySelected) + `ArraySection` + `ClonerSection` + 신규 `components/ui/LinkToggle`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘돼네").**
@@ -673,7 +686,7 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
   - **만들기** → `buildVoxelGlb` → `uploadGlbBlob`(model) → `addAsset`+`addAssetObject`(바닥 스냅 배치) → persist.
 - **진입점**: 툴바 🧊(펜툴 ✏ 옆) + 커맨드팔레트 '복셀 (큐브 쌓아 만들기)'.
 - **검증**: tsc 클린 + dev 컴파일 정상. **브라우저 실동작 확인 완료(사용자 — 칠/지우기·색·크기·쌓기 도우미·미리보기 정상).**
-- **알려진 제약/후속**: 편집이 **레이어별 2D 페인팅**(3D 면 클릭 배치 아님) · 내부 면 컬링 없음(vertex color 단일 메쉬라 실사용 크기엔 무난) · 색만(텍스처 스킨은 후속) · 그리드 크기 변경 시 3D 카메라는 마운트 시점 값 유지(재프레이밍은 orbit으로).
+- **알려진 제약/후속**: ~~레이어별 2D 페인팅(3D 면 클릭 아님)~~ **[3D 클릭 빌드 완료 2026-07-16]** · 내부 면 컬링 없음(단일 메쉬라 실사용 크기엔 무난) · ~~색만(텍스처 스킨)~~ **[단일 스킨+색별 텍스처 완료 2026-07-16 — 위 참고]** · 그리드 크기 변경 시 3D 카메라는 마운트 시점 값 유지(재프레이밍은 orbit으로).
 
 ## ✅ 브라우저 실동작 확인 완료 (2026-07-10, 사용자 일괄 검증)
 

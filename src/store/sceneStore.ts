@@ -169,8 +169,8 @@ interface SceneActions {
   openPenToolEdit: (id: string) => void;
   setVoxelToolOpen: (open: boolean) => void;
   /** 복셀 오브젝트 — live 프리미티브(primitiveShape 'voxel'). 생성/재편집(B안). cellSize=한 칸 크기(미터, 미설정=1). */
-  addVoxelObject: (voxels: { x: number; y: number; z: number; color: string }[], cellSize?: number, placeAt?: PlaceXZ) => void;
-  updateVoxelObject: (id: string, voxels: { x: number; y: number; z: number; color: string }[], cellSize?: number) => void;
+  addVoxelObject: (voxels: { x: number; y: number; z: number; color: string }[], cellSize?: number, skinUrl?: string, voxelSkins?: { color: string; texUrl: string }[], placeAt?: PlaceXZ) => void;
+  updateVoxelObject: (id: string, voxels: { x: number; y: number; z: number; color: string }[], cellSize?: number, skinUrl?: string, voxelSkins?: { color: string; texUrl: string }[]) => void;
   voxelEditId: string | null;
   openVoxelEdit: (id: string) => void;
   setEditorPlaying: (v: boolean) => void;
@@ -779,14 +779,16 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   setVoxelToolOpen: (open) => set(open ? { voxelToolOpen: true } : { voxelToolOpen: false, voxelEditId: null }),
   openVoxelEdit: (id) => set({ voxelEditId: id, voxelToolOpen: true }),
 
-  addVoxelObject: (voxels, cellSize, placeAt) => {
+  addVoxelObject: (voxels, cellSize, skinUrl, voxelSkins, placeAt) => {
     objectCounter += 1;
     // 지오메트리는 X/Z 중심·바닥 y=0 정렬이라 position.y=0이면 지면에 앉는다(바닥 스냅 불필요).
+    // skinUrl=단일 스킨(material.textureUrl, 모든 면 한 장) · voxelSkins=색별 스킨(geom, 색→텍스처). 색별이 있으면 렌더가 우선.
+    const gm = { voxels, ...(cellSize && cellSize !== 1 ? { cellSize } : {}), ...(voxelSkins && voxelSkins.length ? { voxelSkins } : {}) };
     const obj = makeBaseObject({
       name: `복셀 ${objectCounter}`,
       primitiveShape: 'voxel',
-      geom: cellSize && cellSize !== 1 ? { voxels, cellSize } : { voxels },
-      material: { color: '#ffffff', roughness: 0.75, metalness: 0 },
+      geom: gm,
+      material: { color: '#ffffff', roughness: 0.75, metalness: 0, ...(skinUrl ? { textureUrl: skinUrl } : {}) },
       position: { x: placeAt?.x ?? 0, y: 0, z: placeAt?.z ?? 0 },
     });
     const { objects, environment, past } = get();
@@ -799,12 +801,14 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     });
   },
 
-  updateVoxelObject: (id, voxels, cellSize) => {
+  updateVoxelObject: (id, voxels, cellSize, skinUrl, voxelSkins) => {
     const { objects, environment, past } = get();
     const target = objects.find((o) => o.id === id);
     if (!target) return;
     set({
-      objects: objects.map((o) => (o.id === id ? { ...o, geom: { ...o.geom, voxels, cellSize: cellSize && cellSize !== 1 ? cellSize : undefined } } : o)),
+      objects: objects.map((o) => (o.id === id
+        ? { ...o, geom: { ...o.geom, voxels, cellSize: cellSize && cellSize !== 1 ? cellSize : undefined, voxelSkins: voxelSkins && voxelSkins.length ? voxelSkins : undefined }, material: { ...o.material, textureUrl: skinUrl || undefined } }
+        : o)),
       isModified: true,
       ...withHistory({ objects, environment }, past),
     });

@@ -8,9 +8,37 @@ export interface Voxel { x: number; y: number; z: number; color: string }
 
 // 복셀 목록 → 병합 지오메트리(X/Z 중심 정렬 + 바닥 y=0). 정점색(선형). 대상 없으면 null.
 // cellSize: 한 칸의 로컬 크기(미터). 미설정=1. 정수 셀 좌표에 곱해 촘촘한(고해상도) 복셀 지원.
-export function buildVoxelGeometry(voxels: Voxel[] | undefined, cellSize = 1): THREE.BufferGeometry | null {
+export function buildVoxelGeometry(voxels: Voxel[] | undefined, cellSize = 1, grouped = false): THREE.BufferGeometry | null {
   if (!voxels || voxels.length === 0) return null;
   const s = cellSize > 0 ? cellSize : 1;
+
+  // grouped=true — 색별로 묶어 그룹 지오메트리(재질 배열용). 정점색 대신 면별 UV(BoxGeometry 기본) 유지.
+  //   각 그룹(색)에 텍스처 또는 단색 재질을 매칭해 "색→텍스처" 멀티 스킨을 만든다. userData에 색 순서 보관.
+  if (grouped) {
+    const byColor = new Map<string, THREE.BufferGeometry[]>();
+    for (const v of voxels) {
+      const g = new THREE.BoxGeometry(s, s, s);
+      g.translate((v.x + 0.5) * s, (v.y + 0.5) * s, (v.z + 0.5) * s);
+      if (!byColor.has(v.color)) byColor.set(v.color, []);
+      byColor.get(v.color)!.push(g);
+    }
+    const colors = [...byColor.keys()];
+    const perColor: THREE.BufferGeometry[] = [];
+    for (const cc of colors) {
+      const parts = byColor.get(cc)!;
+      const m = mergeGeometries(parts, false);
+      parts.forEach((g) => g.dispose());
+      if (m) perColor.push(m);
+    }
+    const merged = mergeGeometries(perColor, true); // useGroups → 그룹당 materialIndex(색 순서와 일치)
+    perColor.forEach((g) => g.dispose());
+    if (!merged) return null;
+    merged.computeBoundingBox();
+    const bb = merged.boundingBox!;
+    merged.translate(-((bb.min.x + bb.max.x) / 2), -bb.min.y, -((bb.min.z + bb.max.z) / 2));
+    merged.userData.voxelGroupColors = colors;
+    return merged;
+  }
 
   const geoms: THREE.BufferGeometry[] = [];
   const c = new THREE.Color();
@@ -49,4 +77,10 @@ export function voxelSig(voxels: Voxel[] | undefined): string {
     for (let i = 0; i < v.color.length; i++) h = (Math.imul(h, 31) + v.color.charCodeAt(i)) | 0;
   }
   return `${voxels.length}:${h}`;
+}
+
+// 색별 스킨 서명 — 매핑(색↔이미지)이 바뀌면 지오메트리(그룹 여부)·재질이 갱신되게. 없으면 ''.
+export function voxelSkinsSig(skins: { color: string; texUrl: string }[] | undefined): string {
+  if (!skins || skins.length === 0) return '';
+  return skins.map((s) => `${s.color}=${s.texUrl}`).join('|');
 }

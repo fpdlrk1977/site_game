@@ -17,7 +17,8 @@ import { PrimitiveMaterial } from "@/components/three/PrimitiveMaterial";
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
 import { createPrimitiveGeometry, createRoundedBoxDims, profileSig } from "@/lib/primitiveGeometry";
-import { voxelSig } from "@/lib/voxelGeometry";
+import { voxelSig, voxelSkinsSig } from "@/lib/voxelGeometry";
+import { useVoxelSkinMaterials } from "@/components/three/useVoxelSkinMaterials";
 
 const DEG2RAD = Math.PI / 180;
 
@@ -584,9 +585,14 @@ export function ViewerObject({
       : isRoundedBox
         ? createRoundedBoxDims(rbX, rbY, rbZ, object.geom?.cornerRadius ?? 0, object.geom?.cornerSegments ?? 4, object.geom?.subdivisions ?? 0)
         : createPrimitiveGeometry(object.primitiveShape, object.geom),
-    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), object.geom?.subdivisions, isRoundedBox, rbX, rbY, rbZ],
+    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), voxelSkinsSig(object.geom?.voxelSkins), object.geom?.subdivisions, isRoundedBox, rbX, rbY, rbZ],
   );
   useEffect(() => () => primGeom?.dispose(), [primGeom]);
+  // 복셀 색별 스킨 재질 배열(없으면 null → 기존 PrimitiveMaterial 경로).
+  const voxelSkinMats = useVoxelSkinMaterials(
+    (primGeom?.userData?.voxelGroupColors) as string[] | undefined,
+    object.geom?.voxelSkins,
+  );
   // triplanar wrap 모드용 로컬 bbox.
   const wrapBounds = useMemo(() => {
     if (!primGeom) return { min: [-0.5, -0.5, -0.5] as [number, number, number], size: [1, 1, 1] as [number, number, number] };
@@ -861,6 +867,7 @@ export function ViewerObject({
       geometry={primGeom ?? undefined}
       // 둥근 박스: 실치수 지오메트리라 그룹 scale을 상쇄하는 역스케일(1/scale). 비-둥근은 명시적 [1,1,1].
       scale={isRoundedBox ? [1 / rbX, 1 / rbY, 1 / rbZ] : [1, 1, 1]}
+      {...(voxelSkinMats ? { material: voxelSkinMats } : {})}
       castShadow={rdCast}
       receiveShadow={rdReceive}
       onPointerOver={(e) => {
@@ -873,6 +880,7 @@ export function ViewerObject({
         handleClick();
       }}
     >
+      {!voxelSkinMats && (
       <PrimitiveMaterial
         color={color}
         roughness={roughness}
@@ -887,12 +895,13 @@ export function ViewerObject({
         sheen={object.material?.sheen}
         transmission={object.material?.transmission}
         ior={object.material?.ior}
-        vertexColors={object.primitiveShape === 'voxel'}
+        vertexColors={object.primitiveShape === 'voxel' && !object.material?.textureUrl}
         textureMapping={object.material?.textureMapping}
         triplanarScale={object.material?.triplanarScale}
         wrapMin={wrapBounds.min}
         wrapSize={wrapBounds.size}
       />
+      )}
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );
