@@ -1,43 +1,72 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
-  Box, Circle, Cylinder, Cone, Hexagon, Square, Group, Type, Image as ImageIcon, Play,
-  Package, Sparkles, Grid3x3, CircleDot, ChevronDown, ChevronRight, ShoppingBag,
-  Eye, EyeOff, Lock, Unlock, Pencil, Copy, X, Ungroup,
-  Lightbulb, Flashlight, Sun, PenTool, Boxes,CirclePile
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { useSceneStore, isDescendant } from '@/store/sceneStore';
-import { ContextMenu } from '@/components/ui/ContextMenu';
-import type { ObjectNodeSchema } from '@/types/scene';
+  Box,
+  Circle,
+  Cylinder,
+  Cone,
+  Hexagon,
+  Square,
+  Group,
+  Type,
+  Image as ImageIcon,
+  Play,
+  Package,
+  Sparkles,
+  Grid3x3,
+  CircleDot,
+  ChevronDown,
+  ChevronRight,
+  ShoppingBag,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  Pencil,
+  Copy,
+  X,
+  Ungroup,
+  Lightbulb,
+  Flashlight,
+  Sun,
+  PenTool,
+  Boxes,
+  CirclePile,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useSceneStore, isDescendant } from "@/store/sceneStore";
+import { ContextMenu } from "@/components/ui/ContextMenu";
+import type { ObjectNodeSchema } from "@/types/scene";
 
-type DropPos = 'before' | 'after' | 'inside';
+type DropPos = "before" | "after" | "inside";
 
 const SHAPE_ICONS: Record<string, LucideIcon> = {
-  box: Box, sphere: CircleDot, cylinder: Cylinder, plane: Square, frustum: Cone, loft: Hexagon,
-  extrude: PenTool, lathe: PenTool, // 펜툴로 만든 돌출/회전체
+  box: Box,
+  sphere: CircleDot,
+  cylinder: Cylinder,
+  plane: Square,
+  frustum: Cone,
+  loft: Hexagon,
+  extrude: PenTool,
+  lathe: PenTool, // 펜툴로 만든 돌출/회전체
   voxel: Boxes, // 복셀(live 프리미티브)
 };
 
 function getIcon(obj: ObjectNodeSchema): LucideIcon {
-  if (obj.clonerClone) return CircleDot;   // 클로너가 생성한 복제본
-  if (obj.clonerConfig) return Grid3x3;     // 클로너 그룹
+  if (obj.clonerClone) return CircleDot; // 클로너가 생성한 복제본
+  if (obj.clonerConfig) return Grid3x3; // 클로너 그룹
   if (obj.isGroup && obj.prefabId) return CirclePile; // 프리팹 그룹(루트)
   if (obj.isGroup) return Group;
-  if (obj.light) return obj.light.type === 'point' ? Lightbulb : obj.light.type === 'spot' ? Flashlight : Sun;
-  if (obj.content) return obj.content.type === 'text' ? Type : obj.content.type === 'image' ? ImageIcon : Play;
-  if (obj.voxels) return Boxes;   // 복셀로 만든 오브젝트(현재는 GLB로 구워지지만 레시피로 식별)
+  if (obj.light) return obj.light.type === "point" ? Lightbulb : obj.light.type === "spot" ? Flashlight : Sun;
+  if (obj.content) return obj.content.type === "text" ? Type : obj.content.type === "image" ? ImageIcon : Play;
+  if (obj.voxels) return Boxes; // 복셀로 만든 오브젝트(현재는 GLB로 구워지지만 레시피로 식별)
   if (obj.assetId) return Package;
   if (obj.particle) return Sparkles;
-  return SHAPE_ICONS[obj.primitiveShape ?? ''] ?? Circle;
+  return SHAPE_ICONS[obj.primitiveShape ?? ""] ?? Circle;
 }
 
-function buildFlatList(
-  all: ObjectNodeSchema[],
-  parentId: string | null,
-  expanded: Set<string>,
-): ObjectNodeSchema[] {
+function buildFlatList(all: ObjectNodeSchema[], parentId: string | null, expanded: Set<string>): ObjectNodeSchema[] {
   const items = all.filter((o) => o.parentId === parentId);
   const result: ObjectNodeSchema[] = [];
   for (const obj of items) {
@@ -70,11 +99,37 @@ interface ItemProps {
 }
 
 function HierarchyItem({
-  obj, depth, index, isExpanded, onToggleExpand, onClickItem,
-  dragEnabled, isDragging, dropPos, onDragStartItem, onDragOverItem, onDropItem, onDragEndItem,
-  menuOpen, menuPos, onOpenMenu, onCloseMenu,
+  obj,
+  depth,
+  index,
+  isExpanded,
+  onToggleExpand,
+  onClickItem,
+  dragEnabled,
+  isDragging,
+  dropPos,
+  onDragStartItem,
+  onDragOverItem,
+  onDropItem,
+  onDragEndItem,
+  menuOpen,
+  menuPos,
+  onOpenMenu,
+  onCloseMenu,
 }: ItemProps) {
-  const { selectedId, selectedIds, updateObject, setObjectLocked, pushHistory, deleteSelected, duplicateSelected, selectObject, ungroupSelected, openPenToolEdit, openVoxelEdit } = useSceneStore();
+  const {
+    selectedId,
+    selectedIds,
+    updateObject,
+    setObjectLocked,
+    pushHistory,
+    deleteSelected,
+    duplicateSelected,
+    selectObject,
+    ungroupSelected,
+    openPenToolEdit,
+    openVoxelEdit,
+  } = useSceneStore();
   const objects = useSceneStore((s) => s.objects);
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
@@ -104,25 +159,24 @@ function HierarchyItem({
   const commitRename = () => {
     setEditing(false);
     const t = nameValue.trim();
-    if (t && t !== obj.name) { updateObject(obj.id, { name: t }); pushHistory(); }
-    else setNameValue(obj.name);
+    if (t && t !== obj.name) {
+      updateObject(obj.id, { name: t });
+      pushHistory();
+    } else setNameValue(obj.name);
   };
 
   return (
     <div className="relative">
       {/* 드롭 위치 인디케이터 — before/after는 라인, inside(그룹 안)는 링 강조 */}
-      {dropPos === 'before' && (
-        <span className="absolute left-1 right-1 -top-px h-0.5 bg-primary rounded-full z-10 pointer-events-none" />
-      )}
-      {dropPos === 'after' && (
-        <span className="absolute left-1 right-1 -bottom-px h-0.5 bg-primary rounded-full z-10 pointer-events-none" />
-      )}
-      {dropPos === 'inside' && (
-        <span className="absolute inset-0 rounded-xs ring-2 ring-primary ring-inset bg-primary/10 z-10 pointer-events-none" />
-      )}
+      {dropPos === "before" && <span className="absolute left-1 right-1 -top-px h-0.5 bg-primary rounded-full z-10 pointer-events-none" />}
+      {dropPos === "after" && <span className="absolute left-1 right-1 -bottom-px h-0.5 bg-primary rounded-full z-10 pointer-events-none" />}
+      {dropPos === "inside" && <span className="absolute inset-0 rounded-xs ring-2 ring-primary ring-inset bg-primary/10 z-10 pointer-events-none" />}
       <div
         draggable={dragEnabled && !editing}
-        onDragStart={(e) => { e.stopPropagation(); onDragStartItem(obj.id); }}
+        onDragStart={(e) => {
+          e.stopPropagation();
+          onDragStartItem(obj.id);
+        }}
         onDragEnd={onDragEndItem}
         onDragOver={(e) => {
           if (!dragEnabled) return;
@@ -130,43 +184,48 @@ function HierarchyItem({
           const rect = e.currentTarget.getBoundingClientRect();
           const r = (e.clientY - rect.top) / rect.height;
           // 그룹은 3분할(위=앞, 가운데=안, 아래=뒤), 일반 오브젝트는 2분할(앞/뒤)
-          const pos: DropPos = obj.isGroup
-            ? (r < 0.25 ? 'before' : r > 0.75 ? 'after' : 'inside')
-            : (r < 0.5 ? 'before' : 'after');
+          const pos: DropPos = obj.isGroup ? (r < 0.25 ? "before" : r > 0.75 ? "after" : "inside") : r < 0.5 ? "before" : "after";
           onDragOverItem(obj.id, pos);
         }}
-        onDrop={(e) => { if (!dragEnabled) return; e.preventDefault(); onDropItem(obj.id); }}
-        onClick={(e) => { if (editing) return; onClickItem(obj.id, index, e.shiftKey); }}
-        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); selectObject(obj.id); onOpenMenu(e.clientX, e.clientY); }}
+        onDrop={(e) => {
+          if (!dragEnabled) return;
+          e.preventDefault();
+          onDropItem(obj.id);
+        }}
+        onClick={(e) => {
+          if (editing) return;
+          onClickItem(obj.id, index, e.shiftKey);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          selectObject(obj.id);
+          onOpenMenu(e.clientX, e.clientY);
+        }}
         onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
         className={`flex items-center px-1.5 h-7 rounded-xs cursor-pointer group transition-all text-xs gap-1 ${
-          isSelected
-            ? 'bg-primary/10 text-foreground'
-            : 'text-foreground/70 hover:bg-background'
-        } ${!obj.visible ? 'opacity-40' : ''} ${obj.locked ? 'text-muted' : ''} ${isDragging ? 'opacity-30' : ''}`}
+          isSelected ? "bg-primary/10 text-foreground" : "text-foreground/70 hover:bg-background"
+        } ${!obj.visible ? "opacity-40" : ""} ${obj.locked ? "text-muted" : ""} ${isDragging ? "opacity-30" : ""}`}
       >
         {/* 깊이 인덴트 + 트리 라인 */}
         {Array.from({ length: depth }).map((_, i) => (
-          <span
-            key={i}
-            className="shrink-0 w-4 self-stretch relative"
-            style={{ marginLeft: i === 0 ? 8 : 0 }}
-          >
+          <span key={i} className="shrink-0 w-4 self-stretch relative" style={{ marginLeft: i === 0 ? 8 : 0 }}>
             <span className="absolute left-[7px] top-0 bottom-0 w-px bg-border" />
-            {i === depth - 1 && (
-              <span className="absolute left-[7px] top-1/2 w-2 h-px bg-border" />
-            )}
+            {i === depth - 1 && <span className="absolute left-[7px] top-1/2 w-2 h-px bg-border" />}
           </span>
         ))}
 
         {/* 그룹 펼치기/접기 (그룹일 때만 화살표 표시, 일반 오브젝트는 spacer 없음) */}
         {hasChildren && (
-          <span 
-          // style={{ marginLeft: depth === 0 ? 8 : 0 }} 
-          className="shrink-0"
+          <span
+            // style={{ marginLeft: depth === 0 ? 8 : 0 }}
+            className="shrink-0"
           >
             <button
-              onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand();
+              }}
               className="w-4 h-4 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded"
             >
               {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -176,10 +235,13 @@ function HierarchyItem({
 
         {/* 오브젝트 아이콘 (프리팹은 --prefab 색) */}
         <span
-          className={`w-4 flex items-center justify-center shrink-0 ${obj.prefabId ? '' : 'text-muted/60'}`}
-          style={obj.prefabId ? { color: 'var(--prefab)' } : undefined}
+          className={`w-4 flex items-center justify-center shrink-0 ${obj.prefabId ? "" : "text-muted/60"}`}
+          style={obj.prefabId ? { color: "var(--prefab)" } : undefined}
         >
-          {(() => { const I = getIcon(obj); return <I size={14} />; })()}
+          {(() => {
+            const I = getIcon(obj);
+            return <I size={14} />;
+          })()}
         </span>
 
         {/* 이름 */}
@@ -190,16 +252,19 @@ function HierarchyItem({
             onChange={(e) => setNameValue(e.target.value)}
             onBlur={commitRename}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename();
-              if (e.key === 'Escape') { setNameValue(obj.name); setEditing(false); }
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") {
+                setNameValue(obj.name);
+                setEditing(false);
+              }
             }}
             onClick={(e) => e.stopPropagation()}
             className="flex-1 bg-background border border-border rounded px-1.5 py-0 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
         ) : (
           <span
-            className={`flex-1 truncate text-[12px] font-medium ${!obj.prefabId ? (isSelected ? 'text-foreground' : 'text-foreground/70') : ''}`}
-            style={obj.prefabId ? { color: 'var(--prefab)' } : undefined}
+            className={`flex-1 truncate text-[12px] font-medium ${!obj.prefabId ? (isSelected ? "" : "text-foreground/70") : ""}`}
+            style={obj.prefabId ? { color: "var(--prefab)" } : undefined}
           >
             {obj.name}
           </span>
@@ -208,21 +273,30 @@ function HierarchyItem({
         {/* 호버 시 액션 아이콘 (락은 잠긴 경우 항상 표시) */}
         <div className="flex items-center gap-0.5 shrink-0">
           <button
-            onClick={(e) => { e.stopPropagation(); updateObject(obj.id, { visible: !obj.visible }); pushHistory(); }}
-            className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${!obj.visible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-            title={obj.visible ? '숨기기' : '표시'}
+            onClick={(e) => {
+              e.stopPropagation();
+              updateObject(obj.id, { visible: !obj.visible });
+              pushHistory();
+            }}
+            className={`w-5 h-5 flex items-center justify-center text-muted hover:text-foreground transition-colors rounded ${!obj.visible ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+            title={obj.visible ? "숨기기" : "표시"}
           >
             {obj.visible ? <Eye size={13} /> : <EyeOff size={13} />}
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); if (lockedByAncestor) return; setObjectLocked(obj.id, !obj.locked); pushHistory(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (lockedByAncestor) return;
+              setObjectLocked(obj.id, !obj.locked);
+              pushHistory();
+            }}
             disabled={lockedByAncestor}
             className={`w-5 h-5 flex items-center justify-center transition-colors rounded ${
               lockedByAncestor
-                ? 'text-muted/40 opacity-100 cursor-not-allowed'
-                : `text-muted hover:text-foreground ${obj.locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`
+                ? "text-muted/40 opacity-100 cursor-not-allowed"
+                : `text-muted hover:text-foreground ${obj.locked ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`
             }`}
-            title={lockedByAncestor ? '상위 그룹이 잠겨 있어요 (그룹에서 잠금 해제)' : obj.locked ? '잠금 해제' : '잠금'}
+            title={lockedByAncestor ? "상위 그룹이 잠겨 있어요 (그룹에서 잠금 해제)" : obj.locked ? "잠금 해제" : "잠금"}
           >
             {obj.locked ? <Lock size={13} /> : <Unlock size={13} />}
           </button>
@@ -234,23 +308,32 @@ function HierarchyItem({
         <ContextMenu x={menuPos.x} y={menuPos.y} onClose={onCloseMenu} className="w-44">
           {!obj.isGroup && (
             <button
-              onClick={() => { onCloseMenu(); setEditing(true); }}
+              onClick={() => {
+                onCloseMenu();
+                setEditing(true);
+              }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
               <Pencil size={13} className="text-muted" /> 이름 변경
             </button>
           )}
-          {(obj.primitiveShape === 'extrude' || obj.primitiveShape === 'lathe') && (
+          {(obj.primitiveShape === "extrude" || obj.primitiveShape === "lathe") && (
             <button
-              onClick={() => { onCloseMenu(); openPenToolEdit(obj.id); }}
+              onClick={() => {
+                onCloseMenu();
+                openPenToolEdit(obj.id);
+              }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
               <PenTool size={13} className="text-muted" /> 펜툴로 수정
             </button>
           )}
-          {obj.primitiveShape === 'voxel' && (
+          {obj.primitiveShape === "voxel" && (
             <button
-              onClick={() => { onCloseMenu(); openVoxelEdit(obj.id); }}
+              onClick={() => {
+                onCloseMenu();
+                openVoxelEdit(obj.id);
+              }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
               <Boxes size={13} className="text-muted" /> 복셀 수정
@@ -258,7 +341,10 @@ function HierarchyItem({
           )}
           {obj.isGroup && (
             <button
-              onClick={() => { ungroupSelected(); onCloseMenu(); }}
+              onClick={() => {
+                ungroupSelected();
+                onCloseMenu();
+              }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
               <Ungroup size={13} className="text-muted" /> 그룹 해제
@@ -266,7 +352,10 @@ function HierarchyItem({
             </button>
           )}
           <button
-            onClick={() => { duplicateSelected(); onCloseMenu(); }}
+            onClick={() => {
+              duplicateSelected();
+              onCloseMenu();
+            }}
             className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
           >
             <Copy size={13} className="text-muted" /> 복제
@@ -274,7 +363,10 @@ function HierarchyItem({
           </button>
           <div className="border-t border-border my-1" />
           <button
-            onClick={() => { deleteSelected(); onCloseMenu(); }}
+            onClick={() => {
+              deleteSelected();
+              onCloseMenu();
+            }}
             className="w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-background transition-colors flex items-center gap-2"
           >
             <X size={13} /> 삭제
@@ -288,7 +380,7 @@ function HierarchyItem({
 
 export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   const { objects, selectedId, selectObject, selectObjects, moveObject } = useSceneStore();
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // 컨텍스트 메뉴는 패널 레벨에서 단일 관리(한 번에 하나) — 다른 행 우클릭 시 그 행으로 전환.
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -309,7 +401,11 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
     setExpanded((prev) => {
       let changed = false;
       const next = new Set(prev);
-      for (const id of ancestors) if (!next.has(id)) { next.add(id); changed = true; }
+      for (const id of ancestors)
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
       return changed ? next : prev;
     });
   }, [selectedId, objects]);
@@ -320,14 +416,26 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   const [dropTarget, setDropTarget] = useState<{ id: string; pos: DropPos } | null>(null);
 
   const handleDragStartItem = (id: string) => setDragId(id);
-  const handleDragEndItem = () => { setDragId(null); setDropTarget(null); };
+  const handleDragEndItem = () => {
+    setDragId(null);
+    setDropTarget(null);
+  };
   const handleDragOverItem = (targetId: string, pos: DropPos) => {
-    if (!dragId || dragId === targetId) { setDropTarget(null); return; }
+    if (!dragId || dragId === targetId) {
+      setDropTarget(null);
+      return;
+    }
     // 유효하지 않은 드롭(순환)이면 인디케이터를 숨겨 드롭 불가를 표시
     const target = objects.find((o) => o.id === targetId);
-    if (!target) { setDropTarget(null); return; }
-    if (pos === 'inside' && !target.isGroup) { setDropTarget(null); return; }
-    const newParentId = pos === 'inside' ? targetId : target.parentId;
+    if (!target) {
+      setDropTarget(null);
+      return;
+    }
+    if (pos === "inside" && !target.isGroup) {
+      setDropTarget(null);
+      return;
+    }
+    const newParentId = pos === "inside" ? targetId : target.parentId;
     // 그룹을 자기 자신·자손 안으로 넣는 순환 방지
     if (newParentId === dragId || (newParentId && isDescendant(objects, newParentId, dragId))) {
       setDropTarget(null);
@@ -339,7 +447,7 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
     if (dragId && dropTarget && dropTarget.id === targetId) {
       moveObject(dragId, targetId, dropTarget.pos);
       // 그룹 안으로 넣었으면 결과가 보이도록 자동 펼침
-      if (dropTarget.pos === 'inside') {
+      if (dropTarget.pos === "inside") {
         setExpanded((prev) => new Set(prev).add(targetId));
       }
     }
@@ -353,9 +461,7 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
       return next;
     });
 
-  const allObjects = search.trim()
-    ? objects.filter((o) => o.name.toLowerCase().includes(search.toLowerCase()))
-    : objects;
+  const allObjects = search.trim() ? objects.filter((o) => o.name.toLowerCase().includes(search.toLowerCase())) : objects;
 
   const flatList = buildFlatList(
     search.trim() ? objects : allObjects,
@@ -363,10 +469,7 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
     search.trim() ? new Set(objects.filter((o) => o.isGroup).map((o) => o.id)) : expanded,
   );
 
-  const indexMap = useMemo(
-    () => new Map(flatList.map((o, i) => [o.id, i])),
-    [flatList],
-  );
+  const indexMap = useMemo(() => new Map(flatList.map((o, i) => [o.id, i])), [flatList]);
 
   const handleClickItem = (id: string, index: number, shiftKey: boolean) => {
     if (shiftKey && anchorIndexRef.current >= 0) {
@@ -404,7 +507,10 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
           onDragEndItem={handleDragEndItem}
           menuOpen={openMenuId === obj.id}
           menuPos={openMenuId === obj.id ? menuPos : null}
-          onOpenMenu={(x, y) => { setMenuPos({ x, y }); setOpenMenuId(obj.id); }}
+          onOpenMenu={(x, y) => {
+            setMenuPos({ x, y });
+            setOpenMenuId(obj.id);
+          }}
           onCloseMenu={() => setOpenMenuId(null)}
         />,
       ];
@@ -418,7 +524,10 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   const inner = (
     <>
       <div className="px-2 pt-2 pb-1 shrink-0">
-        <input type="text" placeholder="검색..." value={search}
+        <input
+          type="text"
+          placeholder="검색..."
+          value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-background border border-border rounded-xs px-2.5 py-1 text-xs text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
         />
@@ -440,9 +549,7 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
   return (
     <aside className="flex flex-col bg-sidebar border-r border-border overflow-hidden h-full">
       <div className="px-3 py-2 border-b border-border shrink-0">
-        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
-          오브젝트 ({objects.length})
-        </span>
+        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">오브젝트 ({objects.length})</span>
       </div>
       {inner}
     </aside>

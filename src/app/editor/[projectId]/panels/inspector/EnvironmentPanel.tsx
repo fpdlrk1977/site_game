@@ -22,7 +22,7 @@ import {
   Image as ImageIcon,
   Trash2,
   Plus,
-  CirclePlus
+  CirclePlus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
@@ -183,15 +183,7 @@ function SizeField({
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 export function EnvironmentPanel() {
-  const {
-    environment,
-    updateEnvironment,
-    pushHistory,
-    assets,
-    addAsset,
-    projectId,
-    setBoundaryShapeOpen,
-  } = useSceneStore();
+  const { environment, updateEnvironment, pushHistory, assets, addAsset, projectId, setBoundaryShapeOpen } = useSceneStore();
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(false);
   // 표시용(보여주기만) 섹션의 화살표 접기 상태 — enable 스위치 섹션(Ground/Fog/Player)은 제외.
@@ -214,7 +206,10 @@ export function EnvironmentPanel() {
   //   ground·boundary가 예전엔 직접 스토리지 업로드(에셋 미등록)라 관리가 안 됐던 것을 통합.
   const uploadTextureAsset = async (file: File): Promise<string | null> => {
     if (!projectId) return null;
-    if (file.size > 8 * 1024 * 1024) { addToast("Image is too large. Max 8MB.", "error"); return null; }
+    if (file.size > 8 * 1024 * 1024) {
+      addToast("Image is too large. Max 8MB.", "error");
+      return null;
+    }
     try {
       const asset = await uploadImageTexture(file, projectId);
       addAsset(asset);
@@ -232,7 +227,10 @@ export function EnvironmentPanel() {
     if (!file) return;
     setGroundTexUploading(true);
     const url = await uploadTextureAsset(file);
-    if (url) { updateEnvironment({ ground: { ...env.ground!, textureUrl: url } }); pushHistory(); }
+    if (url) {
+      updateEnvironment({ ground: { ...env.ground!, textureUrl: url } });
+      pushHistory();
+    }
     setGroundTexUploading(false);
   };
 
@@ -242,7 +240,10 @@ export function EnvironmentPanel() {
     if (!file) return;
     setBoundaryTexUploading(true);
     const url = await uploadTextureAsset(file);
-    if (url) { updateEnvironment({ boundaryWall: { ...(env.boundaryWall ?? {}), style: "texture", textureUrl: url } }); pushHistory(); }
+    if (url) {
+      updateEnvironment({ boundaryWall: { ...(env.boundaryWall ?? {}), style: "texture", textureUrl: url } });
+      pushHistory();
+    }
     setBoundaryTexUploading(false);
   };
 
@@ -275,7 +276,6 @@ export function EnvironmentPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-
       {/* Frame — 게시 뷰어 고정 화면 비율 */}
       <GroupBox>
         <SectionHeader
@@ -455,7 +455,10 @@ export function EnvironmentPanel() {
                       <TexturePicker
                         value={env.ground?.textureUrl ?? ""}
                         textures={assets.filter((a) => a.type === "texture").map((a) => ({ id: a.id, name: a.name, url: a.dracoUrl }))}
-                        onChange={(url) => { updateEnvironment({ ground: { ...env.ground!, textureUrl: url || undefined } }); pushHistory(); }}
+                        onChange={(url) => {
+                          updateEnvironment({ ground: { ...env.ground!, textureUrl: url || undefined } });
+                          pushHistory();
+                        }}
                         onUpload={() => groundTexInputRef.current?.click()}
                         uploading={groundTexUploading}
                       />
@@ -1132,7 +1135,10 @@ export function EnvironmentPanel() {
                         <TexturePicker
                           value={bw.textureUrl ?? ""}
                           textures={assets.filter((a) => a.type === "texture").map((a) => ({ id: a.id, name: a.name, url: a.dracoUrl }))}
-                          onChange={(url) => { setBw({ textureUrl: url || undefined }); pushHistory(); }}
+                          onChange={(url) => {
+                            setBw({ textureUrl: url || undefined });
+                            pushHistory();
+                          }}
                           onUpload={() => boundaryTexInputRef.current?.click()}
                           uploading={boundaryTexUploading}
                         />
@@ -1166,9 +1172,9 @@ export function EnvironmentPanel() {
                                   <button
                                     onClick={() => triggerBwUpload(face)}
                                     disabled={bwUploading}
-                                    className="w-full h-full flex flex-col items-center justify-center text-[10px] text-foreground hover:text-muted hover:bg-background transition-colors disabled:opacity-50"
+                                    className="w-full h-full flex flex-col items-center justify-center text-[10px] text-foreground hover:text-muted hover:bg-background transition-colors disabled:opacity-50 dark:bg-sidebar!"
                                   >
-                                    <CirclePlus size={14} className='text-muted/50' />
+                                    <CirclePlus size={14} className="text-muted/50" />
                                     <span>{label}</span>
                                   </button>
                                 )}
@@ -1363,8 +1369,6 @@ export function EnvironmentPanel() {
           </div>
         )}
       </GroupBox>
-
-      
 
       {/* 게임 로직(게임 변수·전역 규칙·HUD)은 GNB 'Logic' 탭으로 이동 → panels/LogicPanel */}
 
