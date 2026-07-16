@@ -205,7 +205,7 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
               {/* 트랙(오브젝트) 목록 — 간단 모드 전용(타임라인 모드는 하단 라벨 컬럼이 담당). */}
               {animMode === 'simple' && (
               <div>
-                <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">오브젝트 (트랙) · {trackObjs.length}개</span>
+                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">오브젝트 (트랙) · {trackObjs.length}개</span>
                 <div className="space-y-1">
                   {clip.tracks.map((t) => {
                     const to = objects.find((o) => o.id === t.objectId);
@@ -250,7 +250,7 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
               ) : (
                 <>
                   {/* 간단(포즈 리스트) — 초보용 순서 목록 */}
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block">포즈 (키프레임)</span>
+                  <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block">포즈 (키프레임)</span>
                   <div className="space-y-1">
                     {poseTimes.map((t, i) => (
                       <div key={i} className={`flex items-center gap-2 rounded-xs px-2 py-1 border transition-colors ${i === curPoseIdx ? 'bg-primary/10 border-primary/50' : 'bg-surface border-border'}`}>
@@ -277,14 +277,14 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
                     <button onClick={addPose} className="py-1.5 rounded-xs bg-primary/15 text-primary border border-primary/30 text-[10.5px] font-medium hover:bg-primary/25 transition-colors flex items-center justify-center gap-1"><Plus size={12} /> 포즈 추가</button>
                     <button onClick={toFirstPose} title="오브젝트를 첫 포즈로 되돌림" className="py-1.5 rounded-xs bg-surface border border-border text-muted text-[10.5px] hover:text-foreground transition-colors flex items-center justify-center gap-1"><Undo2 size={12} /> 시작으로</button>
                   </div>
-                  <p className="text-[10px] text-muted/50 leading-snug">포즈를 클릭하면 그 포즈가 <b>편집 중</b>(하이라이트)이 되고, 이후 오브젝트를 옮기면 <b>자동으로 그 포즈에 반영</b>됩니다. 여러 오브젝트를 함께 옮겨 <b>포즈 추가</b>하면 새 포즈가 생겨요.</p>
+                  {/* <p className="text-[10px] text-muted/50 leading-snug">포즈를 클릭하면 그 포즈가 <b>편집 중</b>(하이라이트)이 되고, 이후 오브젝트를 옮기면 <b>자동으로 그 포즈에 반영</b>됩니다. 여러 오브젝트를 함께 옮겨 <b>포즈 추가</b>하면 새 포즈가 생겨요.</p> */}
                 </>
               )}
 
               {/* 총 길이·이징·반복은 간단 모드에서만 — 타임라인 모드는 하단 트랜스포트에 있음(중복 제거). */}
               {animMode === 'simple' && (
                 <>
-                  <p className="text-[10px] text-muted/60 pt-1">총 길이 <b className="text-foreground font-mono">{clip.duration}s</b> <span className="text-muted/40">— 마지막 포즈 시간으로 자동</span></p>
+                  <p className="text-[10px] text-muted/70 dark:text-muted pt-1">총 길이 <b className="text-foreground font-mono">{clip.duration}s</b> <span className="text-muted/70 dark:text-muted">— 마지막 포즈 시간으로 자동</span></p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <div>
                       <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">이징(곡선)</span>
@@ -300,7 +300,7 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
               )}
               {!obj.isGroup && (
                 <div className="pt-0.5">
-                  <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">회전축 (경첩) · <span className="text-primary">{obj.name}</span></span>
+                  <span className="text-[10px] font-semibold text-muted/70 dark:text-muted tracking-wide block mb-1">회전축 (경첩) · <span className="text-primary">{obj.name}</span></span>
                   <div className="grid grid-cols-4 gap-1">
                     {pivotPresets.map((p) => (
                       <button key={p.id} onClick={() => setPivot(p.pivot)}
@@ -309,10 +309,10 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
                       </button>
                     ))}
                   </div>
-                  <p className="text-[9px] text-muted/50 mt-1">뷰포트의 <b className="text-amber-500">노란 표식</b>이 이 오브젝트의 회전축입니다. 축을 정하면 <b>회전 기즈모가 그 모서리를 경첩처럼</b> 돌립니다. (양문은 각 문을 선택해 좌/우로 따로 지정)</p>
+                  <p className="text-[9px] text-muted/70 dark:text-muted mt-1">뷰포트의 <b className="text-amber-500">노란 표식</b>이 이 오브젝트의 회전축입니다. 축을 정하면 <b>회전 기즈모가 그 모서리를 경첩처럼</b> 돌립니다. (양문은 각 문을 선택해 좌/우로 따로 지정)</p>
                 </div>
               )}
-              <p className="text-[10px] text-primary/70 bg-primary/10 border border-primary/20 rounded-xs px-2 py-1.5 leading-snug">재생하려면 이벤트(Events)에서 <b>트리거 → 애니 재생(play_clip)</b>으로 이 애니를 선택하세요. (반복 애니는 '시작 시(scene_start)' 트리거)</p>
+              <p className="text-[10px] text-primary/70 dark:text-muted bg-primary/10 border border-primary/20 rounded-xs px-2 py-1.5 leading-snug">재생하려면 이벤트(Events)에서 <b>트리거 → 애니 재생(play_clip)</b>으로 이 애니를 선택하세요. (반복 애니는 '시작 시(scene_start)' 트리거)</p>
             </>
           )}
         </div>

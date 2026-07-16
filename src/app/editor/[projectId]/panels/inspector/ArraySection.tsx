@@ -49,23 +49,34 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
   return (
         <GroupBox>
           <SectionHeader title="Array / Cloner" hint="Duplicate the selected object multiple times. Linear = evenly spaced (fences, stairs), Grid = rows × columns (floor tiles, seats), Radial = arranged in a circle. Rotation step twists each copy (spiral). Count includes the source; undo works. Make it a 'Live cloner' to change settings later in real time." isOpen={open} onToggle={onToggle} />
-            <div className="px-3 pb-4 space-y-2">
+            {open && <div className="px-3 pb-4 space-y-2">
               {/* 모드 토글 */}
-              <div className="grid grid-cols-3 gap-1">
-                {(['linear', 'grid', 'radial'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setArrayMode(m)}
-                    className={`py-1 rounded-xs text-[10px] transition-colors ${arrayMode === m ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
-                  >
-                    {m === 'linear' ? 'Linear' : m === 'grid' ? 'Grid' : 'Radial'}
-                  </button>
-                ))}
+              <div className='flex gap-4 items-center'>
+                <div className="flex gap-1">
+                  {(['linear', 'grid', 'radial'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setArrayMode(m)}
+                      className={`w-6 h-6 py-1 px-1 rounded-[4px] text-[10px] flex justify-center transition-colors text-center items-center border opacity-70 ${arrayMode === m ? 'border-primary/50 text-primary bg-primary/10 opacity-100 hover:bg-primary/15' : 'bg-surface text-muted hover:bg-background hover:text-foreground border-border/70'}`}
+                    >
+                      {/* {m === 'linear' ? 'Linear' : m === 'grid' ? 'Grid' : 'Radial'} */}
+                      {m === 'linear' ? <Rows3 size={12} /> : m === 'grid' ? <Grid2x2 size={12} /> : <CircleDot size={12} />}
+                      {/* CircleDot, Grid2x2, Rows3 */}
+                    </button>
+                  ))}
+                </div>
+
+                <div className='flex-1'>
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-[10px] font-semibold text-muted/70 dark:text-muted tracking-wide">Count (incl. source)</span>
+                  </div>
+                  <RangeSlider value={arrayCount} onChange={(v) => setArrayCount(Math.max(1, Math.min(100, Math.round(v))))} min={1} max={100} step={1} showValue precision={0} disabled={arrayMode === 'grid'} />
+                </div>
               </div>
 
               {arrayMode === 'grid' ? (
                 <>
-                  <div className="flex gap-2 items-center">
+                  <div className="flex gap-3 items-center">
                     {/* 실시간 미리보기 */}
                     <GridPreview cols={gridCols} rows={gridRows} spX={gridSpacing.x} spZ={gridSpacing.z} />
                     <div className="flex-1 space-y-2 min-w-0">
@@ -83,14 +94,14 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                       </div>
                     </div>
                   </div>
-                  <p className="text-[10px] text-muted/50">{gridCols} × {gridRows} = {total} (incl. source)</p>
+                  {/* <p className="text-[10px] text-muted/50">{gridCols} × {gridRows} = {total} (incl. source)</p> */}
                 </>
               ) : (
                 <>
-                  <div className="flex items-center gap-1 mb-1">
+                  {/* <div className="flex items-center gap-1 mb-1">
                     <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Count (incl. source)</span>
                   </div>
-                  <RangeSlider value={arrayCount} onChange={(v) => setArrayCount(Math.max(1, Math.min(100, Math.round(v))))} min={1} max={100} step={1} showValue precision={0} />
+                  <RangeSlider value={arrayCount} onChange={(v) => setArrayCount(Math.max(1, Math.min(100, Math.round(v))))} min={1} max={100} step={1} showValue precision={0} /> */}
                   {arrayMode === 'linear' ? (
                     <XYZRow label="Spacing" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
                       rowEnd={<LinkToggle value={linkSpL} onChange={(v) => { setLinkSpL(v); if (v) setArrayOffset((o) => ({ x: o.x, y: o.x, z: o.x })); }} title="세 축 함께 조절" />}
@@ -101,24 +112,28 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                     />
                   ) : (
                     <>
-                      <LabeledNum label="Radius" value={arrayRadius} onChange={(v) => setArrayRadius(Math.max(0.1, v))} onCommit={() => {}} min={0.1} max={100} precision={2} dragStep={0.25} />
                       <div>
-                        <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Rotation axis</span>
-                        <div className="grid grid-cols-3 gap-1">
-                          {(['x', 'y', 'z'] as const).map((ax) => (
-                            <button key={ax} onClick={() => setArrayAxis(ax)}
-                              className={`py-1 rounded-xs text-[10px] uppercase transition-colors ${arrayAxis === ax ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
-                            >{ax}{ax === 'y' ? ' (floor)' : ''}</button>
-                          ))}
+                        <LabeledNum label="Radius" value={arrayRadius} onChange={(v) => setArrayRadius(Math.max(0.1, v))} onCommit={() => {}} min={0.1} max={100} precision={2} dragStep={0.25} />
+                        <div className='flex gap-4 mt-1'>
+                          <div>
+                            <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Rotation axis</span>
+                            <div className="grid grid-cols-3 gap-2">
+                              {(['x', 'y', 'z'] as const).map((ax) => (
+                                <button key={ax} onClick={() => setArrayAxis(ax)}
+                                  className={`w-6 h-6 py-1 border border-border/30 rounded-xs text-[10px] uppercase transition-colors ${arrayAxis === ax ? 'bg-primary/10 text-primary border-primary/50 opacity-100 hover:bg-primary/15' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}
+                                >{ax}{ax === 'y' ? ' ' : ''}</button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* 나선 계단 — Rise=칸마다 상승 */}
+                          <LabeledNum label="Rise / step" value={arrayRise} onChange={setArrayRise} onCommit={() => {}} min={0} max={10} precision={2} dragStep={0.05} />
                         </div>
+                        {/* <button
+                          onClick={() => setRotStep(+(360 / Math.max(1, arrayCount)).toFixed(2))}
+                          className="w-full py-1 rounded-xs bg-background text-muted hover:text-foreground text-[10px] transition-colors"
+                          title="Rotation step을 계단이 원을 따라 돌게(360÷Count) 맞춰요"
+                        >나선 계단 방향 맞춤 (Rotation step 자동)</button> */}
                       </div>
-                      {/* 나선 계단 — Rise=칸마다 상승 */}
-                      <LabeledNum label="Rise / step" value={arrayRise} onChange={setArrayRise} onCommit={() => {}} min={0} max={10} precision={2} dragStep={0.05} />
-                      <button
-                        onClick={() => setRotStep(+(360 / Math.max(1, arrayCount)).toFixed(2))}
-                        className="w-full py-1 rounded-xs bg-background text-muted hover:text-foreground text-[10px] transition-colors"
-                        title="Rotation step을 계단이 원을 따라 돌게(360÷Count) 맞춰요"
-                      >나선 계단 방향 맞춤 (Rotation step 자동)</button>
                     </>
                   )}
                 </>
@@ -152,7 +167,7 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                   </button>
                 </Tooltip>
               )}
-            </div>
+            </div>}
         </GroupBox>
   );
 }

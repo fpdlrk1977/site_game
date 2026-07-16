@@ -22,6 +22,7 @@ import {
   Image as ImageIcon,
   Trash2,
   Plus,
+  CirclePlus
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
@@ -155,7 +156,7 @@ function SizeField({
   const emit = (n: number, u: string) => onChange(n > 0 ? `${n}${u}` : undefined);
   return (
     <label className="block">
-      <span className="text-[10px] text-muted/50 block mb-1">{label}</span>
+      <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">{label}</span>
       <div className="flex gap0">
         <div className="flex-1 [&_input]:rounded-r-none">
           <NumInput value={num} onChange={(n) => emit(n, unit)} onCommit={onCommit} min={0} precision={0} dragStep={5} prefix={false} />
@@ -285,7 +286,7 @@ export function EnvironmentPanel() {
         />
         {envOpen("frame") && (
           <div className="px-3 pb-4">
-            <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">화면 비율</span>
+            <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">화면 비율</span>
             <SelectBox
               value={String(env.frameAspect && env.frameAspect > 0 ? env.frameAspect : 0)}
               onChange={(v) => {
@@ -392,7 +393,7 @@ export function EnvironmentPanel() {
             title="Ground"
             hint="The floor plane. A preset, or a solid color / image texture. The floor is opaque, so if an object's bottom sinks below it, it gets hidden and looks cut off (auto floor-snap prevents this)."
           />
-          <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
             <Toggle
               value={env.ground?.enabled ?? false}
               onChange={(v) => {
@@ -481,7 +482,7 @@ export function EnvironmentPanel() {
         {/* Fog */}
         <div className="relative">
           <SectionHeader title="Fog" />
-          <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
             {/* <span className=" text-[11px] text-muted">Enable Fog</span> */}
             <Toggle
               value={env.fog.enabled}
@@ -496,8 +497,8 @@ export function EnvironmentPanel() {
           <div className="px-3 pb-3">
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] text-muted/50 font-semibold block mb-1">Color</span>
-                <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">Color</span>
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
                   <input
                     type="color"
                     value={env.fog.color}
@@ -516,7 +517,7 @@ export function EnvironmentPanel() {
               </div>
 
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] text-muted/50 font-semibold block mb-1">Mode</span>
+                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">Mode</span>
                 <SelectBox
                   value={env.fog.mode ?? "linear"}
                   onChange={(v) => {
@@ -583,7 +584,7 @@ export function EnvironmentPanel() {
             hint="분위기 프리셋(조명·배경·노출 한 번에). 스위치를 켜면 기본 morning, 끄면 default(무드 해제). 켜진 상태에서 다른 무드도 고를 수 있어요."
           />
           {/* Mood on/off — ON=morning 적용, OFF=default(해제). Fog처럼 헤더 우측 스위치 */}
-          <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
             <Toggle
               value={!!env.mood && env.mood !== "default"}
               onChange={(v) => {
@@ -665,8 +666,8 @@ export function EnvironmentPanel() {
             {/* 라이트 색(warm/cool) — 태양·환경광 색조. 미설정=흰색. 노을은 따뜻하게, 밤은 차갑게 등 무드 연출. */}
             <div className="flex gap-2 pt-1">
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] text-muted/50 font-semibold">Sun Color</span>
-                <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                <span className="text-[10px] text-muted/70 dark:text-muted">Sun Color</span>
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
                   <input
                     type="color"
                     value={env.lights.directionalColor ?? "#ffffff"}
@@ -684,8 +685,8 @@ export function EnvironmentPanel() {
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] text-muted/50 font-semibold">Ambient Color</span>
-                <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                <span className="text-[10px] text-muted/70 dark:text-muted">Ambient Color</span>
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
                   <input
                     type="color"
                     value={env.lights.ambientColor ?? "#ffffff"}
@@ -706,7 +707,7 @@ export function EnvironmentPanel() {
             {/* 노출(Exposure) — 씬 전체 밝기. 1=기본. 안내는 아이콘 툴팁으로. */}
             <div className="pt-1">
               <div className="flex items-center gap-1 mb-1">
-                <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Exposure</span>
+                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Exposure</span>
                 <InfoHint text="Overall scene brightness. Uses Linear tone mapping so colors render as set. If some areas blow out to white, lower the exposure." />
               </div>
               <RangeSlider
@@ -723,7 +724,7 @@ export function EnvironmentPanel() {
             {/* 그림자 농도 — 태양(directionalLight) 그림자 진하기(shadow.intensity). 1=진함·0.5=옅음·0=없음. */}
             <div className="pt-1">
               <div className="flex items-center gap-1 mb-1">
-                <span className="text-[10px] font-semibold text-muted/50 tracking-wide">Shadow Density</span>
+                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Shadow Density</span>
                 <InfoHint text="Darkness of the sun's cast shadows. 1 = dark, 0.5 = soft/faint, 0 = no shadow. Per-object shadows are on/off only; this controls the whole scene." />
               </div>
               <RangeSlider
@@ -739,7 +740,7 @@ export function EnvironmentPanel() {
             </div>
             {/* 접지 그림자 — 오브젝트가 바닥에 붙은 느낌. 기본 꺼짐, 켜서 확인 */}
             <label className="flex items-center justify-between cursor-pointer pt-2">
-              <span className="text-[10px] font-semibold text-muted/70">Contact Shadows</span>
+              <span className="text-[10px] text-muted/70 dark:text-muted">Contact Shadows</span>
               <Toggle
                 value={env.contactShadows === true}
                 onChange={(v) => {
@@ -764,7 +765,7 @@ export function EnvironmentPanel() {
           <div className="px-3 pb-4 space-y-1">
             {/* 클릭/호버 이벤트가 있는 오브젝트 위에 힌트 링 표시 (탐색 모드 뷰어/임베드에서만) */}
             <label className="flex items-center justify-between cursor-pointer pb-1">
-              <span className="text-[10px] font-semibold text-muted/70">Show interaction hints</span>
+              <span className="text-[10px] text-muted/70 dark:text-muted">Show interaction hints</span>
               <Toggle
                 value={env.showInteractionHints !== false}
                 onChange={(v) => {
@@ -775,7 +776,7 @@ export function EnvironmentPanel() {
             </label>
             {/* 상호작용 근접 범위 기본값 — interact(E)/approach·E 프롬프트·하이라이트 공유 */}
             <div className="pt-2">
-              <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Default interaction range (m)</span>
+              <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Default interaction range (m)</span>
               <RangeSlider
                 value={env.interactRange ?? 3}
                 onChange={(v) => updateEnvironment({ interactRange: Math.max(0.5, v) })}
@@ -786,10 +787,10 @@ export function EnvironmentPanel() {
                 showValue
                 precision={1}
               />
-              <p className="text-[10px] text-muted/60 leading-relaxed mt-1">
+              {/* <p className="text-[10px] text-muted/60 leading-relaxed mt-1">
                 In play mode, the E prompt, highlight and approach trigger fire when the character gets this close. A per-object range overrides this
                 value.
-              </p>
+              </p> */}
             </div>
           </div>
         )}
@@ -813,7 +814,7 @@ export function EnvironmentPanel() {
               return (
                 <>
                   <label className="block">
-                    <span className="text-[10px] text-muted/50 block mb-1">위치</span>
+                    <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">위치</span>
                     <SelectBox
                       value={dp.position ?? "center"}
                       onChange={(v) => {
@@ -834,7 +835,7 @@ export function EnvironmentPanel() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <span className="text-[10px] text-muted/50 w-12 font-semibold">기본 배경색</span>
+                    <span className="text-[10px] text-muted/70 w-12">기본 배경색</span>
                     <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                       <input
                         type="color"
@@ -868,7 +869,7 @@ export function EnvironmentPanel() {
             hint="플레이(걷기) 모드의 캐릭터·속도·점프. 스위치를 켜면 걷기(플레이) 모드, 끄면 둘러보기 전용 씬이 됩니다."
           />
           {/* 걷기(플레이) 모드 on/off — Fog처럼 헤더 우측 스위치 (텍스트 없이 스위치만) */}
-          <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
             <Toggle
               value={!env.disableWalk}
               onChange={(v) => {
@@ -883,7 +884,7 @@ export function EnvironmentPanel() {
             <>
               {/* 뷰어 기본 진입 모드 — 접속 시 탐색/플레이 중 무엇으로 시작할지 */}
               <div className="pb-1">
-                <span className="text-[10px] text-muted/50 block mb-1.5 font-semibold tracking-wide">기본 진입 모드</span>
+                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1.5 tracking-wide">기본 진입 모드</span>
                 <SelectBox
                   value={env.defaultMode ?? "explore"}
                   onChange={(v) => {
@@ -895,14 +896,14 @@ export function EnvironmentPanel() {
                     { value: "play", label: "플레이 (걸어다니기)" },
                   ]}
                 />
-                <p className="text-[10px] text-muted/60 mt-1.5">뷰어 접속·씬 이동 시 시작할 모드. 플레이면 바로 캐릭터로 시작합니다.</p>
+                {/* <p className="text-[10px] text-muted/60 mt-1.5">뷰어 접속·씬 이동 시 시작할 모드. 플레이면 바로 캐릭터로 시작합니다.</p> */}
               </div>
               {(() => {
                 const characterAssets = assets.filter((a) => a.type === "character");
                 return (
                   <>
                     <div>
-                      <span className="text-[10px] text-muted/50 block mb-1.5 font-semibold tracking-wide">캐릭터</span>
+                      <span className="text-[10px] text-muted/70 dark:text-muted block mb-1.5 tracking-wide">캐릭터</span>
                       <SelectBox
                         value={env.playerCharacterId ?? ""}
                         onChange={(v) => {
@@ -1006,7 +1007,7 @@ export function EnvironmentPanel() {
             hint="플레이 이동 제한 영역. 스위치를 켜면 기본 3 크기의 정사각 경계가 생기고, 가로(X)·세로(Z)로 크기를 조절해요. 벽 스타일(단색·텍스처)로 방/전시장처럼 감쌀 수 있어요."
           />
           {/* 경계 on/off — 켜면 기본 3 정사각 경계, 끄면 경계 없음 (Fog처럼 헤더 우측 스위치) */}
-          <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
             <Toggle
               value={(env.boundary ?? 0) > 0}
               onChange={(v) => {
@@ -1020,7 +1021,7 @@ export function EnvironmentPanel() {
           <div className="px-3 pb-4">
             {/* 모양 — 사각형 / 원형 */}
             <div className="mb-2">
-              <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">모양</span>
+              <span className="text-[10px] text-muted/70 dark:text-muted block mb-1 tracking-wide">Shape</span>
               <SelectBox
                 value={env.boundaryShape ?? "rect"}
                 onChange={(v) => {
@@ -1042,12 +1043,12 @@ export function EnvironmentPanel() {
                 >
                   {env.boundaryPolygon && env.boundaryPolygon.length >= 3 ? `모양 편집 (${env.boundaryPolygon.length}점)` : "＋ 모양 그리기 (위에서)"}
                 </button>
-                <p className="text-[10px] text-muted/60">위에서 내려다본 씬 위에 꼭짓점을 찍어 자유 경계를 그려요. 텍스처는 변마다 반복됩니다.</p>
+                {/* <p className="text-[10px] text-muted/60">위에서 내려다본 씬 위에 꼭짓점을 찍어 자유 경계를 그려요. 텍스처는 변마다 반복됩니다.</p> */}
               </div>
             ) : (env.boundaryShape ?? "rect") === "circle" ? (
               <>
                 <LabeledNum
-                  label="반지름"
+                  label="Round"
                   value={env.boundary ?? 0}
                   onChange={(v) => updateEnvironment(v === 0 ? { boundary: undefined } : { boundary: v })}
                   onCommit={pushHistory}
@@ -1056,13 +1057,13 @@ export function EnvironmentPanel() {
                   precision={0}
                   dragStep={1}
                 />
-                <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음 · 중심에서 원 둘레까지 거리(반지름). 원형은 텍스처를 한 장으로 감싸요.</p>
+                {/* <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음 · 중심에서 원 둘레까지 거리(반지름). 원형은 텍스처를 한 장으로 감싸요.</p> */}
               </>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <LabeledNum
-                    label="가로(X)"
+                    label="Horizontal(X)"
                     value={env.boundary ?? 0}
                     onChange={(v) => updateEnvironment(v === 0 ? { boundary: undefined, boundaryZ: undefined } : { boundary: v })}
                     onCommit={pushHistory}
@@ -1072,7 +1073,7 @@ export function EnvironmentPanel() {
                     dragStep={1}
                   />
                   <LabeledNum
-                    label="세로(Z)"
+                    label="Vertical(Z)"
                     value={env.boundaryZ ?? env.boundary ?? 0}
                     onChange={(v) => updateEnvironment({ boundaryZ: v === 0 ? undefined : v })}
                     onCommit={pushHistory}
@@ -1082,7 +1083,7 @@ export function EnvironmentPanel() {
                     dragStep={1}
                   />
                 </div>
-                <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음 · 중심에서 벽까지 거리(반경). 세로=가로면 정사각.</p>
+                {/* <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음 · 중심에서 벽까지 거리(반경). 세로=가로면 정사각.</p> */}
               </>
             )}
 
@@ -1094,7 +1095,7 @@ export function EnvironmentPanel() {
                 return (
                   <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
                     <div>
-                      <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">벽 스타일</span>
+                      <span className="text-[10px] text-muted/70 dark:text-muted block mb-1 tracking-wide">Wall style</span>
                       <SelectBox
                         value={style}
                         onChange={(v) => {
@@ -1113,7 +1114,7 @@ export function EnvironmentPanel() {
                     <input ref={bwUploadRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleBwFileUpload} />
                     {style === "color" && (
                       <label className="flex items-center gap-2 text-[10px] text-muted/70">
-                        <span className="shrink-0">색</span>
+                        <span className="shrink-0 text-muted/70 dark:text-muted">Color</span>
                         <input
                           type="color"
                           value={bw.color ?? "#8899aa"}
@@ -1121,12 +1122,12 @@ export function EnvironmentPanel() {
                           onBlur={pushHistory}
                           className="w-8 h-6 rounded-xs bg-transparent border border-border cursor-pointer"
                         />
-                        <span className="text-muted/50 font-mono">{bw.color ?? "#8899aa"}</span>
+                        <span className="text-muted/70 font-mono">{bw.color ?? "#8899aa"}</span>
                       </label>
                     )}
                     {style === "texture" && (
                       <div className="space-y-1.5">
-                        <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">텍스처</span>
+                        <span className="text-[10px] text-muted/70 dark:text-muted block tracking-wide">Texture</span>
                         {/* 라이브러리 픽커 — 기존 텍스처 재사용 + 업로드(에셋 등록) */}
                         <TexturePicker
                           value={bw.textureUrl ?? ""}
@@ -1146,14 +1147,14 @@ export function EnvironmentPanel() {
                           onChange={handleBoundaryTexUpload}
                         />
                         {/* 면별 텍스처 — 지정한 면만 개별 이미지, 나머지는 위 기본 텍스처 사용 */}
-                        <span className="text-[10px] text-muted/50 block font-semibold tracking-wide pt-1">면별 텍스처 (선택)</span>
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <span className="text-[10px] text-muted/70 dark:text-muted block tracking-wide pt-1">Textures by face (optional)</span>
+                        <div className="grid grid-cols-4 gap-1.5">
                           {(
                             [
-                              ["front", "앞"],
-                              ["back", "뒤"],
-                              ["left", "왼쪽"],
-                              ["right", "오른쪽"],
+                              ["front", "Front"],
+                              ["back", "Back"],
+                              ["left", "Left"],
+                              ["right", "Right"],
                             ] as const
                           ).map(([face, label]) => {
                             const url = bw.faceTextures?.[face];
@@ -1165,9 +1166,10 @@ export function EnvironmentPanel() {
                                   <button
                                     onClick={() => triggerBwUpload(face)}
                                     disabled={bwUploading}
-                                    className="w-full h-full flex items-center justify-center text-[10px] text-foreground hover:text-muted hover:bg-background transition-colors disabled:opacity-50"
+                                    className="w-full h-full flex flex-col items-center justify-center text-[10px] text-foreground hover:text-muted hover:bg-background transition-colors disabled:opacity-50"
                                   >
-                                    {label} +
+                                    <CirclePlus size={14} className='text-muted/50' />
+                                    <span>{label}</span>
                                   </button>
                                 )}
                                 {url && (
@@ -1198,7 +1200,7 @@ export function EnvironmentPanel() {
                     )}
                     {style === "skybox" && (
                       <div className="space-y-1.5">
-                        <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">파노라마 이미지 (equirectangular 2:1)</span>
+                        <span className="text-[10px] text-muted/70 dark:text-muted block tracking-wide">Panorama Images (equirectangular 2:1)</span>
                         {bw.skyboxUrl ? (
                           <div className="relative rounded-xs overflow-hidden border border-border group">
                             <img src={bw.skyboxUrl} alt="skybox" className="w-full h-16 object-cover" />
@@ -1229,14 +1231,14 @@ export function EnvironmentPanel() {
                             {bwUploading ? "Uploading..." : "360° 파노라마 업로드\n좌우로 이어지는 equirectangular 이미지"}
                           </button>
                         )}
-                        <p className="text-[10px] text-muted/50">벽 대신 씬 전체를 감쌉니다. 4면 벽·천장 설정은 무시돼요.</p>
+                        {/* <p className="text-[10px] text-muted/70">벽 대신 씬 전체를 감쌉니다. 4면 벽·천장 설정은 무시돼요.</p> */}
                       </div>
                     )}
                     {(style === "color" || style === "texture") && (
                       <>
                         <div className="grid grid-cols-2 gap-2">
                           <LabeledNum
-                            label="높이"
+                            label="Height"
                             value={bw.height ?? 8}
                             onChange={(v) => setBw({ height: v })}
                             onCommit={pushHistory}
@@ -1246,7 +1248,7 @@ export function EnvironmentPanel() {
                             dragStep={0.5}
                           />
                           <LabeledNum
-                            label="불투명도"
+                            label="Opacity"
                             value={bw.opacity ?? 1}
                             onChange={(v) => setBw({ opacity: v })}
                             onCommit={pushHistory}
@@ -1256,7 +1258,8 @@ export function EnvironmentPanel() {
                             dragStep={0.05}
                           />
                         </div>
-                        <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
+                        <label className="flex items-center justify-between gap-2 text-[10px] text-muted/70 pt-0.5">
+                          <span>천장 포함 (완전한 방)</span>
                           <Toggle
                             value={bw.ceiling === true}
                             onChange={(v) => {
@@ -1264,9 +1267,9 @@ export function EnvironmentPanel() {
                               pushHistory();
                             }}
                           />
-                          <span>천장 포함 (완전한 방)</span>
                         </label>
-                        <label className="flex items-center gap-2 text-[10px] text-muted/70">
+                        <label className="flex items-center justify-between gap-2 text-[10px] text-muted/70">
+                          <span>그라데이션 (위로 갈수록 투명)</span>
                           <Toggle
                             value={bw.gradient === true}
                             onChange={(v) => {
@@ -1274,9 +1277,9 @@ export function EnvironmentPanel() {
                               pushHistory();
                             }}
                           />
-                          <span>그라데이션 (위로 갈수록 투명)</span>
                         </label>
-                        <label className="flex items-center gap-2 text-[10px] text-muted/70">
+                        <label className="flex items-center justify-between gap-2 text-[10px] text-muted/70">
+                          <span>안쪽에서만 보이기 (밖에선 투명)</span>
                           <Toggle
                             value={bw.oneSided === true}
                             onChange={(v) => {
@@ -1284,9 +1287,8 @@ export function EnvironmentPanel() {
                               pushHistory();
                             }}
                           />
-                          <span>안쪽에서만 보이기 (밖에선 투명)</span>
                         </label>
-                        <p className="text-[10px] text-muted/50">에디터엔 반투명 미리보기(양면) · 실제 룩은 뷰어에서 확인</p>
+                        {/* <p className="text-[10px] text-muted/70">에디터엔 반투명 미리보기(양면) · 실제 룩은 뷰어에서 확인</p> */}
                       </>
                     )}
                   </div>
@@ -1307,7 +1309,7 @@ export function EnvironmentPanel() {
         {envOpen("post") && (
           <div className="px-3 pb-4 space-y-2">
             <div>
-              <span className="text-[10px] font-semibold text-muted/60 tracking-wide block mb-1">Preset</span>
+              <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Preset</span>
               <SelectBox
                 value={env.postProcessing?.preset ?? "none"}
                 onChange={(v) => {
@@ -1340,7 +1342,7 @@ export function EnvironmentPanel() {
               ];
               return (
                 <div className="pt-2 border-t border-border/60 space-y-1.5">
-                  <span className="text-[10px] font-semibold text-muted/60 tracking-wide block">개별 효과 (고급)</span>
+                  <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block">개별 효과 (고급)</span>
                   {rows.map(({ k, label, min, max, step, def }) => (
                     <LabeledNum
                       key={k}
@@ -1354,7 +1356,7 @@ export function EnvironmentPanel() {
                       dragStep={step}
                     />
                   ))}
-                  <p className="text-[10px] text-muted/50">모두 0이면 위 Preset이 적용됩니다.</p>
+                  <p className="text-[10px] text-muted/70">모두 0이면 위 Preset이 적용됩니다.</p>
                 </div>
               );
             })()}
@@ -1368,7 +1370,7 @@ export function EnvironmentPanel() {
 
       {/* 씬 메모 */}
       <GroupBox>
-        <SectionHeader title="씬 메모" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
+        <SectionHeader title="Memo" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
         {notesOpen && (
           <div className="px-3 pb-4">
             <textarea

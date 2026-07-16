@@ -15,7 +15,7 @@ export function SubdivisionSection({ obj }: { obj: ObjectNodeSchema }) {
         <GroupBox>
           <div className="relative">
             <SectionHeader title="Subdivision" hint="Splits the surface into a smooth organic shape (like Blender's Subdivision Surface). Higher level = rounder but far more faces and heavier (max 3)." />
-            <label className="flex items-center cursor-pointer absolute top-3 right-4">
+            <label className="flex items-center cursor-pointer absolute top-4.5 right-4">
               <Toggle value={enabled} onChange={(v) => setLevel(v ? 1 : 0)} />
             </label>
             {enabled && (

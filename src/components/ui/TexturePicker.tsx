@@ -32,7 +32,7 @@ export function TexturePicker({ value, textures, onChange, onUpload, uploading }
         onClick={() => (open ? close() : openMenu())}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="w-full flex items-center gap-1.5 bg-surface border border-border rounded-xs px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        className="w-full flex items-center gap-1.5 bg-surface border border-border/60 rounded-xs px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {value ? (
           <img src={selected?.url ?? value} alt="" className="w-4 h-4 rounded-sm object-cover shrink-0 border border-border" />

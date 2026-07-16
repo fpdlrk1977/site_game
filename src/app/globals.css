@@ -72,7 +72,7 @@
   --color-danger: var(--danger);
 
   /* Radius — 리뉴얼: 부드러운 모서리(Spline 친근함) */
-  --radius-xs: 8px;
+  --radius-xs: 6px;
   --radius-sm: 10px;
   --radius-md: 14px;
   --radius-lg: 18px;

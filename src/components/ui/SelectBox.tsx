@@ -27,7 +27,7 @@ interface Props {
   disabled?: boolean;
 }
 
-const DEFAULT_TRIGGER_CLASS = 'bg-surface border border-border rounded-xs px-2 py-1 text-xs';
+const DEFAULT_TRIGGER_CLASS = 'bg-surface border border-border/60 rounded-xs px-2 py-1 text-xs';
 const ICON_WRAPPER_CLASS = 'shrink-0 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-cover';
 
 export function SelectBox({ value, options, onChange, placeholder = '선택', className, fullWidth = true, iconSize = 16, disabled, gray=false }: Props) {

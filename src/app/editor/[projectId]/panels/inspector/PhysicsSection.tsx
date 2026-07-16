@@ -15,14 +15,14 @@ export function PhysicsSection({ obj }: { obj: ObjectNodeSchema }) {
         <GroupBox>
           <div className="relative">
           <SectionHeader title="Physics" hint="Collision in play mode. When on, the character bumps into it. Turn on Is Sensor to make it a pass-through invisible trigger zone used for area events." />
-          <label className="flex items-center justify-between cursor-pointer absolute top-3 right-4">
+          <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
             <Toggle
               value={obj.physics.enabled}
               onChange={(v) => { updateObject(obj.id, { physics: { ...obj.physics, enabled: v } }); pushHistory(); }}
             />
           </label>
           {obj.physics.enabled && (
-            <div className='px-3 pb-3 space-y-1'>
+            <div className='px-3 pb-3 space-y-2'>
               <div className="flex gap-2 pt-1 justify-between items-center">
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Collider Type</span>
                 <SelectBox

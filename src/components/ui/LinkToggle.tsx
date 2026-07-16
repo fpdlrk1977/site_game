@@ -8,7 +8,7 @@ export function LinkToggle({
   value,
   onChange,
   title,
-  size = 13,
+  size = 12,
 }: {
   value: boolean;
   onChange: (v: boolean) => void;
@@ -20,8 +20,8 @@ export function LinkToggle({
       type="button"
       onClick={() => onChange(!value)}
       title={title ?? (value ? '두 값 잠금 해제' : '두 값을 함께 조절')}
-      className={`shrink-0 w-6 h-6 rounded-xs flex items-center justify-center border transition-colors ${
-        value ? 'bg-primary/15 text-primary border-primary/40' : 'bg-background text-muted border-border hover:text-foreground'
+      className={`shrink-0 w-6 h-6 rounded-xs flex items-center justify-center border transition-colors opacity-70 ${
+        value ? 'bg-primary/10 text-primary border-primary/50 opacity-100 hover:bg-primary/15' : 'bg-surface text-muted border-border/30 hover:text-foreground hover:bg-background'
       }`}
     >
       {value ? <Link2 size={size} /> : <Link2Off size={size} />}

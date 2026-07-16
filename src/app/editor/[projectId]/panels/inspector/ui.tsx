@@ -161,7 +161,7 @@ export function NumInput({
           } else setLocal(fmt(value, precision));
           onCommit();
         }}
-        className={`w-full border border-border rounded-xs pr-5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums bg-muted/5 dark:bg-muted/10 ${prefix ? "pl-6" : "pl-2"}`}
+        className={`w-full border border-border/30 rounded-xs pr-5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums bg-muted/5 dark:bg-muted/10 ${prefix ? "pl-6" : "pl-2"}`}
       />
       <span
         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-ew-resize select-none transition-colors"
@@ -197,7 +197,7 @@ export function LabeledNum({
 }) {
   return (
     <div>
-      <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">{label}</span>
+      <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">{label}</span>
       <NumInput value={value} onChange={onChange} onCommit={onCommit} min={min} max={max} precision={precision} dragStep={dragStep} prefix={false} />
     </div>
   );
@@ -221,7 +221,7 @@ export function LabeledText({
 }) {
   return (
     <div>
-      {label && <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">{label}</span>}
+      {label && <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1/2">{label}</span>}
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -268,7 +268,7 @@ export function XYZRow({
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold text-muted/50 tracking-wide">{label}</span>
+        <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">{label}</span>
         {labelExtra}
       </div>
       <div className={rowEnd ? "flex items-center gap-1" : "grid grid-cols-3 gap-2"}>
@@ -411,7 +411,7 @@ export function SectionHeader({
         {hint && <InfoHint text={hint} />}
       </span>
       {dot && collapsible && !isOpen && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" title="설정값 있음" />}
-      {collapsible && <span className="text-muted/50">{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>}
+      {collapsible && <span className="text-muted/70">{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>}
     </div>
   );
 }
@@ -421,9 +421,9 @@ export function Toggle({ value, onChange }: { value: boolean; onChange: (v: bool
   return (
     <div
       onClick={() => onChange(!value)}
-      className={`relative w-7.5 h-4 rounded-full transition-colors cursor-pointer shrink-0 ${value ? "bg-primary" : "bg-muted/5"}`}
+      className={`relative w-7.5 h-1 rounded-full transition-colors cursor-pointer shrink-0 ${value ? "bg-primary/30" : "bg-border"}`}
     >
-      <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all ${value ? "left-4" : "left-0.5"}`} />
+      <div className={`absolute -top-6/4 w-4 h-4 rounded-full bg-background dark:bg-foreground shadow border border-border/70 transition-all ${value ? "left-4  bg-primary border-primary dark:bg-primary" : "left-0"}`} />
     </div>
   );
 }

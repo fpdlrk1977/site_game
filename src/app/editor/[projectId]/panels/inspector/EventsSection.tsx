@@ -242,7 +242,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-1.5">
         <div>
-          <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Trigger</span>
+          <span className="text-[10px] text-muted/70 dark:text-muted block mb-1 tracking-wide">Trigger</span>
           <SelectBox
             value={newTrigger}
             onChange={(v) => setNewTrigger(v as EventSchema['trigger'])}
@@ -263,7 +263,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
           />
         </div>
         <div>
-          <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Action</span>
+          <span className="text-[10px] text-muted/70  dark:text-muted block mb-1 tracking-wide">Action</span>
           <SelectBox
             value={newAction}
             onChange={(v) => setNewAction(v as EventSchema['action'])}
@@ -357,7 +357,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
       )}
 
       <div>
-        <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">
+        <span className="text-[10px] text-muted/70  dark:text-muted block mb-1 tracking-wide">
           {newAction === 'open_url' ? 'URL'
             : newAction === 'emit_event' ? '이벤트 이름'
             : newAction === 'play_animation' ? '클립 이름'
@@ -517,7 +517,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   options={spawnTargets.map((o) => ({ value: o.id, label: o.name }))}
                 />
                 <div>
-                  <span className="text-[10px] text-muted/50 block mb-0.5">위치 오프셋 (원본 기준 X, Y, Z)</span>
+                  <span className="text-[10px] text-muted/70  dark:text-muted block mb-0.5">위치 오프셋 (원본 기준 X, Y, Z)</span>
                   <div className="grid grid-cols-3 gap-1">
                     <input type="number" step={0.5} value={ox} onChange={(e) => setSpawn(cur, e.target.value, oy, oz, modelSrc)} placeholder="X" className={inputCls} />
                     <input type="number" step={0.5} value={oy} onChange={(e) => setSpawn(cur, ox, e.target.value, oz, modelSrc)} placeholder="Y" className={inputCls} />
@@ -526,7 +526,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                 </div>
                 {(assetVars.length > 0 || modelAssets.length > 0) && (
                   <div>
-                    <span className="text-[10px] text-muted/50 block mb-0.5">모델 (선택 — 변수로 다른 모델 스폰)</span>
+                    <span className="text-[10px] text-muted/70  dark:text-muted block mb-0.5">모델 (선택 — 변수로 다른 모델 스폰)</span>
                     <SelectBox
                       value={modelSrc}
                       onChange={(s) => setSpawn(cur, ox, oy, oz, s)}
@@ -590,7 +590,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                 )}
                 <div className="space-y-1.5 border-t border-border/60 pt-2">
                   <label className="block">
-                    <span className="text-[10px] text-muted/50 block mb-1">위치</span>
+                    <span className="text-[10px] text-muted/70  dark:text-muted block mb-1">위치</span>
                     <SelectBox
                       value={p.position ?? 'center'}
                       onChange={(v) => setP({ position: v as PopupConfig['position'] })}
@@ -603,7 +603,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] text-muted/50 block mb-1">애니메이션</span>
+                    <span className="text-[10px] text-muted/70  dark:text-muted block mb-1">애니메이션</span>
                     <SelectBox
                       value={p.anim ?? 'auto'}
                       onChange={(v) => setP({ anim: v as PopupConfig['anim'] })}
@@ -618,27 +618,27 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   </label>
                   <div className="grid grid-cols-2 gap-1.5">
                     <label className="block">
-                      <span className="text-[10px] text-muted/50 block mb-1">너비 (선택)</span>
+                      <span className="text-[10px] text-muted/70  dark:text-muted block mb-1">너비 (선택)</span>
                       <input type="text" value={p.width ?? ''} onChange={(e) => setP({ width: e.target.value })} placeholder="예: 800px, 90vw" className={inputCls} />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] text-muted/50 block mb-1">높이 (선택)</span>
+                      <span className="text-[10px] text-muted/70  dark:text-muted block mb-1">높이 (선택)</span>
                       <input type="text" value={p.height ?? ''} onChange={(e) => setP({ height: e.target.value })} placeholder="예: 600px, 80vh" className={inputCls} />
                     </label>
                   </div>
                   <label className="block">
-                    <span className="text-[10px] text-muted/50 block mb-1">제목 (선택)</span>
+                    <span className="text-[10px] text-muted/70  dark:text-muted block mb-1">제목 (선택)</span>
                     <input type="text" value={p.title ?? ''} onChange={(e) => setP({ title: e.target.value })} placeholder="오브젝트 이름" className={inputCls} />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] text-muted/50 block mb-1">배경색 (선택)</span>
+                    <span className="text-[10px] text-muted/70  dark:text-muted block mb-1">배경색 (선택)</span>
                     <div className="flex items-center gap-1.5">
                       <input type="color" value={p.bg || '#ffffff'} onChange={(e) => setP({ bg: e.target.value })} className="w-7 h-7 rounded-xs border border-border bg-surface shrink-0 cursor-pointer" />
                       <input type="text" value={p.bg ?? '#ffffff'} onChange={(e) => setP({ bg: e.target.value })} className={inputCls} />
                     </div>
                   </label>
                   <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-[10px] text-muted/50">제목·닫기 표시 (chrome)</span>
+                    <span className="text-[10px] text-muted/70  dark:text-muted">제목·닫기 표시 (chrome)</span>
                     <Toggle value={p.chrome !== false} onChange={(v) => setP({ chrome: v })} />
                   </label>
                   {p.chrome === false && (
@@ -647,11 +647,11 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     </p>
                   )}
                   <label className="block">
-                    <span className="text-[10px] text-muted/50 block mb-1">내부 여백 (선택)</span>
+                    <span className="text-[10px] text-muted/70  dark:text-muted block mb-1">내부 여백 (선택)</span>
                     <input type="text" value={p.padding ?? ''} onChange={(e) => setP({ padding: e.target.value })} placeholder="예: 0, 24px" className={inputCls} />
                   </label>
                   {(mode === 'url' || mode === 'html') && (
-                    <p className="text-muted/50 text-[10px] leading-relaxed">
+                    <p className="text-muted/70  dark:text-muted text-[10px] leading-relaxed">
                       {mode === 'url'
                         ? '일부 사이트는 보안설정(X-Frame-Options)으로 삽입이 차단될 수 있어요. 그 경우 팝업 안 ‘새 탭에서 열기’ 버튼으로 열립니다.'
                         : 'HTML은 샌드박스(iframe)로 격리 렌더돼 페이지 스타일/스크립트에 영향을 주지 않아요.'}
@@ -716,7 +716,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                       onCommit={() => {}}
                       min={0} max={30} precision={1} dragStep={0.05}
                     />
-                    <p className="text-muted/50 text-[10px]">
+                    <p className="text-muted/70  dark:text-muted text-[10px]">
                       누적이 아니라 항상 원래 위치 기준으로 이동합니다. (0,0,0) 이벤트를 하나 더 만들면 제자리로 돌아옵니다.
                     </p>
                   </>
@@ -744,7 +744,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   className={TEXT_INPUT_CLASS}
                   onKeyDown={(e) => e.key === 'Enter' && addEvent()}
                 />
-                <p className="text-muted/50 text-[10px]">트리거 발동 시 오디오를 재생합니다. Audio 탭에서 올린 파일을 고르거나 URL을 직접 넣을 수 있어요. 재생 버튼으로 미리듣기.</p>
+                <p className="text-muted/70  dark:text-muted text-[10px]">트리거 발동 시 오디오를 재생합니다. Audio 탭에서 올린 파일을 고르거나 URL을 직접 넣을 수 있어요. 재생 버튼으로 미리듣기.</p>
               </div>
             );
           }
@@ -767,7 +767,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               <div className="space-y-1.5">
                 <SelectBox value={newValue} onChange={setNewValue} options={opts} placeholder="대상 오브젝트 선택..." />
                 {isDoorAction && (
-                  <p className="text-muted/50 text-[10px]">
+                  <p className="text-muted/70  dark:text-muted text-[10px]">
                     대상의 <b>콜라이더만</b> 켜고/끕니다(모습은 그대로). 플레이 모드에서 통과 가능/불가가 바뀌어요 —
                     문·차단봉 등에 씁니다. 애니메이션(문 열림)은 별도 이벤트로 함께 거세요. 탐색 모드엔 영향 없음.
                   </p>
@@ -798,7 +798,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                 onKeyDown={(e) => e.key === 'Enter' && addEvent()}
               />
               {newAction === 'play_animation' && (
-                <p className="text-muted/50 text-[10px] mt-1">GLB 오브젝트를 선택하면 클립 목록이 자동으로 표시됩니다.</p>
+                <p className="text-muted/70  dark:text-muted text-[10px] mt-1">GLB 오브젝트를 선택하면 클립 목록이 자동으로 표시됩니다.</p>
               )}
             </>
           );
@@ -810,7 +810,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
         {newConditions.length > 0 ? (
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted/50 font-semibold tracking-wide">조건 — 참일 때만 발동</span>
+              <span className="text-[10px] text-muted/70  dark:text-muted tracking-wide">조건 — 참일 때만 발동</span>
               {newConditions.length > 1 && (
                 <span className="text-[9px] text-muted/40">앞 <b className="text-primary">AND</b>/<b className="text-amber-600">OR</b> 배지로 연결 (왼→오 순서)</span>
               )}
@@ -880,7 +880,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                         <input type="number" value={typeof c.value === 'number' ? c.value : 0} onChange={(e) => upd({ value: Number(e.target.value) })} className={inputCls} />
                       )}
                     </div>
-                    <button onClick={() => setNewConditions((cs) => cs.filter((_, j) => j !== i))} title="조건 삭제" className="shrink-0 p-1 rounded text-muted/50 hover:text-red-500 hover:bg-red-500/10"><X size={12} /></button>
+                    <button onClick={() => setNewConditions((cs) => cs.filter((_, j) => j !== i))} title="조건 삭제" className="shrink-0 p-1 rounded text-muted/70  dark:text-muted hover:text-red-500 hover:bg-red-500/10"><X size={12} /></button>
                 </div>
               );
             })}
@@ -898,7 +898,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               {newElse ? (
                 <div className="bg-surface border border-border rounded-xs p-2 space-y-1.5 mt-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-muted/50 font-semibold tracking-wide">아니면(else) 실행</span>
+                    <span className="text-[10px] text-muted/70  dark:text-muted tracking-wide">아니면(else) 실행</span>
                     <button onClick={() => setNewElse(undefined)} className="text-[10px] text-muted/60 hover:text-foreground">제거</button>
                   </div>
                   <SelectBox
@@ -916,7 +916,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                     }
                     return <input value={newElse.value} onChange={(e) => setNewElse({ ...newElse, value: e.target.value })} placeholder={newElse.action === 'set_variable' ? 'score|add|1' : newElse.action === 'open_url' ? 'https://...' : '값'} className={inputCls} />;
                   })()}
-                  <p className="text-[10px] text-muted/50">조건이 <b>거짓</b>이면 이 액션을 대신 실행합니다(예: 참이면 문 열기 / 아니면 &quot;열쇠 필요&quot; 팝업).</p>
+                  <p className="text-[10px] text-muted/70  dark:text-muted">조건이 <b>거짓</b>이면 이 액션을 대신 실행합니다(예: 참이면 문 열기 / 아니면 &quot;열쇠 필요&quot; 팝업).</p>
                 </div>
               ) : (
                 <button onClick={() => setNewElse({ action: 'show_object', value: '' })} className="text-[10px] text-muted/60 hover:text-primary mt-1">+ 아니면(else) 액션</button>
@@ -937,7 +937,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
       <div className="flex gap-1.5">
         <button
           onClick={addEvent}
-          className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white  text-[11px] font-semibold transition-colors"
+          className="flex-1 py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white  text-[11px] transition-colors"
         >
           {editingId ? '저장' : '추가'}
         </button>
@@ -961,7 +961,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
             {(obj.events.some((e) => e.trigger === 'interact' || e.trigger === 'approach_enter' || e.trigger === 'approach_exit')
               || obj.dialogue?.show === 'approach' || obj.dialogue?.show === 'interact') && (
             <div className="space-y-1">
-              <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">상호작용 범위 (m)</span>
+              <span className="text-[10px] text-muted/70  dark:text-muted block tracking-wide">상호작용 범위 (m)</span>
               <div className="flex items-center gap-1.5">
                 <input
                   type="number" min={0.5} max={20} step={0.5}
@@ -983,13 +983,13 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   </button>
                 )}
               </div>
-              <p className="text-[10px] text-muted/50">이 오브젝트의 E/approach 발동 거리. 비우면 씬 기본값을 씁니다.</p>
+              <p className="text-[10px] text-muted/70  dark:text-muted">이 오브젝트의 E/approach 발동 거리. 비우면 씬 기본값을 씁니다.</p>
             </div>
             )}
 
             {/* 대화(말풍선) — 플레이 모드에서 오브젝트 위에 뜨는 순차 문장 */}
             <div className="space-y-1.5">
-              <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">대화 말풍선</span>
+              <span className="text-[10px] text-muted/70  dark:text-muted block tracking-wide">대화 말풍선</span>
               <textarea
                 value={dlg.lines.join('\n')}
                 onChange={(e) => setDlg({ lines: e.target.value.split('\n') })}
@@ -1000,7 +1000,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
               />
               <div className="grid grid-cols-2 gap-1.5">
                 <div>
-                  <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">표시 시점</span>
+                  <span className="text-[10px] text-muted/70  dark:text-muted block mb-1 tracking-wide">표시 시점</span>
                   <SelectBox
                     value={dlg.show}
                     onChange={(v) => { setDlg({ show: v as DialogueConfig['show'] }); pushHistory(); }}
@@ -1012,7 +1012,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">넘기기</span>
+                  <span className="text-[10px] text-muted/70  dark:text-muted block mb-1 tracking-wide">넘기기</span>
                   <SelectBox
                     value={dlg.advance}
                     onChange={(v) => { setDlg({ advance: v as DialogueConfig['advance'] }); pushHistory(); }}
@@ -1052,7 +1052,7 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                   />
                 </label>
               )}
-              <p className="text-muted/50 text-[10px]">
+              <p className="text-muted/70  dark:text-muted text-[10px]">
                 플레이 모드 전용 · 오브젝트 바로 위 표시. 비워두면 안 뜸. 여러 문장이면 순서대로.
               </p>
             </div>
@@ -1118,14 +1118,14 @@ export function EventsSection({ obj, open, onToggle, onPreview }: {
                         else if (ev.action === 'play_sound' && ev.value) { new Audio(ev.value).play().catch(() => addToast('오디오 재생 실패 — URL을 확인하세요', 'error')); }
                       }}
                       title="미리보기"
-                      className="text-muted/50 hover:text-primary w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                      className="text-muted/70  dark:text-muted hover:text-primary w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
                     >
                       <Play size={12} />
                     </button>
                     <button
                       onClick={() => startEdit(ev)}
                       title="수정"
-                      className="text-muted/50 hover:text-primary w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                      className="text-muted/70  dark:text-muted hover:text-primary w-5 h-5 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
                     >
                       <Pencil size={12} />
                     </button>

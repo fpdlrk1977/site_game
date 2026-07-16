@@ -16,7 +16,7 @@ export function VisibilitySection({ obj, open, onToggle }: { obj: ObjectNodeSche
           <div className="px-3 pb-4 space-y-2">
             {(['visible', 'locked'] as const).map((key) => (
               <label key={key} className="flex items-center justify-between cursor-pointer">
-                <span className="text-[10px] font-semibold text-muted/50 capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
+                <span className="text-[10px] font-semibold text-muted/70 dark:text-muted capitalize">{key === 'visible' ? 'Visible' : 'Locked'}</span>
                 <Toggle
                   value={obj[key]}
                   onChange={() => { updateObject(obj.id, { [key]: !obj[key] }); pushHistory(); }}
