@@ -161,7 +161,7 @@ export function NumInput({
           } else setLocal(fmt(value, precision));
           onCommit();
         }}
-        className={`w-full border border-border/30 rounded-xs pr-5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums bg-muted/5 dark:bg-muted ${prefix ? "pl-6" : "pl-2"}`}
+        className={`w-full border border-border/30 rounded-xs pr-5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums bg-muted/5 dark:bg-muted/10 ${prefix ? "pl-6" : "pl-2"}`}
       />
       <span
         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-ew-resize select-none transition-colors"

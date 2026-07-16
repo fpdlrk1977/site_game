@@ -356,7 +356,7 @@ export function EventsSection({
       )}
 
       {newTrigger === "dialogue_end" && (
-        <p className="text-muted text-[10px] bg-surface border border-border rounded-xs px-2 py-1.5">
+        <p className="text-muted text-[10px] bg-muted/5 dark:bg-muted/10 border border-border rounded-xs px-2 py-1.5">
           이 오브젝트의 <b>대화(말풍선) 마지막 문장에 액션 버튼</b>이 뜨고, 방문자가 <b>버튼을 누르면</b> 발동합니다 (자동으로 넘어가지 않아요).
           &quot;대사 끝나면 팝업 열기·씬 이동·문 열기&quot; 같은 연결에 쓰세요. 아래 <b>대화 말풍선</b>에 대사를 먼저 채우고, 버튼 이름은 대화
           설정에서 정할 수 있어요. 플레이 모드 전용.

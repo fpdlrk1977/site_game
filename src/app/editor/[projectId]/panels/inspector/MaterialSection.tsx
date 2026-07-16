@@ -127,6 +127,9 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                           showHex
                           title="Base color"
                           className="w-full"
+                          allowGradient
+                          gradient={obj.material?.gradient ?? null}
+                          onGradientChange={(g) => updateObject(obj.id, { material: { ...obj.material, gradient: g ?? undefined } })}
                         />
                       )}
                     </div>
@@ -219,7 +222,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                           />
                         )}
                       </div>
-                      <p className="text-[10px] text-muted/70 dark:bg-muted">
+                      <p className="text-[10px] text-muted/70 dark:text-muted">
                         Raise Transmission to make it glass-like transparent. With all three at 0 it uses the standard material.
                       </p>
                     </div>

@@ -67,9 +67,15 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **④표현 드롭다운**: hex+RGB 동시표시 → **HEX/RGB/HSL 드롭다운**(패널 내부 인라인 — 포탈 아님, 픽커 안 닫힘) + 선택한 표현의 입력만 노출. `color.ts`에 **HSL 변환 추가**(rgb/hex↔hsl).
 - **확인 필요(브라우저)**: 트리거 필드 모양 · HEX/RGB/HSL 전환·입력 · SV/Hue 드래그 · 팔레트 · 스포이드.
 
-### ⏸️ 대기 — ①그라데이션 (사용자 git push 후 진행)
-> **확정 범위**: 선형(linear)+라디얼(radial) **다중 stop**. 대상 = **프리미티브·복셀·돌출·회전체**(전부 `PrimitiveMaterial` 렌더 → 셰이더 한 곳). **아직 미착수**(사용자 신호 대기).
-> - 계획: `MaterialOverride.gradient?{type,angle,stops[]}` 스키마 + `PrimitiveMaterial` 셰이더(1D 그라데이션 텍스처를 bbox 로컬좌표 `t`로 샘플, 기존 텍스처 wrap/pattern 방식·bbox uniform 재사용) + 픽커 그라데이션 편집 UI(Solid/Gradient 모드, stop 추가/이동/삭제, 선형 각도·라디얼) + 에디터/뷰어(`EditorObjectInstance`·`ViewerObject`가 이미 wrapMin/wrapSize 전달 중) 배선. **allowGradient는 opt-in prop**(라이트·안개 등은 solid 유지).
+### ✅ 완료 (2026-07-17) — ①그라데이션 (선형+라디얼 다중 stop) — 브라우저 확인 대기
+> **범위**: linear+radial **다중 stop**. 대상 = 프리미티브·복셀·돌출·회전체(전부 `PrimitiveMaterial`). tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.**
+- **스키마**(`scene.ts`): `GradientStop{color,pos}`·`GradientFill{type,angle?,stops[]}` + `MaterialOverride.gradient?`(옵셔널=하위호환, 없으면 solid).
+- **셰이더**(`PrimitiveMaterial`): 정지점 램프를 **1D CanvasTexture**로 굽고(`buildGradientTexture`, useMemo+dispose), `onBeforeCompile`이 `#include <color_fragment>` 뒤에 그라데이션 주입 — **bbox 로컬좌표**(`vTriPos`, 기존 uWrapMin/uWrapSize uniform 재사용)로 좌표 `t` 계산(linear=각도 방향 투영, radial=중심 거리) → `uGradTex` 샘플 후 `pow(2.2)` sRGB 디코드로 diffuse 대체. `customShader = triplanar || gradActive`(둘 다 onBeforeCompile), key에 grad 유무 포함(토글 시 재마운트), 정지점/각도 변경은 uniform 갱신(재컴파일 X, per-instance cacheKey).
+- **배선**: `EditorObjectInstance`·`ViewerObject`가 `gradient={mat?.gradient}` 전달(이미 wrapMin/wrapSize 넘기던 자리). 에디터=뷰어 동일 렌더.
+- **픽커 UI**(`ColorPicker`, opt-in `allowGradient`): **Solid/Gradient 토글** + 그라데이션 바(**클릭=정지점 추가·핸들 드래그=위치·클릭=선택·Remove**) + **Linear/Radial** 타입 + Linear **각도** 입력. SV/Hue/hex/RGB/HSL이 **선택된 정지점 색**을 편집(`applyColor`가 solid=onChange / gradient=선택 stop 갱신으로 분기). 트리거 스와치는 그라데이션 미리보기. Solid↔Gradient 전환은 commit(undo 1회).
+- **적용**: `MaterialSection`의 **Color 필드만** `allowGradient`(Emissive·라이트·안개 등은 solid 유지). 그라데이션 변경도 `updateObject`+`pushHistory` 경로라 단일 undo.
+- **확인 필요(브라우저)**: Color 픽커 Gradient 토글 → 바에서 stop 추가/드래그/삭제·색 편집 · Linear 각도·Radial · 프리미티브/복셀/돌출/회전체 표면 렌더(에디터=게시 뷰어) · undo · solid 복귀.
+- **한계/후속**: linear는 **오브젝트 로컬 XY 평면** 기준(각도), radial은 bbox 중심 기준(3D 거리). 알파(투명 stop) 미지원(색만). GLB·텍스트 콘텐츠 제외(프리미티브 전용). 텍스처와 동시 사용 시 gradient×texture로 곱해짐.
 
 ### 후속 (2026-07-16) — Tidy/Distribute (위 별도 항목 참조)
 - (알파 슬라이더 등 나머지는 요청 시)

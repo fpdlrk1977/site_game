@@ -900,6 +900,7 @@ export function ViewerObject({
         triplanarScale={object.material?.triplanarScale}
         wrapMin={wrapBounds.min}
         wrapSize={wrapBounds.size}
+        gradient={object.material?.gradient}
       />
       )}
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}

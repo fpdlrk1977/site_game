@@ -156,7 +156,7 @@ function SizeField({
   const emit = (n: number, u: string) => onChange(n > 0 ? `${n}${u}` : undefined);
   return (
     <label className="block">
-      <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">{label}</span>
+      <span className="text-[10px] text-muted/70 dark:text-muted/10 block mb-1">{label}</span>
       <div className="flex gap0">
         <div className="flex-1 [&_input]:rounded-r-none">
           <NumInput value={num} onChange={(n) => emit(n, unit)} onCommit={onCommit} min={0} precision={0} dragStep={5} prefix={false} />
@@ -173,7 +173,7 @@ function SizeField({
               { value: "vw", label: "vw" },
               { value: "vh", label: "vh" },
             ]}
-            className="px-2 py-1 text-[11px] border border-border rounded-xs text-muted/80 dark:bg-muted"
+            className="px-2 py-1 text-[11px] border border-border rounded-xs text-muted/80 dark:bg-muted/10"
           />
         </div>
       </div>
@@ -350,7 +350,7 @@ export function EnvironmentPanel() {
                     />
 
                     {mode === "color" && (
-                      <div className="px-2 flex  items-center border border-border rounded-xs bg-muted/5 dark:bg-muted">
+                      <div className="px-2 flex  items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                         <input
                           type="color"
                           value={env.sky.value}
@@ -431,7 +431,7 @@ export function EnvironmentPanel() {
                   />
                   {/* Color 모드 — 컬러 선택 필드 */}
                   {mode === "color" && (
-                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted">
+                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                       <input
                         type="color"
                         value={env.ground!.color}
@@ -501,7 +501,7 @@ export function EnvironmentPanel() {
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted">
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
                   <input
                     type="color"
                     value={env.fog.color}
@@ -670,7 +670,7 @@ export function EnvironmentPanel() {
             <div className="flex gap-2 pt-1">
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted">Sun Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted">
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
                   <input
                     type="color"
                     value={env.lights.directionalColor ?? "#ffffff"}
@@ -689,7 +689,7 @@ export function EnvironmentPanel() {
               </div>
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted">Ambient Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted">
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
                   <input
                     type="color"
                     value={env.lights.ambientColor ?? "#ffffff"}
@@ -839,7 +839,7 @@ export function EnvironmentPanel() {
 
                   <div className="flex-1 min-w-0">
                     <span className="text-[10px] text-muted/70 w-12">기본 배경색</span>
-                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted">
+                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
                       <input
                         type="color"
                         value={dp.bg || "#ffffff"}
@@ -1172,7 +1172,7 @@ export function EnvironmentPanel() {
                                   <button
                                     onClick={() => triggerBwUpload(face)}
                                     disabled={bwUploading}
-                                    className="w-full h-full flex flex-col items-center justify-center text-[10px] text-foreground hover:text-muted hover:bg-background transition-colors disabled:opacity-50 dark:bg-sidebar!"
+                                    className="w-full h-full flex flex-col items-center justify-center text-[10px] text-foreground hover:text-muted hover:bg-background bg-muted/5 dark:bg-muted/10 transition-colors disabled:opacity-50"
                                   >
                                     <CirclePlus size={14} className="text-muted/50" />
                                     <span>{label}</span>
@@ -1383,7 +1383,7 @@ export function EnvironmentPanel() {
               onBlur={pushHistory}
               placeholder="씬에 대한 메모를 입력하세요..."
               rows={4}
-              className="w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+              className="w-full bg-muted/5 dark:bg-muted/10 border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             />
           </div>
         )}

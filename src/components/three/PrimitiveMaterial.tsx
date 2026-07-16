@@ -1,9 +1,28 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import * as THREE from 'three';
+import type { GradientFill } from '@/types/scene';
 
 type MappingMode = 'face' | 'wrap' | 'pattern';
+
+// 정지점 램프 → 1D CanvasTexture. 셰이더에서 t(0..1)로 샘플. 색은 sRGB 바이트로 저장(셰이더에서 pow(2.2) 디코드).
+function buildGradientTexture(stops: { color: string; pos: number }[]): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined' || stops.length < 2) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 1;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const g = ctx.createLinearGradient(0, 0, 256, 0);
+  [...stops].sort((a, b) => a.pos - b.pos).forEach((s) => g.addColorStop(Math.max(0, Math.min(1, s.pos)), s.color));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 1);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
 
 interface Props {
   color: string;
@@ -24,19 +43,30 @@ interface Props {
   // 텍스처 투영: 'face'=면마다 한 장(기본) · 'wrap'=한 장을 전체에 보자기처럼 · 'pattern'=무늬 반복(triplanar)
   textureMapping?: MappingMode;
   triplanarScale?: number;          // pattern 모드 반복 스케일(로컬 유닛당)
-  wrapMin?: [number, number, number];  // wrap 모드용 지오메트리 로컬 bbox 최소점
-  wrapSize?: [number, number, number]; // wrap 모드용 지오메트리 로컬 bbox 크기
+  wrapMin?: [number, number, number];  // wrap/gradient 모드용 지오메트리 로컬 bbox 최소점
+  wrapSize?: [number, number, number]; // wrap/gradient 모드용 지오메트리 로컬 bbox 크기
+  gradient?: GradientFill | null;   // 있으면 표면을 정지점 램프로 렌더(color 대신). bbox 로컬좌표로 투영.
 }
 
 // 프리미티브 표준 재질 — 색상 + 선택적 이미지 텍스처(map). 에디터/뷰어가 공유.
 // 텍스처 로딩을 비동기(비-Suspense)로 처리해 인라인 mesh에 Suspense 경계 없이도 안전하게 쓸 수 있다.
 export function PrimitiveMaterial({
   color, roughness, metalness, emissive, emissiveIntensity, wireframe, textureUrl, repeat, flatShading, side,
-  clearcoat, sheen, transmission, ior, vertexColors, textureMapping, triplanarScale, wrapMin, wrapSize,
+  clearcoat, sheen, transmission, ior, vertexColors, textureMapping, triplanarScale, wrapMin, wrapSize, gradient,
 }: Props) {
   const [tex, setTex] = useState<THREE.Texture | null>(null);
   const rx = repeat?.x ?? 1;
   const ry = repeat?.y ?? 1;
+
+  // ── 그라데이션 fill ── 정지점 램프를 1D 텍스처로 굽고, 셰이더에서 bbox 로컬좌표 t로 샘플.
+  const gradStops = gradient?.stops ?? [];
+  const gradActive = !!gradient && gradStops.length >= 2;
+  const gradSig = gradActive ? `${gradient!.type}|${gradient!.angle ?? 0}|${gradStops.map((s) => `${s.color}@${s.pos}`).join(',')}` : '';
+  const gradTex = useMemo(() => (gradActive ? buildGradientTexture(gradStops) : null), [gradSig, gradActive]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { gradTex?.dispose(); }, [gradTex]); // 교체/언마운트 시 이전 텍스처 정리
+  const gradMode = gradActive && gradTex ? (gradient!.type === 'radial' ? 2 : 1) : 0;
+  const gradAngle = ((gradient?.angle ?? 0) * Math.PI) / 180;
+  const gradScale = gradient?.scale ?? 1;
 
   useEffect(() => {
     if (!textureUrl) { setTex(null); return; }
@@ -62,11 +92,18 @@ export function PrimitiveMaterial({
   // 재질 인스턴스별 고유 프로그램 캐시 키 — 여러 오브젝트가 프로그램을 공유하면 onBeforeCompile이
   //   재호출되지 않아 uniform이 일부 재질에 안 걸리는 함정을 회피(인스턴스마다 컴파일 1회).
   const uidRef = useRef(Math.random().toString(36).slice(2));
-  const stateRef = useRef({ mode: 0, scale: 1, min: [-0.5, -0.5, -0.5] as number[], size: [1, 1, 1] as number[] });
+  const stateRef = useRef({
+    mode: 0, scale: 1, min: [-0.5, -0.5, -0.5] as number[], size: [1, 1, 1] as number[],
+    gradMode: 0, gradAngle: 0, gradScale: 1, gradTex: null as THREE.Texture | null,
+  });
   stateRef.current.mode = textureMapping === 'pattern' ? 1 : 0;
   stateRef.current.scale = triplanarScale ?? 1;
   stateRef.current.min = wrapMin ?? [-0.5, -0.5, -0.5];
   stateRef.current.size = wrapSize ?? [1, 1, 1];
+  stateRef.current.gradMode = gradMode;
+  stateRef.current.gradAngle = gradAngle;
+  stateRef.current.gradScale = gradScale;
+  stateRef.current.gradTex = gradTex;
   const shaderRef = useRef<{ uniforms: Record<string, { value: unknown }> } | null>(null);
   useEffect(() => {
     const s = shaderRef.current;
@@ -75,19 +112,48 @@ export function PrimitiveMaterial({
     s.uniforms.uTriScale.value = stateRef.current.scale;
     (s.uniforms.uWrapMin.value as THREE.Vector3).fromArray(stateRef.current.min);
     (s.uniforms.uWrapSize.value as THREE.Vector3).fromArray(stateRef.current.size);
-  }, [textureMapping, triplanarScale, wrapMin, wrapSize]);
+    if (s.uniforms.uGradMode) {
+      s.uniforms.uGradMode.value = stateRef.current.gradMode;
+      s.uniforms.uGradAngle.value = stateRef.current.gradAngle;
+      s.uniforms.uGradScale.value = stateRef.current.gradScale;
+      s.uniforms.uGradTex.value = stateRef.current.gradTex;
+    }
+  }, [textureMapping, triplanarScale, wrapMin, wrapSize, gradSig, gradMode, gradAngle, gradScale, gradTex]);
 
   const onBeforeCompile = useCallback((shader: THREE.WebGLProgramParametersWithUniforms) => {
     shader.uniforms.uWrapMode = { value: stateRef.current.mode };
     shader.uniforms.uTriScale = { value: stateRef.current.scale };
     shader.uniforms.uWrapMin = { value: new THREE.Vector3().fromArray(stateRef.current.min) };
     shader.uniforms.uWrapSize = { value: new THREE.Vector3().fromArray(stateRef.current.size) };
+    shader.uniforms.uGradMode = { value: stateRef.current.gradMode };
+    shader.uniforms.uGradAngle = { value: stateRef.current.gradAngle };
+    shader.uniforms.uGradScale = { value: stateRef.current.gradScale };
+    shader.uniforms.uGradTex = { value: stateRef.current.gradTex };
     shaderRef.current = shader as unknown as { uniforms: Record<string, { value: unknown }> };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vTriPos = position;\n  vTriNormal = normal;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;\nuniform float uWrapMode;\nuniform float uTriScale;\nuniform vec3 uWrapMin;\nuniform vec3 uWrapSize;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;\nuniform float uWrapMode;\nuniform float uTriScale;\nuniform vec3 uWrapMin;\nuniform vec3 uWrapSize;\nuniform float uGradMode;\nuniform float uGradAngle;\nuniform float uGradScale;\nuniform sampler2D uGradTex;')
+      // 그라데이션 — 베이스 색을 정지점 램프로 대체(map/vertexColor보다 먼저). bbox 로컬좌표로 투영.
+      .replace('#include <color_fragment>', `
+        #include <color_fragment>
+        if (uGradMode > 0.5) {
+          vec3 _gp = (vTriPos - uWrapMin) / max(uWrapSize, vec3(1e-4));
+          float _gt;
+          if (uGradMode < 1.5) {
+            vec2 _q = _gp.xy - 0.5;
+            vec2 _dir = vec2(cos(uGradAngle), sin(uGradAngle));
+            _gt = dot(_q, _dir) + 0.5;
+          } else {
+            // radial — 로컬 XY 평면 2D 거리(3D 거리는 박스 표면이 전부 같은 반경이라 단색이 됨). scale=퍼짐.
+            _gt = length(_gp.xy - 0.5) * 2.0 / max(uGradScale, 0.05);
+          }
+          _gt = clamp(_gt, 0.0, 1.0);
+          vec3 _gcol = texture2D(uGradTex, vec2(_gt, 0.5)).rgb;
+          diffuseColor.rgb = pow(_gcol, vec3(2.2));
+        }
+      `)
       .replace('#include <map_fragment>', `
         #ifdef USE_MAP
           vec3 _n = normalize(vTriNormal);
@@ -111,8 +177,10 @@ export function PrimitiveMaterial({
         #endif
       `);
   }, []);
-  const triProps = triplanar ? { onBeforeCompile, customProgramCacheKey: () => `prim-tri-${uidRef.current}` } : {};
-  const triKey = triplanar ? 'tri' : 'face';
+  // 커스텀 셰이더 = triplanar 텍스처 투영 또는 그라데이션. 둘 중 하나라도 켜지면 onBeforeCompile 적용.
+  const customShader = triplanar || gradActive;
+  const triProps = customShader ? { onBeforeCompile, customProgramCacheKey: () => `prim-cust-${uidRef.current}` } : {};
+  const triKey = `${triplanar ? 'tri' : 'face'}-${gradActive ? 'grad' : 'nograd'}`;
 
   // 텍스처/정점색이 있으면 베이스 색을 흰색으로 → 이미지·정점색이 재질 색에 물들지 않고 그대로 보임.
   const base = (tex || vertexColors) ? '#ffffff' : color;

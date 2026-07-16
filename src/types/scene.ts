@@ -269,8 +269,22 @@ export interface ParticleConfig {
   size?: number;
 }
 
+// 그라데이션 fill — 프리미티브(복셀·돌출·회전체 포함) 표면 색을 정지점 램프로 렌더. 있으면 color 대신 사용.
+export interface GradientStop {
+  color: string;  // hex
+  pos: number;    // 0..1
+}
+export interface GradientFill {
+  type: 'linear' | 'radial';
+  angle?: number;          // linear 전용, degrees(0=좌→우). 미설정=0.
+  scale?: number;          // radial 전용, 퍼지는 정도(기본 1, 클수록 넓게 퍼짐).
+  stops: GradientStop[];   // 2개+ (오름차순 권장, 렌더 시 정렬)
+}
+
 export interface MaterialOverride {
   color?: string;
+  // 그라데이션 fill(옵셔널). 있으면 프리미티브 표면을 정지점 램프로 렌더(color 대신). GradientFill 참조.
+  gradient?: GradientFill;
   roughness?: number;
   metalness?: number;
   emissive?: string;

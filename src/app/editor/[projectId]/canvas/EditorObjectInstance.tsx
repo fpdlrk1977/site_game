@@ -738,6 +738,7 @@ export function EditorObjectInstance({ object }: Props) {
             triplanarScale={mat?.triplanarScale}
             wrapMin={wrapBounds.min}
             wrapSize={wrapBounds.size}
+            gradient={mat?.gradient}
           />
           )}
         </mesh>
