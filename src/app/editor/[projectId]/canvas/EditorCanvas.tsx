@@ -1000,6 +1000,12 @@ export function EditorCanvas() {
               <Environment preset={environment.hdrPreset as Exclude<HdrPreset, "none">} background />
             </Suspense>
           )}
+          {/* ── Fog ── 뷰어와 동일. 먼 바닥을 하늘색으로 흐려 수평선 하드컷 완화. linear(near/far) 또는 exp(density) ── */}
+          {environment.fog.enabled && (
+            environment.fog.mode === 'exp'
+              ? <fogExp2 attach="fog" args={[environment.fog.color, environment.fog.density ?? 0.02]} />
+              : <fog attach="fog" args={[environment.fog.color, environment.fog.near, environment.fog.far]} />
+          )}
           {/* HDR 미설정 시에도 은은한 IBL 제공 → PBR 재질 생기 */}
           {!useHdr && <DefaultEnvironment />}
 

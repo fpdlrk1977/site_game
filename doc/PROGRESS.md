@@ -51,6 +51,17 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 🌫️ 진행 중 (2026-07-16) — 에디터 fog 렌더링 추가 (수평선 하드컷 완화) — 브라우저 확인 대기
+
+> `EditorCanvas`에 뷰어(`ViewerCanvas`)와 동일한 `<fog>`/`<fogExp2>` 블록 추가(배경 렌더 직후). tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.**
+
+- **문제(사용자 보고)**: sky 흰색·ground 녹색에서 카메라 상하 이동 시 **평평한 1000×1000 바닥 + 단색 하늘**이 만나는 **수평선이 면도날처럼 하드컷**. Spline은 fog/그라데이션으로 지평선을 페이드시켜 안 그럼.
+- **원인**: fog가 **게시 뷰어에만** 있고 **`EditorCanvas`엔 없어서**, 씬 Fog를 켜도 에디터에선 수평선이 안 부드러워졌음.
+- **수정**: 에디터에도 `environment.fog.enabled`면 linear(near/far)·exp(density) fog 렌더 → Fog 색을 하늘색(흰색)으로 맞추면 먼 바닥이 페이드돼 수평선 완화. 에디터=뷰어 룩 일치.
+- **나중에 논의(사용자 보류)**: fog 켤 때 색=현재 하늘색 자동 제안 · fog 없이도 바닥을 하늘색으로 페이드하는 그라데이션 하늘/자동 대기 블렌드.
+
+---
+
 ## ✅ 완료 (2026-07-16) — 🎨 라이브 클로너 material 편집 (소스→복제본 전파 + 클로너/일반 그룹 Material 섹션 정리) (사용자 확인 완료)
 
 > `sceneStore.updateObject` + `InspectorPanel`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").**
