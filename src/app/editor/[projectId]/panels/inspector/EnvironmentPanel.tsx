@@ -26,7 +26,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
 import { useToast } from "@/hooks/useToast";
-import { createBrowserSupabase } from "@/lib/supabase";
+import { uploadImageTexture } from "@/lib/uploadAsset";
+import { TexturePicker } from "@/components/ui/TexturePicker";
 import { SelectBox } from "@/components/ui/SelectBox";
 import { RangeSlider } from "@/components/ui/RangeSlider";
 import { InfoHint } from "@/components/ui/InfoHint";
@@ -186,6 +187,7 @@ export function EnvironmentPanel() {
     updateEnvironment,
     pushHistory,
     assets,
+    addAsset,
     projectId,
     setBoundaryShapeOpen,
   } = useSceneStore();
@@ -207,83 +209,44 @@ export function EnvironmentPanel() {
   const boundaryTexInputRef = useRef<HTMLInputElement>(null);
   const env = environment;
 
-  const handleGroundTexUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !projectId) return;
-    if (file.size > 8 * 1024 * 1024) {
-      addToast("Image is too large. Max 8MB.", "error");
-      return;
-    }
-    setGroundTexUploading(true);
+  // 공용 — 이미지를 Textures 에셋으로 등록(uploadImageTexture) + 씬 assets에 추가 → 라이브러리에서 재사용·관리 가능.
+  //   ground·boundary가 예전엔 직접 스토리지 업로드(에셋 미등록)라 관리가 안 됐던 것을 통합.
+  const uploadTextureAsset = async (file: File): Promise<string | null> => {
+    if (!projectId) return null;
+    if (file.size > 8 * 1024 * 1024) { addToast("Image is too large. Max 8MB.", "error"); return null; }
     try {
-      const supabase = createBrowserSupabase();
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-      const path = `ground/${projectId}/tex_${Date.now()}.${ext}`;
-      const { error: storageErr } = await supabase.storage.from("assets").upload(path, file, { contentType: file.type, upsert: true });
-      if (storageErr) throw storageErr;
-      // 공개 버킷의 만료 없는 public URL 사용 (0006 마이그레이션에서 버킷 공개 전환)
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("assets").getPublicUrl(path);
-      updateEnvironment({ ground: { ...env.ground!, textureUrl: publicUrl } });
-      pushHistory();
+      const asset = await uploadImageTexture(file, projectId);
+      addAsset(asset);
+      return asset.dracoUrl;
     } catch (err) {
       addToast("Texture upload failed", "error");
       console.error(err);
-    } finally {
-      setGroundTexUploading(false);
+      return null;
     }
+  };
+
+  const handleGroundTexUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setGroundTexUploading(true);
+    const url = await uploadTextureAsset(file);
+    if (url) { updateEnvironment({ ground: { ...env.ground!, textureUrl: url } }); pushHistory(); }
+    setGroundTexUploading(false);
   };
 
   const handleBoundaryTexUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !projectId) return;
-    if (file.size > 8 * 1024 * 1024) {
-      addToast("Image is too large. Max 8MB.", "error");
-      return;
-    }
+    if (!file) return;
     setBoundaryTexUploading(true);
-    try {
-      const supabase = createBrowserSupabase();
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-      const path = `boundary/${projectId}/tex_${Date.now()}.${ext}`;
-      const { error: storageErr } = await supabase.storage.from("assets").upload(path, file, { contentType: file.type, upsert: true });
-      if (storageErr) throw storageErr;
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("assets").getPublicUrl(path);
-      updateEnvironment({ boundaryWall: { ...(env.boundaryWall ?? {}), style: "texture", textureUrl: publicUrl } });
-      pushHistory();
-    } catch (err) {
-      addToast("Texture upload failed", "error");
-      console.error(err);
-    } finally {
-      setBoundaryTexUploading(false);
-    }
+    const url = await uploadTextureAsset(file);
+    if (url) { updateEnvironment({ boundaryWall: { ...(env.boundaryWall ?? {}), style: "texture", textureUrl: url } }); pushHistory(); }
+    setBoundaryTexUploading(false);
   };
 
-  // 경계 이미지 범용 업로더 — 면별 텍스처/스카이박스가 공유. 성공 시 public URL 반환.
-  const uploadBoundaryImage = async (file: File): Promise<string | null> => {
-    if (!projectId) return null;
-    if (file.size > 8 * 1024 * 1024) {
-      addToast("Image is too large. Max 8MB.", "error");
-      return null;
-    }
-    try {
-      const supabase = createBrowserSupabase();
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-      const path = `boundary/${projectId}/tex_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
-      const { error } = await supabase.storage.from("assets").upload(path, file, { contentType: file.type, upsert: true });
-      if (error) throw error;
-      return supabase.storage.from("assets").getPublicUrl(path).data.publicUrl;
-    } catch (err) {
-      addToast("Image upload failed", "error");
-      console.error(err);
-      return null;
-    }
-  };
+  // 경계 이미지 범용 업로더 — 면별 텍스처/스카이박스가 공유. 에셋 등록 후 URL 반환.
+  const uploadBoundaryImage = (file: File): Promise<string | null> => uploadTextureAsset(file);
 
   // 면별 텍스처/스카이박스 업로드 대상 라우팅 — 단일 파일 입력을 target으로 공유.
   const [bwUploadTarget, setBwUploadTarget] = useState<"front" | "back" | "left" | "right" | "skybox" | null>(null);
@@ -487,36 +450,16 @@ export function EnvironmentPanel() {
                   {/* Texture 모드 — 업로드 버튼 / 미리보기 */}
                   {mode === "texture" && (
                     <div className="space-y-2">
-                      {env.ground!.textureUrl ? (
-                        <div className="relative rounded-xs overflow-hidden border border-border group">
-                          <img src={env.ground!.textureUrl} alt="ground texture" className="w-full h-16 object-cover" />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                            <button
-                              onClick={() => groundTexInputRef.current?.click()}
-                              className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-primary/80 transition-colors"
-                            >
-                              Replace
-                            </button>
-                            <button
-                              onClick={() => {
-                                const { textureUrl: _removed, ...rest } = env.ground!;
-                                updateEnvironment({ ground: rest });
-                                pushHistory();
-                              }}
-                              className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-danger/80 transition-colors"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => groundTexInputRef.current?.click()}
-                          disabled={groundTexUploading}
-                          className="w-full py-2.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {groundTexUploading ? "Uploading..." : "Upload texture image\nJPG · PNG · WEBP"}
-                        </button>
+                      {/* 라이브러리 픽커 — 기존 텍스처 재사용 + 업로드(에셋 등록). 오브젝트 텍스처와 동일 UI. */}
+                      <TexturePicker
+                        value={env.ground?.textureUrl ?? ""}
+                        textures={assets.filter((a) => a.type === "texture").map((a) => ({ id: a.id, name: a.name, url: a.dracoUrl }))}
+                        onChange={(url) => { updateEnvironment({ ground: { ...env.ground!, textureUrl: url || undefined } }); pushHistory(); }}
+                        onUpload={() => groundTexInputRef.current?.click()}
+                        uploading={groundTexUploading}
+                      />
+                      {env.ground?.textureUrl && (
+                        <img src={env.ground.textureUrl} alt="ground texture" className="w-full h-16 object-cover rounded-xs border border-border" />
                       )}
                       <input
                         ref={groundTexInputRef}
@@ -1184,35 +1127,16 @@ export function EnvironmentPanel() {
                     {style === "texture" && (
                       <div className="space-y-1.5">
                         <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">텍스처</span>
-                        {bw.textureUrl ? (
-                          <div className="relative rounded-xs overflow-hidden border border-border group">
-                            <img src={bw.textureUrl} alt="boundary texture" className="w-full h-16 object-cover" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                              <button
-                                onClick={() => boundaryTexInputRef.current?.click()}
-                                className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-primary/80 transition-colors"
-                              >
-                                교체
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setBw({ textureUrl: undefined });
-                                  pushHistory();
-                                }}
-                                className="bg-black/70 text-white rounded px-2 py-1 text-[10px] hover:bg-danger/80 transition-colors"
-                              >
-                                제거
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => boundaryTexInputRef.current?.click()}
-                            disabled={boundaryTexUploading}
-                            className="w-full py-2.5 rounded-xs border border-dashed border-border bg-surface text-foreground hover:text-muted hover:bg-background text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-pre-line"
-                          >
-                            {boundaryTexUploading ? "Uploading..." : "Upload texture image\nJPG · PNG · WEBP"}
-                          </button>
+                        {/* 라이브러리 픽커 — 기존 텍스처 재사용 + 업로드(에셋 등록) */}
+                        <TexturePicker
+                          value={bw.textureUrl ?? ""}
+                          textures={assets.filter((a) => a.type === "texture").map((a) => ({ id: a.id, name: a.name, url: a.dracoUrl }))}
+                          onChange={(url) => { setBw({ textureUrl: url || undefined }); pushHistory(); }}
+                          onUpload={() => boundaryTexInputRef.current?.click()}
+                          uploading={boundaryTexUploading}
+                        />
+                        {bw.textureUrl && (
+                          <img src={bw.textureUrl} alt="boundary texture" className="w-full h-16 object-cover rounded-xs border border-border" />
                         )}
                         <input
                           ref={boundaryTexInputRef}

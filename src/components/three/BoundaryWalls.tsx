@@ -68,7 +68,9 @@ function WallFace({ pos, rot, w, h, color, url, opacity, gradient, side }: {
   const transparent = opacity < 1 || gradient;
   return (
     <mesh position={pos} rotation={rot} geometry={geo}>
+      {/* key: 텍스처 비동기 로드 시(undefined→map) 셰이더 재컴파일되게 재질을 새로 마운트(USE_MAP 정의). */}
       <meshStandardMaterial
+        key={`${tex ? 'tex' : 'plain'}-${gradient ? 'vc' : ''}`}
         map={tex ?? undefined}
         color={tex ? '#ffffff' : color}
         side={side}
@@ -106,7 +108,7 @@ function CylinderWall({ radius, h, color, url, opacity, gradient, side }: {
   const transparent = opacity < 1 || gradient;
   return (
     <mesh position={[0, h / 2, 0]} geometry={geo}>
-      <meshStandardMaterial map={tex ?? undefined} color={tex ? '#ffffff' : color} side={side} transparent={transparent} opacity={opacity} vertexColors={gradient} roughness={0.92} metalness={0} />
+      <meshStandardMaterial key={`${tex ? 'tex' : 'plain'}-${gradient ? 'vc' : ''}`} map={tex ?? undefined} color={tex ? '#ffffff' : color} side={side} transparent={transparent} opacity={opacity} vertexColors={gradient} roughness={0.92} metalness={0} />
     </mesh>
   );
 }
@@ -147,7 +149,7 @@ function PolygonCap({ poly, h, color, url, opacity }: { poly: { x: number; z: nu
   useEffect(() => () => geo.dispose(), [geo]);
   return (
     <mesh position={[0, h, 0]} rotation={[Math.PI / 2, 0, 0]} geometry={geo}>
-      <meshStandardMaterial color={tex ? '#ffffff' : color} map={tex ?? undefined} side={THREE.DoubleSide} transparent={opacity < 1} opacity={opacity} roughness={0.92} metalness={0} />
+      <meshStandardMaterial key={tex ? 'tex' : 'plain'} color={tex ? '#ffffff' : color} map={tex ?? undefined} side={THREE.DoubleSide} transparent={opacity < 1} opacity={opacity} roughness={0.92} metalness={0} />
     </mesh>
   );
 }

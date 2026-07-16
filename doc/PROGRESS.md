@@ -51,6 +51,18 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-16) — 🗂️ AssetBrowser: ground·boundary 텍스처 에셋 통합 (사용자 확인 완료)
+
+> `EnvironmentPanel` 단독. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").**
+
+- **문제**: ground/boundary 텍스처가 `ground/`·`boundary/` 경로로 **직접 스토리지 업로드**(에셋 미등록)라 Textures 라이브러리에 안 뜨고 재사용/삭제 관리 불가.
+- **통합**: 공용 `uploadTextureAsset`(= `uploadImageTexture` + `addAsset`, `textures/{pid}/` + assets DB insert)로 3개 핸들러(handleGroundTexUpload·handleBoundaryTexUpload·uploadBoundaryImage[면별/스카이박스 공유]) 통일 → **전부 에셋으로 등록**(오브젝트 텍스처와 동일 파이프라인, Textures 탭에 노출·관리 가능).
+- **라이브러리 픽커**: ground(Texture 모드)·boundary 메인 텍스처에 **`TexturePicker`**(썸네일 그리드 + 업로드) → 업로드뿐 아니라 **기존 텍스처 재사용**. 면별/스카이박스는 업로드(이제 등록)만.
+- 중복 3핸들러 정리, 미사용 `createBrowserSupabase` import 제거. **로드맵 완료.**
+- **🐛 덤 수정(기존 버그)**: boundary 텍스처가 **그라데이션 켤 때만** 보이던 문제 — 경계 벽 재질(`WallFace`·`CylinderWall`·`PolygonCap`)에 `key`가 없어 **텍스처 비동기 로드 시 셰이더 재컴파일 안 됨**(USE_MAP 미정의). 그라데이션의 `vertexColors`가 우연히 재컴파일을 유발해 그때만 보였던 것. → 세 재질에 `key={텍스처 유무}` 추가(PrimitiveMaterial과 동일 트릭)로 그라데이션 무관하게 정상 적용.
+
+---
+
 ## ✅ 완료 (2026-07-16) — 🧊 복셀 후속: 3D 클릭 빌드 + 단일 스킨 + 색별 텍스처(멀티 스킨) (사용자 확인 완료)
 
 > `VoxelToolModal` + `voxelGeometry` + `primitiveGeometry` + `sceneStore`(add/updateVoxelObject) + `EditorObjectInstance` + `ViewerObject` + 신규 `useVoxelSkinMaterials`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘동작한다").**
@@ -784,7 +796,7 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - **경계 벽 2차**: ~~그라데이션 페이드/one-sided/면별 텍스처/스카이박스 대안~~ **[완료 2026-07-10]** / ~~원형 모양~~ / ~~커스텀(자유 다각형)~~ **[전부 완료 2026-07-16 — 위 참고]**. 경계 모양 로드맵 종료(사각·원·다각형).
 - ~~**조명 L2 (c)**: 라이트 색(warm/cool) 스키마~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]**. L2 전체 완료.
 - ~~**Prefab**: 미착수. 착수 전 override/동기화 규칙 설계 필요.~~ **[MVP 완료 2026-07-09 — 아래 참고]**
-- ~~**AssetBrowser 탭**: Materials/HDR (WIP)~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]**. **4개 탭(Materials/Textures/HDR/Audio) 전부 완료.** ground·boundary 텍스처는 여전히 개별 업로드(에셋 등록 아님) — 원하면 uploadImageTexture로 통합 가능.
+- ~~**AssetBrowser 탭**: Materials/HDR (WIP)~~ **[완료 2026-07-10]**. **4개 탭(Materials/Textures/HDR/Audio) 전부 완료.** ~~ground·boundary 텍스처 개별 업로드~~ **[에셋 통합 완료 2026-07-16 — 위 참고: uploadImageTexture+addAsset, TexturePicker 픽커]**.
 
 ### 🗺️ 대형 로드맵 (원본 `ROADMAP.md`/`FEATURE_LIST.md` — 이 핸드오프 요약에 누락됐던 것들)
 
