@@ -384,6 +384,9 @@ export interface PrefabSchema {
   rootKey: string;             // nodes 중 루트 노드의 nodeKey
   nodes: PrefabNode[];
   thumbnailUrl?: string;
+  // 원본(master) 인스턴스의 prefabInstanceId. 이 인스턴스를 편집하면 def를 갱신하고 사본에 자동 전파.
+  //   미설정 = 원본 미지정(레거시) → 수동 Apply 방식 유지, 사용자가 '원본으로 지정' 가능. (피그마 메인 컴포넌트 개념)
+  masterInstanceId?: string;
 }
 
 // 클로너(비파괴 배열) 설정 — 이 그룹은 소스 1개를 count개로 실시간 복제 배치한다.

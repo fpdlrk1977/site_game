@@ -51,6 +51,39 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 🧩 진행 중 (2026-07-16) — 프리팹 원본/사본(Figma 컴포넌트 모델) — 브라우저 확인 대기
+
+> 사용자 요청: "프리팹 = 피그마 컴포넌트인데 원본/사본 구분이 없다. 피그마처럼 원본 편집→사본 자동 반영이면 좋겠다." **확정(사용자)**: ①원본 편집 시 **자동 전파**(Apply 불필요) ②원본 삭제 시 **다른 사본 자동 승격** ③아이콘 = **원본=현재(CirclePile), 사본=`Focus`**. tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.**
+
+- **배경(기존 갭)**: 프리팹 "원본"은 라이브러리 속 **데이터(def)** 일 뿐 화면엔 동등한 인스턴스만 존재. 원본 반영은 인스턴스 편집 후 **수동 Apply**("원본에 반영")뿐 → 피그마의 "메인 컴포넌트↔인스턴스" 자동 동기화가 체감 안 됨.
+- **모델**: `PrefabSchema.masterInstanceId?`(옵셔널, 미설정=레거시=수동 Apply 유지) — 한 인스턴스를 **원본(master)** 으로 지정. 원본 편집 = def 갱신 + 사본 자동 동기화(각 사본 override 존중). **루트 배치 transform(pos/rot/scale)은 항상 인스턴스 소유**(전파 안 함)라 사본 위치는 그대로.
+- **순수 로직**(`lib/prefab.ts`): `propagateMaster(objects, prefab)` = master로부터 `rebuildPrefabFromInstance`→def 재구성 + `syncInstances`. 원본이 씬에 없으면(삭제) 무변경 반환(승격은 스토어가).
+- **스토어**(`sceneStore.ts`):
+  - `createPrefab`: 만든 선택물을 **원본으로 지정**(`masterInstanceId=instanceId`).
+  - `updateObject`: 대상이 **원본 노드면 override 안 쌓고** `propagateMaster`로 즉시 전파. 사본 노드는 기존대로 override 기록. undo 정합 위해 **원본 편집이면 `_prevSnapshot`에 pre-edit `prefabs` 포함**.
+  - `commitTransforms`(기즈모): 원본 자식 트랜스폼 편집→해당 프리팹 전파. **사본 자식은 `transform` override 기록**(향후 동기화 시 보존 — 기존 gizmo 경로의 누락 보완). 원본 편집이면 snapshot에 prefabs.
+  - `setPrefabMaster(instanceRootId)`: 이 인스턴스를 원본으로 지정(= 현재 상태로 def 재구성 + 사본 동기화, Apply와 동일 전파). 우클릭 메뉴/Inspector에서 호출.
+  - `deleteSelected`: 원본 인스턴스가 통째로 삭제되면 **남은 사본 하나를 `masterInstanceId`로 자동 승격**(비파괴 — def·다른 사본 무변경). snapshot에 prefabs 포함.
+- **UI**:
+  - **트리**(`HierarchyPanel`): 프리팹 루트 아이콘 = 원본 `CirclePile` / 사본 `Focus`(둘 다 `--prefab` 색). **레거시(원본 미지정)는 사본 취급 안 하고 현행 아이콘 유지**. 사본/레거시 루트 우클릭에 **"원본으로 지정"**(`Focus` 아이콘).
+  - **Inspector**(`PrefabSection`): 인스턴스에 **Master·원본 / Copy·사본 뱃지**. 원본=「편집 시 자동 반영」 안내(Apply/Revert 숨김). 사본=override 뱃지+Revert+**"Set as master"**(Apply는 숨김 — 원본이 전파원). 레거시(원본 없음)=기존 Apply+Revert+Set as master.
+- **하위호환**: `masterInstanceId` 옵셔널 → 기존 씬/프리팹은 레거시(수동 Apply)로 그대로. normalize/save는 prefabs 통째 통과라 자동 보존.
+- **확인 필요(브라우저)**: 프리팹 만들기→배치(사본 여러 개)→**원본 편집(색·트랜스폼)이 사본에 즉시 반영**·사본 개별 편집은 그 사본만(override)·**원본 삭제 시 사본 자동 승격**·우클릭 "원본으로 지정"·트리 아이콘(원본/사본)·undo가 원본 편집+전파를 1회로 되돌리는지.
+- **알려진 제약/후속**: 전파는 **commit 시점**(updateObject 지연커밋의 pushHistory / gizmo 놓을 때) — 슬라이더 드래그 중엔 놓아야 사본 반영(사실상 즉시). 승격은 최소 동작(def·다른 사본 무변경)이라 승격 직후 새 원본의 기존 override는 다음 편집 때 def로 흡수. `removeObjectsByAsset` 등 다른 삭제 경로는 자동 승격 미적용(propagateMaster가 안전 무변경 반환).
+
+### 후속 (2026-07-16) — 프리팹 그룹 해제 차단 + 사본 detach(프리팹 해제)
+
+> 사용자 지적: "프리팹은 그룹과 다른데 Ctrl+Shift+G로 그룹 해제가 된다. **원본은 일반 오브젝트로 못 돌아가야** 한다." + "**사본 우클릭에 프리팹 해제** → 일반 그룹+기본색 전환" + "프리팹의 '그룹 해제' 메뉴는 숨김". **확정(사용자)**: 원본 detach 없음 · detach는 **메뉴+Inspector 둘 다**. tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.**
+
+- **문제**: `ungroupSelected`가 프리팹 루트도 그냥 그룹으로 해제 + **프리팹 태그를 안 지워서** def의 rootKey가 가리키는 노드가 사라진 **손상된 유령 프리팹**이 됐음.
+- **그룹 해제 차단**: `ungroupSelected`에 `if (group.prefabId) return` — 프리팹(원본/사본, 프리팹 내 하위 그룹 포함) Ctrl+Shift+G 무효. `HierarchyPanel` 컨텍스트 메뉴의 "그룹 해제"는 `obj.isGroup && !obj.prefabId`로 **일반 그룹만 표시**(프리팹은 숨김).
+- **사본 detach**(`detachPrefabInstance(instanceRootId)`): 같은 `prefabInstanceId` 서브트리의 프리팹 태그(prefabId/prefabInstanceId/prefabNodeKey/prefabOverrides) 전부 제거 → **일반 그룹 + 기본색**(트리 색은 `obj.prefabId` 기반이라 자동 복귀). **원본(master)은 가드로 detach 불가**(`masterInstanceId===iid`면 no-op). def·다른 사본·원본 **무영향**. 피그마 "Detach instance"와 동일.
+- **UI**: 트리 사본 루트 우클릭에 **"프리팹 해제"**(`Unlink` 아이콘, "원본으로 지정" 아래) + Inspector `PrefabSection` 사본 브랜치에 **"Detach · 프리팹 해제" 버튼**. 원본엔 둘 다 없음. 겸사겸사 `HierarchyPanel` 미사용 `ShoppingBag` import 정리.
+- **원본 제거 정식 경로**: 라이브러리에서 **프리팹 정의 삭제**(`deletePrefab`) — 모든 인스턴스(원본 포함) 태그 벗고 일반 그룹으로. 이게 원본까지 없애는 유일한 길.
+- **확인 필요(브라우저)**: 프리팹 원본/사본에서 Ctrl+Shift+G 무반응 · 프리팹 우클릭에 "그룹 해제" 안 뜸 · 사본 "프리팹 해제"(메뉴/Inspector)→일반 그룹+기본색·원본/다른 사본 유지 · 원본엔 detach 없음.
+
+---
+
 ## 🌫️ 진행 중 (2026-07-16) — 에디터 fog 렌더링 추가 (수평선 하드컷 완화) — 브라우저 확인 대기
 
 > `EditorCanvas`에 뷰어(`ViewerCanvas`)와 동일한 `<fog>`/`<fogExp2>` 블록 추가(배경 렌더 직후). tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.**

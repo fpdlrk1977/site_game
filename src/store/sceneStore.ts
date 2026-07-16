@@ -35,6 +35,7 @@ import {
   instantiate as instantiatePrefabNodes,
   syncInstances,
   rebuildPrefabFromInstance,
+  propagateMaster,
   overrideGroupsFromPatch,
 } from '@/lib/prefab';
 import { regenerateCloner, clonerPlacement, clonerCount, clonerRotYDeg, DEFAULT_CLONER } from '@/lib/cloner';
@@ -208,6 +209,10 @@ interface SceneActions {
   applyInstanceToPrefab: (instanceRootId: string) => void;
   /** 선택 인스턴스의 override를 버리고 원본 값으로 되돌림(그룹 지정 시 그 그룹만) */
   revertInstance: (instanceRootId: string, group?: PrefabOverrideGroup) => void;
+  /** 이 인스턴스를 프리팹 원본(master)으로 지정 — 이후 이 인스턴스 편집이 사본에 자동 전파 */
+  setPrefabMaster: (instanceRootId: string) => void;
+  /** 이 사본 인스턴스의 프리팹 링크를 끊어 일반 그룹으로 전환(태그 제거→기본색). 원본은 불가. def/다른 사본 무영향 */
+  detachPrefabInstance: (instanceRootId: string) => void;
   /** 프리팹 정의 삭제 — 인스턴스는 태그를 벗고 독립 오브젝트가 됨(씬에는 유지) */
   deletePrefab: (prefabId: string) => void;
   /** 프리팹 이름 변경 */
@@ -1015,13 +1020,15 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const { objects, environment, prefabs, animClips, poseEdit, keySel, _prevSnapshot } = get();
     const target = objects.find((o) => o.id === id);
     // 프리팹 인스턴스 노드를 편집하면, 바뀐 필드가 속한 override 그룹을 기록 → 동기화 시 그 그룹은 원본을 안 따른다.
+    // 단, 원본(master) 인스턴스는 override를 쌓지 않고 편집을 def로 승격해 사본에 자동 전파한다.
+    const editedDef = target?.prefabInstanceId && target.prefabId ? prefabs.find((p) => p.id === target.prefabId) : undefined;
+    const isMasterEdit = !!editedDef && editedDef.masterInstanceId === target!.prefabInstanceId;
     let overridePatch: Partial<ObjectNodeSchema> | null = null;
-    if (target?.prefabInstanceId && target.prefabId) {
-      const def = prefabs.find((p) => p.id === target.prefabId);
-      const isRoot = !!def && target.prefabNodeKey === def.rootKey;
+    if (editedDef && !isMasterEdit) {
+      const isRoot = target!.prefabNodeKey === editedDef.rootKey;
       const groups = overrideGroupsFromPatch(Object.keys(patch), isRoot);
       if (groups.length > 0) {
-        const merged = new Set<PrefabOverrideGroup>(target.prefabOverrides ?? []);
+        const merged = new Set<PrefabOverrideGroup>(target!.prefabOverrides ?? []);
         groups.forEach((g) => merged.add(g));
         overridePatch = { prefabOverrides: [...merged] };
       }
@@ -1039,34 +1046,78 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         }
       }
     }
+    // 원본(master) 편집 → def 갱신 + 사본에 즉시 전파(override는 존중). 루트 배치 transform은 def에 안 밀림(제자리).
+    let newPrefabs = prefabs;
+    if (isMasterEdit && editedDef) {
+      const r = propagateMaster(newObjects, editedDef);
+      newObjects = r.objects;
+      newPrefabs = prefabs.map((p) => (p.id === editedDef.id ? r.prefab : p));
+    }
     // 오토키 — 트랜스폼 편집 시 편집 중 포즈가 있으면 그 포즈 키프레임에 자동 반영.
     const isTransform = 'position' in patch || 'rotation' in patch || 'scale' in patch;
     const ak = isTransform ? autoKeyPose(poseEdit, keySel, animClips, newObjects, [id]) : null;
     set({
-      _prevSnapshot: _prevSnapshot ?? { objects, environment, ...(ak ? { animClips } : {}) },
+      // 원본 편집이면 undo가 def도 되돌리도록 스냅샷에 pre-edit prefabs 포함(첫 편집에서 1회 캡처).
+      _prevSnapshot: _prevSnapshot ?? { objects, environment, ...(isMasterEdit ? { prefabs } : {}), ...(ak ? { animClips } : {}) },
       objects: newObjects,
+      ...(isMasterEdit ? { prefabs: newPrefabs } : {}),
       ...(ak ? { animClips: ak } : {}),
       isModified: true,
     });
   },
 
   commitTransforms: (updates) => {
-    const { objects, environment, animClips, poseEdit, keySel, past } = get();
+    const { objects, environment, prefabs, animClips, poseEdit, keySel, past } = get();
     const map = new Map(updates.map((u) => [u.id, u]));
-    const newObjects = objects.map((o) => {
+    let masterEdited = false;
+    let newObjects = objects.map((o) => {
       const u = map.get(o.id);
-      return u ? { ...o, position: { ...u.position }, rotation: { ...u.rotation }, scale: { ...u.scale } } : o;
+      if (!u) return o;
+      const moved = { ...o, position: { ...u.position }, rotation: { ...u.rotation }, scale: { ...u.scale } };
+      // 프리팹 인스턴스 자식을 기즈모로 옮기면: 원본이면 전파 대상, 사본이면 transform override 기록(향후 동기화 시 보존).
+      if (o.prefabId && o.prefabInstanceId && o.prefabNodeKey) {
+        const def = prefabs.find((p) => p.id === o.prefabId);
+        if (def?.masterInstanceId === o.prefabInstanceId) masterEdited = true;
+        else if (def && o.prefabNodeKey !== def.rootKey) {
+          const ov = new Set(o.prefabOverrides ?? []);
+          ov.add('transform');
+          moved.prefabOverrides = [...ov];
+        }
+      }
+      return moved;
     });
+    // 원본 자식 트랜스폼 편집 → 해당 프리팹만 def 갱신 + 사본 전파.
+    let newPrefabs = prefabs;
+    if (masterEdited) {
+      for (const def of prefabs) {
+        if (!def.masterInstanceId) continue;
+        const touched = updates.some((u) => objects.find((x) => x.id === u.id)?.prefabInstanceId === def.masterInstanceId);
+        if (!touched) continue;
+        const cur = newPrefabs.find((p) => p.id === def.id)!;
+        const r = propagateMaster(newObjects, cur);
+        newObjects = r.objects;
+        newPrefabs = newPrefabs.map((p) => (p.id === def.id ? r.prefab : p));
+      }
+    }
     // 오토키 — 편집 중 포즈가 있으면 옮긴 오브젝트를 그 포즈 키프레임에 자동 반영(objects·animClips 원자 커밋).
     const ak = autoKeyPose(poseEdit, keySel, animClips, newObjects, updates.map((u) => u.id));
     set({
       objects: newObjects,
+      ...(masterEdited ? { prefabs: newPrefabs } : {}),
       ...(ak ? { animClips: ak } : {}),
       isModified: true,
       // 직전에 커밋 안 된 편집 스냅샷 잔재를 버려 히스토리 오염 차단(기즈모는 자체 baseline으로 원자 커밋).
       _prevSnapshot: null,
-      // 이 변환 '직전'의 objects(오토키면 animClips도)를 undo 기준으로 원자적 커밋.
-      ...withHistory(ak ? { objects, environment, animClips } : { objects, environment }, past),
+      // 이 변환 '직전'의 objects(원본 편집이면 prefabs, 오토키면 animClips도)를 undo 기준으로 원자적 커밋.
+      ...withHistory(
+        {
+          objects,
+          environment,
+          ...(masterEdited ? { prefabs } : {}),
+          ...(ak ? { animClips } : {}),
+        },
+        past,
+      ),
     });
   },
 
@@ -1151,7 +1202,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   deleteSelected: () => {
-    const { selectedId, selectedIds, objects, environment, animClips, past } = get();
+    const { selectedId, selectedIds, objects, environment, prefabs, animClips, past } = get();
     const roots = selectedIds.length > 0 ? selectedIds : (selectedId ? [selectedId] : []);
     if (roots.length === 0) return;
     // 그룹의 모든 자손도 함께 삭제
@@ -1160,15 +1211,36 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       return [id, ...children.flatMap((c) => collectDescendants(c.id))];
     };
     const allToDelete = new Set(roots.flatMap((id) => collectDescendants(id)));
+    const remaining = objects.filter((o) => !allToDelete.has(o.id));
     // 삭제되는 오브젝트를 참조하는 애니 클립 제거(고아 클립 정리)
     const { clips: nextClips, changed: clipsChanged } = pruneOrphanClips(animClips, allToDelete);
+    // 원본(master) 인스턴스가 통째로 삭제되면 남은 사본 하나를 원본으로 자동 승격(프리팹 관계 유지).
+    let nextPrefabs = prefabs;
+    let prefabsChanged = false;
+    for (const p of prefabs) {
+      if (!p.masterInstanceId) continue;
+      const masterAlive = remaining.some((o) => o.prefabId === p.id && o.prefabInstanceId === p.masterInstanceId);
+      if (masterAlive) continue;
+      const nextIid = remaining.find((o) => o.prefabId === p.id && o.prefabInstanceId)?.prefabInstanceId;
+      nextPrefabs = nextPrefabs.map((x) => (x.id === p.id ? { ...x, masterInstanceId: nextIid } : x));
+      prefabsChanged = true;
+    }
     set({
-      objects: objects.filter((o) => !allToDelete.has(o.id)),
+      objects: remaining,
       animClips: nextClips,
+      ...(prefabsChanged ? { prefabs: nextPrefabs } : {}),
       selectedId: null,
       selectedIds: [],
       isModified: true,
-      ...withHistory(clipsChanged ? { objects, environment, animClips } : { objects, environment }, past),
+      ...withHistory(
+        {
+          objects,
+          environment,
+          ...(clipsChanged ? { animClips } : {}),
+          ...(prefabsChanged ? { prefabs } : {}),
+        },
+        past,
+      ),
     });
   },
 
@@ -1498,6 +1570,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     if (!selectedId) return;
     const group = objects.find((o) => o.id === selectedId);
     if (!group?.isGroup) return;
+    if (group.prefabId) return; // 프리팹(원본/사본)은 그룹 해제 불가 — 사본은 '프리팹 해제(detach)'로만 링크 해제.
 
     // 행렬 기반: 자식의 참 월드행렬(그룹 체인 포함)을 새 부모(그룹의 부모=중첩이면 조부모, 아니면 root)
     // 기준 로컬로 변환해 decompose. 회전+비균일 스케일에서도 위치/방향/크기가 어긋나지 않는다
@@ -1553,11 +1626,13 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       objs = [...objects.map((o) => (o.id === selectedId ? { ...o, parentId: groupObj.id, position: { x: 0, y: 0, z: 0 } } : o)), groupObj];
     }
 
-    const { prefab, tagged } = buildPrefab(objs, rootId, prefabName);
+    const { prefab, tagged, instanceId } = buildPrefab(objs, rootId, prefabName);
+    // 만든 이 선택물이 곧 원본(master) — 이후 편집이 배치할 사본들에 자동 전파(피그마 메인 컴포넌트).
+    const masterPrefab: PrefabSchema = { ...prefab, masterInstanceId: instanceId };
     const taggedById = new Map(tagged.map((t) => [t.id, t]));
     set({
       objects: objs.map((o) => taggedById.get(o.id) ?? o),
-      prefabs: [...prefabs, prefab],
+      prefabs: [...prefabs, masterPrefab],
       selectedId: rootId,
       selectedIds: [rootId],
       isModified: true,
@@ -1619,6 +1694,48 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       objects: synced,
       isModified: true,
       ...withHistory({ objects, environment, prefabs }, past),
+    });
+  },
+
+  setPrefabMaster: (instanceRootId) => {
+    const { objects, environment, prefabs, past } = get();
+    const root = objects.find((o) => o.id === instanceRootId);
+    if (!root?.prefabId || !root.prefabInstanceId) return;
+    const prefab = prefabs.find((p) => p.id === root.prefabId);
+    if (!prefab) return;
+    if (prefab.masterInstanceId === root.prefabInstanceId) return; // 이미 원본
+    const iid = root.prefabInstanceId;
+    // 이 인스턴스를 원본으로: 현재 상태로 def 재구성 + master 지정 + 이 인스턴스 override 초기화 + 전체 동기화.
+    //   (= '이걸 원본으로 삼는다' → 사본들은 이 원본을 따르게 됨. Apply와 같은 전파.)
+    const newDef: PrefabSchema = { ...rebuildPrefabFromInstance(objects, prefab, instanceRootId), masterInstanceId: iid };
+    const cleared = objects.map((o) => (o.prefabInstanceId === iid ? { ...o, prefabOverrides: [] } : o));
+    const newPrefabs = prefabs.map((p) => (p.id === newDef.id ? newDef : p));
+    const synced = syncInstances(cleared, newDef);
+    set({
+      objects: synced,
+      prefabs: newPrefabs,
+      isModified: true,
+      ...withHistory({ objects, environment, prefabs }, past),
+    });
+  },
+
+  detachPrefabInstance: (instanceRootId) => {
+    const { objects, environment, prefabs, past } = get();
+    const root = objects.find((o) => o.id === instanceRootId);
+    if (!root?.prefabId || !root.prefabInstanceId) return;
+    const prefab = prefabs.find((p) => p.id === root.prefabId);
+    if (prefab && prefab.masterInstanceId === root.prefabInstanceId) return; // 원본은 detach 불가(못 돌아감)
+    const iid = root.prefabInstanceId;
+    // 이 인스턴스 서브트리(같은 prefabInstanceId)의 프리팹 태그를 전부 제거 → 일반 그룹/오브젝트로. def·다른 사본 무영향.
+    const detached = objects.map((o) =>
+      o.prefabInstanceId === iid
+        ? { ...o, prefabId: undefined, prefabInstanceId: undefined, prefabNodeKey: undefined, prefabOverrides: undefined }
+        : o,
+    );
+    set({
+      objects: detached,
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
     });
   },
 

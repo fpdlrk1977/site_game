@@ -8,7 +8,7 @@ import {
   Cone,
   Hexagon,
   Square,
-  Group,
+  Archive,
   Type,
   Image as ImageIcon,
   Play,
@@ -18,7 +18,6 @@ import {
   CircleDot,
   ChevronDown,
   ChevronRight,
-  ShoppingBag,
   Eye,
   EyeOff,
   Lock,
@@ -33,6 +32,8 @@ import {
   PenTool,
   Boxes,
   CirclePile,
+  Focus,
+  Unlink,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore, isDescendant } from "@/store/sceneStore";
@@ -53,11 +54,11 @@ const SHAPE_ICONS: Record<string, LucideIcon> = {
   voxel: Boxes, // 복셀(live 프리미티브)
 };
 
-function getIcon(obj: ObjectNodeSchema): LucideIcon {
+function getIcon(obj: ObjectNodeSchema, isCopyRoot = false): LucideIcon {
   if (obj.clonerClone) return CircleDot; // 클로너가 생성한 복제본
   if (obj.clonerConfig) return Grid3x3; // 클로너 그룹
-  if (obj.isGroup && obj.prefabId) return CirclePile; // 프리팹 그룹(루트)
-  if (obj.isGroup) return Group;
+  if (obj.isGroup && obj.prefabId) return isCopyRoot ? Focus : CirclePile; // 프리팹 루트 — 원본=CirclePile, 사본=Focus
+  if (obj.isGroup) return Archive;
   if (obj.light) return obj.light.type === "point" ? Lightbulb : obj.light.type === "spot" ? Flashlight : Sun;
   if (obj.content) return obj.content.type === "text" ? Type : obj.content.type === "image" ? ImageIcon : Play;
   if (obj.voxels) return Boxes; // 복셀로 만든 오브젝트(현재는 GLB로 구워지지만 레시피로 식별)
@@ -131,6 +132,14 @@ function HierarchyItem({
     openVoxelEdit,
   } = useSceneStore();
   const objects = useSceneStore((s) => s.objects);
+  const prefabs = useSceneStore((s) => s.prefabs);
+  const setPrefabMaster = useSceneStore((s) => s.setPrefabMaster);
+  const detachPrefabInstance = useSceneStore((s) => s.detachPrefabInstance);
+  // 프리팹 루트인지 + 원본/사본 구분. 원본 미지정(레거시)이면 사본 취급 안 함(현행 아이콘 유지).
+  const prefabDef = obj.prefabId ? prefabs.find((p) => p.id === obj.prefabId) : undefined;
+  const isPrefabRoot = !!(obj.isGroup && obj.prefabId && prefabDef);
+  const isMasterRoot = isPrefabRoot && prefabDef!.masterInstanceId === obj.prefabInstanceId;
+  const isCopyRoot = isPrefabRoot && !!prefabDef!.masterInstanceId && !isMasterRoot;
   const [editing, setEditing] = useState(false);
   const [nameValue, setNameValue] = useState(obj.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -239,7 +248,7 @@ function HierarchyItem({
           style={obj.prefabId ? { color: "var(--prefab)" } : undefined}
         >
           {(() => {
-            const I = getIcon(obj);
+            const I = getIcon(obj, isCopyRoot);
             return <I size={14} />;
           })()}
         </span>
@@ -339,7 +348,32 @@ function HierarchyItem({
               <Boxes size={13} className="text-muted" /> 복셀 수정
             </button>
           )}
-          {obj.isGroup && (
+          {isPrefabRoot && !isMasterRoot && (
+            <>
+              <button
+                onClick={() => {
+                  setPrefabMaster(obj.id);
+                  onCloseMenu();
+                }}
+                title="이 인스턴스를 프리팹 원본으로 지정 — 이후 편집이 모든 사본에 자동 반영됩니다"
+                className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
+              >
+                <Focus size={13} style={{ color: "var(--prefab)" }} /> 원본으로 지정
+              </button>
+              <button
+                onClick={() => {
+                  detachPrefabInstance(obj.id);
+                  onCloseMenu();
+                }}
+                title="프리팹 링크를 끊어 일반 그룹으로 전환합니다(색상도 기본색). 원본과 다른 사본은 영향 없음"
+                className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
+              >
+                <Unlink size={13} className="text-muted" /> 프리팹 해제
+              </button>
+            </>
+          )}
+          {/* 그룹 해제는 일반 그룹만 — 프리팹(원본/사본)은 그룹이 아니라 프리팹이므로 숨김(사본은 '프리팹 해제'로 링크 해제) */}
+          {obj.isGroup && !obj.prefabId && (
             <button
               onClick={() => {
                 ungroupSelected();

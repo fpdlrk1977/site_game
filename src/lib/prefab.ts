@@ -249,6 +249,26 @@ export function syncInstances(
   return result;
 }
 
+// 원본(master) 인스턴스의 현재 상태를 def에 반영하고 모든 사본에 자동 전파.
+//   = master로부터 def 재구성 + syncInstances(사본의 override는 존중). 원본 미지정이면 그대로 반환.
+//   피그마: 메인 컴포넌트를 편집하면 인스턴스가 자동 갱신되는 것과 동일.
+export function propagateMaster(
+  objects: ObjectNodeSchema[],
+  prefab: PrefabSchema,
+): { objects: ObjectNodeSchema[]; prefab: PrefabSchema } {
+  if (!prefab.masterInstanceId) return { objects, prefab };
+  const masterRoot = objects.find(
+    (o) =>
+      o.prefabId === prefab.id &&
+      o.prefabInstanceId === prefab.masterInstanceId &&
+      o.prefabNodeKey === prefab.rootKey,
+  );
+  if (!masterRoot) return { objects, prefab }; // 원본이 씬에 없음(삭제됨) → 호출부에서 승격 처리
+  const newDef = rebuildPrefabFromInstance(objects, prefab, masterRoot.id);
+  const synced = syncInstances(objects, newDef);
+  return { objects: synced, prefab: newDef };
+}
+
 // 한 인스턴스의 현재 상태로 프리팹 def를 재구성(Apply). 루트 transform은 def의 기존 값을 보존(배치는 인스턴스별이므로).
 export function rebuildPrefabFromInstance(
   objects: ObjectNodeSchema[],
