@@ -51,6 +51,26 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-16) — 🔷 경계 벽 원형(Circle) + 커스텀(자유 다각형) 모양 (사용자 확인 완료)
+
+> `scene.ts` + `BoundaryWalls` + `PlayCanvas`(콜라이더) + `EditorCanvas`(BoundaryGizmo) + `ViewerCanvas` + `EnvironmentPanel` + 신규 `BoundaryShapeModal`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("만족해").**
+
+### 원형(Circle)
+- **스키마**: `EnvSchema.boundaryShape?: 'rect'|'circle'|'polygon'`(미설정=rect, 기존 씬 무영향). 원형은 `boundary`=반지름.
+- **렌더**: 신규 `CylinderWall`(열린 실린더, 색·텍스처[둘레 2πr 타일]·그라데이션·oneSided=BackSide) + 천장=원반. **콜라이더**: 반지름 비례 24~72개 박스를 접선 링으로. **가이드**: 주황 원 링.
+
+### 커스텀(자유 다각형)
+- **편집 UI**(`BoundaryShapeModal`, 펜툴 패턴 재사용): 위에서 내려다본 씬 **풋프린트 배경**(오브젝트 worldBBox=파란 사각형·스폰=초록 점·월드 격자) 위에 꼭짓점 클릭→**첫 점 클릭해 닫기**(3점+)·점 드래그·Ctrl+Z·스냅(1m)·Esc. 적용 시 월드 XZ `boundaryPolygon` 저장 + `boundary`=경계반경 자동. 스토어 `boundaryShapeOpen` 플래그, `EditorClient` 마운트.
+- **렌더**: `PolygonWall`(변마다 `WallFace` 한 장 `rot=[0,atan2(-dz,dx),0]`) + `PolygonCap`(천장, `THREE.Shape`→ShapeGeometry earcut 삼각분할). **콜라이더**: 변마다 정렬 박스(`rot=[0,atan2(dx,dz),0]`, len/2+0.3 겹침). **가이드**: 주황 다각형 외곽선 + 꼭짓점 기둥.
+- **제약**: oneSided(안쪽만)는 다각형 윈딩 판정 복잡해 미지원(항상 양면). 오목/볼록 다 됨.
+
+### 공통
+- **에디터 바닥 채움 가이드**(2026-07-16 추가): 라인만으론 안쪽 구분 어려워 `BoundaryGizmo`에 **반투명 주황 바닥(opacity 0.08, depthWrite=false, y=0.03)** 추가 — rect=plane·circle=circle·polygon=shapeGeometry. **에디터 전용**(뷰어 무영향).
+- **UI**: Boundary 모양 드롭다운(사각형/원형/**커스텀**) + 원형=반지름·사각형=가로/세로·커스텀=**"모양 그리기/편집" 버튼**.
+- 원형/다각형 모두 **면별 텍스처 개념 없음**(변/둘레마다 반복). 스카이박스는 모양 무관.
+
+---
+
 ## ✅ 완료·헤드리스 검증 (2026-07-16) — 🟦 둥근 박스 직사각형 모서리 균일화 (비균일 스케일 왜곡 수정)
 
 > `primitiveGeometry`(신규 `createRoundedBoxDims`) + `EditorObjectInstance` + `ViewerObject` + `InstancedPrimitives`. tsc 클린 + `✓ Compiled`. **헤드리스 스크린샷 검증 + 사용자 확인 완료("잘되는거 같아").** (직전 "얇은 판" 회귀는 편집 중 HMR 중간상태였고 하드리프레시로 해소.)
@@ -731,7 +751,7 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
   - **Phase 3 완료(2026-07-08)**: (1) **등장 애니메이션 종류 선택** `PopupConfig.anim: 'auto'|'none'|'fade'|'scale'|'slide'` — auto=위치별 기본(기존), slide는 위치에 맞는 방향 자동. `globals.css`에 `popupFade` 추가, `ViewerClient`가 anim→animClass 매핑. 씬 기본값(`defaultPopup`)에도 anim 포함. (2) **chrome/padding 옵션** `PopupConfig.chrome?`(미설정/true=제목바+하단 닫기, **false=몰입형: 제목·닫기 숨김 + 우상단 플로팅 ✕ + 여백 0** → edge-to-edge iframe용), `padding?`(카드 내부 여백 override, 예 '0'|'24px'). chrome=false는 legacyCompact 제외라 구조 카드로 렌더. (3) **에디터 ▶ 미리보기를 PopupFrame로** — `previewPopup` state를 `{content, config}`로 바꿔 뷰어와 동일 병합(이벤트>씬기본)으로 **모드(iframe/html) 실제 렌더 + 크기/배경 반영**. 위치 프리셋은 에디터 미리보기에선 중앙 고정 + "뷰어에선 ○○ 배치" 주석(실제 위치는 뷰어). 에디터 이벤트 폼에 애니메이션 드롭다운·chrome 토글·여백 입력 추가, `cleanPopup`이 anim/chrome/padding 보존. 검증: **tsc 클린 + dev `/test/move-object` 200**. **실동작 브라우저 확인 필요**(anim 5종·몰입형 chrome=false 플로팅닫기·여백0 iframe·▶ 미리보기 iframe 렌더).
   - **팝업 Phase 완료** — 후속 후보(미착수): 팝업 안 여러 액션 버튼(CTA), 등장/퇴장 분리 애니메이션, 팝업 열림 시 이벤트 트리거 체이닝.
 - **대화 시스템 고도화 — 대사 종료 액션(버튼)·거리 LOD·1회성 [완료 2026-07-08]**: (1) **대사 종료 시 액션 = 말풍선 안 버튼** — `EventSchema.trigger`에 `dialogue_end` 추가. **자동발동이 아니라**(사용자 피드백: always+이벤트 문제·끝나자마자 넘어가면 당황) 대화 **마지막 문장에 액션 버튼**을 띄우고 **방문자가 누르면** 발동. `DialogueConfig.endButtonLabel`(기본 '확인'). `SpeechBubble` 안 3D Html 버튼(pointerEvents auto + onMouseDown/onTouchStart stopPropagation으로 카메라 드래그 차단 — 플레이 모드는 포인터락 없어 클릭 가능) → `dv.confirm()` → `onEvent(obj,'dialogue_end')` → 기존 `handleObjectEvent` 파이프라인(팝업·씬이동·문열기 등 전 액션). 데스크톱은 E키(근접+끝)로도 확정. auto 대화는 종료 이벤트 있으면 **마지막 문장에서 순환 멈춰 버튼 유지**. (2) **거리 LOD** — `SpeechBubble`을 `<group ref>`로 감싸 useFrame에서 카메라 거리 계산, 12m부터 페이드→20m 넘으면 사실상 숨김(직접 style.opacity, setState 없음, drei `distanceFactor` 원근축소와 병행). (3) **1회성** — `DialogueConfig.once`. `active = wantActive && !dismissed && !(once && seen)`. seen 시점: 버튼 확정(confirm) 또는 (버튼 없는 대화는) 끝까지 보고 근접 해제 시. `dismissed`=버튼 눌러 이번 세션 닫음(근접 풀리면 리셋). 미묘한 자동발동 로직(firedRef 등)은 버튼 방식으로 대체돼 단순화됨. **미완료(대화 남은 것)**: 선택지(분기), 하단 대화창 모드. 에디터: 트리거 '대사 종료 시'(버튼 안내), 대화 섹션 '1회성' 토글 + (종료 이벤트 있을 때) '종료 버튼' 이름 입력. 검증: **tsc 클린 + dev `/test/move-object` 200**. **실동작 브라우저 확인 필요**(근접→대사 끝 버튼 등장→클릭→액션, 멀어지면 페이드, once 재방문 안 뜸 — [[project_e2e_play_mode_testing]] 방식 권장).
-- **경계 벽 2차**: ~~그라데이션 페이드/one-sided/면별 텍스처/스카이박스 대안~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]** / **원형·커스텀 모양만 남음**(콜라이더도 원형 대응 필요라 별도).
+- **경계 벽 2차**: ~~그라데이션 페이드/one-sided/면별 텍스처/스카이박스 대안~~ **[완료 2026-07-10]** / ~~원형 모양~~ / ~~커스텀(자유 다각형)~~ **[전부 완료 2026-07-16 — 위 참고]**. 경계 모양 로드맵 종료(사각·원·다각형).
 - ~~**조명 L2 (c)**: 라이트 색(warm/cool) 스키마~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]**. L2 전체 완료.
 - ~~**Prefab**: 미착수. 착수 전 override/동기화 규칙 설계 필요.~~ **[MVP 완료 2026-07-09 — 아래 참고]**
 - ~~**AssetBrowser 탭**: Materials/HDR (WIP)~~ **[완료 2026-07-10 — 아래 '최근 완료' 참고]**. **4개 탭(Materials/Textures/HDR/Audio) 전부 완료.** ground·boundary 텍스처는 여전히 개별 업로드(에셋 등록 아님) — 원하면 uploadImageTexture로 통합 가능.

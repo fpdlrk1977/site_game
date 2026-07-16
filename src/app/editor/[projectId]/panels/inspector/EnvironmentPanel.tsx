@@ -187,6 +187,7 @@ export function EnvironmentPanel() {
     pushHistory,
     assets,
     projectId,
+    setBoundaryShapeOpen,
   } = useSceneStore();
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(false);
@@ -1074,29 +1075,73 @@ export function EnvironmentPanel() {
         </div>
         {(env.boundary ?? 0) > 0 && (
           <div className="px-3 pb-4">
-            <div className="grid grid-cols-2 gap-2">
-              <LabeledNum
-                label="가로(X)"
-                value={env.boundary ?? 0}
-                onChange={(v) => updateEnvironment(v === 0 ? { boundary: undefined, boundaryZ: undefined } : { boundary: v })}
-                onCommit={pushHistory}
-                min={0}
-                max={200}
-                precision={0}
-                dragStep={1}
-              />
-              <LabeledNum
-                label="세로(Z)"
-                value={env.boundaryZ ?? env.boundary ?? 0}
-                onChange={(v) => updateEnvironment({ boundaryZ: v === 0 ? undefined : v })}
-                onCommit={pushHistory}
-                min={0}
-                max={200}
-                precision={0}
-                dragStep={1}
+            {/* 모양 — 사각형 / 원형 */}
+            <div className="mb-2">
+              <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">모양</span>
+              <SelectBox
+                value={env.boundaryShape ?? "rect"}
+                onChange={(v) => {
+                  updateEnvironment({ boundaryShape: v === "rect" ? undefined : (v as "circle" | "polygon") });
+                  pushHistory();
+                }}
+                options={[
+                  { value: "rect", label: "사각형" },
+                  { value: "circle", label: "원형" },
+                  { value: "polygon", label: "커스텀 (다각형)" },
+                ]}
               />
             </div>
-            <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음 · 중심에서 벽까지 거리(반경). 세로=가로면 정사각.</p>
+            {(env.boundaryShape ?? "rect") === "polygon" ? (
+              <div className="space-y-1.5">
+                <button
+                  onClick={() => setBoundaryShapeOpen(true)}
+                  className="w-full py-2 rounded-xs bg-primary/15 text-primary border border-primary/30 text-[11px] font-medium hover:bg-primary/25 transition-colors"
+                >
+                  {env.boundaryPolygon && env.boundaryPolygon.length >= 3 ? `모양 편집 (${env.boundaryPolygon.length}점)` : "＋ 모양 그리기 (위에서)"}
+                </button>
+                <p className="text-[10px] text-muted/60">위에서 내려다본 씬 위에 꼭짓점을 찍어 자유 경계를 그려요. 텍스처는 변마다 반복됩니다.</p>
+              </div>
+            ) : (env.boundaryShape ?? "rect") === "circle" ? (
+              <>
+                <LabeledNum
+                  label="반지름"
+                  value={env.boundary ?? 0}
+                  onChange={(v) => updateEnvironment(v === 0 ? { boundary: undefined } : { boundary: v })}
+                  onCommit={pushHistory}
+                  min={0}
+                  max={200}
+                  precision={0}
+                  dragStep={1}
+                />
+                <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음 · 중심에서 원 둘레까지 거리(반지름). 원형은 텍스처를 한 장으로 감싸요.</p>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <LabeledNum
+                    label="가로(X)"
+                    value={env.boundary ?? 0}
+                    onChange={(v) => updateEnvironment(v === 0 ? { boundary: undefined, boundaryZ: undefined } : { boundary: v })}
+                    onCommit={pushHistory}
+                    min={0}
+                    max={200}
+                    precision={0}
+                    dragStep={1}
+                  />
+                  <LabeledNum
+                    label="세로(Z)"
+                    value={env.boundaryZ ?? env.boundary ?? 0}
+                    onChange={(v) => updateEnvironment({ boundaryZ: v === 0 ? undefined : v })}
+                    onCommit={pushHistory}
+                    min={0}
+                    max={200}
+                    precision={0}
+                    dragStep={1}
+                  />
+                </div>
+                <p className="text-[10px] text-muted/60 mt-0.5">0 = 경계 없음 · 중심에서 벽까지 거리(반경). 세로=가로면 정사각.</p>
+              </>
+            )}
 
             {(env.boundary ?? 0) > 0 &&
               (() => {

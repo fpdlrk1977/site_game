@@ -12,8 +12,10 @@ export interface EnvSchema {
   sky: { type: 'color' | 'hdr' | 'sky'; value: string };
   hdrPreset?: HdrPreset;
   ground?: { enabled: boolean; color: string; preset?: GroundPreset; textureUrl?: string };
-  boundary?: number;  // 경계 X 반경(중심→벽). >0이면 이동 제한(콜라이더) 항상 존재
-  boundaryZ?: number; // 경계 Z 반경. 미설정 시 boundary와 같음(정사각) — 직사각 지원
+  boundary?: number;  // 경계 X 반경(중심→벽). >0이면 이동 제한(콜라이더) 항상 존재. 원형이면 이 값이 반지름.
+  boundaryZ?: number; // 경계 Z 반경. 미설정 시 boundary와 같음(정사각) — 직사각 지원. 원형에선 무시.
+  boundaryShape?: 'rect' | 'circle' | 'polygon'; // 경계 모양. rect=사각·circle=원형·polygon=자유 다각형.
+  boundaryPolygon?: { x: number; z: number }[];  // polygon 모양의 꼭짓점(월드 XZ, 닫힌 경로). boundary는 경계반경(게이트/스카이박스용)으로 자동 세팅.
   // 경계 벽 시각 — 미설정/none = 안 보임(투명, 영역만). color=단색 벽, texture=이미지 매핑 벽,
   //   skybox=4면 벽 대신 360° 파노라마 구(球)로 씬을 감쌈.
   boundaryWall?: {

@@ -39,8 +39,8 @@
     --foreground: #edebf4;
     --muted: #8e8b9e;
     --primary: #7c6cff;
-    --accent: #0092b8; /* 포인트 컬러(사이언) — 라이트와 동일 */
-    --select: #0d99ff; /* 단일 선택/호버 가이드(파랑) */
+    --accent: #0092b8; 
+    --select: #0dff1d; 
     --select-multi: #ff7a0d; /* 다중 선택 묶음 가이드(주황) */
     --glass: rgba(22, 20, 30, 0.82);
   }

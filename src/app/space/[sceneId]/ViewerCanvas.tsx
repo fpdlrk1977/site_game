@@ -409,7 +409,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* 경계 벽 — 스타일(단색/텍스처)일 때 실제 벽 렌더. 탐색·플레이 공통. none이면 안 보임.
           (충돌은 PlayCanvas의 경계 콜라이더가 담당) */}
       {(environment.boundary ?? 0) > 0 && environment.boundaryWall && (
-        <BoundaryWalls sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} config={environment.boundaryWall} />
+        <BoundaryWalls sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} shape={environment.boundaryShape ?? 'rect'} polygon={environment.boundaryPolygon} config={environment.boundaryWall} />
       )}
 
       {/* ── 바닥 ── */}

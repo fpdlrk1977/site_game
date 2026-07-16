@@ -104,6 +104,7 @@ interface SceneState {
   exportRequest: { ids: string[]; name: string; _tick: number } | null;
   // 펜 툴(2D 프로파일 → 돌출/회전체) 모달 열림 상태.
   penToolOpen: boolean;
+  boundaryShapeOpen: boolean; // 경계 다각형 편집 모달 열림
   voxelToolOpen: boolean;
   // 인에디터 플레이 — true면 편집 중 씬을 뷰어로 구동(걷기/게임 테스트). 상단바 ▶로 토글.
   editorPlaying: boolean;
@@ -162,6 +163,7 @@ interface SceneActions {
   requestExport: (ids: string[], name: string) => void;
   /** 펜 툴 모달 열기/닫기 */
   setPenToolOpen: (open: boolean) => void;
+  setBoundaryShapeOpen: (open: boolean) => void;
   /** 펜 툴 모달을 특정 오브젝트 재편집 모드로 열기 */
   penToolEditId: string | null;
   openPenToolEdit: (id: string) => void;
@@ -580,6 +582,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   focusSelectedRequest: null,
   exportRequest: null,
   penToolOpen: false,
+  boundaryShapeOpen: false,
   penToolEditId: null,
   editorPlaying: false,
   voxelToolOpen: false,
@@ -771,6 +774,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   requestFocusSelected: () => set({ focusSelectedRequest: Date.now() }),
   requestExport: (ids, name) => set({ exportRequest: { ids, name, _tick: Date.now() } }),
   setPenToolOpen: (open) => set(open ? { penToolOpen: true } : { penToolOpen: false, penToolEditId: null }),
+  setBoundaryShapeOpen: (open) => set({ boundaryShapeOpen: open }),
   openPenToolEdit: (id) => set({ penToolEditId: id, penToolOpen: true }),
   setVoxelToolOpen: (open) => set(open ? { voxelToolOpen: true } : { voxelToolOpen: false, voxelEditId: null }),
   openVoxelEdit: (id) => set({ voxelEditId: id, voxelToolOpen: true }),

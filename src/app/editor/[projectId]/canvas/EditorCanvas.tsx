@@ -22,10 +22,41 @@ import { CharacterPreview } from "./CharacterPreview";
 import { FolderOpen } from "lucide-react";
 import type { Vector3 as Vec3, HdrPreset } from "@/types/scene";
 
-function BoundaryGizmo({ sizeX, sizeZ }: { sizeX: number; sizeZ: number }) {
+function BoundaryGizmo({ sizeX, sizeZ, shape = 'rect', polygon }: { sizeX: number; sizeZ: number; shape?: 'rect' | 'circle' | 'polygon'; polygon?: { x: number; z: number }[] }) {
   const bx = sizeX;
   const bz = sizeZ;
   const H = 8;
+  // 다각형: 바닥/상단 폴리라인 + 꼭짓점 세로 기둥.
+  const polyPositions = useMemo(() => {
+    if (shape !== 'polygon' || !polygon || polygon.length < 3) return null;
+    const pts: number[] = [];
+    const ring = (y: number) => {
+      for (let i = 0; i < polygon.length; i++) {
+        const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+        pts.push(a.x, y, a.z, b.x, y, b.z);
+      }
+    };
+    ring(0.02); ring(H);
+    for (const p of polygon) pts.push(p.x, 0, p.z, p.x, H, p.z);
+    return new Float32Array(pts);
+  }, [shape, polygon]);
+  // 원형: 바닥 원 + 상단 원 + 세로 기둥 몇 개(lineSegments라 각 선분=꼭짓점 쌍).
+  const circlePositions = useMemo(() => {
+    if (shape !== 'circle') return null;
+    const r = sizeX, seg = 64, pts: number[] = [];
+    const ring = (y: number) => {
+      for (let i = 0; i < seg; i++) {
+        const a0 = (i / seg) * Math.PI * 2, a1 = ((i + 1) / seg) * Math.PI * 2;
+        pts.push(Math.cos(a0) * r, y, Math.sin(a0) * r, Math.cos(a1) * r, y, Math.sin(a1) * r);
+      }
+    };
+    ring(0.02); ring(H);
+    for (let i = 0; i < 8; i++) { // 세로 기둥 8개
+      const a = (i / 8) * Math.PI * 2, x = Math.cos(a) * r, z = Math.sin(a) * r;
+      pts.push(x, 0, z, x, H, z);
+    }
+    return new Float32Array(pts);
+  }, [shape, sizeX]);
   const positions = useMemo(
     () =>
       new Float32Array([
@@ -107,13 +138,34 @@ function BoundaryGizmo({ sizeX, sizeZ }: { sizeX: number; sizeZ: number }) {
       ]),
     [bx, bz],
   );
+  const pos = polyPositions ?? circlePositions ?? positions;
+  // 바닥 영역 옅은 채움 — 라인만으론 안쪽이 안 보여서 경계 안을 반투명 주황으로(에디터 가이드 전용).
+  const fillShape = useMemo(() => {
+    if (shape !== 'polygon' || !polygon || polygon.length < 3) return null;
+    const s = new THREE.Shape();
+    polygon.forEach((p, i) => (i === 0 ? s.moveTo(p.x, p.z) : s.lineTo(p.x, p.z)));
+    s.closePath();
+    return s;
+  }, [shape, polygon]);
   return (
-    <lineSegments>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
-      <lineBasicMaterial color="#f59e0b" />
-    </lineSegments>
+    <>
+      <mesh position={[0, 0.03, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={-1}>
+        {shape === 'circle' ? (
+          <circleGeometry args={[bx, 64]} />
+        ) : fillShape ? (
+          <shapeGeometry args={[fillShape]} />
+        ) : (
+          <planeGeometry args={[bx * 2, bz * 2]} />
+        )}
+        <meshBasicMaterial color="#f59e0b" transparent opacity={0.08} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      <lineSegments key={shape}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[pos, 3]} />
+        </bufferGeometry>
+        <lineBasicMaterial color="#f59e0b" />
+      </lineSegments>
+    </>
   );
 }
 
@@ -996,12 +1048,14 @@ export function EditorCanvas() {
           {/* 선택 오버레이 — 드래그 미리보기 + 선택 묶음 바운더리 (오브젝트 렌더 미변경) */}
           <SelectionOverlay dragRectRef={dragRectRef} isDraggingRef={isDraggingRef} dragCanvasRectRef={dragCanvasRectRef} />
 
-          {(environment.boundary ?? 0) > 0 && <BoundaryGizmo sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} />}
+          {(environment.boundary ?? 0) > 0 && <BoundaryGizmo sizeX={environment.boundary!} sizeZ={environment.boundaryZ ?? environment.boundary!} shape={environment.boundaryShape ?? 'rect'} polygon={environment.boundaryPolygon} />}
           {/* 경계 벽 미리보기 — editor=true라 반투명으로 편집을 덜 가림. 실제 룩은 뷰어에서 확인 */}
           {(environment.boundary ?? 0) > 0 && environment.boundaryWall && (
             <BoundaryWalls
               sizeX={environment.boundary!}
               sizeZ={environment.boundaryZ ?? environment.boundary!}
+              shape={environment.boundaryShape ?? 'rect'}
+              polygon={environment.boundaryPolygon}
               config={environment.boundaryWall}
               editor
             />

@@ -392,6 +392,46 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
       {/* 경계 벽 — friction=0 으로 벽에 눌렸을 때 공중에 걸리는 현상 방지 */}
       {(scene.environment.boundary ?? 0) > 0 && (() => {
         const bx = scene.environment.boundary!;
+        const bshape = scene.environment.boundaryShape ?? 'rect';
+        // 다각형: 각 변(edge)마다 그 변에 정렬된 박스 콜라이더 한 개.
+        if (bshape === 'polygon') {
+          const poly = scene.environment.boundaryPolygon;
+          if (!poly || poly.length < 3) return null;
+          return (
+            <>
+              {poly.map((a, i) => {
+                const b = poly[(i + 1) % poly.length];
+                const dx = b.x - a.x, dz = b.z - a.z;
+                const len = Math.hypot(dx, dz);
+                if (len < 1e-3) return null;
+                return (
+                  <RigidBody key={i} type="fixed" friction={0} position={[(a.x + b.x) / 2, 15, (a.z + b.z) / 2]} rotation={[0, Math.atan2(dx, dz), 0]}>
+                    <CuboidCollider args={[0.5, 15, len / 2 + 0.3]} />
+                  </RigidBody>
+                );
+              })}
+            </>
+          );
+        }
+        // 원형: 반지름 r 밖으로 못 나가게 접선 방향 박스 N개를 링으로 배치(속 빈 실린더 프리미티브 없음).
+        if (bshape === 'circle') {
+          const r = bx;
+          const N = Math.max(24, Math.min(72, Math.round(r * 3)));  // 반지름 클수록 세분↑
+          const chordHalf = (Math.PI * r / N) * 1.35;               // 이웃과 겹치게 여유
+          return (
+            <>
+              {Array.from({ length: N }).map((_, i) => {
+                const a = (i / N) * Math.PI * 2;
+                const cx = Math.cos(a) * (r + 0.5), cz = Math.sin(a) * (r + 0.5); // 벽을 r 살짝 밖에(안쪽면≈r)
+                return (
+                  <RigidBody key={i} type="fixed" friction={0} position={[cx, 15, cz]} rotation={[0, -a, 0]}>
+                    <CuboidCollider args={[0.5, 15, chordHalf]} />
+                  </RigidBody>
+                );
+              })}
+            </>
+          );
+        }
         const bz = scene.environment.boundaryZ ?? bx;
         return (
           <>
