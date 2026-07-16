@@ -75,7 +75,7 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **픽커 UI**(`ColorPicker`, opt-in `allowGradient`): **Solid/Gradient 토글** + 그라데이션 바(**클릭=정지점 추가·핸들 드래그=위치·클릭=선택·Remove**) + **Linear/Radial** 타입 + Linear **각도** 입력. SV/Hue/hex/RGB/HSL이 **선택된 정지점 색**을 편집(`applyColor`가 solid=onChange / gradient=선택 stop 갱신으로 분기). 트리거 스와치는 그라데이션 미리보기. Solid↔Gradient 전환은 commit(undo 1회).
 - **적용**: `MaterialSection`의 **Color 필드만** `allowGradient`(Emissive·라이트·안개 등은 solid 유지). 그라데이션 변경도 `updateObject`+`pushHistory` 경로라 단일 undo.
 - **확인 필요(브라우저)**: Color 픽커 Gradient 토글 → 바에서 stop 추가/드래그/삭제·색 편집 · Linear 각도·Radial · 프리미티브/복셀/돌출/회전체 표면 렌더(에디터=게시 뷰어) · undo · solid 복귀.
-- **한계/후속**: linear는 **오브젝트 로컬 XY 평면** 기준(각도), radial은 bbox 중심 기준(3D 거리). 알파(투명 stop) 미지원(색만). GLB·텍스트 콘텐츠 제외(프리미티브 전용). 텍스처와 동시 사용 시 gradient×texture로 곱해짐.
+- **한계/후속**: linear·radial 모두 **오브젝트 로컬 XY 평면** 기준. radial 컨트롤 = **Spread(퍼짐)·Angle(중심 미는 방향)·Offset(중심 이동거리)** (`scale`/`angle`/`offset` 필드, uniform uGradScale/uGradAngle/uGradOffset). ※radial을 처음엔 3D bbox 거리로 했다가 박스 표면이 전부 같은 반경→단색 버그 → XY 2D 거리로 수정. 알파(투명 stop) 미지원(색만). GLB·텍스트 콘텐츠 제외(프리미티브 전용). 텍스처와 동시 사용 시 gradient×texture로 곱해짐.
 
 ### 후속 (2026-07-16) — Tidy/Distribute (위 별도 항목 참조)
 - (알파 슬라이더 등 나머지는 요청 시)

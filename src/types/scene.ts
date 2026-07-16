@@ -276,8 +276,9 @@ export interface GradientStop {
 }
 export interface GradientFill {
   type: 'linear' | 'radial';
-  angle?: number;          // linear 전용, degrees(0=좌→우). 미설정=0.
+  angle?: number;          // linear: 방향 degrees(0=좌→우). radial: 중심을 미는 방향. 미설정=0.
   scale?: number;          // radial 전용, 퍼지는 정도(기본 1, 클수록 넓게 퍼짐).
+  offset?: number;         // radial 전용, 중심 이동 거리(0=가운데 ~ 1=가장자리, angle 방향). 미설정=0.
   stops: GradientStop[];   // 2개+ (오름차순 권장, 렌더 시 정렬)
 }
 

@@ -40,6 +40,23 @@ interface Props {
 // EyeDropper API (크로미엄) 타입
 type EyeDropperCtor = new () => { open: () => Promise<{ sRGBHex: string }> };
 
+// 그라데이션 숫자 컨트롤(라벨+입력) — Angle/Spread/Offset 공용
+function GradNum({ label, value, step, onChange, onCommit }: { label: string; value: number; step?: number; onChange: (n: number) => void; onCommit: () => void }) {
+  return (
+    <label className="flex items-center gap-1 text-[10px] text-muted">
+      <span>{label}</span>
+      <input
+        type="number"
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        onBlur={onCommit}
+        className="w-12 bg-background border border-border rounded-xs px-1 py-0.5 text-[11px] text-foreground text-center focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+      />
+    </label>
+  );
+}
+
 // 정지점 램프 → CSS 그라데이션 문자열(프리뷰/트리거용)
 function cssGradient(g: GradientFill): string {
   const parts = [...g.stops]
@@ -371,7 +388,7 @@ export function ColorPicker({
             {/* 그라데이션 바 + 타입/각도 */}
             {gradMode && gradient && (
               <div className="mb-2.5 space-y-2">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <div className="flex rounded-xs overflow-hidden border border-border">
                     {(["linear", "radial"] as const).map((t) => (
                       <button
@@ -387,31 +404,15 @@ export function ColorPicker({
                       </button>
                     ))}
                   </div>
+                  {/* linear=Angle, radial=Spread+Angle(방향)+Offset */}
                   {gradient.type === "linear" ? (
-                    <label className="flex items-center gap-1 text-[10px] text-muted ml-auto">
-                      <span>Angle</span>
-                      <input
-                        type="number"
-                        value={Math.round(gradient.angle ?? 0)}
-                        onChange={(e) => onGradientChange?.({ ...gradient, angle: Number(e.target.value) || 0 })}
-                        onBlur={commit}
-                        className="w-12 bg-background border border-border rounded-xs px-1 py-0.5 text-[11px] text-foreground text-center focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </label>
+                    <GradNum label="Angle" value={Math.round(gradient.angle ?? 0)} onChange={(n) => onGradientChange?.({ ...gradient, angle: n })} onCommit={commit} />
                   ) : (
-                    <label className="flex items-center gap-1 text-[10px] text-muted ml-auto">
-                      <span>Spread</span>
-                      <input
-                        type="number"
-                        min={0.1}
-                        max={3}
-                        step={0.1}
-                        value={gradient.scale ?? 1}
-                        onChange={(e) => onGradientChange?.({ ...gradient, scale: Number(e.target.value) || 1 })}
-                        onBlur={commit}
-                        className="w-12 bg-background border border-border rounded-xs px-1 py-0.5 text-[11px] text-foreground text-center focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </label>
+                    <>
+                      <GradNum label="Spread" value={gradient.scale ?? 1} step={0.1} onChange={(n) => onGradientChange?.({ ...gradient, scale: n || 1 })} onCommit={commit} />
+                      <GradNum label="Angle" value={Math.round(gradient.angle ?? 0)} onChange={(n) => onGradientChange?.({ ...gradient, angle: n })} onCommit={commit} />
+                      <GradNum label="Offset" value={gradient.offset ?? 0} step={0.05} onChange={(n) => onGradientChange?.({ ...gradient, offset: n })} onCommit={commit} />
+                    </>
                   )}
                 </div>
                 {/* 그라데이션 바 — 클릭=정지점 추가, 핸들 드래그=위치 이동, 클릭=선택 */}

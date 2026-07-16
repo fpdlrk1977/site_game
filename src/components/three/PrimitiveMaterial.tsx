@@ -67,6 +67,7 @@ export function PrimitiveMaterial({
   const gradMode = gradActive && gradTex ? (gradient!.type === 'radial' ? 2 : 1) : 0;
   const gradAngle = ((gradient?.angle ?? 0) * Math.PI) / 180;
   const gradScale = gradient?.scale ?? 1;
+  const gradOffset = gradient?.offset ?? 0;
 
   useEffect(() => {
     if (!textureUrl) { setTex(null); return; }
@@ -94,7 +95,7 @@ export function PrimitiveMaterial({
   const uidRef = useRef(Math.random().toString(36).slice(2));
   const stateRef = useRef({
     mode: 0, scale: 1, min: [-0.5, -0.5, -0.5] as number[], size: [1, 1, 1] as number[],
-    gradMode: 0, gradAngle: 0, gradScale: 1, gradTex: null as THREE.Texture | null,
+    gradMode: 0, gradAngle: 0, gradScale: 1, gradOffset: 0, gradTex: null as THREE.Texture | null,
   });
   stateRef.current.mode = textureMapping === 'pattern' ? 1 : 0;
   stateRef.current.scale = triplanarScale ?? 1;
@@ -103,6 +104,7 @@ export function PrimitiveMaterial({
   stateRef.current.gradMode = gradMode;
   stateRef.current.gradAngle = gradAngle;
   stateRef.current.gradScale = gradScale;
+  stateRef.current.gradOffset = gradOffset;
   stateRef.current.gradTex = gradTex;
   const shaderRef = useRef<{ uniforms: Record<string, { value: unknown }> } | null>(null);
   useEffect(() => {
@@ -116,9 +118,10 @@ export function PrimitiveMaterial({
       s.uniforms.uGradMode.value = stateRef.current.gradMode;
       s.uniforms.uGradAngle.value = stateRef.current.gradAngle;
       s.uniforms.uGradScale.value = stateRef.current.gradScale;
+      s.uniforms.uGradOffset.value = stateRef.current.gradOffset;
       s.uniforms.uGradTex.value = stateRef.current.gradTex;
     }
-  }, [textureMapping, triplanarScale, wrapMin, wrapSize, gradSig, gradMode, gradAngle, gradScale, gradTex]);
+  }, [textureMapping, triplanarScale, wrapMin, wrapSize, gradSig, gradMode, gradAngle, gradScale, gradOffset, gradTex]);
 
   const onBeforeCompile = useCallback((shader: THREE.WebGLProgramParametersWithUniforms) => {
     shader.uniforms.uWrapMode = { value: stateRef.current.mode };
@@ -128,13 +131,14 @@ export function PrimitiveMaterial({
     shader.uniforms.uGradMode = { value: stateRef.current.gradMode };
     shader.uniforms.uGradAngle = { value: stateRef.current.gradAngle };
     shader.uniforms.uGradScale = { value: stateRef.current.gradScale };
+    shader.uniforms.uGradOffset = { value: stateRef.current.gradOffset };
     shader.uniforms.uGradTex = { value: stateRef.current.gradTex };
     shaderRef.current = shader as unknown as { uniforms: Record<string, { value: unknown }> };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vTriPos = position;\n  vTriNormal = normal;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;\nuniform float uWrapMode;\nuniform float uTriScale;\nuniform vec3 uWrapMin;\nuniform vec3 uWrapSize;\nuniform float uGradMode;\nuniform float uGradAngle;\nuniform float uGradScale;\nuniform sampler2D uGradTex;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;\nuniform float uWrapMode;\nuniform float uTriScale;\nuniform vec3 uWrapMin;\nuniform vec3 uWrapSize;\nuniform float uGradMode;\nuniform float uGradAngle;\nuniform float uGradScale;\nuniform float uGradOffset;\nuniform sampler2D uGradTex;')
       // 그라데이션 — 베이스 색을 정지점 램프로 대체(map/vertexColor보다 먼저). bbox 로컬좌표로 투영.
       .replace('#include <color_fragment>', `
         #include <color_fragment>
@@ -146,8 +150,10 @@ export function PrimitiveMaterial({
             vec2 _dir = vec2(cos(uGradAngle), sin(uGradAngle));
             _gt = dot(_q, _dir) + 0.5;
           } else {
-            // radial — 로컬 XY 평면 2D 거리(3D 거리는 박스 표면이 전부 같은 반경이라 단색이 됨). scale=퍼짐.
-            _gt = length(_gp.xy - 0.5) * 2.0 / max(uGradScale, 0.05);
+            // radial — 로컬 XY 평면 2D 거리(3D 거리는 박스 표면이 전부 같은 반경이라 단색이 됨).
+            //   중심을 angle 방향으로 offset만큼 이동, scale=퍼지는 정도.
+            vec2 _c = vec2(0.5) + uGradOffset * 0.5 * vec2(cos(uGradAngle), sin(uGradAngle));
+            _gt = length(_gp.xy - _c) * 2.0 / max(uGradScale, 0.05);
           }
           _gt = clamp(_gt, 0.0, 1.0);
           vec3 _gcol = texture2D(uGradTex, vec2(_gt, 0.5)).rgb;
