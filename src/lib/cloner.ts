@@ -21,12 +21,13 @@ export function clonerRotYDeg(cfg: ClonerConfig, i: number): number {
 export function clonerPlacement(cfg: ClonerConfig, i: number): { x: number; y: number; z: number } {
   if (cfg.mode === 'radial') {
     const r = cfg.radius ?? 3;
-    const t = (2 * Math.PI / Math.max(1, cfg.count)) * i;
+    const turns = cfg.turns ?? 1;
+    const t = (2 * Math.PI * turns / Math.max(1, cfg.count)) * i;
     const c = Math.cos(t) * r, s = Math.sin(t) * r;
     const ax = cfg.axis ?? 'y';
     if (ax === 'x') return { x: 0, y: c, z: s };
     if (ax === 'z') return { x: c, y: s, z: 0 };
-    return { x: c, y: 0, z: s }; // y: XZ 평면(바닥)
+    return { x: c, y: (cfg.rise ?? 0) * i, z: s }; // y: XZ 원(바닥) + rise=나선 계단 상승
   }
   if (cfg.mode === 'grid') {
     const cols = Math.max(1, Math.round(cfg.cols ?? 1));

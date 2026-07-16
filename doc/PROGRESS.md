@@ -51,6 +51,23 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-16) — 🔢 배열(Array/Cloner) 툴 후속: Grid·회전 증분·나선 계단·미니 프리뷰·LinkToggle (사용자 확인 완료)
+
+> `scene.ts`(ClonerConfig) + `lib/cloner` + `sceneStore`(arraySelected) + `ArraySection` + `ClonerSection` + 신규 `components/ui/LinkToggle`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘돼네").**
+
+- **모드 3종**: Linear(직선) / **Grid(격자)** / Radial(원형). `ClonerConfig`에 `'grid'`·`cols`·`rows`·`rotStep`·`rise` 추가(옵셔널, 기존 씬 무영향).
+- **Grid**: Columns×Rows + 열/행 간격(grid 전용 spacing 상태, 기본 4×4·간격 1). **실시간 미니 프리뷰**(`GridPreview` SVG — cols×rows 점, 간격 비율 반영, 20 초과 시 영역 사각형). **LinkToggle 2개**(cols⟷rows·간격 x⟷z, 켜면 함께 움직임, 버튼 위치=각 줄 맨 끝).
+- **회전 증분**(`rotStep`, °/copy): 복제마다 Y축 회전 — 나선/트위스트. 전 모드 공통.
+- **나선 계단**(Radial): `rise`(칸마다 Y 상승) + **"나선 계단 방향 맞춤" 버튼**(rotStep=360÷Count). 위치는 항상 한 바퀴 고정(Turns 옵션은 Rotation step과 역할 혼동+다바퀴 겹침 이슈로 제거).
+- **공용화**: `lib/cloner`에 `clonerCount`·`clonerRotYDeg` 추가, `clonerPlacement`에 grid/rise 분기 → `arraySelected`(한 번 복제)와 `regenerateCloner`(라이브)가 **동일 배치 로직 공유**. `arraySelected` 시그니처를 `ClonerConfig` 하나로 리팩터(원본 제자리 = placement(i)−placement(0)). 그룹·중첩 지원 유지.
+- **재사용 컴포넌트** `LinkToggle`(Link2/Link2Off) — 동기화는 부모가, 컴포넌트는 순수 토글이라 다른 "두 수치 묶기" UI에 재사용 가능.
+- **후속(선택)**: 다바퀴(멀티턴) 나선은 제거된 Turns를 되살려야 함 · Grid를 XZ 외 수직 격자 · 배열 미리보기를 linear/radial까지 확장.
+
+### 로드맵 갱신 — 배열 툴 후속
+> 기존 "배열 툴 후속(그리드/원형/회전 증분)"은 이 작업으로 완료. (원형 배열은 이미 있었고, 그리드·회전·나선 추가.)
+
+---
+
 ## ✅ 완료 (2026-07-16) — 🔷 경계 벽 원형(Circle) + 커스텀(자유 다각형) 모양 (사용자 확인 완료)
 
 > `scene.ts` + `BoundaryWalls` + `PlayCanvas`(콜라이더) + `EditorCanvas`(BoundaryGizmo) + `ViewerCanvas` + `EnvironmentPanel` + 신규 `BoundaryShapeModal`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("만족해").**
@@ -742,7 +759,7 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 ### 기능 로드맵 (미착수/후속)
 
 - ~~**오브젝트 앰비언트 애니메이션(`motion`)**~~ **[완료 2026-07-08 — MVP + 후속]**: `MotionConfig`(type=float/spin/pulse/orbit/wander, speed/amplitude/radius/**axis**/**collider**). 모션 수식은 **공용 `src/lib/motion.ts`**(`computeMotion` — 시각과 콜라이더가 동일 로직 공유). **시각**: `ViewerObject`의 `MotionGroup`(베이스 pos/rot/scl + 타입별 델타를 useFrame로, 콘텐츠는 로컬 원점이라 spin/pulse가 오브젝트 중심 피벗) + `Xform` 래퍼로 **GLB·프리미티브·콘텐츠(text/image/video)·그룹 전부** 배선(YouTube만 정적). 에디터 정적·**뷰어 전용**. **후속 완료**: (1) **spin 축 선택**(x/y/z, 기본 y), (2) **콘텐츠/그룹 지원**, (3) **콜라이더 동반**(`collider:true` → `PlayCanvas`의 `MovingCollider` = kinematicPosition RigidBody가 computeMotion으로 매 프레임 `setNextKinematicTranslation/Rotation` → **플레이 모드에서 진짜 이동 장애물**. auto/physics 필터에서 제외, pulse는 런타임 콜라이더 스케일 불가라 제외). 에디터 UI: 일반 오브젝트 Motion 섹션 게이트를 `!obj.light`로 열어 **GLB·프리미티브·콘텐츠 모두 노출**, **그룹은 전용 Inspector(별도 early-return 패널)에 Motion 블록 추가**. 라이트만 제외. **그룹 모션은 플레이 모드도 지원**: 플레이 렌더가 모드별로 갈라져 있어(`GroupWithCollision`은 정적) 그룹 모션이 안 돌던 것 → PlayCanvas에서 그룹을 3분기(모션없음=`GroupWithCollision` / 모션+콜라이더OFF=`ViewerObject` 시각전용 / 모션+콜라이더ON=**`MovingGroupCollider`** = 그룹 전체를 하나의 kinematicPosition 강체로 묶어 `colliders="hull"` 자식 복합 콜라이더가 함께 이동하는 **진짜 이동 장애물**). 그룹도 콜라이더 토글 노출(pulse 제외). 한계: 자식 형상이 볼록 껍질(hull)로 근사(오목 형상 두꺼워짐)·비균일 스케일 그룹은 콜라이더 왜곡 가능·캐릭터 라이딩 미구현. **콜라이더 OFF = 통과(장식) 규칙 통일**: 위치가 움직이는 모션(float/spin/orbit/wander)+콜라이더OFF 오브젝트는 **콜라이더 미부여(통과)** — 예전엔 autoObjects로 가서 시각은 떠다니는데 벽만 원래 자리에 남는 '유령 콜라이더' 버그였음. 단일=`visualMotionObjects`(ViewerObject 시각전용), 그룹=`movingGroups`. pulse는 제자리라 정적 콜라이더 유지(autoObjects). 한계: 콜라이더 동반 시 캐릭터가 **위에 올라타 실려가진 않음**(rapier kinematic 라이딩 미구현). wander=랜덤 목표점 easing 로밍. 검증: tsc 클린 + 에디터·뷰어 200 + **"잘움직이네" 사용자 확인(MVP)**. **콜라이더 동반·콘텐츠/그룹·spin축 실동작 브라우저 확인 필요**.
-- **맵 제작 도구**: ~~(a) 추가 시 자동 바닥 스냅~~ **[완료 2026-07-07]** ~~(b) 배열/반복 툴~~ **[완료 2026-07-08 — Inspector Array 섹션]**. ※Ctrl+D 복제는 크기 정확 복사됨. 후속 후보: 그리드(2D)/원형 배열, 회전 증분.
+- **맵 제작 도구**: ~~(a) 추가 시 자동 바닥 스냅~~ **[완료 2026-07-07]** ~~(b) 배열/반복 툴~~ **[완료 2026-07-08]** ~~그리드(2D)/원형 배열, 회전 증분~~ **[완료 2026-07-16 — Grid·회전 증분·나선 계단·프리뷰·LinkToggle, 위 참고]**. ※Ctrl+D 복제는 크기 정확 복사됨.
 - ~~**Inspector 툴팁**~~ **[완료 2026-07-07]**: `InfoHint`(ⓘ, lucide `Info`) 공통 컴포넌트 + `Tooltip`에 `wide` 옵션(줄바꿈/최대폭) 추가. `SectionHeader`에 `hint` prop → Transform/Visibility/Physics/Events/Content/Light/Particle/Boundary/Interaction/Ground/Player/Lights 등에 안내문. (필요 시 필드 단위 툴팁·나머지 섹션 추가 가능)
 - ~~**Events E3-B(문/콜라이더 토글)**: `set_passable`/`toggle_collision` + hide_object 시 루트 콜라이더 제거~~ **[완료 2026-07-08]**.
 - **팝업 고도화 — 웹사이트/HTML 임베드 + 커스터마이징**: **[Phase 1 완료 2026-07-08]**. 현재 `show_popup`은 `RichContent`로 이미지/영상/YouTube/Vimeo 자동 인식은 되나 **일반 웹사이트 URL은 링크로만** 뜨고 커스텀 HTML/스타일 불가 → "웹사이트도 품는다"는 취지에 부족. **방향(합의): iframe으로 통일** — URL 모드=`<iframe src>`, HTML 모드=`<iframe srcdoc sandbox>`(XSS·스타일오염을 샌드박스로 회피), auto=기존 RichContent.

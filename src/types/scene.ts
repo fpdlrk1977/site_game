@@ -394,6 +394,8 @@ export interface ClonerConfig {
   cols?: number;                 // grid: 열(가로) 개수
   rows?: number;                 // grid: 행(세로) 개수
   rotStep?: number;              // 복제마다 Y축 회전 증분(도) — 나선/트위스트
+  rise?: number;                 // radial: 복제마다 Y 상승(m) — 나선 계단(헬릭스)
+  turns?: number;                // radial: 전체 회전 바퀴 수(기본 1). >1이면 여러 바퀴 나선.
 }
 
 export interface MotionConfig {

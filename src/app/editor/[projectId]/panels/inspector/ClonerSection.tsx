@@ -30,15 +30,15 @@ export function ClonerSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
                       <LabeledNum label="Rows" value={cfg.rows ?? 3} onChange={(v) => setCfg({ rows: Math.max(1, Math.min(50, Math.round(v))) })} onCommit={pushHistory} min={1} max={50} precision={0} dragStep={1} />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <LabeledNum label="Col spacing (m)" value={cfg.offset.x} onChange={(v) => setCfg({ offset: { ...cfg.offset, x: v } })} onCommit={pushHistory} precision={2} dragStep={0.25} />
-                      <LabeledNum label="Row spacing (m)" value={cfg.offset.z} onChange={(v) => setCfg({ offset: { ...cfg.offset, z: v } })} onCommit={pushHistory} precision={2} dragStep={0.25} />
+                      <LabeledNum label="Col spacing" value={cfg.offset.x} onChange={(v) => setCfg({ offset: { ...cfg.offset, x: v } })} onCommit={pushHistory} precision={2} dragStep={0.25} />
+                      <LabeledNum label="Row spacing" value={cfg.offset.z} onChange={(v) => setCfg({ offset: { ...cfg.offset, z: v } })} onCommit={pushHistory} precision={2} dragStep={0.25} />
                     </div>
                   </>
                 ) : (
                   <>
                     <LabeledNum label="Count (incl. source)" value={cfg.count} onChange={(v) => setCfg({ count: Math.max(2, Math.min(200, Math.round(v))) })} onCommit={pushHistory} min={2} max={200} precision={0} dragStep={1} />
                     {cfg.mode === 'linear' ? (
-                      <XYZRow label="Spacing (m)" x={cfg.offset.x} y={cfg.offset.y} z={cfg.offset.z}
+                      <XYZRow label="Spacing" x={cfg.offset.x} y={cfg.offset.y} z={cfg.offset.z}
                         onChangeX={(v) => setCfg({ offset: { ...cfg.offset, x: v } })}
                         onChangeY={(v) => setCfg({ offset: { ...cfg.offset, y: v } })}
                         onChangeZ={(v) => setCfg({ offset: { ...cfg.offset, z: v } })}
@@ -46,7 +46,7 @@ export function ClonerSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
                       />
                     ) : (
                       <>
-                        <LabeledNum label="Radius (m)" value={cfg.radius ?? 3} onChange={(v) => setCfg({ radius: Math.max(0.1, v) })} onCommit={pushHistory} min={0.1} max={100} precision={2} dragStep={0.25} />
+                        <LabeledNum label="Radius" value={cfg.radius ?? 3} onChange={(v) => setCfg({ radius: Math.max(0.1, v) })} onCommit={pushHistory} min={0.1} max={100} precision={2} dragStep={0.25} />
                         <div>
                           <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Rotation axis</span>
                           <div className="grid grid-cols-3 gap-1">
@@ -57,6 +57,13 @@ export function ClonerSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
                             ))}
                           </div>
                         </div>
+                        {/* 나선 계단 — Rise=칸마다 상승 */}
+                        <LabeledNum label="Rise / step" value={cfg.rise ?? 0} onChange={(v) => setCfg({ rise: v })} onCommit={pushHistory} min={0} max={10} precision={2} dragStep={0.05} />
+                        <button
+                          onClick={() => { setCfg({ rotStep: +(360 / Math.max(1, cfg.count)).toFixed(2) }); pushHistory(); }}
+                          className="w-full py-1 rounded-xs bg-background text-muted hover:text-foreground text-[10px] transition-colors"
+                          title="Rotation step을 360÷Count로 맞춰 계단이 원을 따라 돌게 해요"
+                        >나선 계단 방향 맞춤</button>
                       </>
                     )}
                   </>
