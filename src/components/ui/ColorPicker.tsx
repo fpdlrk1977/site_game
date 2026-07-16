@@ -10,8 +10,7 @@
 //   (그라데이션) + allowGradient gradient={mat.gradient} onGradientChange={(g)=>update({gradient:g})}
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Pipette, Plus, ChevronDown, Trash2 } from "lucide-react";
-import { useDropdown } from "@/hooks/useDropdown";
+import { Pipette, Plus, ChevronDown, Trash2, X } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
 import { normalizeHex, hexToHsv, hsvToHex, hexToRgb, rgbToHex, hexToHsl, hslToHex, type HSV } from "@/lib/color";
 import type { GradientFill } from "@/types/scene";
@@ -94,8 +93,44 @@ export function ColorPicker({
   gradient,
   onGradientChange,
 }: Props) {
-  // triggerRef를 필드 컨테이너(div)에 달아, 스와치 옆 hex 입력을 클릭해도 팝오버가 안 닫히게 한다.
-  const { open, toggle, close, triggerRef, panelRef, panelStyle } = useDropdown<HTMLDivElement>();
+  // 떠 있는 팝업(펜툴/복셀 모달과 동일) — 바깥클릭으로 안 닫히고 헤더 드래그로 이동, X/Esc로만 닫힘.
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const close = useCallback(() => setOpen(false), []);
+  const openPanel = () => {
+    const r = triggerRef.current?.getBoundingClientRect();
+    const PW = 232;
+    let x = r ? r.left : 100;
+    let y = r ? r.bottom + 4 : 100;
+    x = Math.max(8, Math.min(x, window.innerWidth - PW - 8));
+    y = Math.max(8, Math.min(y, window.innerHeight - 380));
+    setPanelPos({ x, y });
+    setOpen(true);
+  };
+  const toggle = () => (open ? close() : openPanel());
+  // 헤더 드래그 이동
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{ ox: number; oy: number } | null>(null);
+  const onHeaderDown = (e: React.MouseEvent) => {
+    const r = panelRef.current?.getBoundingClientRect();
+    if (!r) return;
+    dragRef.current = { ox: e.clientX - r.left, oy: e.clientY - r.top };
+    setDragging(true);
+  };
+  const onDragMove = (e: React.MouseEvent) => {
+    if (dragRef.current) setPanelPos({ x: e.clientX - dragRef.current.ox, y: e.clientY - dragRef.current.oy });
+  };
+  const endDrag = () => { dragRef.current = null; setDragging(false); };
+  // Esc 닫기 (바깥클릭은 안 닫힘)
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, [open, close]);
+
   const colorAssets = useSceneStore((s) => s.colorAssets);
   const addColorAsset = useSceneStore((s) => s.addColorAsset);
   const removeColorAsset = useSceneStore((s) => s.removeColorAsset);
@@ -283,15 +318,13 @@ export function ColorPicker({
   };
   const startStopDrag = (idx: number, e: React.PointerEvent) => {
     e.stopPropagation();
-    setSelStop(idx);
-    draggingRef.current = true;
+    setSelStop(idx); // 선택 → srcColor 변경 → SV/Hue thumb가 이 정지점 색으로 이동(위치 드래그는 색 불변이라 동기화 안 막음)
     const g0 = gradient!;
     const move = (ev: PointerEvent) => {
       const pos = posFromX(ev.clientX);
       onGradientChange?.({ ...g0, stops: g0.stops.map((s, i) => (i === idx ? { ...s, pos } : s)) });
     };
     const up = () => {
-      draggingRef.current = false;
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       commit();
@@ -357,10 +390,26 @@ export function ColorPicker({
         createPortal(
           <div
             ref={panelRef}
-            style={panelStyle}
-            className="w-56 bg-surface border border-border rounded-sm shadow-dropdown p-2.5 select-none"
-            onMouseDown={(e) => e.stopPropagation()}
+            style={{ position: "fixed", left: panelPos.x, top: panelPos.y, zIndex: 9999 }}
+            className="w-56 bg-surface border border-border rounded-sm shadow-dropdown select-none"
           >
+            {/* 드래그 헤더 + 닫기(X) */}
+            <div
+              onMouseDown={onHeaderDown}
+              className="flex items-center justify-between px-2.5 py-1.5 border-b border-border cursor-move"
+            >
+              <span className="text-[10px] font-semibold text-muted tracking-wide">Color</span>
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={close}
+                className="text-muted hover:text-foreground transition-colors"
+                title="Close"
+              >
+                <X size={13} />
+              </button>
+            </div>
+            <div className="p-2.5">
             {/* Solid / Gradient 토글 */}
             {allowGradient && (
               <div className="flex rounded-xs overflow-hidden border border-border mb-2.5">
@@ -404,7 +453,25 @@ export function ColorPicker({
                       </button>
                     ))}
                   </div>
-                  {/* linear=Angle, radial=Spread+Angle(방향)+Offset */}
+                  {/* radial 투영 방식 — Facing(구·기본)/Surface(면)/Axis(고정) */}
+                  {gradient.type === "radial" && (
+                    <div className="flex rounded-xs overflow-hidden border border-border">
+                      {(["facing", "surface", "axis"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => { onGradientChange?.({ ...gradient, radialMode: m }); commit(); }}
+                          title={m === "facing" ? "카메라 바라보는 쪽 원형(구에 자연스러움)" : m === "surface" ? "면마다 중앙 원형(패널·벽)" : "로컬 축 고정"}
+                          className={`px-2 py-1 text-[10px] capitalize transition-colors ${(gradient.radialMode ?? "facing") === m ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* 수치 컨트롤 — linear=Angle, radial=Spread+Angle(방향)+Offset */}
+                <div className="flex items-center gap-2 flex-wrap">
                   {gradient.type === "linear" ? (
                     <GradNum label="Angle" value={Math.round(gradient.angle ?? 0)} onChange={(n) => onGradientChange?.({ ...gradient, angle: n })} onCommit={commit} />
                   ) : (
@@ -463,7 +530,8 @@ export function ColorPicker({
               className="relative w-full h-32 rounded-xs cursor-crosshair"
               style={{
                 backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
-                backgroundImage: "linear-gradient(to right, #fff, rgba(255,255,255,0)), linear-gradient(to top, #000, rgba(0,0,0,0))",
+                // 검정(명도) 겹을 위에 → 좌하단이 실제로 검게 보이고 클릭값(s=0,v=0=검정)과 일치.
+                backgroundImage: "linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, rgba(255,255,255,0))",
               }}
             >
               <span
@@ -632,13 +700,9 @@ export function ColorPicker({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={close}
-              className="w-full mt-2.5 py-1 rounded-xs bg-background text-muted hover:text-foreground text-[10px] transition-colors"
-            >
-              Done
-            </button>
+            </div>
+            {/* 드래그 중에만 뜨는 투명 캡처 레이어(overlay 아님 — 이동 종료 시 사라짐) */}
+            {dragging && <div className="fixed inset-0 z-[60] cursor-move" onMouseMove={onDragMove} onMouseUp={endDrag} onMouseLeave={endDrag} />}
           </div>,
           document.body,
         )}

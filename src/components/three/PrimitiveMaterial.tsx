@@ -68,6 +68,7 @@ export function PrimitiveMaterial({
   const gradAngle = ((gradient?.angle ?? 0) * Math.PI) / 180;
   const gradScale = gradient?.scale ?? 1;
   const gradOffset = gradient?.offset ?? 0;
+  const radModeNum = ({ facing: 0, surface: 1, axis: 2 } as const)[gradient?.radialMode ?? 'facing']; // radial 투영 방식
 
   useEffect(() => {
     if (!textureUrl) { setTex(null); return; }
@@ -95,7 +96,7 @@ export function PrimitiveMaterial({
   const uidRef = useRef(Math.random().toString(36).slice(2));
   const stateRef = useRef({
     mode: 0, scale: 1, min: [-0.5, -0.5, -0.5] as number[], size: [1, 1, 1] as number[],
-    gradMode: 0, gradAngle: 0, gradScale: 1, gradOffset: 0, gradTex: null as THREE.Texture | null,
+    gradMode: 0, gradAngle: 0, gradScale: 1, gradOffset: 0, radMode: 0, gradTex: null as THREE.Texture | null,
   });
   stateRef.current.mode = textureMapping === 'pattern' ? 1 : 0;
   stateRef.current.scale = triplanarScale ?? 1;
@@ -105,6 +106,7 @@ export function PrimitiveMaterial({
   stateRef.current.gradAngle = gradAngle;
   stateRef.current.gradScale = gradScale;
   stateRef.current.gradOffset = gradOffset;
+  stateRef.current.radMode = radModeNum;
   stateRef.current.gradTex = gradTex;
   const shaderRef = useRef<{ uniforms: Record<string, { value: unknown }> } | null>(null);
   useEffect(() => {
@@ -119,9 +121,10 @@ export function PrimitiveMaterial({
       s.uniforms.uGradAngle.value = stateRef.current.gradAngle;
       s.uniforms.uGradScale.value = stateRef.current.gradScale;
       s.uniforms.uGradOffset.value = stateRef.current.gradOffset;
+      s.uniforms.uRadMode.value = stateRef.current.radMode;
       s.uniforms.uGradTex.value = stateRef.current.gradTex;
     }
-  }, [textureMapping, triplanarScale, wrapMin, wrapSize, gradSig, gradMode, gradAngle, gradScale, gradOffset, gradTex]);
+  }, [textureMapping, triplanarScale, wrapMin, wrapSize, gradSig, gradMode, gradAngle, gradScale, gradOffset, radModeNum, gradTex]);
 
   const onBeforeCompile = useCallback((shader: THREE.WebGLProgramParametersWithUniforms) => {
     shader.uniforms.uWrapMode = { value: stateRef.current.mode };
@@ -132,27 +135,48 @@ export function PrimitiveMaterial({
     shader.uniforms.uGradAngle = { value: stateRef.current.gradAngle };
     shader.uniforms.uGradScale = { value: stateRef.current.gradScale };
     shader.uniforms.uGradOffset = { value: stateRef.current.gradOffset };
+    shader.uniforms.uRadMode = { value: stateRef.current.radMode };
     shader.uniforms.uGradTex = { value: stateRef.current.gradTex };
     shaderRef.current = shader as unknown as { uniforms: Record<string, { value: unknown }> };
+    // 정점: 로컬 좌표/법선 + radial 'facing'(뷰 기준)용 뷰공간 위치/중심/반경을 varying으로 전달.
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vTriPos = position;\n  vTriNormal = normal;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;\nvarying vec2 vGViewPos;\nvarying vec2 vGViewCtr;\nvarying float vGRadius;\nuniform vec3 uWrapMin;\nuniform vec3 uWrapSize;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+  vTriPos = position;
+  vTriNormal = normal;
+  {
+    vec3 _ctr = uWrapMin + uWrapSize * 0.5;
+    vGViewPos = (modelViewMatrix * vec4(position, 1.0)).xy;
+    vGViewCtr = (modelViewMatrix * vec4(_ctr, 1.0)).xy;
+    vec3 _ex = (modelViewMatrix * vec4(uWrapSize.x, 0.0, 0.0, 0.0)).xyz;
+    vec3 _ey = (modelViewMatrix * vec4(0.0, uWrapSize.y, 0.0, 0.0)).xyz;
+    vGRadius = 0.25 * (length(_ex) + length(_ey)); // 뷰공간 XY 반경(줌 무관·원형 유지)
+  }`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;\nuniform float uWrapMode;\nuniform float uTriScale;\nuniform vec3 uWrapMin;\nuniform vec3 uWrapSize;\nuniform float uGradMode;\nuniform float uGradAngle;\nuniform float uGradScale;\nuniform float uGradOffset;\nuniform sampler2D uGradTex;')
-      // 그라데이션 — 베이스 색을 정지점 램프로 대체(map/vertexColor보다 먼저). bbox 로컬좌표로 투영.
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;\nvarying vec2 vGViewPos;\nvarying vec2 vGViewCtr;\nvarying float vGRadius;\nuniform float uWrapMode;\nuniform float uTriScale;\nuniform vec3 uWrapMin;\nuniform vec3 uWrapSize;\nuniform float uGradMode;\nuniform float uGradAngle;\nuniform float uGradScale;\nuniform float uGradOffset;\nuniform float uRadMode;\nuniform sampler2D uGradTex;')
+      // 그라데이션 — 베이스 색을 정지점 램프로 대체(map/vertexColor보다 먼저).
       .replace('#include <color_fragment>', `
         #include <color_fragment>
         if (uGradMode > 0.5) {
           vec3 _gp = (vTriPos - uWrapMin) / max(uWrapSize, vec3(1e-4));
+          vec2 _adir = vec2(cos(uGradAngle), sin(uGradAngle));
           float _gt;
           if (uGradMode < 1.5) {
-            vec2 _q = _gp.xy - 0.5;
-            vec2 _dir = vec2(cos(uGradAngle), sin(uGradAngle));
-            _gt = dot(_q, _dir) + 0.5;
+            // linear — 로컬 XY 방향 투영
+            _gt = dot(_gp.xy - 0.5, _adir) + 0.5;
+          } else if (uRadMode < 0.5) {
+            // radial · facing — 카메라 바라보는 쪽 기준 원형(뷰공간, 줌 무관). offset=중심 이동.
+            vec2 _c = vGViewCtr + uGradOffset * vGRadius * _adir;
+            _gt = length(vGViewPos - _c) / max(vGRadius, 1e-4) / max(uGradScale, 0.05);
+          } else if (uRadMode < 1.5) {
+            // radial · surface — 면 법선 기준, 지배 축 제외한 2D에서 면 중앙 원형(패널·벽)
+            vec3 _an = abs(normalize(vTriNormal));
+            vec2 _uv = (_an.x >= _an.y && _an.x >= _an.z) ? _gp.yz : (_an.y >= _an.z ? _gp.xz : _gp.xy);
+            vec2 _c = vec2(0.5) + uGradOffset * 0.5 * _adir;
+            _gt = length(_uv - _c) * 2.0 / max(uGradScale, 0.05);
           } else {
-            // radial — 로컬 XY 평면 2D 거리(3D 거리는 박스 표면이 전부 같은 반경이라 단색이 됨).
-            //   중심을 angle 방향으로 offset만큼 이동, scale=퍼지는 정도.
-            vec2 _c = vec2(0.5) + uGradOffset * 0.5 * vec2(cos(uGradAngle), sin(uGradAngle));
+            // radial · axis — 로컬 XY 고정(오브젝트에 붙음)
+            vec2 _c = vec2(0.5) + uGradOffset * 0.5 * _adir;
             _gt = length(_gp.xy - _c) * 2.0 / max(uGradScale, 0.05);
           }
           _gt = clamp(_gt, 0.0, 1.0);

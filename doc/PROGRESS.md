@@ -75,7 +75,9 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **픽커 UI**(`ColorPicker`, opt-in `allowGradient`): **Solid/Gradient 토글** + 그라데이션 바(**클릭=정지점 추가·핸들 드래그=위치·클릭=선택·Remove**) + **Linear/Radial** 타입 + Linear **각도** 입력. SV/Hue/hex/RGB/HSL이 **선택된 정지점 색**을 편집(`applyColor`가 solid=onChange / gradient=선택 stop 갱신으로 분기). 트리거 스와치는 그라데이션 미리보기. Solid↔Gradient 전환은 commit(undo 1회).
 - **적용**: `MaterialSection`의 **Color 필드만** `allowGradient`(Emissive·라이트·안개 등은 solid 유지). 그라데이션 변경도 `updateObject`+`pushHistory` 경로라 단일 undo.
 - **확인 필요(브라우저)**: Color 픽커 Gradient 토글 → 바에서 stop 추가/드래그/삭제·색 편집 · Linear 각도·Radial · 프리미티브/복셀/돌출/회전체 표면 렌더(에디터=게시 뷰어) · undo · solid 복귀.
-- **한계/후속**: linear·radial 모두 **오브젝트 로컬 XY 평면** 기준. radial 컨트롤 = **Spread(퍼짐)·Angle(중심 미는 방향)·Offset(중심 이동거리)** (`scale`/`angle`/`offset` 필드, uniform uGradScale/uGradAngle/uGradOffset). ※radial을 처음엔 3D bbox 거리로 했다가 박스 표면이 전부 같은 반경→단색 버그 → XY 2D 거리로 수정. 알파(투명 stop) 미지원(색만). GLB·텍스트 콘텐츠 제외(프리미티브 전용). 텍스처와 동시 사용 시 gradient×texture로 곱해짐.
+- **radial 투영 3방식**(`GradientFill.radialMode`, uniform uRadMode): **facing(기본)** = 카메라 바라보는 쪽 원형(뷰공간 XY 거리/반경, 줌 무관·어느 각도서도 정원·앞면만) / **surface** = 면 법선 지배축 제외 2D로 면마다 중앙 원형(패널·벽) / **axis** = 로컬 XY 고정. 픽커에 Facing/Surface/Axis 세그먼트. **facing이 '타원·양쪽 찍힘' 해결**(axis는 로컬 Z축 무시 XY라 비스듬히 보면 타원+앞뒤 대칭이던 것). 정점 셰이더에 뷰공간 위치/중심/반경(vGViewPos/vGViewCtr/vGRadius) varying 추가.
+- **radial 컨트롤**: Spread(퍼짐)·Angle(중심 미는 방향)·Offset(중심 이동거리) — 세 모드 공통(facing=화면 기준, surface/axis=면/로컬 기준).
+- **한계/후속**: linear는 로컬 XY 방향. 알파(투명 stop) 미지원(색만). GLB·텍스트 콘텐츠 제외(프리미티브 전용). 텍스처와 동시 사용 시 gradient×texture로 곱해짐. ※radial 초기 3D bbox 거리→박스 단색 버그로 XY 2D로, 이후 facing/surface/axis 3방식으로 확장.
 
 ### 후속 (2026-07-16) — Tidy/Distribute (위 별도 항목 참조)
 - (알파 슬라이더 등 나머지는 요청 시)

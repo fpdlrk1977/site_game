@@ -279,6 +279,8 @@ export interface GradientFill {
   angle?: number;          // linear: 방향 degrees(0=좌→우). radial: 중심을 미는 방향. 미설정=0.
   scale?: number;          // radial 전용, 퍼지는 정도(기본 1, 클수록 넓게 퍼짐).
   offset?: number;         // radial 전용, 중심 이동 거리(0=가운데 ~ 1=가장자리, angle 방향). 미설정=0.
+  // radial 투영 방식: 'facing'=카메라 바라보는 쪽 원형(기본·구에 자연스러움)·'surface'=면마다 중앙 원형(패널·벽)·'axis'=로컬 XY 고정.
+  radialMode?: 'facing' | 'surface' | 'axis';
   stops: GradientStop[];   // 2개+ (오름차순 권장, 렌더 시 정렬)
 }
 
