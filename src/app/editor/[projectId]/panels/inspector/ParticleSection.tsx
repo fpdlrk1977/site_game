@@ -6,6 +6,7 @@
 import { Flame, Wind, Sparkles, Snowflake } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { SectionHeader, GroupBox, LabeledNum } from './ui';
 import type { ObjectNodeSchema, ParticlePreset } from '@/types/scene';
 
@@ -31,21 +32,11 @@ export function ParticleSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
               </div>
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Color override</span>
-                <div className="px-2 flex items-center border border-border rounded-xs">
-                  <input type="color"
-                    value={obj.particle.color ?? '#ffffff'}
-                    onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="w-5 h-5 cursor-pointer"
-                  />
-                  <input type="text"
-                    value={obj.particle.color ?? '#ffffff'}
-                    onChange={(e) => updateObject(obj.id, { particle: { ...obj.particle!, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    placeholder="Preset default"
-                    className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
+                <ColorPicker
+                  value={obj.particle.color ?? '#ffffff'}
+                  onChange={(hex) => updateObject(obj.id, { particle: { ...obj.particle!, color: hex } })}
+                  onCommit={pushHistory}
+                />
               </div>
               {([
                 { key: 'count', label: 'Count',  min: 10, max: 500, precision: 0, dragStep: 2, fallback: 80 },

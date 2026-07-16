@@ -10,6 +10,7 @@ import { useSceneStore } from "@/store/sceneStore";
 import { useToast } from "@/hooks/useToast";
 import { createBrowserSupabase } from "@/lib/supabase";
 import { SelectBox } from "@/components/ui/SelectBox";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { GlbClipPicker } from "./GlbClipPicker";
 import { SectionHeader, GroupBox, Toggle, LabeledNum, LabeledText, XYZRow, TEXT_INPUT_CLASS } from "./ui";
 import { DraggablePopup } from "@/components/ui/DraggablePopup";
@@ -537,15 +538,10 @@ export function EventsSection({
                       }
                     />
                   ) : vtype === "color" ? (
-                    <div className="flex items-center gap-1.5 bg-surface border border-border rounded-xs px-2 py-0.5">
-                      <input
-                        type="color"
-                        value={/^#/.test(amt) ? amt : "#ffffff"}
-                        onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)}
-                        className="w-5 h-5 cursor-pointer bg-transparent"
-                      />
-                      <span className="text-[10px] text-muted tabular-nums">{/^#/.test(amt) ? amt : "#ffffff"}</span>
-                    </div>
+                    <ColorPicker
+                      value={/^#/.test(amt) ? amt : "#ffffff"}
+                      onChange={(hex) => setSV(vn || variables[0].name, op, hex)}
+                    />
                   ) : vtype === "string" ? (
                     <input
                       type="text"
@@ -835,15 +831,7 @@ export function EventsSection({
                   </label>
                   <label className="block">
                     <span className="text-[10px] text-muted/70  dark:text-muted block mb-1">배경색 (선택)</span>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="color"
-                        value={p.bg || "#ffffff"}
-                        onChange={(e) => setP({ bg: e.target.value })}
-                        className="w-7 h-7 rounded-xs border border-border bg-surface shrink-0 cursor-pointer"
-                      />
-                      <input type="text" value={p.bg ?? "#ffffff"} onChange={(e) => setP({ bg: e.target.value })} className={inputCls} />
-                    </div>
+                    <ColorPicker value={p.bg || "#ffffff"} onChange={(hex) => setP({ bg: hex })} />
                   </label>
                   <label className="flex items-center justify-between cursor-pointer">
                     <span className="text-[10px] text-muted/70  dark:text-muted">제목·닫기 표시 (chrome)</span>
@@ -1151,17 +1139,10 @@ export function EventsSection({
                           }
                         />
                       ) : ctype === "color" ? (
-                        <div className="flex items-center gap-1 bg-surface border border-border rounded-xs px-1.5 py-0.5">
-                          <input
-                            type="color"
-                            value={typeof c.value === "string" && /^#/.test(c.value) ? c.value : "#ffffff"}
-                            onChange={(e) => upd({ value: e.target.value })}
-                            className="w-5 h-5 cursor-pointer bg-transparent shrink-0"
-                          />
-                          <span className="text-[9px] text-muted tabular-nums truncate">
-                            {typeof c.value === "string" && /^#/.test(c.value) ? c.value : "#ffffff"}
-                          </span>
-                        </div>
+                        <ColorPicker
+                          value={typeof c.value === "string" && /^#/.test(c.value) ? c.value : "#ffffff"}
+                          onChange={(hex) => upd({ value: hex })}
+                        />
                       ) : ctype === "string" ? (
                         <input
                           type="text"

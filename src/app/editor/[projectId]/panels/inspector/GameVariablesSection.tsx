@@ -6,6 +6,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { SectionHeader, GroupBox, Toggle } from './ui';
 import type { GameVariable } from '@/types/scene';
 
@@ -91,16 +92,11 @@ export function GameVariablesSection() {
                     options={(v.options ?? []).length ? (v.options ?? []).map((o) => ({ value: o, label: `초기: ${o}` })) : [{ value: "", label: "(선택지 없음)" }]}
                   />
                 ) : v.type === "color" ? (
-                  <div className="flex items-center gap-1.5 bg-background border border-border rounded-xs px-2 py-0.5">
-                    <input
-                      type="color"
-                      value={typeof v.initial === "string" && v.initial ? v.initial : "#ffffff"}
-                      onChange={(e) => updateVariable(v.id, { initial: e.target.value })}
-                      onBlur={pushHistory}
-                      className="w-5 h-5 cursor-pointer bg-transparent"
-                    />
-                    <span className="text-[10px] text-muted tabular-nums">{typeof v.initial === "string" ? v.initial : "#ffffff"}</span>
-                  </div>
+                  <ColorPicker
+                    value={typeof v.initial === "string" && v.initial ? v.initial : "#ffffff"}
+                    onChange={(hex) => updateVariable(v.id, { initial: hex })}
+                    onCommit={pushHistory}
+                  />
                 ) : v.type === "asset" ? (
                   <SelectBox
                     value={typeof v.initial === "string" ? v.initial : ""}

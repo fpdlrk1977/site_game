@@ -6,6 +6,7 @@
 import { Lightbulb, Flashlight, Sun } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
 import type { ObjectNodeSchema } from '@/types/scene';
 
@@ -32,31 +33,12 @@ export function LightSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                 </div>
                 {/* Color */}
                 <div className="">
-                  <span className="text-[10px] font-semibold text-muted/50">Color</span>
-                  {/* <div className="flex items-center gap-2">
-                    <input type="color" value={obj.light.color}
-                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent" />
-                    <span className="text-[10px]  text-muted">{obj.light.color}</span>
-                  </div> */}
-
-                  <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
-                    <input
-                      type="color"
-                      value={obj.light.color}
-                    onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="w-5 h-5 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={obj.light.color}
-                      onChange={(e) => updateObject(obj.id, { light: { ...obj.light!, color: e.target.value } })}
-                      onBlur={pushHistory}
-                      className="flex-1 px-2.5 py-1.5  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
+                  <span className="text-[10px] font-semibold text-muted/50 block mb-1">Color</span>
+                  <ColorPicker
+                    value={obj.light.color}
+                    onChange={(hex) => updateObject(obj.id, { light: { ...obj.light!, color: hex } })}
+                    onCommit={pushHistory}
+                  />
 
                 </div>
                 {/* Intensity */}

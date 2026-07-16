@@ -7,7 +7,6 @@ import { useState, useRef } from "react";
 import {
   User,
   RotateCcw,
-  X,
   Sunrise,
   Sun,
   Sunset,
@@ -20,8 +19,6 @@ import {
   Droplet,
   Palette,
   Image as ImageIcon,
-  Trash2,
-  Plus,
   CirclePlus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -29,6 +26,7 @@ import { useSceneStore } from "@/store/sceneStore";
 import { useToast } from "@/hooks/useToast";
 import { uploadImageTexture } from "@/lib/uploadAsset";
 import { TexturePicker } from "@/components/ui/TexturePicker";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { SelectBox } from "@/components/ui/SelectBox";
 import { RangeSlider } from "@/components/ui/RangeSlider";
 import { InfoHint } from "@/components/ui/InfoHint";
@@ -350,22 +348,11 @@ export function EnvironmentPanel() {
                     />
 
                     {mode === "color" && (
-                      <div className="px-2 flex  items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
-                        <input
-                          type="color"
-                          value={env.sky.value}
-                          onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
-                          onBlur={pushHistory}
-                          className="w-5 h-5 cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={env.sky.value}
-                          onChange={(e) => updateEnvironment({ sky: { ...env.sky, value: e.target.value } })}
-                          onBlur={pushHistory}
-                          className="w-full flex-1 px-2.5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                      </div>
+                      <ColorPicker
+                        value={env.sky.value}
+                        onChange={(hex) => updateEnvironment({ sky: { ...env.sky, value: hex } })}
+                        onCommit={pushHistory}
+                      />
                     )}
 
                     {mode === "hdr" && (
@@ -431,22 +418,11 @@ export function EnvironmentPanel() {
                   />
                   {/* Color 모드 — 컬러 선택 필드 */}
                   {mode === "color" && (
-                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
-                      <input
-                        type="color"
-                        value={env.ground!.color}
-                        onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
-                        onBlur={pushHistory}
-                        className="w-5 h-5 cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={env.ground!.color}
-                        onChange={(e) => updateEnvironment({ ground: { ...env.ground!, color: e.target.value } })}
-                        onBlur={pushHistory}
-                        className="flex-1 px-2.5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </div>
+                    <ColorPicker
+                      value={env.ground!.color}
+                      onChange={(hex) => updateEnvironment({ ground: { ...env.ground!, color: hex } })}
+                      onCommit={pushHistory}
+                    />
                   )}
                   {/* Texture 모드 — 업로드 버튼 / 미리보기 */}
                   {mode === "texture" && (
@@ -501,22 +477,11 @@ export function EnvironmentPanel() {
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
-                  <input
-                    type="color"
-                    value={env.fog.color}
-                    onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="w-5 h-5 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={env.fog.color}
-                    onChange={(e) => updateEnvironment({ fog: { ...env.fog, color: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="flex-1 w-full px-2.5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
+                <ColorPicker
+                  value={env.fog.color}
+                  onChange={(hex) => updateEnvironment({ fog: { ...env.fog, color: hex } })}
+                  onCommit={pushHistory}
+                />
               </div>
 
               <div className="flex-1 min-w-0">
@@ -670,46 +635,24 @@ export function EnvironmentPanel() {
             <div className="flex gap-2 pt-1">
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted">Sun Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
-                  <input
-                    type="color"
-                    value={env.lights.directionalColor ?? "#ffffff"}
-                    onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalColor: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="w-5 h-5 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={env.lights.directionalColor ?? "#ffffff"}
-                    onChange={(e) => updateEnvironment({ lights: { ...env.lights, directionalColor: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="flex-1 w-full px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
+                <ColorPicker
+                  value={env.lights.directionalColor ?? "#ffffff"}
+                  onChange={(hex) => updateEnvironment({ lights: { ...env.lights, directionalColor: hex } })}
+                  onCommit={pushHistory}
+                />
               </div>
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted">Ambient Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
-                  <input
-                    type="color"
-                    value={env.lights.ambientColor ?? "#ffffff"}
-                    onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientColor: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="w-5 h-5 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={env.lights.ambientColor ?? "#ffffff"}
-                    onChange={(e) => updateEnvironment({ lights: { ...env.lights, ambientColor: e.target.value } })}
-                    onBlur={pushHistory}
-                    className="flex-1 w-full px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
+                <ColorPicker
+                  value={env.lights.ambientColor ?? "#ffffff"}
+                  onChange={(hex) => updateEnvironment({ lights: { ...env.lights, ambientColor: hex } })}
+                  onCommit={pushHistory}
+                />
               </div>
             </div>
             {/* 노출(Exposure) — 씬 전체 밝기. 1=기본. 안내는 아이콘 툴팁으로. */}
             <div className="pt-1">
-              <div className="flex items-center gap-1 mb-1">
+              <div className="flex items-center gap-1 mb-1/2">
                 <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Exposure</span>
                 <InfoHint text="Overall scene brightness. Uses Linear tone mapping so colors render as set. If some areas blow out to white, lower the exposure." />
               </div>
@@ -726,7 +669,7 @@ export function EnvironmentPanel() {
             </div>
             {/* 그림자 농도 — 태양(directionalLight) 그림자 진하기(shadow.intensity). 1=진함·0.5=옅음·0=없음. */}
             <div className="pt-1">
-              <div className="flex items-center gap-1 mb-1">
+              <div className="flex items-center gap-1 mb-1/2">
                 <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Shadow Density</span>
                 <InfoHint text="Darkness of the sun's cast shadows. 1 = dark, 0.5 = soft/faint, 0 = no shadow. Per-object shadows are on/off only; this controls the whole scene." />
               </div>
@@ -779,7 +722,7 @@ export function EnvironmentPanel() {
             </label>
             {/* 상호작용 근접 범위 기본값 — interact(E)/approach·E 프롬프트·하이라이트 공유 */}
             <div className="pt-2">
-              <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Default interaction range (m)</span>
+              <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1/2">Default interaction range (m)</span>
               <RangeSlider
                 value={env.interactRange ?? 3}
                 onChange={(v) => updateEnvironment({ interactRange: Math.max(0.5, v) })}
@@ -812,8 +755,6 @@ export function EnvironmentPanel() {
             {(() => {
               const dp = env.defaultPopup ?? {};
               const setDP = (patch: Partial<typeof dp>) => updateEnvironment({ defaultPopup: { ...dp, ...patch } });
-              // const inputCls = 'w-full bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-primary';
-              const inputCls = "flex-1 w-full px-2.5 py-1  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
               return (
                 <>
                   <label className="block">
@@ -838,24 +779,12 @@ export function EnvironmentPanel() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <span className="text-[10px] text-muted/70 w-12">기본 배경색</span>
-                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
-                      <input
-                        type="color"
-                        value={dp.bg || "#ffffff"}
-                        onChange={(e) => setDP({ bg: e.target.value })}
-                        onBlur={pushHistory}
-                        className="w-5 h-5 cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={dp.bg ?? "#ffffff"}
-                        onChange={(e) => setDP({ bg: e.target.value })}
-                        onBlur={pushHistory}
-                        placeholder="#ffffff"
-                        className={inputCls}
-                      />
-                    </div>
+                    <span className="text-[10px] text-muted/70 w-12 block mb-1">기본 배경색</span>
+                    <ColorPicker
+                      value={dp.bg || "#ffffff"}
+                      onChange={(hex) => setDP({ bg: hex })}
+                      onCommit={pushHistory}
+                    />
                   </div>
                 </>
               );
@@ -1116,17 +1045,15 @@ export function EnvironmentPanel() {
                     {/* 면별/스카이박스 업로드 공용 파일 입력 */}
                     <input ref={bwUploadRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleBwFileUpload} />
                     {style === "color" && (
-                      <label className="flex items-center gap-2 text-[10px] text-muted/70">
+                      <div className="flex items-center gap-2 text-[10px] text-muted/70">
                         <span className="shrink-0 text-muted/70 dark:text-muted">Color</span>
-                        <input
-                          type="color"
+                        <ColorPicker
                           value={bw.color ?? "#8899aa"}
-                          onChange={(e) => setBw({ color: e.target.value })}
-                          onBlur={pushHistory}
-                          className="w-8 h-6 rounded-xs bg-transparent border border-border cursor-pointer"
+                          onChange={(hex) => setBw({ color: hex })}
+                          onCommit={pushHistory}
+                          className="flex-1"
                         />
-                        <span className="text-muted/70 font-mono">{bw.color ?? "#8899aa"}</span>
-                      </label>
+                      </div>
                     )}
                     {style === "texture" && (
                       <div className="space-y-1.5">

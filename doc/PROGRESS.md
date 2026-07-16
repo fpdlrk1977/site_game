@@ -58,9 +58,22 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **`lib/color.ts`**: 순수 색 변환(normalizeHex·hex↔rgb↔hsv). 픽커 HSV 사각형/Hue 슬라이더·hex/RGB 입력 공유.
 - **`ColorPicker.tsx`**(공통): 트리거 스와치 버튼 + 팝오버(`useDropdown`+portal 재사용). 기능 = **SV(채도·명도) 사각형 드래그 · Hue 슬라이더 · hex/RGB 입력 · 저장 팔레트(`colorAssets`) 연동(클릭 적용·+Save·우클릭 삭제) · 스포이드(EyeDropper API, 크로미엄만)**. props `{value, onChange(hex), onCommit(=pushHistory), className, showHex, palette, disabled, title}`. onChange=실시간, onCommit=조작 끝 1회(드래그업/입력확정/스와치). **그레이스케일에서 hue 보존**(내부 HSV state + 드래그 중 외부 동기화 skip).
 - **드롭인 규약**: 기존 `<input type=color value onChange onBlur={pushHistory}>` → `<ColorPicker value onChange={hex→} onCommit={pushHistory}>`. className으로 트리거 크기 조절(기본 w-8 h-8, showHex면 스와치 위 hex 표시).
-- **적용 완료**: `MaterialSection`(Color·Emissive) · `MultiSelectPanel`(일괄 색). **남은 롤아웃(~20곳/9파일)**: EnvironmentPanel(7)·EventsSection(3)·SceneLogicSection(2)·LightSection(2)·HudSection(1)·GameVariablesSection(1)·ParticleSection(1)·AssetBrowser(2)·VoxelToolModal(1). **저위험 드롭인**이라 컴포넌트 UX 확정 후 일괄 교체 예정.
+- **적용 완료**: `MaterialSection`(Color·Emissive) · `MultiSelectPanel`(일괄 색) · `VoxelToolModal`(칠할 색).
 
-### 후속 (2026-07-16) — 픽커 UI 리팩터 2·3·4 (사용자 요청) — 브라우저 확인 대기
+### ✅ 완료 (2026-07-17) — 컬러픽커 전역 롤아웃 (input[type=color] → ColorPicker)
+> 프로젝트 전역의 네이티브 색 입력을 자체 `ColorPicker`로 통일. tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.**
+- **교체 18곳**: `EnvironmentPanel`(7: Sky·Ground·Fog·Sun·Ambient·팝업 기본배경·경계벽) · `EventsSection`(3: set_variable 색·팝업 배경·조건 색) · `SceneLogicSection`(2: 조건 색·set_variable 색) · `LightSection`(1: 라이트 색) · `ParticleSection`(1) · `HudSection`(1) · `GameVariablesSection`(1: color 변수 초기값) · `AssetBrowser`(2: 재질 라이브러리 색·자체발광). (VoxelTool30·Material·MultiSelect는 앞서 완료.)
+- **패턴**: 스와치+hex 텍스트 필드(`<div>...<input color><input text></div>`)는 통째로 `<ColorPicker value onChange onCommit={pushHistory}/>`로 교체. 작은 스와치(AssetBrowser 재질)는 `showHex={false}` 소형. 폼 상태만인 곳(SceneLogic·Events 일부)은 onCommit 생략.
+- **제외(의도)**: MaterialSection **복셀 disabled** 색 표시(안내용) · LightSection **주석 처리**된 옛 입력.
+- **정리**: EnvironmentPanel 미사용 `inputCls`(팝업 배경 텍스트 입력 제거로 고아) 삭제. ※EnvironmentPanel의 X/Trash2/Plus 미사용 import 경고는 기존(무관).
+- **결과**: 전역 색 입력이 SV/Hue·HEX/RGB/HSL·저장 팔레트·스포이드·팝업형 픽커로 통일. Material Color만 그라데이션 지원, 나머지는 solid.
+
+### 후속 (2026-07-17) — 컬러픽커 팝업화 + SV/정지점 버그 수정 (사용자 확인 완료)
+- **SV 사각형 색배치 버그**: 흰색 겹이 검정 겹 위라 좌하단이 시각상 흰색인데 클릭값은 검정(#000000)으로 불일치 → **검정(명도) 겹을 위로** 순서 교체(좌상=흰·우상=순색·하단=검정, 클릭값 일치).
+- **정지점 선택 시 SV/Hue thumb 미이동**: `startStopDrag`가 켜던 `draggingRef`가 thumb 재동기화를 막았음(위치 드래그는 색 불변이라 불필요) → 제거. 이제 정지점 클릭하면 그 색으로 SV/Hue 작은 원이 이동(선택 정지점=SV에서 편집).
+- **떠 있는 팝업 전환**(펜툴/복셀 모달 패턴): `useDropdown` 제거 → 로컬 open/panelPos + **드래그 헤더("Color")+닫기(X)** + **Esc 닫기, 바깥클릭 안 닫힘**(3D 씬 보며 색 조절). 여러 색 필드 동시 오픈 가능(각각 X). 드래그 캡처 레이어(dragging 시).
+
+### 후속 (2026-07-17) — 픽커 UI 리팩터 2·3·4 (사용자 요청) — 브라우저 확인 대기
 > 사용자 5개 요청 중 **알파(5)=보류(추후 요청)**, **그라데이션(1)=선형+라디얼 다중stop으로 확정했으나 사용자가 git push 후 진행 요청 → 대기**. 이번엔 **2·3·4만** 반영. tsc 클린 + `✓ Compiled`.
 - **②트리거 필드형**: 버튼 전체가 색 → **`[스와치 네모][hex 텍스트]` 필드형**(border/bg 있는 입력 박스 모양, 색은 작은 네모에만). `showHex` 기본 true.
 - **③font-mono 삭제**: 픽커 hex/값 텍스트의 `font-mono` 전부 제거(앞으로 미사용).

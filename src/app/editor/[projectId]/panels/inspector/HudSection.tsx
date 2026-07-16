@@ -6,6 +6,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { SectionHeader, GroupBox } from './ui';
 import type { HudElement } from '@/types/scene';
 
@@ -102,12 +103,11 @@ export function HudSection() {
               {(el.kind === "bar" || el.kind === "lives") && (
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted/60">색</span>
-                  <input
-                    type="color"
+                  <ColorPicker
                     value={el.color ?? "#ef4444"}
-                    onChange={(e) => updateHudElement(el.id, { color: e.target.value })}
-                    onBlur={pushHistory}
-                    className="w-8 h-6 rounded border border-border bg-transparent cursor-pointer"
+                    onChange={(hex) => updateHudElement(el.id, { color: hex })}
+                    onCommit={pushHistory}
+                    className="flex-1"
                   />
                   {el.kind === "lives" && (
                     <SelectBox

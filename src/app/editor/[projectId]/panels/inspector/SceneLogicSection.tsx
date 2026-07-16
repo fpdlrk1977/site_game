@@ -9,6 +9,7 @@ import { MathUtils } from 'three';
 import { Cpu, Plus, Trash2, Pencil, X } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { SectionHeader, GroupBox } from './ui';
 import type { EventSchema, EventCondition, GameVariable } from '@/types/scene';
 
@@ -208,7 +209,7 @@ export function SceneLogicSection() {
                               ) : ct === 'enum' ? (
                                 <SelectBox value={typeof c.value === 'string' ? c.value : (cv?.options?.[0] ?? '')} onChange={(v) => upd({ value: v })} options={(cv?.options ?? []).map((o) => ({ value: o, label: o }))} />
                               ) : ct === 'color' ? (
-                                <input type="color" value={typeof c.value === 'string' && /^#/.test(c.value) ? c.value : '#ffffff'} onChange={(e) => upd({ value: e.target.value })} className="w-full h-7 cursor-pointer bg-transparent" />
+                                <ColorPicker value={typeof c.value === 'string' && /^#/.test(c.value) ? c.value : '#ffffff'} onChange={(hex) => upd({ value: hex })} />
                               ) : ct === 'string' ? (
                                 <input type="text" value={typeof c.value === 'string' ? c.value : ''} onChange={(e) => upd({ value: e.target.value })} className={inputCls} />
                               ) : (
@@ -265,7 +266,7 @@ export function SceneLogicSection() {
                       ) : vtype === 'enum' ? (
                         <SelectBox value={amt || selVar?.options?.[0] || ''} onChange={(a) => setSV(vn || variables[0].name, op, a)} options={(selVar?.options ?? []).map((o) => ({ value: o, label: o }))} />
                       ) : vtype === 'color' ? (
-                        <input type="color" value={/^#/.test(amt) ? amt : '#ffffff'} onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)} className="w-full h-7 cursor-pointer bg-transparent" />
+                        <ColorPicker value={/^#/.test(amt) ? amt : '#ffffff'} onChange={(hex) => setSV(vn || variables[0].name, op, hex)} />
                       ) : vtype === 'string' ? (
                         <input type="text" value={amt} onChange={(e) => setSV(vn || variables[0].name, op, e.target.value)} placeholder="텍스트" className={inputCls} />
                       ) : vtype === 'asset' ? (

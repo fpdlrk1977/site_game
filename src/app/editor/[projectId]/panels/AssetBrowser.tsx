@@ -9,6 +9,7 @@ import { tryEmbedTextures } from '@/lib/glbEmbed';
 import { uploadGlbBlob, uploadAudioFile, uploadImageTexture } from '@/lib/uploadAsset';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { RangeSlider } from '@/components/ui/RangeSlider';
 import { InlineEditName } from '@/components/ui/InlineEditName';
 import type { AssetRefSchema, ContentType, ParticlePreset, LightType, HdrPreset, MaterialOverride } from '@/types/scene';
@@ -549,13 +550,10 @@ export function AssetBrowser() {
                     return (
                     <div key={m.id} className="bg-background border border-border rounded-xs">
                       <div className="flex items-center gap-1.5 px-1.5 py-1">
-                        <label title="색 편집(공유 반영)"
-                          className="relative w-3 h-3 shrink-0 rounded-full cursor-pointer border border-muted/60 ring-1 ring-black/10 overflow-hidden"
-                          style={{ background: materialSwatchBg(m.material) }}>
-                          <input type="color" value={m.material.color ?? '#a78bfa'}
-                            onChange={(e) => setM({ color: e.target.value })} onBlur={pushHistory}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                        </label>
+                        <ColorPicker value={m.material.color ?? '#a78bfa'}
+                          onChange={(hex) => setM({ color: hex })} onCommit={pushHistory}
+                          showHex={false} title="색 편집(공유 반영)"
+                          className="w-7 h-6 justify-center shrink-0" />
                         <InlineEditName value={m.name} onCommit={(n) => renameMaterialAsset(m.id, n)}
                           title="이름 변경" placeholder="재질 이름"
                           className="flex-1 min-w-0 bg-transparent text-[11px] text-foreground rounded-sm px-1 -mx-1 border border-transparent hover:border-border/60 focus:border-primary/50 focus:outline-none transition-colors" />
@@ -578,12 +576,12 @@ export function AssetBrowser() {
                               onChange={(v) => setM({ [k]: v })} onCommit={pushHistory}
                               min={0} max={1} step={0.02} showValue precision={2} />
                           ))}
-                          <label className="flex items-center gap-2 text-[10px] text-muted">
+                          <div className="flex items-center gap-2 text-[10px] text-muted">
                             <span className="w-14 shrink-0">자체발광</span>
-                            <input type="color" value={m.material.emissive ?? '#000000'}
-                              onChange={(e) => setM({ emissive: e.target.value })} onBlur={pushHistory}
-                              className="w-6 h-6 rounded cursor-pointer border border-border" />
-                          </label>
+                            <ColorPicker value={m.material.emissive ?? '#000000'}
+                              onChange={(hex) => setM({ emissive: hex })} onCommit={pushHistory}
+                              className="flex-1" />
+                          </div>
                         </div>
                       )}
                     </div>
