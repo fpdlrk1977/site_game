@@ -51,6 +51,32 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 🎨 진행 중 (2026-07-16) — 커스텀 컬러픽커 공통 컴포넌트 (피그마식) — 브라우저 확인 대기 / 롤아웃 진행중
+
+> 사용자 요청: "input[type=color]이 너무 단순하다. 피그마처럼 자체 컬러픽커를 **공통 컴포넌트**로." 신규 `lib/color.ts` + `components/ui/ColorPicker.tsx`. tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.** (3종 로드맵 중 ② — 다음: 액추에이터[맨 나중 상의])
+
+- **`lib/color.ts`**: 순수 색 변환(normalizeHex·hex↔rgb↔hsv). 픽커 HSV 사각형/Hue 슬라이더·hex/RGB 입력 공유.
+- **`ColorPicker.tsx`**(공통): 트리거 스와치 버튼 + 팝오버(`useDropdown`+portal 재사용). 기능 = **SV(채도·명도) 사각형 드래그 · Hue 슬라이더 · hex/RGB 입력 · 저장 팔레트(`colorAssets`) 연동(클릭 적용·+Save·우클릭 삭제) · 스포이드(EyeDropper API, 크로미엄만)**. props `{value, onChange(hex), onCommit(=pushHistory), className, showHex, palette, disabled, title}`. onChange=실시간, onCommit=조작 끝 1회(드래그업/입력확정/스와치). **그레이스케일에서 hue 보존**(내부 HSV state + 드래그 중 외부 동기화 skip).
+- **드롭인 규약**: 기존 `<input type=color value onChange onBlur={pushHistory}>` → `<ColorPicker value onChange={hex→} onCommit={pushHistory}>`. className으로 트리거 크기 조절(기본 w-8 h-8, showHex면 스와치 위 hex 표시).
+- **적용 완료**: `MaterialSection`(Color·Emissive) · `MultiSelectPanel`(일괄 색). **남은 롤아웃(~20곳/9파일)**: EnvironmentPanel(7)·EventsSection(3)·SceneLogicSection(2)·LightSection(2)·HudSection(1)·GameVariablesSection(1)·ParticleSection(1)·AssetBrowser(2)·VoxelToolModal(1). **저위험 드롭인**이라 컴포넌트 UX 확정 후 일괄 교체 예정.
+- **확인 필요(브라우저)**: SV/Hue 드래그·hex/RGB 입력·저장 팔레트(적용/저장/삭제)·스포이드·undo(드래그=1회)·팝오버 위치/바깥클릭/Esc.
+- **후속(선택)**: 알파(opacity) 슬라이더 · 최근 사용 색 · 그라데이션 에디터로 확장(fog/경계벽).
+
+---
+
+## 📐 진행 중 (2026-07-16) — Tidy Up & Distribute Spacing (피그마식 정돈/간격 균등) — 브라우저 확인 대기
+
+> 기준 문서 `doc/# Tidy Up & Distribute Spacing 기능 구현 명세.md`. 기존 `alignSelected`(min/center/max)에 **자동 정돈 + 간격 균등** 추가. tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.** (3종 로드맵 중 ① — 다음: 컬러픽커 → 액추에이터[맨 나중 상의])
+
+- **`tidyUpSelected()`**(2개+): 선택 전체 bbox가 **가장 긴 축=주 축**으로 순서(중심)대로 **균등 간격 팩**(전체 스팬 유지, gap=(span−Σsize)/(n−1)≥0) + **나머지 두 축은 중심 평균으로 맞춤**. 아무렇게나 놓인 것 → 한 줄 정돈.
+- **`distributeSelected(axis)`**(3개+): 위치 순서·양끝 유지하고 **축 방향 사이 간격만 균등**. 크기 불변. X/Y/Z 각각.
+- **공통**: `worldBBox`(AABB, 회전 반영) 기준 + position 델타 1:1(루트 기준, `alignSelected`와 동일 제약). **잠김·숨김·bbox 미로딩(GLB) 제외**. spacing 음수→0. **단일 undo**(`withHistory`).
+- **3D 대응**: 명세는 2D(x/y)지만 우린 3D → Distribute는 **X/Y/Z 축 버튼**, Tidy는 최장축 자동. `MultiSelectPanel` **Arrange 섹션** 신설(Tidy up 버튼 + Distribute X/Y/Z, 3개 미만이면 Distribute disabled).
+- **확인 필요(브라우저)**: 흩어진 오브젝트 Tidy up→한 줄 균등·교차축 중심 정렬 · Distribute 축별 간격 균등(양끝 유지) · 잠김/숨김 제외 · undo 1회 · 회전된 오브젝트 AABB 기준.
+- **후속(선택)**: 격자(rows×cols) 정돈 · 방향 강제 지정 옵션 · 뷰포트 툴바 노출.
+
+---
+
 ## 🧩 진행 중 (2026-07-16) — 프리팹 원본/사본(Figma 컴포넌트 모델) — 브라우저 확인 대기
 
 > 사용자 요청: "프리팹 = 피그마 컴포넌트인데 원본/사본 구분이 없다. 피그마처럼 원본 편집→사본 자동 반영이면 좋겠다." **확정(사용자)**: ①원본 편집 시 **자동 전파**(Apply 불필요) ②원본 삭제 시 **다른 사본 자동 승격** ③아이콘 = **원본=현재(CirclePile), 사본=`Focus`**. tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.**

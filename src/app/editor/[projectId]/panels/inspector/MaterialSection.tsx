@@ -9,6 +9,7 @@ import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { uploadImageTexture } from '@/lib/uploadAsset';
 import { TexturePicker } from '@/components/ui/TexturePicker';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { InlineEditName } from '@/components/ui/InlineEditName';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
@@ -76,43 +77,27 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                         <button onClick={() => openVoxelEdit(obj.id)} className="text-[10px] text-primary/80 hover:text-primary mt-1 transition-colors">복셀 수정 열기 →</button>
                       </div>
                     ) : (
-                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
-                      <input
-                        type="color"
+                      <ColorPicker
                         value={obj.material?.color ?? '#a78bfa'}
-                        onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
-                        onBlur={pushHistory}
-                        className="w-5 h-5 cursor-pointer"
+                        onChange={(hex) => updateObject(obj.id, { material: { ...obj.material, color: hex } })}
+                        onCommit={pushHistory}
+                        showHex
+                        title="Base color"
+                        className="w-full h-8 px-2 justify-start"
                       />
-                      <input
-                        type="text"
-                        value={obj.material?.color ?? '#a78bfa'}
-                        onChange={(e) => updateObject(obj.id, { material: { ...obj.material, color: e.target.value } })}
-                        onBlur={pushHistory}
-                      className="w-full px-2.5 py-1  text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </div>
                     )}
                   </div>
 
                   <div className='flex-1'>
                     <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Emissive</span>
-                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
-                      <input
-                        type="color"
-                        value={obj.material?.emissive ?? '#000000'}
-                        onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
-                        onBlur={pushHistory}
-                        className="w-5 h-5 cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={obj.material?.emissive ?? '#000000'}
-                        onChange={(e) => updateObject(obj.id, { material: { ...obj.material, emissive: e.target.value } })}
-                        onBlur={pushHistory}
-                      className="w-full px-2.5 py-1 text-[11px] text-foreground  focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </div>
+                    <ColorPicker
+                      value={obj.material?.emissive ?? '#000000'}
+                      onChange={(hex) => updateObject(obj.id, { material: { ...obj.material, emissive: hex } })}
+                      onCommit={pushHistory}
+                      showHex
+                      title="Emissive (glow) color"
+                      className="w-full h-8 px-2 justify-start"
+                    />
                   </div>
                 </div>
 

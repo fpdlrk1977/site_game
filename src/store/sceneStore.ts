@@ -137,6 +137,10 @@ interface SceneActions {
   selectObjects: (ids: string[]) => void;
   deleteSelected: () => void;
   alignSelected: (axis: 'x' | 'y' | 'z', mode: 'min' | 'center' | 'max') => void;
+  /** Tidy Up — 선택물을 주 축(가장 긴 bbox 축)으로 정렬 + 교차축 중심 맞춤 + 균등 간격. 2개+ */
+  tidyUpSelected: () => void;
+  /** Distribute — 양끝은 유지하고 축 방향 오브젝트 사이 간격만 균등하게. 3개+ */
+  distributeSelected: (axis: 'x' | 'y' | 'z') => void;
   setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
   setTransformSpace: (space: 'world' | 'local') => void;
   addObject: (shape: PrimitiveShape, placeAt?: PlaceXZ) => void;
@@ -1265,6 +1269,89 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         const delta = targetVal - edge(o.id, o.position[axis]);
         return { ...o, position: { ...o.position, [axis]: o.position[axis] + delta } };
       }),
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  // Tidy Up — 주 축(선택 전체 bbox가 가장 긴 축) 방향으로 순서대로 균등 배치 + 나머지 두 축은 중심 평균으로 맞춤.
+  //   잠김·숨김·bbox 없는(미로딩 GLB) 오브젝트는 제외. 회전은 worldBBox(AABB) 기준. 단일 undo.
+  tidyUpSelected: () => {
+    const { selectedIds, objects, assets, environment, past } = get();
+    const AX = ['x', 'y', 'z'] as const;
+    type Boxed = { id: string; min: Record<'x' | 'y' | 'z', number>; max: Record<'x' | 'y' | 'z', number> };
+    const boxed: Boxed[] = [];
+    for (const o of objects) {
+      if (!selectedIds.includes(o.id) || o.locked || o.visible === false) continue;
+      const b = worldBBox(objects, assets, o.id);
+      if (b) boxed.push({ id: o.id, min: { x: b.min.x, y: b.min.y, z: b.min.z }, max: { x: b.max.x, y: b.max.y, z: b.max.z } });
+    }
+    if (boxed.length < 2) return;
+    const center = (bx: Boxed, a: 'x' | 'y' | 'z') => (bx.min[a] + bx.max[a]) / 2;
+    // 주 축 = 전체 스팬이 가장 큰 축
+    const span = (a: 'x' | 'y' | 'z') => Math.max(...boxed.map((b) => b.max[a])) - Math.min(...boxed.map((b) => b.min[a]));
+    const layout = span('x') >= span('y') && span('x') >= span('z') ? 'x' : span('y') >= span('z') ? 'y' : 'z';
+    const cross = AX.filter((a) => a !== layout);
+    // 교차축 목표 = 각 축 중심의 평균
+    const avg: Record<string, number> = {};
+    for (const a of cross) avg[a] = boxed.reduce((s, b) => s + center(b, a), 0) / boxed.length;
+    // 주 축 = 현재 순서(중심)대로 정렬 후 균등 간격으로 팩. 전체 스팬은 유지.
+    const sorted = [...boxed].sort((a, b) => center(a, layout) - center(b, layout));
+    const sizes = sorted.map((b) => b.max[layout] - b.min[layout]);
+    const minLeft = Math.min(...boxed.map((b) => b.min[layout]));
+    const maxRight = Math.max(...boxed.map((b) => b.max[layout]));
+    const gap = Math.max(0, (maxRight - minLeft - sizes.reduce((s, v) => s + v, 0)) / (sorted.length - 1));
+    const deltas = new Map<string, Partial<Record<'x' | 'y' | 'z', number>>>();
+    let cur = minLeft;
+    sorted.forEach((b, i) => {
+      const d: Partial<Record<'x' | 'y' | 'z', number>> = { [layout]: cur - b.min[layout] };
+      for (const a of cross) d[a] = avg[a] - center(b, a);
+      deltas.set(b.id, d);
+      cur += sizes[i] + gap;
+    });
+    set({
+      objects: objects.map((o) => {
+        const d = deltas.get(o.id);
+        if (!d) return o;
+        return {
+          ...o,
+          position: {
+            x: o.position.x + (d.x ?? 0),
+            y: o.position.y + (d.y ?? 0),
+            z: o.position.z + (d.z ?? 0),
+          },
+        };
+      }),
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  // Distribute Spacing — 위치 순서/양끝은 유지하고 축 방향 '사이 간격'만 균등화. 크기는 안 바꿈. 3개+ 필요.
+  distributeSelected: (axis) => {
+    const { selectedIds, objects, assets, environment, past } = get();
+    const boxed: { id: string; min: number; max: number }[] = [];
+    for (const o of objects) {
+      if (!selectedIds.includes(o.id) || o.locked || o.visible === false) continue;
+      const b = worldBBox(objects, assets, o.id);
+      if (b) boxed.push({ id: o.id, min: b.min[axis], max: b.max[axis] });
+    }
+    if (boxed.length < 3) return;
+    boxed.sort((a, b) => a.min - b.min);
+    const minLeft = boxed[0].min;
+    const maxRight = boxed[boxed.length - 1].max;
+    const sizes = boxed.map((b) => b.max - b.min);
+    const gap = Math.max(0, (maxRight - minLeft - sizes.reduce((s, v) => s + v, 0)) / (boxed.length - 1));
+    const deltas = new Map<string, number>();
+    let cur = minLeft;
+    boxed.forEach((b, i) => {
+      deltas.set(b.id, cur - b.min); // bbox min을 cur로 옮기는 만큼 position 이동(루트 1:1)
+      cur += sizes[i] + gap;
+    });
+    set({
+      objects: objects.map((o) =>
+        deltas.has(o.id) ? { ...o, position: { ...o.position, [axis]: o.position[axis] + deltas.get(o.id)! } } : o,
+      ),
       isModified: true,
       ...withHistory({ objects, environment }, past),
     });

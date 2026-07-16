@@ -3,9 +3,10 @@
 // 다중선택 패널 — 2개+ 오브젝트 선택 시 인스펙터. 일괄편집·거리·합치기(Merge)·Boolean·정렬.
 // InspectorPanel 분리 리팩터: isMultiSelect 반환 브랜치 + async 핸들러(handleMerge/handleBoolean)를 통째 이동.
 import { useState } from 'react';
-import { SlidersHorizontal, Combine, AlignCenter } from 'lucide-react';
+import { SlidersHorizontal, Combine, AlignCenter, Wand2, AlignHorizontalSpaceAround } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { buildMergedGlb } from '@/lib/mergeObjects';
 import { buildBooleanGlb, type BooleanOp } from '@/lib/booleanObjects';
 import { uploadGlbBlob } from '@/lib/uploadAsset';
@@ -13,7 +14,7 @@ import { persistCurrentScene } from '@/lib/saveScene';
 import { SectionHeader, Toggle } from './ui';
 
 export function MultiSelectPanel() {
-  const { objects, selectedIds, projectId, batchUpdateObjects, alignSelected, mergeIntoAsset, pushHistory } = useSceneStore();
+  const { objects, selectedIds, projectId, batchUpdateObjects, alignSelected, tidyUpSelected, distributeSelected, mergeIntoAsset, pushHistory } = useSceneStore();
   const { addToast } = useToast();
   const [merging, setMerging] = useState(false);
   // 여러 프리미티브를 하나의 GLB 에셋으로 굽는다(Merge). 원본 제거 + 에셋 오브젝트 1개로 대체.
@@ -100,12 +101,11 @@ export function MultiSelectPanel() {
               <div>
                 <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1">Color (apply to all)</span>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    defaultValue={firstColor}
-                    onChange={(e) => batchUpdateObjects(selectedIds, (o) => ({ material: { ...o.material, color: e.target.value } }))}
-                    onBlur={pushHistory}
-                    className="w-8 h-8 rounded-xs border border-border bg-background cursor-pointer p-0.5"
+                  <ColorPicker
+                    value={firstColor}
+                    onChange={(hex) => batchUpdateObjects(selectedIds, (o) => ({ material: { ...o.material, color: hex } }))}
+                    onCommit={pushHistory}
+                    title="Apply color to all selected"
                   />
                   <span className="text-[10px] text-muted">Applies to all selected objects</span>
                 </div>
@@ -179,6 +179,36 @@ export function MultiSelectPanel() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* 정돈 & 간격 균등 (Tidy Up / Distribute) */}
+          <SectionHeader title="Arrange" icon={<AlignHorizontalSpaceAround size={12} />} />
+          <div className="px-3 py-3 space-y-3">
+            <button
+              onClick={() => tidyUpSelected()}
+              title="Auto-arrange the selection along its longest axis with even spacing (cross axes centered). Locked/hidden are skipped."
+              className="w-full py-1.5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground transition-colors text-[11px] inline-flex items-center justify-center gap-1.5"
+            >
+              <Wand2 size={13} /> Tidy up
+            </button>
+            <div>
+              <p className="text-[10px] font-semibold text-muted tracking-wide mb-1.5">
+                Distribute spacing {selectedIds.length < 3 && <span className="text-muted/50">(needs 3+)</span>}
+              </p>
+              <div className="grid grid-cols-3 gap-1">
+                {(['x', 'y', 'z'] as const).map((axis) => (
+                  <button
+                    key={axis}
+                    onClick={() => distributeSelected(axis)}
+                    disabled={selectedIds.length < 3}
+                    title={`Even out gaps along the ${axis.toUpperCase()} axis (order and endpoints kept)`}
+                    className="py-1 rounded-xs text-[10px] bg-background text-muted hover:bg-surface hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {axis.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </aside>
