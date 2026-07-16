@@ -23,7 +23,7 @@
     --accent: #0d99ff;
     --select: #0d99ff; /* 단일 선택/호버 가이드(파랑) */
     --select-multi: #ff7a0d; /* 다중 선택 묶음 가이드(주황) */
-    --prefab: #008a25; 
+    --prefab: #a768f3; 
     --success: #22c55e;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -43,7 +43,7 @@
     --accent: #0092b8; 
     --select: #008a25; 
     --select-multi: #ff7a0d; /* 다중 선택 묶음 가이드(주황) */
-    --prefab: #008a25; 
+    --prefab: #b40054; 
     --glass: rgba(22, 20, 30, 0.82);
   }
 }

@@ -51,6 +51,48 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## ✅ 완료 (2026-07-16) — 🎨 라이브 클로너 material 편집 (소스→복제본 전파 + 클로너/일반 그룹 Material 섹션 정리) (사용자 확인 완료)
+
+> `sceneStore.updateObject` + `InspectorPanel`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").**
+
+- **문제**: 라이브 클로너는 복제본이 생성 시점에 구워진 복사본 + `regenerateCloner`는 config(개수/간격) 변경 때만 돌아서, **소스 material을 바꿔도 복제본 미반영**. 또 Material 섹션 조건에 `!obj.isGroup`가 없어 **모든 그룹(일반 포함)에 무의미한 Material 섹션**이 떴음(그룹은 메쉬 없음).
+- **소스→복제본 전파**: `updateObject`에서 대상이 **클로너 소스**(부모가 `clonerConfig` 그룹 & 자신은 `clonerClone` 아님)면 같은 patch를 그 그룹의 복제본들에 전파(material·geom·physics·motion·visible·scale 등). **위치/회전/이름/식별자는 복제본 고유(배치·rotStep)라 제외**. regenerate 없이 직접 map이라 가벼움.
+- **Material 섹션 정리**(`InspectorPanel`): 편집대상 `mt` = 클로너 그룹이면 **내부 소스**, 아니면 obj. `mt.isGroup||assetId||particle||비텍스트콘텐츠`면 미표시 → **일반 그룹=Material 숨김**, **클로너 그룹=소스 편집(→전파)**, 프리미티브=기존과 동일. 클로너 그룹을 펼치지 않고도 색/재질 지정 가능.
+- **한계**: 소스가 **그룹(하위 자식)** 인 클로너는 소스 루트 편집만 전파(깊은 자식 material 미전파). 프리미티브 단일 소스는 완전 동작.
+
+---
+
+## ✅ 완료 (2026-07-16) — 🧩 프리팹 개선 5종 (단일그룹·geom동기화·그룹래핑/아이콘·복제=인스턴스·트리색) (사용자 확인 완료)
+
+> `sceneStore`(groupSelected·createPrefab·duplicateSelected·pasteClipboard·arraySelected) + `lib/prefab`(mergeDefIntoNode) + `HierarchyPanel` + `globals.css`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("동작은 잘된다").**
+
+1. **단일 오브젝트 그룹화**: `groupSelected` 가드 `<2`→`<1`. 오브젝트 1개도 제자리에 그룹으로 감쌈.
+2. **프리팹 geom 동기화**: `mergeDefIntoNode`에 `out.geom = cloneVal(def.geom)` 추가(assetId/primitiveShape처럼 구조적 필드로 항상 def 따름). 원본 형상(복셀·펜툴 프로파일·cornerRadius 등) 수정 시 전 인스턴스 반영. (PrefabNodeData는 이미 geom 포함이라 def엔 있었고, 병합만 누락됐던 것.)
+3. **프리팹 등록 시 그룹 래핑 + 아이콘**: `createPrefab`이 대상이 단일 오브젝트면 먼저 그룹으로 감싼 뒤(그룹이면 그대로) 프리팹화 → 프리팹 루트는 항상 그룹. `HierarchyPanel.getIcon`에 `isGroup && prefabId → Package`(프리팹 아이콘, Folder보다 먼저).
+4. **복제/붙여넣기/배열 = prefab place처럼**: 프리팹 인스턴스 복제 시 **새 `prefabInstanceId` 발급**(prefabId·nodeKey·override 유지) → 같은 프리팹의 독립 인스턴스(sync가 뭉치던 버그 해결). `duplicateSelected`(withInst)·`pasteClipboard`(instMap 인스턴스별)·`arraySelected`(복사본마다 instI) 적용.
+5. **트리 텍스트 색**: 프리팹 인스턴스 노드(`prefabId` 있음) 이름을 `var(--prefab)`(초록)으로 — 일반 오브젝트와 구분. `--prefab` 토큰(사용자 지정값).
+
+---
+
+## ✅ 완료 (2026-07-16) — 🎨 트리 아이콘 교체 + Array/Cloner 패널 전 모드 UI 통일 (사용자 확인 완료)
+
+> `HierarchyPanel`·`PrefabSection` + 신규 공용 `inspector/GridPreview.tsx` + `ArraySection`·`ClonerSection`·`ui.tsx(XYZRow)`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료.**
+
+### 트리/패널 아이콘 (`HierarchyPanel.getIcon` + `PrefabSection` 헤더)
+- **프리팹 그룹(루트)**: `Package` → **`CirclePile`**(사용자 최종 선택) + **`--prefab` 색**. **자식 아이콘 색도 `--prefab`**(prefabId 있는 노드 아이콘 span에 `color: var(--prefab)`, 없으면 `text-muted/60`). Inspector Prefab 섹션 타이틀 아이콘도 `Component` → **`ShoppingBag`**(+`--prefab`색). (※"paper-bag"은 lucide 1.22에 없어 처음엔 ShoppingBag, 트리는 사용자가 `CirclePile`로 교체.)
+- **클로너 그룹**: `Grid2x2` → **`Grid3x3`**(사용자 조정). **그룹 폴더**: `Folder` → **`Group`**. **구체**: `Circle` → **`CircleDot`**.
+
+### Array/Cloner 패널 통일 (처음 생성 `ArraySection` ↔ 생성 후 수정 `ClonerSection`)
+> **문제**: 생성 후 라이브 클로너를 수정할 때 UI가 생성 시와 달랐음(프리뷰 없음·Count 컨트롤 다름·싱크 버튼 없음).
+- **GridPreview 공용화**: ArraySection 내부에만 있던 미니 격자 SVG를 신규 **`inspector/GridPreview.tsx`** 로 추출 → 양쪽 import. ClonerSection Grid 모드에도 실시간 프리뷰 표시.
+- **Grid 싱크 버튼**: ClonerSection Grid에 `LinkToggle` 2개(열⟷행 `linkCR`·간격 x⟷z `linkSp`, 로컬 state) + 레이아웃을 ArraySection과 동일(`flex items-end` + 링크 맨 끝).
+- **Count 컨트롤 통일**: ClonerSection Count `LabeledNum` → **`RangeSlider`**(ArraySection과 동일, `onCommit={pushHistory}`로 드래그 놓을 때 undo 커밋).
+- **Linear 싱크 버튼**: Linear Spacing(XYZ)에 3축 잠금 `LinkToggle`(`linkSpL`, X=Y=Z) 추가 — 양쪽 패널. **위치는 Grid와 동일하게 입력열 맨 끝**: `XYZRow`에 신규 **`rowEnd` slot** 추가(있으면 입력열을 flex로 배치, X/Y/Z 뒤에 요소 렌더 / 없으면 기존 `grid-cols-3` 유지 → 다른 XYZRow 무영향).
+- **Grid 프리뷰 좌표 정렬 버그**: ClonerSection은 전 모드가 `cfg.offset` 하나를 공유해 Linear(비대칭 offset)→Grid 전환 시 격자가 한쪽으로 몰림(ox=22.5). ArraySection은 grid 간격을 별도 state(`gridSpacing` 기본 `{1,1}`)로 관리해 정사각(ox=9)이던 것. → **ClonerSection에서 비-Grid→Grid 전환 시 간격을 정사각 `{x:1,z:1}`로 시작**(이미 Grid면 사용자 간격 보존). Rows 폴백도 `?? 3`→`?? 4`(ArraySection 기본과 일치).
+- 결과: Grid(프리뷰+열/행/간격+링크2)·Linear(Count슬라이더+Spacing+링크1)·Radial(Count슬라이더+Radius/축/Rise/나선) 전 모드에서 두 패널 UI·프리뷰 일치.
+
+---
+
 ## ✅ 완료 (2026-07-16) — 🗂️ AssetBrowser: ground·boundary 텍스처 에셋 통합 (사용자 확인 완료)
 
 > `EnvironmentPanel` 단독. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("잘된다").**

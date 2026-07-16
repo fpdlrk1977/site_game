@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useLayoutEffect, type MutableRefObject } from 'react';
-import { Download, X, Component, Package } from 'lucide-react';
+import { Download, X, CirclePile, Package } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { RichContent } from '@/components/ui/RichContent';
@@ -126,13 +126,13 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
           )}
           {!isCharSelected && prefabs.length > 0 && (
             <GroupBox>
-              <SectionHeader title="Prefab Library" icon={<Component size={12} />} hint="Master prefabs in this scene. 'Place' adds a new instance to the scene. Deleting removes only the definition; already-placed objects remain as independent objects." />
+              <SectionHeader title="Prefab Library" icon={<CirclePile size={12} />} hint="Master prefabs in this scene. 'Place' adds a new instance to the scene. Deleting removes only the definition; already-placed objects remain as independent objects." />
               <div className="px-3 pb-4 space-y-1.5">
                 {prefabs.map((p) => {
                   const count = new Set(objects.filter((o) => o.prefabId === p.id).map((o) => o.prefabInstanceId)).size;
                   return (
                     <div key={p.id} className="flex items-center gap-1.5 bg-background border border-border rounded-xs px-2 py-1.5">
-                      <span className="text-[11px] text-foreground font-medium flex-1 truncate flex items-center gap-1.5" title={p.name}><Component size={12} className="shrink-0 text-muted" /> {p.name}</span>
+                      <span className="text-[11px] text-foreground font-medium flex-1 truncate flex items-center gap-1.5" title={p.name}><CirclePile size={12} className="shrink-0 text-muted" /> {p.name}</span>
                       <span className="text-[10px] text-muted shrink-0">{count}</span>
                       <button
                         onClick={() => { instantiatePrefab(p.id); addToast(`'${p.name}' placed`, 'success'); }}
@@ -262,8 +262,12 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
         {/* Content (content 오브젝트만) */}
         {obj.content && <ContentSection obj={obj} open={isOpen('content')} onToggle={() => toggleSection('content')} />}
 
-        {/* Material (프리미티브 + 텍스트 콘텐츠) */}
-        {!obj.assetId && !obj.particle && (!obj.content || obj.content.type === 'text') && <MaterialSection obj={obj} open={isOpen('material')} onToggle={() => toggleSection('material')} />}
+        {/* Material — 프리미티브 + 텍스트 콘텐츠. 클로너 그룹은 내부 소스를 편집(→ 복제본 전파). 일반 그룹은 메쉬가 없어 미표시. */}
+        {(() => {
+          const mt = obj.clonerConfig ? objects.find((o) => o.parentId === obj.id && !o.clonerClone) : obj;
+          if (!mt || mt.isGroup || mt.assetId || mt.particle || (mt.content && mt.content.type !== 'text')) return null;
+          return <MaterialSection obj={mt} open={isOpen('material')} onToggle={() => toggleSection('material')} />;
+        })()}
 
         {/* Particle (파티클 이미터만) */}
         {obj.particle && <ParticleSection obj={obj} open={isOpen('particle')} onToggle={() => toggleSection('particle')} />}

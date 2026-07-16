@@ -10,31 +10,8 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { RangeSlider } from '@/components/ui/RangeSlider';
 import { LinkToggle } from '@/components/ui/LinkToggle';
 import { SectionHeader, GroupBox, LabeledNum, XYZRow } from './ui';
+import { GridPreview } from './GridPreview';
 import type { ObjectNodeSchema, ClonerConfig } from '@/types/scene';
-
-// 격자 배치 실시간 미리보기 — cols×rows 점을 간격 비율 반영해 박스에 맞춰 그린다.
-function GridPreview({ cols, rows, spX, spZ }: { cols: number; rows: number; spX: number; spZ: number }) {
-  const PV = 72, pad = 9;
-  const gw = Math.max(1e-3, (cols - 1) * Math.abs(spX));
-  const gh = Math.max(1e-3, (rows - 1) * Math.abs(spZ));
-  const s = (PV - 2 * pad) / Math.max(gw, gh);
-  const totalW = gw * s, totalH = gh * s;
-  const ox = (PV - totalW) / 2, oy = (PV - totalH) / 2;
-  const many = cols > 20 || rows > 20; // 점이 너무 많으면 영역만 표시(가벼움)
-  return (
-    <svg width={PV} height={PV} viewBox={`0 0 ${PV} ${PV}`} className="shrink-0 rounded-xs bg-background border border-border">
-      {many ? (
-        <rect x={ox} y={oy} width={Math.max(4, totalW)} height={Math.max(4, totalH)} fill="var(--color-primary)" fillOpacity={0.15} stroke="var(--color-primary)" strokeOpacity={0.6} strokeWidth={1} />
-      ) : (
-        Array.from({ length: rows }).flatMap((_, r) =>
-          Array.from({ length: cols }).map((__, c) => (
-            <circle key={`${r}-${c}`} cx={ox + c * Math.abs(spX) * s} cy={oy + r * Math.abs(spZ) * s} r={1.7} fill="var(--color-primary)" />
-          )),
-        )
-      )}
-    </svg>
-  );
-}
 
 export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { arraySelected, makeCloner } = useSceneStore();
@@ -49,7 +26,8 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
   const [gridRows, setGridRows] = useState(4);
   const [gridSpacing, setGridSpacing] = useState({ x: 1, z: 1 }); // grid 전용 간격(linear와 분리)
   const [linkCR, setLinkCR] = useState(false);  // cols=rows 잠금
-  const [linkSp, setLinkSp] = useState(false);  // col간격=row간격 잠금
+  const [linkSp, setLinkSp] = useState(false);  // col간격=row간격 잠금(grid)
+  const [linkSpL, setLinkSpL] = useState(false); // x=y=z 잠금(linear spacing)
   const [rotStep, setRotStep] = useState(0);
 
   const clampN = (v: number) => Math.max(1, Math.min(50, Math.round(v)));
@@ -115,9 +93,10 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
                   <RangeSlider value={arrayCount} onChange={(v) => setArrayCount(Math.max(1, Math.min(100, Math.round(v))))} min={1} max={100} step={1} showValue precision={0} />
                   {arrayMode === 'linear' ? (
                     <XYZRow label="Spacing" x={arrayOffset.x} y={arrayOffset.y} z={arrayOffset.z}
-                      onChangeX={(v) => setArrayOffset((o) => ({ ...o, x: v }))}
-                      onChangeY={(v) => setArrayOffset((o) => ({ ...o, y: v }))}
-                      onChangeZ={(v) => setArrayOffset((o) => ({ ...o, z: v }))}
+                      rowEnd={<LinkToggle value={linkSpL} onChange={(v) => { setLinkSpL(v); if (v) setArrayOffset((o) => ({ x: o.x, y: o.x, z: o.x })); }} title="세 축 함께 조절" />}
+                      onChangeX={(v) => setArrayOffset((o) => (linkSpL ? { x: v, y: v, z: v } : { ...o, x: v }))}
+                      onChangeY={(v) => setArrayOffset((o) => (linkSpL ? { x: v, y: v, z: v } : { ...o, y: v }))}
+                      onChangeZ={(v) => setArrayOffset((o) => (linkSpL ? { x: v, y: v, z: v } : { ...o, z: v }))}
                       onCommit={() => {}} dragStep={0.5}
                     />
                   ) : (

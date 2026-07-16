@@ -1026,7 +1026,19 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         overridePatch = { prefabOverrides: [...merged] };
       }
     }
-    const newObjects = objects.map((o) => (o.id === id ? { ...o, ...patch, ...overridePatch } : o));
+    let newObjects = objects.map((o) => (o.id === id ? { ...o, ...patch, ...overridePatch } : o));
+    // 라이브 클로너 소스를 편집하면 그 복제본들에도 같은 변경을 전파(material·geom·physics·motion·visible 등).
+    // 위치/회전/이름/식별자는 복제본 고유(배치·rotStep)라 제외.
+    if (target && !target.clonerClone && target.parentId) {
+      const grp = objects.find((o) => o.id === target.parentId && o.clonerConfig);
+      if (grp) {
+        const { position: _p, rotation: _r, name: _n, id: _i, parentId: _pp, clonerClone: _cc, ...propagate } = patch;
+        void _p; void _r; void _n; void _i; void _pp; void _cc;
+        if (Object.keys(propagate).length > 0) {
+          newObjects = newObjects.map((o) => (o.clonerClone && o.parentId === grp.id ? { ...o, ...propagate } : o));
+        }
+      }
+    }
     // 오토키 — 트랜스폼 편집 시 편집 중 포즈가 있으면 그 포즈 키프레임에 자동 반영.
     const isTransform = 'position' in patch || 'rotation' in patch || 'scale' in patch;
     const ak = isTransform ? autoKeyPose(poseEdit, keySel, animClips, newObjects, [id]) : null;
@@ -1192,6 +1204,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const src = objects.find((o) => o.id === selectedId);
     if (!src) return;
     objectCounter += 1;
+    // 프리팹 인스턴스 복제 → 같은 프리팹의 '새 인스턴스'(새 prefabInstanceId). place와 동일 효과.
+    const newInst = src.prefabInstanceId ? MathUtils.generateUUID() : null;
+    const withInst = (o: ObjectNodeSchema): ObjectNodeSchema => (newInst && o.prefabInstanceId ? { ...o, prefabInstanceId: newInst } : o);
 
     if (src.isGroup) {
       // 중첩 그룹 포함 전체 하위 계층 재귀 복제
@@ -1226,7 +1241,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       // 그룹 루트만 +1 이동(자식은 로컬 위치 유지) → 클립 키프레임도 루트 이동량만 오프셋
       const posDelta = new Map([[src.id, { x: newGroup.position.x - src.position.x, y: newGroup.position.y - src.position.y, z: newGroup.position.z - src.position.z }]]);
       const { clips: dupClips, clipIdMap } = dupAnimClips(animClips, idMap, posDelta); // 애니 클립도 복제 + play_clip 리맵 + 위치 오프셋
-      const remapped = remapPlayClipEvents([newGroup, ...fixedDescendants], clipIdMap);
+      const remapped = remapPlayClipEvents([newGroup, ...fixedDescendants], clipIdMap).map(withInst);
       set({
         objects: [...objects, ...remapped],
         animClips: dupClips.length ? [...animClips, ...dupClips] : animClips,
@@ -1248,7 +1263,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       const { clips: dupClips, clipIdMap } = dupAnimClips(animClips, new Map([[src.id, copy.id]]), posDelta);
       const [remappedCopy] = remapPlayClipEvents([copy], clipIdMap);
       set({
-        objects: [...objects, remappedCopy],
+        objects: [...objects, withInst(remappedCopy)],
         animClips: dupClips.length ? [...animClips, ...dupClips] : animClips,
         selectedId: copy.id,
         selectedIds: [copy.id],
@@ -1310,9 +1325,15 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
     const idMap = new Map<string, string>();
     for (const o of clipboard.objects) idMap.set(o.id, MathUtils.generateUUID());
+    // 프리팹 인스턴스 붙여넣기 → 원래 instanceId별로 새 instanceId 발급(같은 프리팹의 독립 인스턴스).
+    const instMap = new Map<string, string>();
     const posDelta = new Map<string, { x: number; y: number; z: number }>();
     const newObjs: ObjectNodeSchema[] = clipboard.objects.map((o) => {
       const n: ObjectNodeSchema = { ...clone(o), id: idMap.get(o.id)!, parentId: o.parentId ? (idMap.get(o.parentId) ?? null) : null };
+      if (o.prefabInstanceId) {
+        if (!instMap.has(o.prefabInstanceId)) instMap.set(o.prefabInstanceId, MathUtils.generateUUID());
+        n.prefabInstanceId = instMap.get(o.prefabInstanceId)!;
+      }
       if (n.parentId === null) {
         n.position = { ...n.position, x: n.position.x + 1 };
         n.name = `${n.name} 복사`;
@@ -1351,6 +1372,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       const pos = { x: src.position.x + pi.x - p0.x, y: src.position.y + pi.y - p0.y, z: src.position.z + pi.z - p0.z };
       const rotY = clonerRotYDeg(cfg, i);
       const rotation = rotY ? { x: src.rotation.x, y: src.rotation.y + rotY, z: src.rotation.z } : src.rotation;
+      // 프리팹 인스턴스 배열 → 각 복사본이 독립 인스턴스(새 prefabInstanceId).
+      const instI = src.prefabInstanceId ? MathUtils.generateUUID() : undefined;
 
       if (src.isGroup) {
         // 중첩 그룹 포함 전체 하위 계층 재귀 복제 (duplicateSelected와 동일 패턴)
@@ -1367,14 +1390,14 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
         const newGroupId = MathUtils.generateUUID();
         idMap.set(src.id, newGroupId);
         collectAll(src.id);
-        additions.push({ ...src, id: newGroupId, name: `${src.name} ${i}`, position: pos, rotation });
+        additions.push({ ...src, id: newGroupId, name: `${src.name} ${i}`, position: pos, rotation, ...(instI ? { prefabInstanceId: instI } : {}) });
         for (const o of newDescendants) {
-          additions.push({ ...o, parentId: idMap.get(o.parentId!) ?? o.parentId });
+          additions.push({ ...o, parentId: idMap.get(o.parentId!) ?? o.parentId, ...(instI && o.prefabInstanceId ? { prefabInstanceId: instI } : {}) });
         }
         newIds.push(newGroupId);
       } else {
         const id = MathUtils.generateUUID();
-        additions.push({ ...src, id, name: `${src.name} ${i}`, position: pos, rotation, parentId: src.parentId });
+        additions.push({ ...src, id, name: `${src.name} ${i}`, position: pos, rotation, parentId: src.parentId, ...(instI ? { prefabInstanceId: instI } : {}) });
         newIds.push(id);
       }
     }
@@ -1428,7 +1451,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   groupSelected: () => {
     const { selectedIds, objects, environment, past } = get();
-    if (selectedIds.length < 2) return;
+    if (selectedIds.length < 1) return; // 단일 오브젝트도 그룹으로 감쌀 수 있게
 
     // 그룹 내부 아이템 선택 시 최상위 조상으로 정규화
     // (로컬 좌표와 월드 좌표 혼용 방지)
@@ -1438,7 +1461,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       return getRootId(o.parentId);
     };
     const normalizedIds = [...new Set(selectedIds.map(getRootId))];
-    if (normalizedIds.length < 2) return;
+    if (normalizedIds.length < 1) return;
 
     const toGroup = objects.filter((o) => normalizedIds.includes(o.id));
 
@@ -1518,11 +1541,25 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const src = objects.find((o) => o.id === selectedId);
     if (!src || src.parentId) return; // 루트 오브젝트/그룹만
     if (src.prefabInstanceId) return;  // 이미 프리팹 인스턴스면 무시
-    const { prefab, tagged } = buildPrefab(objects, selectedId, name?.trim() || src.name || '프리팹');
+    const prefabName = name?.trim() || src.name || '프리팹';
+
+    // 프리팹 루트는 항상 그룹 — 단일 오브젝트면 먼저 그룹으로 감싼다(이미 그룹이면 그대로).
+    let objs = objects;
+    let rootId = selectedId;
+    if (!src.isGroup) {
+      objectCounter += 1;
+      const groupObj = makeBaseObject({ name: prefabName, position: { ...src.position }, isGroup: true });
+      rootId = groupObj.id;
+      objs = [...objects.map((o) => (o.id === selectedId ? { ...o, parentId: groupObj.id, position: { x: 0, y: 0, z: 0 } } : o)), groupObj];
+    }
+
+    const { prefab, tagged } = buildPrefab(objs, rootId, prefabName);
     const taggedById = new Map(tagged.map((t) => [t.id, t]));
     set({
-      objects: objects.map((o) => taggedById.get(o.id) ?? o),
+      objects: objs.map((o) => taggedById.get(o.id) ?? o),
       prefabs: [...prefabs, prefab],
+      selectedId: rootId,
+      selectedIds: [rootId],
       isModified: true,
       ...withHistory({ objects, environment, prefabs }, past),
     });

@@ -237,6 +237,7 @@ export function LabeledText({
 export function XYZRow({
   label,
   labelExtra,
+  rowEnd,
   x,
   y,
   z,
@@ -250,6 +251,8 @@ export function XYZRow({
 }: {
   label: string;
   labelExtra?: ReactNode;
+  // 입력열 맨 끝에 붙는 요소(예: 축 잠금 LinkToggle). 있으면 입력열을 flex로 배치.
+  rowEnd?: ReactNode;
   x: number;
   y: number;
   z: number;
@@ -268,17 +271,18 @@ export function XYZRow({
         <span className="text-[10px] font-semibold text-muted/50 tracking-wide">{label}</span>
         {labelExtra}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className={rowEnd ? "flex items-center gap-1" : "grid grid-cols-3 gap-2"}>
         {[
           { axis: "X", val: x, change: onChangeX },
           { axis: "Y", val: y, change: onChangeY },
           { axis: "Z", val: z, change: onChangeZ },
         ].map(({ axis, val, change }) => (
-          <div key={axis} className="relative">
+          <div key={axis} className={rowEnd ? "relative flex-1 min-w-0" : "relative"}>
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted/70 pointer-events-none z-10">{axis}</span>
             <NumInput value={val} onChange={change} onCommit={onCommit} dragStep={dragStep} min={min} max={max} prefix={true} />
           </div>
         ))}
+        {rowEnd}
       </div>
     </div>
   );

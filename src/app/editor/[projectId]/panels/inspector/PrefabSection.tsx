@@ -2,7 +2,7 @@
 
 // Prefab (단일) 섹션 — 원본 정의화 / 인스턴스 동기화·override·Apply·Revert. 접힘 없음.
 // 조건(인스턴스 아니고 프리팹화 불가)이면 컴포넌트가 스스로 null 반환.
-import { Component, X } from 'lucide-react';
+import { Component, X, CirclePile } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { SectionHeader, GroupBox } from './ui';
@@ -47,7 +47,7 @@ export function PrefabSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
 
           return (
             <GroupBox>
-              <SectionHeader title="Prefab" icon={<Component size={12} />} hint="Group objects into a reusable master. Editing the master updates every instance (sync); changing a value on one instance detaches only that field (override)." isOpen={open} onToggle={onToggle} />
+              <SectionHeader title="Prefab" icon={<CirclePile size={12} />} hint="Group objects into a reusable master. Editing the master updates every instance (sync); changing a value on one instance detaches only that field (override)." isOpen={open} onToggle={onToggle} />
               {open && <div className="px-3 pb-4 space-y-2">
                 {!isInstance && canCreate && (
                   <>
@@ -55,7 +55,7 @@ export function PrefabSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
                       onClick={() => { createPrefab(); addToast('Created a prefab', 'success'); }}
                       className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors"
                     >
-<span className="inline-flex items-center gap-1.5"><Component size={13} /> Make prefab</span>
+<span className="inline-flex items-center gap-1.5"><CirclePile size={13} /> Make prefab</span>
                     </button>
                     <p className="text-[10px] text-muted/50">Registers this object{obj.isGroup ? ' (group)' : ''} as a master. Instances you place later update together when you edit the master.</p>
                   </>
@@ -63,7 +63,7 @@ export function PrefabSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
                 {isInstance && instanceRoot && (
                   <>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-primary font-semibold flex-1 truncate flex items-center gap-1.5"><Component size={12} className="shrink-0" /> {prefabDef!.name}</span>
+                      <span className="text-[11px] text-primary font-semibold flex-1 truncate flex items-center gap-1.5" style={{ color: 'var(--prefab)' }}><CirclePile size={12} className="shrink-0" /> {prefabDef!.name}</span>
                       <span className="text-[10px] text-muted shrink-0">{instanceCount} instances</span>
                     </div>
                     {overrides.length > 0 ? (

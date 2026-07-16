@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  Box, Circle, Cylinder, Cone, Hexagon, Square, Folder, Type, Image as ImageIcon, Play,
-  Package, Sparkles, Grid2x2, CircleDot, ChevronDown, ChevronRight,
+  Box, Circle, Cylinder, Cone, Hexagon, Square, Group, Type, Image as ImageIcon, Play,
+  Package, Sparkles, Grid3x3, CircleDot, ChevronDown, ChevronRight, ShoppingBag,
   Eye, EyeOff, Lock, Unlock, Pencil, Copy, X, Ungroup,
-  Lightbulb, Flashlight, Sun, PenTool, Boxes,
+  Lightbulb, Flashlight, Sun, PenTool, Boxes,CirclePile
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSceneStore, isDescendant } from '@/store/sceneStore';
@@ -15,15 +15,16 @@ import type { ObjectNodeSchema } from '@/types/scene';
 type DropPos = 'before' | 'after' | 'inside';
 
 const SHAPE_ICONS: Record<string, LucideIcon> = {
-  box: Box, sphere: Circle, cylinder: Cylinder, plane: Square, frustum: Cone, loft: Hexagon,
+  box: Box, sphere: CircleDot, cylinder: Cylinder, plane: Square, frustum: Cone, loft: Hexagon,
   extrude: PenTool, lathe: PenTool, // 펜툴로 만든 돌출/회전체
   voxel: Boxes, // 복셀(live 프리미티브)
 };
 
 function getIcon(obj: ObjectNodeSchema): LucideIcon {
   if (obj.clonerClone) return CircleDot;   // 클로너가 생성한 복제본
-  if (obj.clonerConfig) return Grid2x2;     // 클로너 그룹
-  if (obj.isGroup) return Folder;
+  if (obj.clonerConfig) return Grid3x3;     // 클로너 그룹
+  if (obj.isGroup && obj.prefabId) return CirclePile; // 프리팹 그룹(루트)
+  if (obj.isGroup) return Group;
   if (obj.light) return obj.light.type === 'point' ? Lightbulb : obj.light.type === 'spot' ? Flashlight : Sun;
   if (obj.content) return obj.content.type === 'text' ? Type : obj.content.type === 'image' ? ImageIcon : Play;
   if (obj.voxels) return Boxes;   // 복셀로 만든 오브젝트(현재는 GLB로 구워지지만 레시피로 식별)
@@ -173,8 +174,11 @@ function HierarchyItem({
           </span>
         )}
 
-        {/* 오브젝트 아이콘 */}
-        <span className="w-4 flex items-center justify-center shrink-0 text-muted">
+        {/* 오브젝트 아이콘 (프리팹은 --prefab 색) */}
+        <span
+          className={`w-4 flex items-center justify-center shrink-0 ${obj.prefabId ? '' : 'text-muted/60'}`}
+          style={obj.prefabId ? { color: 'var(--prefab)' } : undefined}
+        >
           {(() => { const I = getIcon(obj); return <I size={14} />; })()}
         </span>
 
@@ -193,7 +197,10 @@ function HierarchyItem({
             className="flex-1 bg-background border border-border rounded px-1.5 py-0 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
         ) : (
-          <span className={`flex-1 truncate text-[12px] font-medium ${isSelected ? 'text-foreground' : 'text-foreground/70'}`}>
+          <span
+            className={`flex-1 truncate text-[12px] font-medium ${!obj.prefabId ? (isSelected ? 'text-foreground' : 'text-foreground/70') : ''}`}
+            style={obj.prefabId ? { color: 'var(--prefab)' } : undefined}
+          >
             {obj.name}
           </span>
         )}

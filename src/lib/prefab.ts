@@ -151,6 +151,7 @@ export function mergeDefIntoNode(
   // 정체성/구조 — 항상 def 따름
   out.assetId = def.assetId;
   out.primitiveShape = def.primitiveShape;
+  out.geom = cloneVal(def.geom); // 형상(복셀·펜툴 프로파일·cornerRadius 등)도 동기화
   out.isGroup = def.isGroup;
   out.interactRange = def.interactRange;
 
