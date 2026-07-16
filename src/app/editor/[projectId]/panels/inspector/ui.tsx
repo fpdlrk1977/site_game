@@ -161,7 +161,7 @@ export function NumInput({
           } else setLocal(fmt(value, precision));
           onCommit();
         }}
-        className={`w-full border border-border/30 rounded-xs pr-5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums bg-muted/5 dark:bg-muted/10 ${prefix ? "pl-6" : "pl-2"}`}
+        className={`w-full border border-border/30 rounded-xs pr-5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary tabular-nums bg-muted/5 dark:bg-muted ${prefix ? "pl-6" : "pl-2"}`}
       />
       <span
         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-ew-resize select-none transition-colors"
@@ -205,7 +205,8 @@ export function LabeledNum({
 
 // ── 라벨 + 텍스트 입력 (LabeledNum의 텍스트 버전, 드래그 아이콘 없음) ──
 //   onChange=실시간, onCommit=blur(=pushHistory 등). 공용 인풋 스타일이라 매번 className 안 넣어도 됨.
-export const TEXT_INPUT_CLASS = 'w-full border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-primary bg-muted/5 dark:bg-muted/10';
+export const TEXT_INPUT_CLASS =
+  "w-full border border-border rounded-xs px-2 py-1 text-[11px] text-foreground placeholder:text-muted/40 focus:outline-none focus:ring-1 focus:ring-primary bg-muted/5 dark:bg-muted";
 export function LabeledText({
   label,
   value,
@@ -221,14 +222,8 @@ export function LabeledText({
 }) {
   return (
     <div>
-      {label && <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1/2">{label}</span>}
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onCommit}
-        placeholder={placeholder}
-        className={TEXT_INPUT_CLASS}
-      />
+      {label && <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">{label}</span>}
+      <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onCommit} placeholder={placeholder} className={TEXT_INPUT_CLASS} />
     </div>
   );
 }
@@ -389,8 +384,8 @@ export function SectionHeader({
           const s = section.getBoundingClientRect();
           const h = header.getBoundingClientRect();
           if (s.bottom > c.bottom) {
-            const alignBottom = s.bottom - c.bottom;   // 섹션 끝을 컨테이너 끝에 맞춤
-            const alignHeaderTop = h.top - c.top - 4;  // 헤더를 상단에 붙임(과도 방지 캡)
+            const alignBottom = s.bottom - c.bottom; // 섹션 끝을 컨테이너 끝에 맞춤
+            const alignHeaderTop = h.top - c.top - 4; // 헤더를 상단에 붙임(과도 방지 캡)
             const delta = Math.min(alignBottom, Math.max(0, alignHeaderTop));
             if (delta > 1) container!.scrollBy({ top: delta, behavior: "smooth" });
           }
@@ -423,7 +418,9 @@ export function Toggle({ value, onChange }: { value: boolean; onChange: (v: bool
       onClick={() => onChange(!value)}
       className={`relative w-7.5 h-1 rounded-full transition-colors cursor-pointer shrink-0 ${value ? "bg-primary/30" : "bg-border"}`}
     >
-      <div className={`absolute -top-6/4 w-4 h-4 rounded-full bg-background dark:bg-foreground shadow border border-border/70 transition-all ${value ? "left-4  bg-primary border-primary dark:bg-primary" : "left-0"}`} />
+      <div
+        className={`absolute -top-6/4 w-4 h-4 rounded-full bg-background dark:bg-foreground shadow border border-border/70 transition-all ${value ? "left-4  bg-primary border-primary dark:bg-primary" : "left-0"}`}
+      />
     </div>
   );
 }

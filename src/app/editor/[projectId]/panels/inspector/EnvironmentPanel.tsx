@@ -173,7 +173,7 @@ function SizeField({
               { value: "vw", label: "vw" },
               { value: "vh", label: "vh" },
             ]}
-            className="px-2 py-1 text-[11px] border border-border rounded-xs text-muted/80 dark:bg-muted/10"
+            className="px-2 py-1 text-[11px] border border-border rounded-xs text-muted/80 dark:bg-muted"
           />
         </div>
       </div>
@@ -350,7 +350,7 @@ export function EnvironmentPanel() {
                     />
 
                     {mode === "color" && (
-                      <div className="px-2 flex  items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                      <div className="px-2 flex  items-center border border-border rounded-xs bg-muted/5 dark:bg-muted">
                         <input
                           type="color"
                           value={env.sky.value}
@@ -431,7 +431,7 @@ export function EnvironmentPanel() {
                   />
                   {/* Color 모드 — 컬러 선택 필드 */}
                   {mode === "color" && (
-                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted">
                       <input
                         type="color"
                         value={env.ground!.color}
@@ -501,7 +501,7 @@ export function EnvironmentPanel() {
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted">
                   <input
                     type="color"
                     value={env.fog.color}
@@ -670,7 +670,7 @@ export function EnvironmentPanel() {
             <div className="flex gap-2 pt-1">
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted">Sun Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted">
                   <input
                     type="color"
                     value={env.lights.directionalColor ?? "#ffffff"}
@@ -689,7 +689,7 @@ export function EnvironmentPanel() {
               </div>
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted">Ambient Color</span>
-                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted/10">
+                <div className="px-2 flex items-center border border-border/30 rounded-xs bg-muted/5 dark:bg-muted">
                   <input
                     type="color"
                     value={env.lights.ambientColor ?? "#ffffff"}
@@ -839,7 +839,7 @@ export function EnvironmentPanel() {
 
                   <div className="flex-1 min-w-0">
                     <span className="text-[10px] text-muted/70 w-12">기본 배경색</span>
-                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted/10">
+                    <div className="px-2 flex items-center border border-border rounded-xs bg-muted/5 dark:bg-muted">
                       <input
                         type="color"
                         value={dp.bg || "#ffffff"}

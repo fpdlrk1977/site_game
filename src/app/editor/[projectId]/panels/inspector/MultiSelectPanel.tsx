@@ -106,6 +106,7 @@ export function MultiSelectPanel() {
                     onChange={(hex) => batchUpdateObjects(selectedIds, (o) => ({ material: { ...o.material, color: hex } }))}
                     onCommit={pushHistory}
                     title="Apply color to all selected"
+                    className="w-36 h-8"
                   />
                   <span className="text-[10px] text-muted">Applies to all selected objects</span>
                 </div>

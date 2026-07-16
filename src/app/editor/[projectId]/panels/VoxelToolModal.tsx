@@ -7,6 +7,7 @@ import { OrbitControls, Grid } from '@react-three/drei';
 import { Boxes, X, Plus, Minus } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import { useToast } from '@/hooks/useToast';
 import { uploadImageTexture } from '@/lib/uploadAsset';
 import type { Voxel } from '@/lib/voxelGeometry';
@@ -428,7 +429,7 @@ export function VoxelToolModal() {
         {/* 컨트롤 */}
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           {/* 색 — 커스텀 컬러픽커 + 프리셋 SelectBox(각 항목에 색 스와치) */}
-          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer border border-border" />
+          <ColorPicker value={color} onChange={setColor} showHex={false} title="칠할 색" className="w-8 h-7 justify-center" />
           <SelectBox
             value={color}
             onChange={(v) => setColor(v)}

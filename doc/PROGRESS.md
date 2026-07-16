@@ -59,8 +59,20 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **`ColorPicker.tsx`**(공통): 트리거 스와치 버튼 + 팝오버(`useDropdown`+portal 재사용). 기능 = **SV(채도·명도) 사각형 드래그 · Hue 슬라이더 · hex/RGB 입력 · 저장 팔레트(`colorAssets`) 연동(클릭 적용·+Save·우클릭 삭제) · 스포이드(EyeDropper API, 크로미엄만)**. props `{value, onChange(hex), onCommit(=pushHistory), className, showHex, palette, disabled, title}`. onChange=실시간, onCommit=조작 끝 1회(드래그업/입력확정/스와치). **그레이스케일에서 hue 보존**(내부 HSV state + 드래그 중 외부 동기화 skip).
 - **드롭인 규약**: 기존 `<input type=color value onChange onBlur={pushHistory}>` → `<ColorPicker value onChange={hex→} onCommit={pushHistory}>`. className으로 트리거 크기 조절(기본 w-8 h-8, showHex면 스와치 위 hex 표시).
 - **적용 완료**: `MaterialSection`(Color·Emissive) · `MultiSelectPanel`(일괄 색). **남은 롤아웃(~20곳/9파일)**: EnvironmentPanel(7)·EventsSection(3)·SceneLogicSection(2)·LightSection(2)·HudSection(1)·GameVariablesSection(1)·ParticleSection(1)·AssetBrowser(2)·VoxelToolModal(1). **저위험 드롭인**이라 컴포넌트 UX 확정 후 일괄 교체 예정.
-- **확인 필요(브라우저)**: SV/Hue 드래그·hex/RGB 입력·저장 팔레트(적용/저장/삭제)·스포이드·undo(드래그=1회)·팝오버 위치/바깥클릭/Esc.
-- **후속(선택)**: 알파(opacity) 슬라이더 · 최근 사용 색 · 그라데이션 에디터로 확장(fog/경계벽).
+
+### 후속 (2026-07-16) — 픽커 UI 리팩터 2·3·4 (사용자 요청) — 브라우저 확인 대기
+> 사용자 5개 요청 중 **알파(5)=보류(추후 요청)**, **그라데이션(1)=선형+라디얼 다중stop으로 확정했으나 사용자가 git push 후 진행 요청 → 대기**. 이번엔 **2·3·4만** 반영. tsc 클린 + `✓ Compiled`.
+- **②트리거 필드형**: 버튼 전체가 색 → **`[스와치 네모][hex 텍스트]` 필드형**(border/bg 있는 입력 박스 모양, 색은 작은 네모에만). `showHex` 기본 true.
+- **③font-mono 삭제**: 픽커 hex/값 텍스트의 `font-mono` 전부 제거(앞으로 미사용).
+- **④표현 드롭다운**: hex+RGB 동시표시 → **HEX/RGB/HSL 드롭다운**(패널 내부 인라인 — 포탈 아님, 픽커 안 닫힘) + 선택한 표현의 입력만 노출. `color.ts`에 **HSL 변환 추가**(rgb/hex↔hsl).
+- **확인 필요(브라우저)**: 트리거 필드 모양 · HEX/RGB/HSL 전환·입력 · SV/Hue 드래그 · 팔레트 · 스포이드.
+
+### ⏸️ 대기 — ①그라데이션 (사용자 git push 후 진행)
+> **확정 범위**: 선형(linear)+라디얼(radial) **다중 stop**. 대상 = **프리미티브·복셀·돌출·회전체**(전부 `PrimitiveMaterial` 렌더 → 셰이더 한 곳). **아직 미착수**(사용자 신호 대기).
+> - 계획: `MaterialOverride.gradient?{type,angle,stops[]}` 스키마 + `PrimitiveMaterial` 셰이더(1D 그라데이션 텍스처를 bbox 로컬좌표 `t`로 샘플, 기존 텍스처 wrap/pattern 방식·bbox uniform 재사용) + 픽커 그라데이션 편집 UI(Solid/Gradient 모드, stop 추가/이동/삭제, 선형 각도·라디얼) + 에디터/뷰어(`EditorObjectInstance`·`ViewerObject`가 이미 wrapMin/wrapSize 전달 중) 배선. **allowGradient는 opt-in prop**(라이트·안개 등은 solid 유지).
+
+### 후속 (2026-07-16) — Tidy/Distribute (위 별도 항목 참조)
+- (알파 슬라이더 등 나머지는 요청 시)
 
 ---
 
