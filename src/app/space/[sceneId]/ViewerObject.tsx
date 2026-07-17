@@ -10,12 +10,15 @@ import { PlayModeContext } from "./PlayModeContext";
 import { ClipRequestContext } from "./ClipRequestContext";
 import { InteractHighlightContext } from "./InteractHighlightContext";
 import { DialogueAdvanceContext } from "./DialogueAdvanceContext";
+import { ActuatorDriveContext } from "./ActuatorDriveContext";
 import { useObjectDialogue, effectiveDialogue } from "./useObjectDialogue";
 import { glbLocalBboxCache } from "@/lib/glbBboxCache";
-import { localCenter } from "@/lib/objectBBox";
+import { localCenter, localBBox } from "@/lib/objectBBox";
+import { anchorLocalPoint } from "@/lib/pivotMath";
 import { PrimitiveMaterial } from "@/components/three/PrimitiveMaterial";
-import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig } from "@/types/scene";
+import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig, ActuatorConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
+import { computeActuator, computeDriveValue } from "@/lib/actuator";
 import { createPrimitiveGeometry, createRoundedBoxDims, profileSig } from "@/lib/primitiveGeometry";
 import { voxelSig, voxelSkinsSig } from "@/lib/voxelGeometry";
 import { useVoxelSkinMaterials } from "@/components/three/useVoxelSkinMaterials";
@@ -337,29 +340,54 @@ function ImagePlane({
 // 앰비언트 모션 — 베이스 변환(pos/rot/scl) + 타입별 델타를 useFrame로 적용. 콘텐츠는 로컬 원점.
 // spin/pulse는 이 그룹(=오브젝트 원점) 기준이라 제자리에서 돈다/커진다. 계산은 computeMotion 공유.
 const _mOut = { pos: new THREE.Vector3(), rot: new THREE.Euler(), scl: new THREE.Vector3(), quat: new THREE.Quaternion() };
+const _actHingeVec = new THREE.Vector3();
+// 앰비언트 모션 또는 관절(액추에이터)을 매 프레임 적용하는 그룹. actuator가 있으면 우선(motion과 배타).
 function MotionGroup({
   pos,
   rot,
   scl,
   motion,
+  actuator,
+  actHinge,
+  actDrive,
   pivot,
   children,
 }: {
   pos: [number, number, number];
   rot: [number, number, number];
   scl: [number, number, number];
-  motion: MotionConfig;
+  motion?: MotionConfig;
+  actuator?: ActuatorConfig | null;
+  actHinge?: [number, number, number] | null; // 경첩 로컬점(actuator rotate용)
+  actDrive?: number | null; // variable/event 구동 목표(0..1) — MotionGroup이 부드럽게 이징
   pivot?: [number, number, number] | null; // 회전 피벗(로컬 형상 중심) — 그룹 spin 제자리 회전용
   children: React.ReactNode;
 }) {
   const ref = useRef<THREE.Group>(null);
   const phase = useRef(Math.random() * 100); // 개별 위상(동시에 안 뛰게)
   const wander = useRef(makeWanderState());
+  const driveCur = useRef<number | null>(null); // variable/event 구동 현재값(이징 상태)
 
   useFrame((state, dt) => {
     const g = ref.current;
     if (!g) return;
-    computeMotion(motion, pos, rot, scl, state.clock.elapsedTime + phase.current, dt, wander.current, _mOut, pivot);
+    const t = state.clock.elapsedTime + phase.current;
+    if (actuator) {
+      const h = actHinge ? _actHingeVec.set(actHinge[0], actHinge[1], actHinge[2]) : null;
+      let dv: number;
+      if (actuator.drive === 'variable' || actuator.drive === 'event') {
+        // 목표(actDrive)를 향해 speed에 비례해 이징. 첫 프레임은 스냅(로드 시 튐 방지).
+        const target = Math.max(0, Math.min(1, actDrive ?? actuator.value ?? 0));
+        if (driveCur.current === null) driveCur.current = target;
+        else driveCur.current += (target - driveCur.current) * (1 - Math.pow(0.0001, Math.min(dt, 0.05) * (actuator.speed ?? 1) * 3));
+        dv = driveCur.current;
+      } else {
+        dv = computeDriveValue(actuator, t);
+      }
+      computeActuator(actuator, h, pos, rot, scl, dv, _mOut);
+    } else if (motion) {
+      computeMotion(motion, pos, rot, scl, t, dt, wander.current, _mOut, pivot);
+    } else return;
     g.position.copy(_mOut.pos);
     g.quaternion.copy(_mOut.quat); // 쿼터니언 직접 적용 — 오일러 왕복 없이 축 기준 깔끔한 회전
     g.scale.copy(_mOut.scl);
@@ -372,12 +400,15 @@ function MotionGroup({
   );
 }
 
-// 모션 있으면 MotionGroup, 없으면 정적 group — 콘텐츠 분기에서 변환 래퍼로 사용(핸들러는 내부 요소에)
+// 모션/관절 있으면 MotionGroup, 없으면 정적 group — 콘텐츠 분기에서 변환 래퍼로 사용(핸들러는 내부 요소에)
 function Xform({
   pos,
   rot,
   scl,
   motion,
+  actuator,
+  actHinge,
+  actDrive,
   pivot,
   children,
 }: {
@@ -385,11 +416,14 @@ function Xform({
   rot: [number, number, number];
   scl: [number, number, number];
   motion?: MotionConfig;
+  actuator?: ActuatorConfig | null;
+  actHinge?: [number, number, number] | null;
+  actDrive?: number | null;
   pivot?: [number, number, number] | null;
   children: React.ReactNode;
 }) {
-  return motion ? (
-    <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} pivot={pivot}>
+  return (motion || actuator) ? (
+    <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} actuator={actuator} actHinge={actHinge} actDrive={actDrive} pivot={pivot}>
       {children}
     </MotionGroup>
   ) : (
@@ -611,6 +645,21 @@ export function ViewerObject({
     const c = localCenter(allObjects, assets, object.id);
     return c ? [c.x, c.y, c.z] : null;
   }, [object.motion, object.id, allObjects, assets]);
+  // 관절(액추에이터) — motion과 배타. noMotion(콜라이더 구동, 5c)이면 시각 미적용.
+  const actuator = noMotion ? undefined : object.actuator;
+  // 경첩 로컬점(anchorLocalPoint) — rotate 관절의 고정점. slide/미설정이면 null.
+  const actHinge = useMemo<[number, number, number] | null>(() => {
+    if (!object.actuator) return null;
+    const lb = localBBox(allObjects, assets, object.id);
+    if (!lb || lb.isEmpty()) return null;
+    const h = anchorLocalPoint(lb, object.actuator.hinge ?? { x: 0.5, y: 0.5, z: 0.5 });
+    return [h.x, h.y, h.z];
+  }, [object.actuator, object.id, allObjects, assets]);
+  // variable/event 구동 목표(0..1) — ViewerClient가 컨텍스트로 제공. manual/oscillate는 null(MotionGroup 자체 계산).
+  const actDriveMap = useContext(ActuatorDriveContext);
+  const actDrive = actuator && (actuator.drive === 'variable' || actuator.drive === 'event')
+    ? (actDriveMap[object.id] ?? actuator.value ?? 0)
+    : null;
   // 내부(click/hover)·PhysicsObject(area)·animate_object 요청 중 가장 최근(t) 것을 사용
   const effectiveClip = [internalClip, activeClipProp, externalClip]
     .filter((c): c is ClipRequest => !!c)
@@ -645,8 +694,8 @@ export function ViewerObject({
       : [object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD];
     const gScl: [number, number, number] = noTransform ? [1, 1, 1] : [object.scale.x, object.scale.y, object.scale.z];
     const gInner = children.map((child) => <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />);
-    return motion ? (
-      <MotionGroup pos={gPos} rot={gRot} scl={gScl} motion={motion} pivot={motionPivot}>
+    return (motion || actuator) ? (
+      <MotionGroup pos={gPos} rot={gRot} scl={gScl} motion={motion} actuator={actuator} actHinge={actHinge} actDrive={actDrive} pivot={motionPivot}>
         {gInner}
       </MotionGroup>
     ) : (
@@ -730,8 +779,8 @@ export function ViewerObject({
         />
       </Suspense>
     );
-    return motion ? (
-      <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
+    return (motion || actuator) ? (
+      <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} actuator={actuator} actHinge={actHinge} actDrive={actDrive} pivot={motionPivot}>
         {glb}
       </MotionGroup>
     ) : (
@@ -751,7 +800,7 @@ export function ViewerObject({
       const tEmissive = object.material?.emissive ?? "#000000";
       return (
         <>
-          <Xform pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
+          <Xform pos={pos} rot={rot} scl={scl} motion={motion} actuator={actuator} actHinge={actHinge} actDrive={actDrive} pivot={motionPivot}>
             <group
               onClick={(e) => {
                 e.stopPropagation();
@@ -796,7 +845,7 @@ export function ViewerObject({
     if (type === "image" && object.content.url) {
       return (
         <>
-          <Xform pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
+          <Xform pos={pos} rot={rot} scl={scl} motion={motion} actuator={actuator} actHinge={actHinge} actDrive={actDrive} pivot={motionPivot}>
             <Suspense fallback={null}>
               <ImagePlane
                 position={[0, 0, 0]}
@@ -822,7 +871,7 @@ export function ViewerObject({
       }
       if (url) {
         return (
-          <Xform pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
+          <Xform pos={pos} rot={rot} scl={scl} motion={motion} actuator={actuator} actHinge={actHinge} actDrive={actDrive} pivot={motionPivot}>
             <VideoMesh
               position={[0, 0, 0]}
               rotation={[0, 0, 0]}
@@ -839,7 +888,7 @@ export function ViewerObject({
     }
     // 빈 플레이스홀더 (image URL 없음, video URL 없음)
     return (
-      <Xform pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
+      <Xform pos={pos} rot={rot} scl={scl} motion={motion} actuator={actuator} actHinge={actHinge} actDrive={actDrive} pivot={motionPivot}>
         <mesh
           onClick={(e) => {
             e.stopPropagation();
@@ -908,8 +957,8 @@ export function ViewerObject({
   );
   return (
     <>
-      {motion ? (
-        <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} pivot={motionPivot}>
+      {(motion || actuator) ? (
+        <MotionGroup pos={pos} rot={rot} scl={scl} motion={motion} actuator={actuator} actHinge={actHinge} actDrive={actDrive} pivot={motionPivot}>
           {primMesh}
         </MotionGroup>
       ) : (

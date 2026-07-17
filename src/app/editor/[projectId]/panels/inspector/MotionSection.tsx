@@ -40,7 +40,7 @@ export function MotionSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
                   />
                   {type !== 'none' && (
                     <div className="grid grid-cols-2 gap-2">
-                      <LabeledNum label="Speed" value={m?.speed ?? 1} onChange={(v) => setM({ speed: v })} onCommit={pushHistory} min={0.1} max={5} precision={2} dragStep={0.1} />
+                      <LabeledNum label="Speed" value={m?.speed ?? 1} onChange={(v) => setM({ speed: v })} onCommit={pushHistory} min={0.1} max={10} precision={2} dragStep={0.1} />
                       {(type === 'float' || type === 'pulse') && (
                         <LabeledNum label="Amplitude" value={m?.amplitude ?? (type === 'float' ? 0.5 : 0.2)} onChange={(v) => setM({ amplitude: v })} onCommit={pushHistory} min={0} max={5} precision={2} dragStep={0.05} />
                       )}

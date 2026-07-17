@@ -117,6 +117,7 @@ export type EventAction =
   | 'game_lose'
   | 'swap_model'
   | 'play_clip'
+  | 'set_actuator'
   | 'run_script';
 
 export interface EventSchema {
@@ -347,6 +348,8 @@ export interface ObjectNodeSchema {
   isGroup?: boolean;
   // 앰비언트 애니메이션 — 뷰어에서 항상 실행되는 트랜스폼 애니(GLB 자체 클립과 별개). 현재 GLB·프리미티브만.
   motion?: MotionConfig;
+  // 관절(액추에이터) — 경첩 기준 축 회전/직선 이동. motion과 배타(있으면 motion 무시). doc/PIVOT_MANIPULATION.md §6.
+  actuator?: ActuatorConfig;
   // 기본 애니메이션 클립 — GLB 내장 클립 중 트리거 없이 씬 로드 시 자동 루프 재생할 클립 이름.
   // 이벤트(click/hover/area/animate_object) 트리거 클립이 오면 fadeOut되며 덮인다(복귀 없음 — MVP).
   defaultClip?: string;
@@ -432,6 +435,21 @@ export interface MotionConfig {
   radius?: number;    // orbit=궤도 반경 / wander=이동 반경 (기본 orbit 2 · wander 3)
   axis?: 'x' | 'y' | 'z'; // spin 회전축 (기본 y)
   collider?: boolean; // 플레이 모드에서 콜라이더도 함께 이동(진짜 이동 장애물). 기본 false=시각 전용
+}
+
+// 관절(액추에이터) — 경첩(hinge) 기준으로 한 축을 min~max 범위에서 구동. doc/PIVOT_MANIPULATION.md §6.
+export interface ActuatorConfig {
+  kind: 'rotate' | 'slide';       // 회전 관절(경첩) / 직선 관절(피스톤)
+  axis: 'x' | 'y' | 'z';          // 회전축(rotate) 또는 이동축(slide) — 오브젝트 로컬
+  hinge?: Vector3;                // 경첩 위치(정규화 0..1, 미설정=형상 중심). 중(0.5)/엣지 허용. rotate 전용
+  min: number;                    // rotate=각도(도) · slide=거리(m) — 닫힘/기준
+  max: number;                    // rotate=각도(도) · slide=거리(m) — 열림/최대
+  drive: 'manual' | 'oscillate' | 'variable' | 'event';
+  value?: number;                 // 현재 위치 0..1 (min=0·max=1). 에디터 미리보기·초기값. 기본 0
+  speed?: number;                 // oscillate 속도배수 / event 이동속도(초당 0..1). 기본 1
+  loop?: 'pingpong' | 'forward';  // oscillate 방식. 기본 pingpong
+  variable?: string;              // drive='variable'일 때 바인딩할 GameVariable.name (0..1 해석)
+  collider?: boolean;             // 플레이 모드 콜라이더 동반(진짜 장애물). 기본 false=시각
 }
 
 export interface DialogueConfig {

@@ -54,6 +54,7 @@ const ACTION_LABELS: Record<string, string> = {
   game_lose: "게임 오버",
   swap_model: "모델 교체",
   play_clip: "애니 재생",
+  set_actuator: "관절 여닫기",
   run_script: "스크립트 실행",
 };
 
@@ -326,6 +327,7 @@ export function EventsSection({
               { value: "despawn_object", label: "오브젝트 제거(디스폰)" },
               { value: "swap_model", label: "모델 교체" },
               { value: "play_clip", label: "애니 재생 (키프레임)" },
+              { value: "set_actuator", label: "관절 여닫기 (액추에이터)" },
               { value: "game_win", label: "게임 승리" },
               { value: "game_lose", label: "게임 오버" },
               { value: "run_script", label: "스크립트 실행 (고급)" },
@@ -641,6 +643,38 @@ export function EventsSection({
                 options={animClips.map((c) => ({ value: c.id, label: c.name }))}
                 placeholder="재생할 애니 선택..."
               />
+            );
+          }
+          if (newAction === "set_actuator") {
+            // value = "대상objectId|목표" — 목표 = open/close/toggle/0~1. 관절(actuator) 오브젝트만 대상.
+            const [tid = "", mode = "open"] = newValue.split("|");
+            const compose = (id: string, m: string) => `${id}|${m}`;
+            const actOpts = objects.filter((o) => o.actuator).map((o) => ({ value: o.id, label: o.id === obj?.id ? `${o.name} (자신)` : o.name }));
+            return actOpts.length === 0 ? (
+              <p className="text-muted text-[10px] bg-surface border border-amber-500/40 rounded-xs px-2 py-1.5">
+                관절이 있는 오브젝트가 없어요. 대상 오브젝트의 <b>Actuator</b> 섹션에서 관절을 켜고 <b>Drive = 이벤트</b>로 두세요.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                <SelectBox
+                  value={tid}
+                  onChange={(id) => setNewValue(compose(id, mode))}
+                  options={actOpts}
+                  placeholder="관절 오브젝트 선택..."
+                />
+                {tid && (
+                  <SelectBox
+                    value={mode}
+                    onChange={(m) => setNewValue(compose(tid, m))}
+                    options={[
+                      { value: "open", label: "열기 (max)" },
+                      { value: "close", label: "닫기 (min)" },
+                      { value: "toggle", label: "토글 (열림↔닫힘)" },
+                    ]}
+                  />
+                )}
+                <p className="text-muted/70 dark:text-muted text-[10px]">대상 관절의 Drive를 <b>이벤트</b>로 두면 이 액션이 부드럽게 여닫습니다.</p>
+              </div>
             );
           }
           if (newAction === "spawn_object") {

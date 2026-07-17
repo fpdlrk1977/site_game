@@ -51,6 +51,9 @@ const isMovingColliderObj = (o: ObjectNodeSchema) =>
 const isVisualOnlyMotionObj = (o: ObjectNodeSchema) =>
   !!o.motion && o.motion.type !== 'pulse' && o.motion.collider !== true &&
   !o.isGroup && !o.light && !o.physics.enabled;
+// 관절(액추에이터) 콜라이더 미동반 → 시각 전용(ViewerObject가 관절 구동). collider 동반은 5c. doc §6.
+const isActuatorVisualObj = (o: ObjectNodeSchema) =>
+  !!o.actuator && o.actuator.collider !== true && !o.isGroup && !o.light;
 
 type ColliderAssets = Parameters<typeof ViewerObject>[0]['assets'];
 type ColliderOnEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
@@ -367,10 +370,12 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   //   (정적 콜라이더를 붙이면 시각은 떠다니는데 벽만 원래 자리에 남는 '유령 콜라이더' 버그가 됨)
   //   루트만 여기서 렌더(중첩 자식은 GroupWithCollision이 처리). pulse는 제자리라 autoObjects에 남김.
   const visualMotionObjects = rootObjects.filter((o) => o.visible && isVisualOnlyMotionObj(o) && !isPassable(o));
+  // 관절(콜라이더 미동반) 루트 — 시각 전용 ViewerObject(관절 구동). autoObjects에서 제외해 고정 콜라이더가 안 붙게.
+  const actuatorVisualObjects = rootObjects.filter((o) => o.visible && isActuatorVisualObj(o) && !isPassable(o));
   // 통과(콜라이더 제거) 대상 루트 오브젝트 — 콜라이더 없이 시각만(모션 있으면 애니메이션도) 렌더. 문 열림.
   const passableVisualObjects = rootObjects.filter((o) => o.visible && !o.light && !o.isGroup && isPassable(o));
   // ⚠ 숨김(hide_object)·통과 오브젝트는 콜라이더에서 제외 — 예전엔 visible 무시로 '보이지 않는 벽'이 남았음.
-  const autoObjects = rootObjects.filter((o) => o.visible && !o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isVisualOnlyMotionObj(o) && !isPassable(o));
+  const autoObjects = rootObjects.filter((o) => o.visible && !o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isVisualOnlyMotionObj(o) && !isActuatorVisualObj(o) && !isPassable(o));
   const physicsObjects = rootObjects.filter((o) => o.visible && o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isPassable(o));
 
   const characterAsset = scene.environment.playerCharacterId
@@ -470,6 +475,11 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
 
       {/* 움직이는 모션·콜라이더 미동반 — 시각 전용(콜라이더 없음, 통과 가능) */}
       {visualMotionObjects.map((obj) => (
+        <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* 관절(콜라이더 미동반) — 시각 전용 ViewerObject가 관절 구동(문 여닫힘). 콜라이더 동반은 5c. */}
+      {actuatorVisualObjects.map((obj) => (
         <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 

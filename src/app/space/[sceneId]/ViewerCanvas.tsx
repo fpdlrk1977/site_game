@@ -17,6 +17,7 @@ import { GroundPlane } from '@/components/three/GroundPlane';
 import { DefaultEnvironment } from '@/components/three/DefaultEnvironment';
 import { PlayModeContext } from './PlayModeContext';
 import { ClipRequestContext, type ClipReq } from './ClipRequestContext';
+import { ActuatorDriveContext } from './ActuatorDriveContext';
 import { InteractHighlightContext } from './InteractHighlightContext';
 import { DialogueAdvanceContext } from './DialogueAdvanceContext';
 import { SceneToneMapping } from '@/components/three/SceneToneMapping';
@@ -236,6 +237,7 @@ interface Props {
   mobileInputRef?: React.MutableRefObject<{ fwd: number; strafe: number; jump: boolean }>;
   focusRequest?: { id: string | null; t: number } | null;
   clipRequests?: Record<string, ClipReq>;
+  actuatorDrive?: Record<string, number>;
   onInteractPromptChange?: (obj: ObjectNodeSchema | null) => void;
   /** 근접한 interact 대상 id — 3D 트리에 내려 해당 오브젝트를 하이라이트 */
   interactHighlightId?: string | null;
@@ -252,6 +254,7 @@ interface Props {
 }
 
 const EMPTY_CLIPS: Record<string, ClipReq> = {};
+const EMPTY_DRIVE: Record<string, number> = {};
 
 // 탐색 모드 진입 시 1회 자동 전체 맞춤 — 저장한 공간을 다시 열 때 카메라가 너무 가깝지 않도록
 // 모든 루트 오브젝트가 화면에 들어오는 뷰로 시작(에디터 Shift+F 전체 맞춤과 동일 기준).
@@ -283,7 +286,7 @@ function InitialFit({ objects, orbitRef }: {
   return null;
 }
 
-export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked }: Props) {
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
   const orbitRef = useRef<OrbitControlsImpl>(null);
@@ -328,6 +331,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
     >
       <PlayModeContext.Provider value={playMode}>
       <ClipRequestContext.Provider value={clipRequests ?? EMPTY_CLIPS}>
+      <ActuatorDriveContext.Provider value={actuatorDrive ?? EMPTY_DRIVE}>
       <InteractHighlightContext.Provider value={interactHighlightId ?? null}>
       <DialogueAdvanceContext.Provider value={dialogueNonce ?? 0}>
       {/* 톤매핑 Neutral 고정 + 씬별 노출 — 저장 색을 최대한 그대로 렌더 */}
@@ -484,6 +488,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {!playMode && environment.showInteractionHints !== false && <InteractionHints objects={objects} assets={scene.assets ?? []} />}
       </DialogueAdvanceContext.Provider>
       </InteractHighlightContext.Provider>
+      </ActuatorDriveContext.Provider>
       </ClipRequestContext.Provider>
       </PlayModeContext.Provider>
     </Canvas>

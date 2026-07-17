@@ -51,6 +51,25 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 🦾 진행 중 (2026-07-17) — 액추에이터(관절) Phase 5a: 시각 저작 (기준 `doc/PIVOT_MANIPULATION.md §6`) — 브라우저 확인 대기
+
+> 결정 확정(사용자): **①A 경첩 전용 필드 · ②A set_actuator+변수(5b) · ③A 5a부터 확인**. 앵커 근간(Phase 1~3) 위에 관절을 얹음. tsc 클린 + **수학 테스트 10/10**. **✅ ▶ 플레이 동작 확인 완료(사용자, oscillate 문 여닫힘).** speed 최대 5→10(Actuator·Motion).
+> - **버그픽스(확인 중 발견)**: ①`PlayCanvas`가 관절 오브젝트를 autoObjects(고정 콜라이더)로 보내 관절 무시 → `actuatorVisualObjects` 라우팅 추가(콜라이더 없이 ViewerObject, autoObjects 제외). ②`ViewerObject` 렌더 분기 3곳(676·761·939, **프리미티브 경로 포함**)이 `{motion ? ...}`로 motion만 검사 → actuator만 있으면 MotionGroup 건너뜀 → 전부 `motion || actuator`로 수정.
+
+- **스키마**(`scene.ts`): `ActuatorConfig{kind(rotate/slide)·axis·hinge?(정규화, 중/엣지 허용)·min·max·drive(manual/oscillate/variable/event)·value·speed·loop·variable·collider}` + `ObjectNodeSchema.actuator?`(옵셔널·**motion과 배타**, 하위호환). `saveScene`는 `objects` 통과라 자동 보존.
+- **런타임 수학**(신규 `lib/actuator.ts`): `computeActuator(act, hingeLocal, base pos/rot/scl, driveValue, out)` — rotate=축 회전(로컬 post-multiply)+**경첩 고정 위치보정**(computeMotion 피벗 방식: 회전 전후 경첩 월드위치 일치)·slide=축 방향 이동(오브젝트 회전 반영). `computeDriveValue`(manual=value·oscillate=pingpong/forward). **결정론 테스트 10/10**(경첩 고정·오프셋 위치·dv0 불변·slide·회전반영·oscillate 범위).
+- **뷰어 적용**(`ViewerObject`): `MotionGroup`/`Xform`을 **motion·actuator 공용**으로 확장(actuator 우선). `actHinge`=`anchorLocalPoint(localBBox, hinge)`. 호출부 프롭에 `actuator`/`actHinge` 배선(replace_all 7곳 + Xform 내부). → **▶ 플레이·게시 뷰어에서 관절 동작**(에디터 뷰포트는 정적, motion과 동일 패턴).
+- **에디터 UI**(신규 `ActuatorSection.tsx`, InspectorPanel Motion 아래·기본 접힘): 사용 토글(켜면 motion 제거·기본 Y축 좌측경첩 문) + 종류/축 + **경첩 3×3 피커**(회전축 수직면, 중/엣지 포함 — 감췄던 "중" 여기서 씀) + Min/Max(°/m) + Drive(manual/oscillate) + value 미리보기/speed·loop. "▶로 확인·motion 배타·변수/콜라이더는 5b/5c" 안내.
+- **확인 필요(브라우저)**: 박스에 관절 켜기→문(Y·좌측경첩·0~90)·▶플레이서 여닫힘(manual value / oscillate 자동왕복) · 축/경첩 바꿔가며 · slide 피스톤 · motion과 배타.
+### Phase 5b (2026-07-17) — 변수·이벤트 구동 — 브라우저 확인 대기
+> "다가가서/클릭으로 문 열기" 게임 로직. tsc·컴파일 클린. **▶ 플레이 확인 대기.**
+- **스키마**: `EventAction`에 **`set_actuator`** 추가. **컨텍스트**(신규 `ActuatorDriveContext.ts`): objectId→목표 driveValue(0..1), ViewerCanvas Provider(clip 옆·탐색/플레이 공통).
+- **뷰어 이징**(`ViewerObject` MotionGroup): drive=variable/event면 컨텍스트 목표(`actDrive`)를 향해 speed 비례 이징(첫 프레임 스냅), manual/oscillate는 `computeDriveValue`. `actDrive` prop 배선.
+- **런타임**(`ViewerClient`): `actuatorDrive` 상태 + **`set_actuator` 핸들러**(`"objId|open/close/toggle/0~1"`, toggle=현재값 반전) + **variable 동기**(`syncVarActuators`: 변수값 clamp01→목표, onVarsChanged·init, event 목표 머지 보존) + restart 리셋 + ViewerCanvas prop.
+- **에디터**: `ActuatorSection` Drive에 변수/이벤트(변수=바인딩 SelectBox·이벤트=안내·Ease speed) · `EventsSection` **set_actuator 액션**(관절 오브젝트 대상 + open/close/toggle).
+- **확인 필요(브라우저)**: Actuator Drive=이벤트 → 박스 Click(또는 interact/approach) '관절 여닫기·자신·토글' → ▶ 플레이서 클릭/근접 시 부드럽게 여닫힘 · 변수 구동은 변수 0↔1 시 따라감.
+- **다음**: 5c(콜라이더 동반 — 실제 부딪히는 문) → 5d(다관절 프리셋 등). ※에디터 뷰포트 read-only 가이드(경첩 마커·축선)는 소폭 후속.
+
 ## 🧭 진행 중 (2026-07-17) — 피벗/조작 근간 Phase 1: 오브젝트 앵커 + 스케일 앵커 (기준: `doc/PIVOT_MANIPULATION.md`) — 브라우저 확인 대기
 
 > 사용자 확정 방향(프로젝트 근간): 오브젝트마다 **변형 기준점(앵커)** → 스케일/회전이 그 점 기준. **하단 앵커=바닥 고정+위로만 성장**(중심 스케일로 밑면이 바닥 뚫던 문제 해결). 애니 경첩·액추에이터·카메라의 공통 근간. 결정(사용자 승인): 애니통합=단계적(Phase4)·조작평면=카메라향한면·핸들=기즈모 공존. tsc 클린 + `✓ Compiled` + **수학 테스트 11/11**. **브라우저 확인 대기.**

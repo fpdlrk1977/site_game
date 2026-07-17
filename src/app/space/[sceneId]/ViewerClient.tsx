@@ -234,6 +234,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // varsRef: 권위값(동기 읽기/쓰기). hudVars: 화면 HUD 재렌더용 미러. watcherState: variable_changed 엣지 감지.
   const varsRef = useRef<Record<string, number | boolean | string>>({});
   const [hudVars, setHudVars] = useState<Record<string, number | boolean | string>>({});
+  // 액추에이터 구동 목표(objectId→0..1) — variable(변수값)·event(set_actuator) 구동. ViewerObject가 이징. doc §6.
+  const [actuatorDrive, setActuatorDrive] = useState<Record<string, number>>({});
   const watcherState = useRef<Record<string, boolean>>({}); // eventId → 직전 조건 평가값
   const evalDepth = useRef(0); // variable_changed 반응형 재진입 가드
   // Phase 2 — 런타임 스폰/디스폰·승패·재시작 상태
@@ -271,6 +273,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     varsRef.current = init;
     watcherState.current = {};
     setHudVars(init);
+    syncVarActuators(); // variable 구동 관절 초기값 반영
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene.variables, runNonce]);
 
@@ -508,9 +511,23 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       evalDepth.current -= 1;
     }
   }
+  // variable 구동 액추에이터 — 바인딩 변수값(0..1로 clamp)을 구동 목표로 반영. event 목표는 보존(머지).
+  function syncVarActuators() {
+    const upd: Record<string, number> = {};
+    for (const o of scene.objects) {
+      const a = o.actuator;
+      if (a?.drive === 'variable' && a.variable) {
+        const raw = varsRef.current[a.variable];
+        const n = typeof raw === 'boolean' ? (raw ? 1 : 0) : Number(raw);
+        upd[o.id] = Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
+      }
+    }
+    if (Object.keys(upd).length) setActuatorDrive((m) => ({ ...m, ...upd }));
+  }
   function onVarsChanged() {
     setHudVars({ ...varsRef.current });
     persistScoped(); // global/persistent 변수는 저장(씬 이동·재방문 유지)
+    syncVarActuators(); // variable 구동 관절 반영
     evaluateWatchers();
   }
 
@@ -529,6 +546,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     moveAnims.current.clear();
     setGameResult(null);
     setInteractionLock(false);
+    setActuatorDrive({}); // 관절 구동 목표 초기화(variable은 변수 재초기화 시 재동기)
     // Phase E — 재시작 시 global(세션) 변수도 initial로(세션 저장 제거). persistent(최고점수 등)는 유지.
     for (const v of scene.variables ?? []) {
       if (v.scope === 'global') { try { window.sessionStorage.removeItem(varStoreKey(v.name)); } catch { /* ignore */ } }
@@ -668,6 +686,20 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
           playingClips.current.set(ev.value, performance.now());
           if (clipRaf.current == null) clipRaf.current = requestAnimationFrame(tickClips);
         }
+      } else if (ev.action === 'set_actuator' && ev.value) {
+        // value = "대상objectId|목표" — 목표 = 0..1 숫자 · open(1) · close(0) · toggle(반전). 관절이 부드럽게 이동. doc §6.
+        const sep = ev.value.indexOf('|');
+        const id = sep >= 0 ? ev.value.slice(0, sep) : ev.value;
+        const tRaw = (sep >= 0 ? ev.value.slice(sep + 1) : '').trim();
+        if (id) setActuatorDrive((m) => {
+          const cur = m[id] ?? (scene.objects.find((o) => o.id === id)?.actuator?.value ?? 0);
+          let target: number;
+          if (tRaw === 'open') target = 1;
+          else if (tRaw === 'close') target = 0;
+          else if (tRaw === 'toggle') target = cur >= 0.5 ? 0 : 1;
+          else { const n = parseFloat(tRaw); target = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1; }
+          return { ...m, [id]: target };
+        });
       } else if (ev.action === 'despawn_object') {
         // value = 대상 objectId (빈 값이면 자기 자신). Phase 2.
         const target = ev.value || obj.id;
@@ -717,7 +749,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 고정 화면 비율(frameAspect) — 설정 시 캔버스를 그 비율로 레터박스(가운데 정렬 + 배경 여백).
   const frameAspect = scene.environment.frameAspect && scene.environment.frameAspect > 0 ? scene.environment.frameAspect : null;
   const viewerCanvasEl = (
-    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} />
+    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} />
   );
 
   return (

@@ -153,12 +153,68 @@ rotateAnchorDelta(A, s, R0, R1) →  Δposition   // = pivotOffset(A⊙s, R1) �
 
 > **카메라도 이 근간의 대상**: 카메라는 위치·회전을 가진 오브젝트라 조작 핸들·기즈모(스케일 제외)·애니 클립을 그대로 상속 → 카메라 오브젝트 배치/조준/플라이스루가 저비용으로 얹힌다. 상세 = **`doc/CAMERA.md`**.
 
-## 6. 액추에이터(관절) 연결 — 이 근간 위에
+## 6. 액추에이터(관절) — Phase 5 상세 설계 (설계 확정 대기)
 
-- 액추에이터 = **피벗(경첩 위치, Layer 1) + 회전축(X/Y/Z) + 각도(min/max) + 구동(슬라이더/이벤트/변수/오실레이트)**.
-- 피벗은 이 문서의 앵커를 그대로 사용. 자식(구성요소)은 계층 부모-자식으로 추종. 다관절 = 중첩.
-- 플레이 모드 콜라이더 추종은 기존 `MovingGroupCollider`(kinematic hull) 패턴 재사용.
-- 즉 **이 명세가 끝나면 액추에이터는 "축+각도+구동"만 얹으면 됨** → 두 번 작업 없음.
+> 앵커/조작 근간(Phase 1~3 완료) 위에 **관절**을 얹는다. 아래 "결정 필요" 확인 후 Phase 5a 착수.
+
+### 6.0 한 줄 정의
+오브젝트를 **경첩점(hinge)** 기준으로 **한 축**을 따라 **범위(min~max)** 안에서 **구동(drive)** 시키는 관절.
+= **문 여닫기 · 로봇팔 관절 · 피스톤 · 레버 · 시소**를 노코드로. 앵커가 이미 스케일·회전을 그 점 기준으로 하므로 **"축+각도+구동"만 얹으면** 됨.
+
+### 6.1 스키마 (`src/types/scene.ts`)
+```ts
+export interface ActuatorConfig {
+  kind: 'rotate' | 'slide';       // 회전 관절(경첩) / 직선 관절(피스톤)
+  axis: 'x' | 'y' | 'z';          // 회전축(rotate) 또는 이동축(slide) — 오브젝트 로컬
+  hinge?: Vector3;                // 경첩 위치(정규화 0..1, 미설정=형상 중심). ★중(0.5)/엣지 허용 — rotate 전용
+  min: number;                    // rotate=각도(도)·slide=거리(m) — 닫힘/기준
+  max: number;                    // rotate=각도(도)·slide=거리(m) — 열림/최대
+  drive: 'manual' | 'oscillate' | 'variable' | 'event';
+  value?: number;                 // 현재 위치 0..1(min=0·max=1). 에디터 미리보기·초기값. 기본 0
+  speed?: number;                 // oscillate 속도배수 / event 이동속도(초당 0..1). 기본 1
+  loop?: 'pingpong' | 'forward';  // oscillate 방식. 기본 pingpong
+  variable?: string;              // drive='variable'일 때 바인딩할 GameVariable.name(0..1 해석)
+  collider?: boolean;             // 플레이 모드 콜라이더 동반(진짜 장애물). 기본 false=시각
+}
+// ObjectNodeSchema.actuator?: ActuatorConfig   // 옵셔널=관절 없음(하위호환). motion과 배타(actuator 우선).
+```
+전부 옵셔널 추가 → 기존 씬/렌더/저장 무변경.
+
+### 6.2 경첩(hinge) — 앵커 근간 재사용 + "중" 재노출
+- 회전 경첩 = **회전축에 수직인 평면의 한 점**. 예: **문 = Y축 + 좌측-중앙**(X-Z 평면 좌측).
+- 문/레버 경첩은 대개 **엣지/면(중 0.5 포함)**. 일반 앵커 피커는 코너만(중 감춤)이지만, **관절 경첩 피커는 축 수직 평면의 3×3 그리드(9점, 중·엣지 포함)** 로 노출 → 사용자가 예상한 "중 나중에 쓰기"가 여기.
+- 수학 재사용: 경첩 로컬점 `H = anchorLocalPoint(localBBox, hinge)`, 회전 보정 `rotateAnchorDelta(H, scale, rot0, rot1)`(이미 있음).
+
+### 6.3 런타임 (`src/lib/actuator.ts` 신규 — motion.ts 패턴)
+`computeActuator(act, hingeLocal, basePos, baseRot, baseScl, driveValue, out)` — 시각·콜라이더 공유.
+- **rotate**: `angle=lerp(min,max,driveValue)°` 축 회전 → `out.quat=baseQuat∘axisQuat(angle)`, 위치보정 `rotateAnchorDelta`로 경첩 고정.
+- **slide**: `d=lerp(min,max,driveValue)` 축 방향 이동(회전 반영).
+- **driveValue 산출**(뷰어 rAF): `manual`=act.value(정지) / `oscillate`=시간 pingpong / `variable`=변수값 clamp01 / `event`=목표(0/1) 향해 speed/초 부드럽게.
+- **적용**: 시각=`ViewerObject`의 MotionGroup/Xform 자리(모션 대신), 에디터=정적 미리보기(act.value) / 콜라이더=`PlayCanvas`의 MovingCollider·MovingGroupCollider 재사용(collider:true만) / **다관절=계층 중첩으로 자동**(부모가 서브트리 이동+자식이 로컬 회전).
+
+### 6.4 게임 로직 연동
+- `variable` 구동: 기존 GameVariable+set_variable로 값 조절 → 관절 반영(배선 최소).
+- `event` 구동(신규 액션 후보): `EventAction`에 **`set_actuator`**(value=`"objectId|target"`) → 목표 저장 후 매 프레임 이동 → "버튼/근접 → 문 열림".
+
+### 6.5 에디터 UI (`ActuatorSection.tsx` 신규)
+헤더 스위치(Physics 패턴) + 종류(회전/직선) + 축 + **경첩 3×3 피커** + 범위(min/max) + 구동 드롭다운(방식별 컨트롤) + **미리보기 슬라이더(value)**(live 채널 실시간) + 콜라이더 토글. motion과 배타 안내.
+
+### 6.6 단계 분할
+| 단계 | 내용 | 리스크 |
+|---|---|---|
+| **5a** | 스키마 + computeActuator(rotate/slide) + 경첩 3×3 피커 + **manual·oscillate** + 시각 적용 + ActuatorSection + 미리보기 | 중 |
+| **5b** | **variable·event 구동**(+set_actuator) — 문 여닫기 등 | 중 |
+| **5c** | **콜라이더 동반**(플레이 장애물, MovingCollider 재사용) | 중상 |
+| **5d**(선택) | 다관절 프리셋(로봇팔)·범위 가이드·min/max 핸들·이징 | 하 |
+각 단계: tsc 클린 + 결정론 테스트(각도/경첩 고정) + 브라우저 확인 후 다음.
+
+### 6.7 결정 필요
+- **① 경첩 소스**: (A) actuator 전용 `hinge` 필드[권장·스케일 앵커와 분리] / (B) object.pivot 재사용.
+- **② event 구동**: (A) 신규 `set_actuator` + variable 둘 다[권장, set_actuator는 5b 후반] / (B) variable만.
+- **③ 시작 범위**: 5a(시각 저작)까지 먼저 확인받고 진행 / 5a+5b 묶어 진행.
+
+### 6.8 제약
+- **motion과 배타**(둘 다 로컬 변환). 콜라이더=hull 근사·비균일 스케일 왜곡·라이딩 미구현(모션 동일). variable=v1은 clamp01(임의 범위 매핑 후속). slide 콜라이더는 이동만. 하위호환 옵셔널.
 
 ---
 
