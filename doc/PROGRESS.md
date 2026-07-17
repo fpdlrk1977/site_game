@@ -68,6 +68,15 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **정리**: EnvironmentPanel 미사용 `inputCls`(팝업 배경 텍스트 입력 제거로 고아) 삭제. ※EnvironmentPanel의 X/Trash2/Plus 미사용 import 경고는 기존(무관).
 - **결과**: 전역 색 입력이 SV/Hue·HEX/RGB/HSL·저장 팔레트·스포이드·팝업형 픽커로 통일. Material Color만 그라데이션 지원, 나머지는 solid.
 
+### 후속 (2026-07-17) — 컬러픽커 전역 싱글턴 + 우측 패널 밖 표시 (사용자 요청) — 브라우저 확인 대기
+> **확정(사용자)**: ①화면에 픽커는 **하나만** — 다른 색 필드 클릭 시 팝업은 **그 자리 유지, 내용만 교체**(피그마식). ②**우측 패널(Inspector/Env) 픽커는 패널 왼쪽 바깥**에 떠서 정보 안 가림. tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.**
+- **싱글턴**: 신규 `store/colorPickerStore.ts`(zustand: `activeFieldId`+`panelPos`). 각 `<ColorPicker>`는 `useId()` fieldId가 active일 때만 팝업 렌더 → 항상 하나. 다른 필드 클릭 = 이미 열려있으면 `switchTo`(위치 유지·내용 스왑), 닫혀있으면 `openAt`(위치 계산). 같은 필드 재클릭=닫기. 드래그 위치도 스토어 공유. 언마운트 시 active면 close. 로컬 open/panelPos state 제거.
+- **우측 패널 밖(자동 배치)**: `placement` 미지정 시 트리거 `rect.left > vw*0.55`(우측)면 **left**(패널 밖 왼쪽), 아니면 **bottom-start**. 호출부 무수정으로 Inspector/Env 픽커 자동 왼쪽·AssetBrowser(좌)/복셀모달(중앙) 자동 아래. `placement` 명시 지정도 유지.
+- 성능: active만 panelPos 구독(드래그 시 active 하나만 리렌더). isActive는 전 인스턴스 구독이나 open/switch 시에만 갱신.
+
+### 후속 (2026-07-17) — placement prop (useDropdown/SelectBox/ColorPicker) (사용자 확인 완료)
+> 드롭다운·픽커 열리는 위치 지정 prop. `useDropdown`에 `DropdownPlacement`(bottom/bottom-start/bottom-end/top(-start/-end)/right/left) — 상하 공간부족 시 자동 뒤집기·가로 start/end 정렬·뷰포트 클램프. SelectBox·ColorPicker에 `placement` prop 노출, 기본 bottom-start(왼쪽+하단). 기존 'bottom'/'right' 호출부 호환.
+
 ### 후속 (2026-07-17) — 컬러픽커 팝업화 + SV/정지점 버그 수정 (사용자 확인 완료)
 - **SV 사각형 색배치 버그**: 흰색 겹이 검정 겹 위라 좌하단이 시각상 흰색인데 클릭값은 검정(#000000)으로 불일치 → **검정(명도) 겹을 위로** 순서 교체(좌상=흰·우상=순색·하단=검정, 클릭값 일치).
 - **정지점 선택 시 SV/Hue thumb 미이동**: `startStopDrag`가 켜던 `draggingRef`가 thumb 재동기화를 막았음(위치 드래그는 색 불변이라 불필요) → 제거. 이제 정지점 클릭하면 그 색으로 SV/Hue 작은 원이 이동(선택 정지점=SV에서 편집).

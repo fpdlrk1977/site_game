@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
-import { useDropdown } from "@/hooks/useDropdown";
+import { useDropdown, type DropdownPlacement } from "@/hooks/useDropdown";
 import { useListNav } from "@/hooks/useListNav";
 
 export interface SelectOption {
@@ -25,6 +25,8 @@ interface Props {
   /** 옵션 아이콘 크기(px). 개별 아이콘이 자체 크기를 지정해도 이 크기로 강제된다. 기본 16 */
   iconSize?: number;
   disabled?: boolean;
+  /** 드롭다운이 열리는 위치. 기본 'bottom-start'(왼쪽+하단). */
+  placement?: DropdownPlacement;
 }
 
 const DEFAULT_TRIGGER_CLASS = "bg-surface border border-border/60 rounded-xs px-2 py-[5px] text-xs dark:bg-sidebar!";
@@ -41,8 +43,9 @@ export function SelectBox({
   iconSize = 16,
   disabled,
   gray = false,
+  placement = "bottom-start",
 }: Props) {
-  const { open, openMenu, close, triggerRef, panelRef, panelStyle } = useDropdown<HTMLButtonElement>();
+  const { open, openMenu, close, triggerRef, panelRef, panelStyle } = useDropdown<HTMLButtonElement>({ placement });
   const [highlight, setHighlight] = useListNav(options.length, open);
 
   const selectedIndex = options.findIndex((o) => o.value === value);

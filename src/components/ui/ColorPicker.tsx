@@ -8,12 +8,14 @@
 // 드롭인 사용:
 //   <ColorPicker value={hex} onChange={(hex) => update(hex)} onCommit={pushHistory} />
 //   (그라데이션) + allowGradient gradient={mat.gradient} onGradientChange={(g)=>update({gradient:g})}
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useId } from "react";
 import { createPortal } from "react-dom";
 import { Pipette, Plus, ChevronDown, Trash2, X } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
+import { useColorPickerStore } from "@/store/colorPickerStore";
 import { normalizeHex, hexToHsv, hsvToHex, hexToRgb, rgbToHex, hexToHsl, hslToHex, type HSV } from "@/lib/color";
 import type { GradientFill } from "@/types/scene";
+import type { DropdownPlacement } from "@/hooks/useDropdown";
 
 type Mode = "hex" | "rgb" | "hsl";
 const MODES: Mode[] = ["hex", "rgb", "hsl"];
@@ -30,6 +32,8 @@ interface Props {
   showHex?: boolean;
   /** 저장 팔레트(colorAssets) 표시 (기본 true) */
   palette?: boolean;
+  /** 팝업이 열리는 위치. 기본 'bottom-start'(왼쪽+하단). */
+  placement?: DropdownPlacement;
   /** 그라데이션 편집 허용(프리미티브 재질 등). onGradientChange 필요. */
   allowGradient?: boolean;
   gradient?: GradientFill | null;
@@ -89,27 +93,49 @@ export function ColorPicker({
   title,
   showHex = true,
   palette = true,
+  placement,
   allowGradient = false,
   gradient,
   onGradientChange,
 }: Props) {
-  // 떠 있는 팝업(펜툴/복셀 모달과 동일) — 바깥클릭으로 안 닫히고 헤더 드래그로 이동, X/Esc로만 닫힘.
+  // 전역 단일 팝업 — 화면에 픽커는 하나만. 이 fieldId가 active일 때만 팝업 렌더. 위치는 스토어 공유(전환 시 자리 유지).
+  const fieldId = useId();
   const triggerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const close = useCallback(() => setOpen(false), []);
-  const openPanel = () => {
-    const r = triggerRef.current?.getBoundingClientRect();
-    const PW = 232;
-    let x = r ? r.left : 100;
-    let y = r ? r.bottom + 4 : 100;
-    x = Math.max(8, Math.min(x, window.innerWidth - PW - 8));
-    y = Math.max(8, Math.min(y, window.innerHeight - 380));
-    setPanelPos({ x, y });
-    setOpen(true);
+  const isActive = useColorPickerStore((s) => s.activeFieldId === fieldId);
+  const panelPos = useColorPickerStore((s) => (s.activeFieldId === fieldId ? s.panelPos : null)) ?? { x: 0, y: 0 };
+  const open = isActive;
+  const close = useCallback(() => {
+    if (useColorPickerStore.getState().activeFieldId === fieldId) useColorPickerStore.getState().close();
+  }, [fieldId]);
+  // 트리거 rect + placement로 초기 위치 계산
+  const computePos = (r: DOMRect) => {
+    const PW = 232, PH = 380;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    // placement 미지정 = 자동: 트리거가 화면 우측(우측 패널)이면 왼쪽으로(패널 밖), 아니면 아래+왼쪽정렬.
+    const plc = placement ?? (r.left > vw * 0.55 ? "left" : "bottom-start");
+    let x: number, y: number;
+    if (plc === "right" || plc === "left") {
+      x = plc === "right" ? r.right + 6 : r.left - PW - 6;
+      y = r.top;
+    } else {
+      const alignEnd = plc === "bottom-end" || plc === "top-end";
+      x = alignEnd ? r.right - PW : r.left;
+      const wantAbove = plc.startsWith("top");
+      const above = wantAbove ? r.top > PH + 8 : (vh - r.bottom < PH + 8 && r.top > vh - r.bottom);
+      y = above ? r.top - PH - 4 : r.bottom + 4;
+    }
+    return { x: Math.max(8, Math.min(x, vw - PW - 8)), y: Math.max(8, Math.min(y, vh - PH - 8)) };
   };
-  const toggle = () => (open ? close() : openPanel());
+  const toggle = () => {
+    const st = useColorPickerStore.getState();
+    if (st.activeFieldId === fieldId) { st.close(); return; }
+    if (st.activeFieldId) st.switchTo(fieldId); // 이미 다른 픽커 열림 → 자리 유지, 내용만 교체
+    else {
+      const r = triggerRef.current?.getBoundingClientRect();
+      st.openAt(fieldId, r ? computePos(r) : { x: 100, y: 100 });
+    }
+  };
   // 헤더 드래그 이동
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ ox: number; oy: number } | null>(null);
@@ -120,7 +146,7 @@ export function ColorPicker({
     setDragging(true);
   };
   const onDragMove = (e: React.MouseEvent) => {
-    if (dragRef.current) setPanelPos({ x: e.clientX - dragRef.current.ox, y: e.clientY - dragRef.current.oy });
+    if (dragRef.current) useColorPickerStore.getState().setPanelPos({ x: e.clientX - dragRef.current.ox, y: e.clientY - dragRef.current.oy });
   };
   const endDrag = () => { dragRef.current = null; setDragging(false); };
   // Esc 닫기 (바깥클릭은 안 닫힘)
@@ -130,6 +156,8 @@ export function ColorPicker({
     window.addEventListener("keydown", onKey, { capture: true });
     return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [open, close]);
+  // 언마운트 시 이 필드가 active면 팝업 닫기(오브젝트 전환 등으로 트리거가 사라질 때)
+  useEffect(() => () => { if (useColorPickerStore.getState().activeFieldId === fieldId) useColorPickerStore.getState().close(); }, [fieldId]);
 
   const colorAssets = useSceneStore((s) => s.colorAssets);
   const addColorAsset = useSceneStore((s) => s.addColorAsset);

@@ -13,13 +13,20 @@ interface UseDropdownResult<T extends HTMLElement> {
   panelStyle: CSSProperties;
 }
 
+/**
+ * 패널이 트리거에 붙는 위치.
+ * - 'bottom'/'bottom-start'(기본): 아래 + 왼쪽 정렬(트리거 왼쪽 모서리에 맞춤). 공간 부족 시 위로 뒤집힘.
+ * - 'bottom-end': 아래 + 오른쪽 정렬(트리거 오른쪽 모서리에 맞춤)
+ * - 'top'/'top-start': 위 + 왼쪽 정렬 · 'top-end': 위 + 오른쪽 정렬
+ * - 'right': 트리거 오른쪽 · 'left': 트리거 왼쪽 (상하는 뷰포트 안쪽으로 클램프)
+ */
+export type DropdownPlacement =
+  | 'bottom' | 'bottom-start' | 'bottom-end'
+  | 'top' | 'top-start' | 'top-end'
+  | 'right' | 'left';
+
 interface UseDropdownOptions {
-  /**
-   * 패널을 트리거의 어느 쪽에 붙일지.
-   * - 'bottom'(기본): 트리거 아래(공간 부족 시 위로 뒤집힘)
-   * - 'right': 트리거 오른쪽(세로 레일/GNB 메뉴용 — 상하는 뷰포트 안쪽으로 클램프)
-   */
-  placement?: 'bottom' | 'right';
+  placement?: DropdownPlacement;
 }
 
 /**
@@ -50,27 +57,33 @@ export function useDropdown<T extends HTMLElement = HTMLButtonElement>(
       const panelW = panelRef.current?.offsetWidth ?? tr.width;
       const panelH = panelRef.current?.offsetHeight ?? 240;
 
-      if (placement === 'right') {
-        // 트리거 오른쪽에 상단 정렬, 아래 공간 부족 시 위로 밀어 클램프
+      // 좌/우 배치 — 트리거 옆에 상단 정렬(상하는 뷰포트 안쪽 클램프)
+      if (placement === 'right' || placement === 'left') {
         const top = Math.max(8, Math.min(tr.top, vh - panelH - 8));
-        setPanelStyle({
-          position: 'fixed',
-          left: tr.right + 6,
-          top,
-          opacity: 1,
-          zIndex: 9999,
-        });
+        const left = placement === 'right' ? tr.right + 6 : Math.max(8, tr.left - panelW - 6);
+        setPanelStyle({ position: 'fixed', left, top, opacity: 1, zIndex: 9999 });
         return;
       }
 
-      const below = tr.bottom + panelH + 4 <= vh || tr.top < panelH;
-      const left = Math.max(8, Math.min(tr.left, vw - panelW - 8));
+      // 상/하 배치 — 원하는 방향 우선, 공간 부족하면 반대로 뒤집기
+      const wantAbove = placement === 'top' || placement === 'top-start' || placement === 'top-end';
+      const belowSpace = vh - tr.bottom;
+      const aboveSpace = tr.top;
+      let above = wantAbove;
+      if (!above && belowSpace < panelH + 8 && aboveSpace > belowSpace) above = true;
+      if (above && aboveSpace < panelH + 8 && belowSpace > aboveSpace) above = false;
+
+      // 가로 정렬 — end=오른쪽 모서리 맞춤, 그 외=왼쪽 모서리 맞춤(기본)
+      const alignEnd = placement === 'bottom-end' || placement === 'top-end';
+      let left = alignEnd ? tr.right - panelW : tr.left;
+      left = Math.max(8, Math.min(left, vw - panelW - 8));
+
       setPanelStyle({
         position: 'fixed',
         left,
         minWidth: tr.width,
-        top: below ? tr.bottom + 4 : undefined,
-        bottom: below ? undefined : vh - tr.top + 4,
+        top: above ? undefined : tr.bottom + 4,
+        bottom: above ? vh - tr.top + 4 : undefined,
         opacity: 1,
         zIndex: 9999,
       });
