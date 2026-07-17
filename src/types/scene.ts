@@ -333,6 +333,10 @@ export interface ObjectNodeSchema {
   position: Vector3;
   rotation: Vector3; // Euler degrees
   scale: Vector3;
+  // 변형 기준점(앵커) — 각 축 정규화 0..1(0=min면·0.5=중심·1=max면). 미설정=중심(현재 동작, 하위호환).
+  //   실제 로컬 점 = lerp(localBBox.min, localBBox.max, pivot). 스케일이 이 점을 고정한 채 일어난다
+  //   (하단 앵커 = 바닥 고정 + 위로만 성장). doc/PIVOT_MANIPULATION.md.
+  pivot?: Vector3;
   visible: boolean;
   locked: boolean;
   physics: PhysicsSchema;

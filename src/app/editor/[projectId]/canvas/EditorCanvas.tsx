@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { useSceneStore } from "@/store/sceneStore";
 import { EditorObjectInstance } from "./EditorObjectInstance";
 import { GizmoController } from "./GizmoController";
+import { ManipulationHandles } from "./ManipulationHandles";
 import { ObjectRefsContext, useObjectRefs } from "./ObjectRefsContext";
 import { pointerDownOnObjectRef } from "./boxSelectState";
 import { PostProcessingEffects } from "@/components/three/PostProcessingEffects";
@@ -791,6 +792,17 @@ export function EditorCanvas() {
     setSelBox(null);
   }, []);
 
+  // 내비 버튼 매핑. 좌버튼은 orbit 대상 아님(마퀴/선택 전용), 우버튼 = 패닝.
+  //   ★ OrbitControls 내장: PAN 동작 중 Ctrl/Shift/Meta를 누르면 자동으로 '회전'으로 스왑된다.
+  //     → 우버튼을 PAN 고정으로 두면 "우드래그=패닝, modifier+우드래그(Ctrl 포함)=회전"이 된다.
+  useEffect(() => {
+    const apply = () => { if (orbitRef.current) orbitRef.current.mouseButtons = { LEFT: undefined, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }; };
+    apply();
+    // orbitRef가 첫 effect에 아직 없을 수 있어 다음 프레임에도 한 번 더 적용(안전).
+    const raf = requestAnimationFrame(apply);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     // 배치 모드: 좌클릭(비-ctrl) = 클릭 위치에 생성. ctrl+좌/우클릭은 카메라 조작으로 통과.
     if (useSceneStore.getState().pendingPlacement) {
@@ -806,10 +818,15 @@ export function EditorCanvas() {
       return;
     }
     if (e.button !== 0) return;
-    // Ctrl+drag → orbit (let OrbitControls handle it)
-    // Object/gizmo hit → orbit/transform (let three.js handle it)
-    if (e.ctrlKey || pointerDownOnObjectRef.current || gizmoDraggingRef.current) {
+    // 좌드래그는 회전 안 함(회전=Ctrl+우드래그로 통일). 기즈모/핸들 드래그 → 각자 처리(orbit는 그쪽이 관리).
+    if (gizmoDraggingRef.current) {
       pointerDownOnObjectRef.current = false;
+      return;
+    }
+    // 오브젝트 위 좌드래그 = 회전 안 함(orbit 끔)·마퀴 안 함 — 선택만(오브젝트 onClick 처리). pointerUp의 resetDrag가 orbit 복구.
+    if (pointerDownOnObjectRef.current) {
+      pointerDownOnObjectRef.current = false;
+      if (orbitRef.current) orbitRef.current.enabled = false;
       return;
     }
     dragStartRef.current = { x: e.clientX, y: e.clientY };
@@ -1099,6 +1116,7 @@ export function EditorCanvas() {
           <ClipPreview />
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
+          <ManipulationHandles orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
 
           <PlacementGhost posRef={placeGhostPosRef} />
 

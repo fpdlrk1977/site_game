@@ -51,6 +51,41 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 🧭 진행 중 (2026-07-17) — 피벗/조작 근간 Phase 1: 오브젝트 앵커 + 스케일 앵커 (기준: `doc/PIVOT_MANIPULATION.md`) — 브라우저 확인 대기
+
+> 사용자 확정 방향(프로젝트 근간): 오브젝트마다 **변형 기준점(앵커)** → 스케일/회전이 그 점 기준. **하단 앵커=바닥 고정+위로만 성장**(중심 스케일로 밑면이 바닥 뚫던 문제 해결). 애니 경첩·액추에이터·카메라의 공통 근간. 결정(사용자 승인): 애니통합=단계적(Phase4)·조작평면=카메라향한면·핸들=기즈모 공존. tsc 클린 + `✓ Compiled` + **수학 테스트 11/11**. **브라우저 확인 대기.**
+
+- **스키마**: `ObjectNodeSchema.pivot?: Vector3`(정규화 0..1, 0=min면·0.5=중심·1=max면. 미설정=중심=현재동작, 하위호환). 실제 로컬점 = `lerp(localBBox.min,max,pivot)`.
+- **수학**(`src/lib/pivotMath.ts`): `anchorLocalPoint`·`scaleAnchorDelta`(스케일 s0→s1 시 앵커 고정 position 보정 = R·(A⊙(s0−s1)))·`rotateAnchorDelta`(Phase3용, animPivot 일반화)·`isCenterAnchor`. **결정론 테스트 11/11**(하단/상단/좌하단엣지/회전+앵커/중심판정).
+- **필드 스케일 앵커**(`TransformSection.setScl`): 앵커 설정 시 Size/Scale 변경이 position 동반 보정 → 앵커 고정. 미설정=중심(현재).
+- **기즈모 스케일 앵커**(`GizmoController` SingleGizmo): 프록시 `cLocal`을 스케일모드+앵커면 **앵커 점**으로 → 기즈모가 이미 cLocal 기준 스케일하는 구조라 자동 앵커 스케일(위젯도 앵커에 뜸). 기본(중심)·회전(애니경첩)은 무변경.
+- **피벗 피커**(신규 공용 `panels/inspector/PivotPicker.tsx`): 축별 3단(좌/중/우·하/중/상·앞/중/뒤)=27점 + '중심으로' 리셋. Transform 섹션(라이트 제외)에 노출. **애니/액추에이터 재사용 예정**.
+- **확인 필요(브라우저)**: 박스 선택→기준점 '하'→Size 높이 키우면 **바닥 붙은 채 위로만** 성장(필드·기즈모 둘 다) · 좌하단 엣지 등 조합 · 중심(기본)은 기존과 동일 · 그룹/GLB.
+- **한계/다음**: 이번은 **스케일**만 앵커(회전 기즈모는 기존 중심/애니경첩). 상단 앵커 성장 시 루트 y 언더그라운드 미클램프(앵커 우선, 의도).
+
+### 내비게이션 통일 (2026-07-17) — 회전 = Ctrl+우드래그 (사용자 확인 완료)
+> `EditorCanvas`. **회전을 Ctrl+우드래그로 일원화**(예전엔 오브젝트 위 좌드래그·Ctrl+좌가 회전으로 새던 것 정리). tsc 클린 + `✓ Compiled`.
+- **좌드래그**: 회전 제거 → 빈 곳=마퀴·오브젝트=선택만(둘 다 orbit 끔, pointerUp resetDrag가 복구). `handlePointerDown`에서 ctrl 분기 제거.
+- **회전**: OrbitControls `mouseButtons.RIGHT=PAN` 고정. **★핵심 발견**: three OrbitControls는 PAN 드래그 중 **Ctrl/Shift/Meta 누르면 자동으로 회전으로 스왑**(내장). → 우드래그=패닝, **Ctrl+우드래그=회전**. (초기에 ctrl→ROTATE로 억지 설정하니 스왑과 겹쳐 반대로 나오던 것·키 down/up 추적은 stuck 문제 → PAN 고정으로 해결.) `LEFT:undefined`로 좌버튼 orbit 제외.
+- **한계**: 내장 스왑이 Ctrl/Shift/Meta 구분 안 해 **Shift+우드래그도 회전**됨(무해, 사용자 "패스"). Ctrl-only 원하면 pointerdown modifier로 base 스왑 보정 필요(미적용).
+
+### Phase 2 (2026-07-17) — 조작 핸들(코너 드래그 스케일) — 사용자 확인 완료
+> 신규 `canvas/ManipulationHandles.tsx`. tsc 클린 + `✓ Compiled`. **사용자 확인 완료("정상적으로 되는거 같아").**
+- **코너 핸들 8개**(선택 오브젝트 로컬 bbox 코너, 화면상 일정 크기·매 프레임 위치 갱신, 드래그 중 커지는 박스 따라감). **앵커(고정점) = 패널 pivot(설정 시) · 미설정이면 잡은 코너의 반대 코너**(C 하이브리드) → 필드·기즈모·핸들 앵커 일관.
+- **스케일 팩터 = "잡은 코너↔앵커" 화면 대각선 축에 마우스 투영**(방사형 거리 아님 — 옆으로 비껴 끌어도 축 방향만 반영, 일관). 앵커 고정은 Phase 1 `scaleAnchorDelta` 재사용.
+- **시각 피드백**: 잡은 핸들=흰색·앵커 코너=주황·앵커점 주황 마커(구). "무엇이 고정되는지" 눈으로 보임.
+- **실시간**: `liveTransformStore.setLive` → Inspector 즉시. **놓을 때** `commitTransforms`(undo 1회).
+- **버그 수정 3건**: ①**occlusion** — 뒤쪽 코너가 오브젝트에 가려 반응 안 하던 것 → 핸들 메쉬 `raycast`가 거리 1e-6로 항상 최우선(8코너 다 잡힘). ②**orbit 회전으로 샘** — R3F stopPropagation은 네이티브 orbit 못 막음 → 핸들 **hover 시 orbit 미리 비활성**(+선택해제/드래그종료 복구). ③스케일 팩터 방사형→대각선 투영.
+- **기즈모 공존**: 스케일 모드 TransformControls(스케일 박스) **숨김**(핸들 담당, `GizmoController.showGizmo`), 이동=화살표·회전=링 유지. 핸들 항상 표시.
+- **다음**: Phase 3(뷰포트 피벗 핸들[패널 은퇴]·엣지 핸들[1축]·회전 핸들·모디파이어·드래그 HUD) → Phase 4(컨텍스트 메뉴+애니 통합) → Phase 5(액추에이터).
+
+#### Phase 2 후속 (2026-07-17) — 핸들 시각 개선 (사용자 확인 완료)
+- **크기**: 코너 핸들 배율 0.022→**0.016**(min 0.015)로 축소(너무 크던 것).
+- **앵커 = 핸들 색 변경**(사용자 제안): 별도 주황 구 마커(`markerRef`/sphere) **제거** → **앵커 코너의 핸들 자체가 주황**(`#ff7a0d`). 중심모드=hover 시 반대 코너 주황(`anchorIdx = oppOfHot`), 패널pivot=그 코너 항상 주황(`pivotCornerIdx(obj.pivot)` — 각 축 0/1이면 코너 인덱스). 잡은 핸들=흰색 유지.
+- **방향별 리사이즈 커서**: `cursorForCorner(i)` — 코너↔bbox중심 화면각(atan2)을 45°씩 8분할 → `CURSORS`(ew/nwse/ns/nesw 순환). hover·드래그 중 적용, 박스 회전 시 화면 방향 따라감.
+
+---
+
 ## 🎨 진행 중 (2026-07-16) — 커스텀 컬러픽커 공통 컴포넌트 (피그마식) — 브라우저 확인 대기 / 롤아웃 진행중
 
 > 사용자 요청: "input[type=color]이 너무 단순하다. 피그마처럼 자체 컬러픽커를 **공통 컴포넌트**로." 신규 `lib/color.ts` + `components/ui/ColorPicker.tsx`. tsc 클린 + `✓ Compiled`. **브라우저 확인 대기.** (3종 로드맵 중 ② — 다음: 액추에이터[맨 나중 상의])

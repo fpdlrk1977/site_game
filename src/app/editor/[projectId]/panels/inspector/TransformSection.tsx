@@ -7,9 +7,11 @@ import { ArrowDownToLine } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useEditorPrefsStore, SIZE_UNIT_FACTOR, SIZE_UNITS } from '@/store/editorPrefsStore';
 import { worldBBox, localBBox } from '@/lib/objectBBox';
+import { anchorLocalPoint, scaleAnchorDelta, isCenterAnchor } from '@/lib/pivotMath';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { SectionHeader, GroupBox, XYZRow, LiveTransformRows } from './ui';
-import type { ObjectNodeSchema } from '@/types/scene';
+import { PivotPicker } from './PivotPicker';
+import type { ObjectNodeSchema, Vector3 } from '@/types/scene';
 
 export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { objects, assets, updateObject, pushHistory } = useSceneStore();
@@ -23,8 +25,24 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
     updateObject(obj.id, { position: { ...obj.position, [axis]: axis === 'y' && !obj.parentId ? Math.max(0, v) : v } });
   const setRot = (axis: 'x' | 'y' | 'z', v: number) =>
     updateObject(obj.id, { rotation: { ...obj.rotation, [axis]: v } });
-  const setScl = (axis: 'x' | 'y' | 'z', v: number) =>
-    updateObject(obj.id, { scale: { ...obj.scale, [axis]: v } });
+  // 스케일 — 앵커(pivot) 설정 시 그 점이 고정되도록 position 동반 보정(하단 앵커=바닥 고정 성장). 미설정=중심(현재 동작).
+  const setScl = (axis: 'x' | 'y' | 'z', v: number) => {
+    const newScale = { ...obj.scale, [axis]: v };
+    if (!isCenterAnchor(obj.pivot)) {
+      const lb = localBBox(objects, assets, obj.id);
+      if (lb && !lb.isEmpty()) {
+        const A = anchorLocalPoint(lb, obj.pivot!);
+        const d = scaleAnchorDelta(A, obj.rotation, obj.scale, newScale);
+        updateObject(obj.id, {
+          scale: newScale,
+          position: { x: obj.position.x + d.x, y: obj.position.y + d.y, z: obj.position.z + d.z },
+        });
+        return;
+      }
+    }
+    updateObject(obj.id, { scale: newScale });
+  };
+  const setPivot = (p?: Vector3) => { updateObject(obj.id, { pivot: p }); pushHistory(); };
 
   // GLB 밑면을 바닥(y=0)에 정렬 — 모델 로컬 bbox에 현재 회전·스케일을 적용해
   // 실제 최하단(min.y)을 구하고, position.y를 그만큼 올려 바닥에 앉힌다.
@@ -90,6 +108,12 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
                   />
                 );
               })()}
+              {/* 변형 기준점(앵커) — 스케일이 이 점 기준으로. 하단=바닥 고정 성장. 라이트 제외. */}
+              {!obj.light && (
+                <div className="pt-1">
+                  <PivotPicker value={obj.pivot} onChange={setPivot} />
+                </div>
+              )}
               {/* 밑면을 바닥에 정렬 — 원점이 발밑이 아니어서 바닥에 파묻히는 경우 교정(모든 루트 타입) */}
               {!obj.parentId && (
                 <button

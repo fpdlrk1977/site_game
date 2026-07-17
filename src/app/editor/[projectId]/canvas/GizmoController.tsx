@@ -10,6 +10,7 @@ import { useLiveTransformStore } from '@/store/liveTransformStore';
 import { useObjectRefs } from './ObjectRefsContext';
 import { CHARACTER_PREVIEW_ID } from './CharacterPreview';
 import { localCenter, worldBBox, localBBox } from '@/lib/objectBBox';
+import { anchorLocalPoint, isCenterAnchor } from '@/lib/pivotMath';
 
 const RAD2DEG = 180 / Math.PI;
 const DEG2RAD = Math.PI / 180;
@@ -217,8 +218,14 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
         if (tr) { pivot = tr.pivot ?? (cl.rootId === selectedId ? cl.pivot : undefined); break; }
       }
     }
-    if (pivot) {
-      const sc = objects.find((o) => o.id === selectedId)?.scale ?? { x: 1, y: 1, z: 1 };
+    // 스케일 모드 + 오브젝트 앵커(pivot) 설정 → 그 앵커 점을 회전/스케일 중심(cLocal)으로.
+    //   → 기즈모가 앵커 기준으로 스케일(하단 앵커면 아래 고정). doc/PIVOT_MANIPULATION.md.
+    const selObj = objects.find((o) => o.id === selectedId);
+    if (transformMode === 'scale' && !isCenterAnchor(selObj?.pivot)) {
+      const lb = localBBox(objects, assets, selectedId);
+      cLocalRef.current.copy(lb && !lb.isEmpty() ? anchorLocalPoint(lb, selObj!.pivot!) : (localCenter(objects, assets, selectedId) ?? _p.set(0, 0, 0)));
+    } else if (pivot) {
+      const sc = selObj?.scale ?? { x: 1, y: 1, z: 1 };
       cLocalRef.current.set(
         sc.x ? pivot.x / sc.x : 0,
         sc.y ? pivot.y / sc.y : 0,
@@ -300,9 +307,13 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
     if (!skipYClamp) target!.position.y = Math.max(floorMinYRef.current, target!.position.y);
   };
 
+  // 스케일 모드는 코너 핸들(ManipulationHandles)이 담당 → 스케일 기즈모 숨김(중복 방지). 이동/회전은 기즈모 유지.
+  const showGizmo = isCharPreview || effectiveMode !== 'scale';
+
   return (
     <>
       <primitive object={proxyRef.current} />
+      {showGizmo && (
       <TransformControls
         object={proxyRef.current}
         mode={effectiveMode}
@@ -364,6 +375,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
           }
         }}
       />
+      )}
     </>
   );
 }

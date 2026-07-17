@@ -44,7 +44,19 @@ interface Props {
 type EyeDropperCtor = new () => { open: () => Promise<{ sRGBHex: string }> };
 
 // 그라데이션 숫자 컨트롤(라벨+입력) — Angle/Spread/Offset 공용
-function GradNum({ label, value, step, onChange, onCommit }: { label: string; value: number; step?: number; onChange: (n: number) => void; onCommit: () => void }) {
+function GradNum({
+  label,
+  value,
+  step,
+  onChange,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  step?: number;
+  onChange: (n: number) => void;
+  onCommit: () => void;
+}) {
   return (
     <label className="flex items-center gap-1 text-[10px] text-muted">
       <span>{label}</span>
@@ -110,8 +122,10 @@ export function ColorPicker({
   }, [fieldId]);
   // 트리거 rect + placement로 초기 위치 계산
   const computePos = (r: DOMRect) => {
-    const PW = 232, PH = 380;
-    const vw = window.innerWidth, vh = window.innerHeight;
+    const PW = 232,
+      PH = 380;
+    const vw = window.innerWidth,
+      vh = window.innerHeight;
     // placement 미지정 = 자동: 트리거가 화면 우측(우측 패널)이면 왼쪽으로(패널 밖), 아니면 아래+왼쪽정렬.
     const plc = placement ?? (r.left > vw * 0.55 ? "left" : "bottom-start");
     let x: number, y: number;
@@ -122,15 +136,19 @@ export function ColorPicker({
       const alignEnd = plc === "bottom-end" || plc === "top-end";
       x = alignEnd ? r.right - PW : r.left;
       const wantAbove = plc.startsWith("top");
-      const above = wantAbove ? r.top > PH + 8 : (vh - r.bottom < PH + 8 && r.top > vh - r.bottom);
+      const above = wantAbove ? r.top > PH + 8 : vh - r.bottom < PH + 8 && r.top > vh - r.bottom;
       y = above ? r.top - PH - 4 : r.bottom + 4;
     }
     return { x: Math.max(8, Math.min(x, vw - PW - 8)), y: Math.max(8, Math.min(y, vh - PH - 8)) };
   };
   const toggle = () => {
     const st = useColorPickerStore.getState();
-    if (st.activeFieldId === fieldId) { st.close(); return; }
-    if (st.activeFieldId) st.switchTo(fieldId); // 이미 다른 픽커 열림 → 자리 유지, 내용만 교체
+    if (st.activeFieldId === fieldId) {
+      st.close();
+      return;
+    }
+    if (st.activeFieldId)
+      st.switchTo(fieldId); // 이미 다른 픽커 열림 → 자리 유지, 내용만 교체
     else {
       const r = triggerRef.current?.getBoundingClientRect();
       st.openAt(fieldId, r ? computePos(r) : { x: 100, y: 100 });
@@ -148,16 +166,29 @@ export function ColorPicker({
   const onDragMove = (e: React.MouseEvent) => {
     if (dragRef.current) useColorPickerStore.getState().setPanelPos({ x: e.clientX - dragRef.current.ox, y: e.clientY - dragRef.current.oy });
   };
-  const endDrag = () => { dragRef.current = null; setDragging(false); };
+  const endDrag = () => {
+    dragRef.current = null;
+    setDragging(false);
+  };
   // Esc 닫기 (바깥클릭은 안 닫힘)
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    };
     window.addEventListener("keydown", onKey, { capture: true });
     return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [open, close]);
   // 언마운트 시 이 필드가 active면 팝업 닫기(오브젝트 전환 등으로 트리거가 사라질 때)
-  useEffect(() => () => { if (useColorPickerStore.getState().activeFieldId === fieldId) useColorPickerStore.getState().close(); }, [fieldId]);
+  useEffect(
+    () => () => {
+      if (useColorPickerStore.getState().activeFieldId === fieldId) useColorPickerStore.getState().close();
+    },
+    [fieldId],
+  );
 
   const colorAssets = useSceneStore((s) => s.colorAssets);
   const addColorAsset = useSceneStore((s) => s.addColorAsset);
@@ -386,7 +417,7 @@ export function ColorPicker({
             if (!disabled) toggle();
           }}
           title={title ?? "Open color picker"}
-          className="w-4 h-4 rounded-sm border border-border shrink-0 disabled:cursor-not-allowed"
+          className="w-4 h-4 rounded-[2px] border border-border shrink-0 disabled:cursor-not-allowed"
           style={triggerSwatch}
         />
         {showHex && (
@@ -422,10 +453,7 @@ export function ColorPicker({
             className="w-56 bg-surface border border-border rounded-sm shadow-dropdown select-none"
           >
             {/* 드래그 헤더 + 닫기(X) */}
-            <div
-              onMouseDown={onHeaderDown}
-              className="flex items-center justify-between px-2.5 py-1.5 border-b border-border cursor-move"
-            >
+            <div onMouseDown={onHeaderDown} className="flex items-center justify-between px-2.5 py-1.5 border-b border-border cursor-move">
               <span className="text-[10px] font-semibold text-muted tracking-wide">Color</span>
               <button
                 type="button"
@@ -438,296 +466,326 @@ export function ColorPicker({
               </button>
             </div>
             <div className="p-2.5">
-            {/* Solid / Gradient 토글 */}
-            {allowGradient && (
-              <div className="flex rounded-xs overflow-hidden border border-border mb-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (gradMode) disableGradient();
-                  }}
-                  className={`flex-1 py-1 text-[10px] transition-colors ${!gradMode ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
-                >
-                  Solid
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!gradMode) enableGradient();
-                  }}
-                  className={`flex-1 py-1 text-[10px] transition-colors ${gradMode ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
-                >
-                  Gradient
-                </button>
-              </div>
-            )}
+              {/* Solid / Gradient 토글 */}
+              {allowGradient && (
+                <div className="flex rounded-xs overflow-hidden border border-border mb-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (gradMode) disableGradient();
+                    }}
+                    className={`flex-1 py-1 text-[10px] transition-colors ${!gradMode ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
+                  >
+                    Solid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!gradMode) enableGradient();
+                    }}
+                    className={`flex-1 py-1 text-[10px] transition-colors ${gradMode ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
+                  >
+                    Gradient
+                  </button>
+                </div>
+              )}
 
-            {/* 그라데이션 바 + 타입/각도 */}
-            {gradMode && gradient && (
-              <div className="mb-2.5 space-y-2">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <div className="flex rounded-xs overflow-hidden border border-border">
-                    {(["linear", "radial"] as const).map((t) => (
+              {/* 그라데이션 바 + 타입/각도 */}
+              {gradMode && gradient && (
+                <div className="mb-2.5 space-y-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex rounded-xs overflow-hidden border border-border">
+                      {(["linear", "radial"] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => {
+                            onGradientChange?.({ ...gradient, type: t });
+                            commit();
+                          }}
+                          className={`px-2 py-1 text-[10px] transition-colors ${gradient.type === t ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
+                        >
+                          {t === "linear" ? "Linear" : "Radial"}
+                        </button>
+                      ))}
+                    </div>
+                    {/* radial 투영 방식 — Facing(구·기본)/Surface(면)/Axis(고정) */}
+                    {gradient.type === "radial" && (
+                      <div className="flex rounded-xs overflow-hidden border border-border">
+                        {(["facing", "surface", "axis"] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => {
+                              onGradientChange?.({ ...gradient, radialMode: m });
+                              commit();
+                            }}
+                            title={
+                              m === "facing"
+                                ? "카메라 바라보는 쪽 원형(구에 자연스러움)"
+                                : m === "surface"
+                                  ? "면마다 중앙 원형(패널·벽)"
+                                  : "로컬 축 고정"
+                            }
+                            className={`px-2 py-1 text-[10px] capitalize transition-colors ${(gradient.radialMode ?? "facing") === m ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* 수치 컨트롤 — linear=Angle, radial=Spread+Angle(방향)+Offset */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {gradient.type === "linear" ? (
+                      <GradNum
+                        label="Angle"
+                        value={Math.round(gradient.angle ?? 0)}
+                        onChange={(n) => onGradientChange?.({ ...gradient, angle: n })}
+                        onCommit={commit}
+                      />
+                    ) : (
+                      <>
+                        <GradNum
+                          label="Spread"
+                          value={gradient.scale ?? 1}
+                          step={0.1}
+                          onChange={(n) => onGradientChange?.({ ...gradient, scale: n || 1 })}
+                          onCommit={commit}
+                        />
+                        <GradNum
+                          label="Angle"
+                          value={Math.round(gradient.angle ?? 0)}
+                          onChange={(n) => onGradientChange?.({ ...gradient, angle: n })}
+                          onCommit={commit}
+                        />
+                        <GradNum
+                          label="Offset"
+                          value={gradient.offset ?? 0}
+                          step={0.05}
+                          onChange={(n) => onGradientChange?.({ ...gradient, offset: n })}
+                          onCommit={commit}
+                        />
+                      </>
+                    )}
+                  </div>
+                  {/* 그라데이션 바 — 클릭=정지점 추가, 핸들 드래그=위치 이동, 클릭=선택 */}
+                  <div className="relative pt-1 pb-0.5">
+                    <div
+                      ref={barRef}
+                      onPointerDown={(e) => addStopAt(e.clientX)}
+                      className="h-5 rounded-xs border border-border cursor-copy"
+                      style={{ backgroundImage: cssGradient({ ...gradient, type: "linear" }) }}
+                      title="Click to add a stop"
+                    />
+                    {stops.map((s, i) => (
                       <button
-                        key={t}
+                        key={i}
                         type="button"
-                        onClick={() => {
-                          onGradientChange?.({ ...gradient, type: t });
-                          commit();
+                        onPointerDown={(e) => startStopDrag(i, e)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelStop(i);
                         }}
-                        className={`px-2 py-1 text-[10px] transition-colors ${gradient.type === t ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
-                      >
-                        {t === "linear" ? "Linear" : "Radial"}
-                      </button>
+                        title={`${s.color}`}
+                        className={`absolute top-0.5 w-3.5 h-6 -translate-x-1/2 rounded-sm border-2 shadow ${i === selIdx ? "border-primary z-10" : "border-white"}`}
+                        style={{ left: `${s.pos * 100}%`, backgroundColor: s.color }}
+                      />
                     ))}
                   </div>
-                  {/* radial 투영 방식 — Facing(구·기본)/Surface(면)/Axis(고정) */}
-                  {gradient.type === "radial" && (
-                    <div className="flex rounded-xs overflow-hidden border border-border">
-                      {(["facing", "surface", "axis"] as const).map((m) => (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted">
+                      Stop {selIdx + 1}/{stops.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={removeStop}
+                      disabled={stops.length <= 2}
+                      title="Remove selected stop"
+                      className="inline-flex items-center gap-0.5 text-[10px] text-muted hover:text-danger transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 size={11} /> Remove
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SV 사각형 */}
+              <div
+                ref={svRef}
+                onPointerDown={(e) => startDrag(applySV, e)}
+                className="relative w-full h-32 rounded-xs cursor-crosshair"
+                style={{
+                  backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
+                  // 검정(명도) 겹을 위에 → 좌하단이 실제로 검게 보이고 클릭값(s=0,v=0=검정)과 일치.
+                  backgroundImage: "linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, rgba(255,255,255,0))",
+                }}
+              >
+                <span
+                  className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow pointer-events-none"
+                  style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, backgroundColor: curHex }}
+                />
+              </div>
+
+              {/* Hue 슬라이더 */}
+              <div
+                ref={hueRef}
+                onPointerDown={(e) => startDrag((x) => applyHue(x), e)}
+                className="relative w-full h-3 rounded-full mt-2.5 cursor-pointer"
+                style={{ backgroundImage: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)" }}
+              >
+                <span
+                  className="absolute top-1/2 w-3.5 h-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow pointer-events-none"
+                  style={{ left: `${(hsv.h / 360) * 100}%`, backgroundColor: `hsl(${hsv.h}, 100%, 50%)` }}
+                />
+              </div>
+
+              {/* 표현 드롭다운 + 값 입력 + 스포이드 */}
+              <div className="flex items-start gap-1.5 mt-2.5">
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setModeOpen((o) => !o)}
+                    className="inline-flex items-center gap-0.5 h-[26px] px-1.5 bg-background border border-border rounded-xs text-[10px] text-foreground hover:bg-surface transition-colors"
+                  >
+                    {mode.toUpperCase()}
+                    <ChevronDown size={11} className={`text-muted transition-transform ${modeOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {modeOpen && (
+                    <div className="absolute left-0 top-full mt-0.5 z-10 bg-surface border border-border rounded-xs shadow-dropdown py-0.5 min-w-[52px]">
+                      {MODES.map((m) => (
                         <button
                           key={m}
                           type="button"
-                          onClick={() => { onGradientChange?.({ ...gradient, radialMode: m }); commit(); }}
-                          title={m === "facing" ? "카메라 바라보는 쪽 원형(구에 자연스러움)" : m === "surface" ? "면마다 중앙 원형(패널·벽)" : "로컬 축 고정"}
-                          className={`px-2 py-1 text-[10px] capitalize transition-colors ${(gradient.radialMode ?? "facing") === m ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"}`}
+                          onClick={() => {
+                            setMode(m);
+                            setModeOpen(false);
+                          }}
+                          className={`block w-full text-left px-2 py-1 text-[10px] hover:bg-background transition-colors ${m === mode ? "text-foreground" : "text-muted"}`}
                         >
-                          {m}
+                          {m.toUpperCase()}
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
-                {/* 수치 컨트롤 — linear=Angle, radial=Spread+Angle(방향)+Offset */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  {gradient.type === "linear" ? (
-                    <GradNum label="Angle" value={Math.round(gradient.angle ?? 0)} onChange={(n) => onGradientChange?.({ ...gradient, angle: n })} onCommit={commit} />
-                  ) : (
+
+                <div className="flex-1 flex items-center gap-1">
+                  {mode === "hex" && (
+                    <input
+                      value={hexText}
+                      onFocus={() => {
+                        editingRef.current = true;
+                      }}
+                      onChange={(e) => onHexInput(e.target.value)}
+                      onBlur={() => {
+                        editingRef.current = false;
+                        commitHexText();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitHexText();
+                        }
+                      }}
+                      spellCheck={false}
+                      className="w-full bg-background border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  )}
+                  {mode === "rgb" &&
+                    (["r", "g", "b"] as const).map((p) => (
+                      <input
+                        key={p}
+                        type="number"
+                        min={0}
+                        max={255}
+                        value={rgb[p]}
+                        onChange={(e) => applyRgb(p, e.target.value)}
+                        onBlur={commit}
+                        className={numCls}
+                      />
+                    ))}
+                  {mode === "hsl" && (
                     <>
-                      <GradNum label="Spread" value={gradient.scale ?? 1} step={0.1} onChange={(n) => onGradientChange?.({ ...gradient, scale: n || 1 })} onCommit={commit} />
-                      <GradNum label="Angle" value={Math.round(gradient.angle ?? 0)} onChange={(n) => onGradientChange?.({ ...gradient, angle: n })} onCommit={commit} />
-                      <GradNum label="Offset" value={gradient.offset ?? 0} step={0.05} onChange={(n) => onGradientChange?.({ ...gradient, offset: n })} onCommit={commit} />
+                      <input
+                        type="number"
+                        min={0}
+                        max={360}
+                        value={Math.round(hsl.h)}
+                        onChange={(e) => applyHsl("h", e.target.value)}
+                        onBlur={commit}
+                        className={numCls}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={Math.round(hsl.s * 100)}
+                        onChange={(e) => applyHsl("s", e.target.value)}
+                        onBlur={commit}
+                        className={numCls}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={Math.round(hsl.l * 100)}
+                        onChange={(e) => applyHsl("l", e.target.value)}
+                        onBlur={commit}
+                        className={numCls}
+                      />
                     </>
                   )}
                 </div>
-                {/* 그라데이션 바 — 클릭=정지점 추가, 핸들 드래그=위치 이동, 클릭=선택 */}
-                <div className="relative pt-1 pb-0.5">
-                  <div
-                    ref={barRef}
-                    onPointerDown={(e) => addStopAt(e.clientX)}
-                    className="h-5 rounded-xs border border-border cursor-copy"
-                    style={{ backgroundImage: cssGradient({ ...gradient, type: "linear" }) }}
-                    title="Click to add a stop"
-                  />
-                  {stops.map((s, i) => (
+
+                {hasEyeDropper && (
+                  <button
+                    type="button"
+                    onClick={eyedropper}
+                    title="Pick a color from the screen"
+                    className="w-[26px] h-[26px] shrink-0 flex items-center justify-center rounded-xs bg-background border border-border text-muted hover:text-foreground transition-colors"
+                  >
+                    <Pipette size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* 저장 팔레트 */}
+              {palette && (
+                <div className="mt-2.5 pt-2.5 border-t border-border">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-semibold text-muted tracking-wide">Saved</span>
                     <button
-                      key={i}
                       type="button"
-                      onPointerDown={(e) => startStopDrag(i, e)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelStop(i);
-                      }}
-                      title={`${s.color}`}
-                      className={`absolute top-0.5 w-3.5 h-6 -translate-x-1/2 rounded-sm border-2 shadow ${i === selIdx ? "border-primary z-10" : "border-white"}`}
-                      style={{ left: `${s.pos * 100}%`, backgroundColor: s.color }}
-                    />
-                  ))}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted">
-                    Stop {selIdx + 1}/{stops.length}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={removeStop}
-                    disabled={stops.length <= 2}
-                    title="Remove selected stop"
-                    className="inline-flex items-center gap-0.5 text-[10px] text-muted hover:text-danger transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 size={11} /> Remove
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* SV 사각형 */}
-            <div
-              ref={svRef}
-              onPointerDown={(e) => startDrag(applySV, e)}
-              className="relative w-full h-32 rounded-xs cursor-crosshair"
-              style={{
-                backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
-                // 검정(명도) 겹을 위에 → 좌하단이 실제로 검게 보이고 클릭값(s=0,v=0=검정)과 일치.
-                backgroundImage: "linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, rgba(255,255,255,0))",
-              }}
-            >
-              <span
-                className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow pointer-events-none"
-                style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, backgroundColor: curHex }}
-              />
-            </div>
-
-            {/* Hue 슬라이더 */}
-            <div
-              ref={hueRef}
-              onPointerDown={(e) => startDrag((x) => applyHue(x), e)}
-              className="relative w-full h-3 rounded-full mt-2.5 cursor-pointer"
-              style={{ backgroundImage: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)" }}
-            >
-              <span
-                className="absolute top-1/2 w-3.5 h-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow pointer-events-none"
-                style={{ left: `${(hsv.h / 360) * 100}%`, backgroundColor: `hsl(${hsv.h}, 100%, 50%)` }}
-              />
-            </div>
-
-            {/* 표현 드롭다운 + 값 입력 + 스포이드 */}
-            <div className="flex items-start gap-1.5 mt-2.5">
-              <div className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setModeOpen((o) => !o)}
-                  className="inline-flex items-center gap-0.5 h-[26px] px-1.5 bg-background border border-border rounded-xs text-[10px] text-foreground hover:bg-surface transition-colors"
-                >
-                  {mode.toUpperCase()}
-                  <ChevronDown size={11} className={`text-muted transition-transform ${modeOpen ? "rotate-180" : ""}`} />
-                </button>
-                {modeOpen && (
-                  <div className="absolute left-0 top-full mt-0.5 z-10 bg-surface border border-border rounded-xs shadow-dropdown py-0.5 min-w-[52px]">
-                    {MODES.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => {
-                          setMode(m);
-                          setModeOpen(false);
-                        }}
-                        className={`block w-full text-left px-2 py-1 text-[10px] hover:bg-background transition-colors ${m === mode ? "text-foreground" : "text-muted"}`}
-                      >
-                        {m.toUpperCase()}
-                      </button>
-                    ))}
+                      onClick={() => addColorAsset("", curHex)}
+                      title="Save the current color to the palette"
+                      className="inline-flex items-center gap-0.5 text-[10px] text-muted hover:text-foreground transition-colors"
+                    >
+                      <Plus size={11} /> Save
+                    </button>
                   </div>
-                )}
-              </div>
-
-              <div className="flex-1 flex items-center gap-1">
-                {mode === "hex" && (
-                  <input
-                    value={hexText}
-                    onFocus={() => {
-                      editingRef.current = true;
-                    }}
-                    onChange={(e) => onHexInput(e.target.value)}
-                    onBlur={() => {
-                      editingRef.current = false;
-                      commitHexText();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        commitHexText();
-                      }
-                    }}
-                    spellCheck={false}
-                    className="w-full bg-background border border-border rounded-xs px-1.5 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                )}
-                {mode === "rgb" &&
-                  (["r", "g", "b"] as const).map((p) => (
-                    <input
-                      key={p}
-                      type="number"
-                      min={0}
-                      max={255}
-                      value={rgb[p]}
-                      onChange={(e) => applyRgb(p, e.target.value)}
-                      onBlur={commit}
-                      className={numCls}
-                    />
-                  ))}
-                {mode === "hsl" && (
-                  <>
-                    <input
-                      type="number"
-                      min={0}
-                      max={360}
-                      value={Math.round(hsl.h)}
-                      onChange={(e) => applyHsl("h", e.target.value)}
-                      onBlur={commit}
-                      className={numCls}
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={Math.round(hsl.s * 100)}
-                      onChange={(e) => applyHsl("s", e.target.value)}
-                      onBlur={commit}
-                      className={numCls}
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={Math.round(hsl.l * 100)}
-                      onChange={(e) => applyHsl("l", e.target.value)}
-                      onBlur={commit}
-                      className={numCls}
-                    />
-                  </>
-                )}
-              </div>
-
-              {hasEyeDropper && (
-                <button
-                  type="button"
-                  onClick={eyedropper}
-                  title="Pick a color from the screen"
-                  className="w-[26px] h-[26px] shrink-0 flex items-center justify-center rounded-xs bg-background border border-border text-muted hover:text-foreground transition-colors"
-                >
-                  <Pipette size={13} />
-                </button>
+                  {colorAssets.length > 0 ? (
+                    <div className="grid grid-cols-8 gap-1">
+                      {colorAssets.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setFromHex(c.color, true)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            removeColorAsset(c.id);
+                          }}
+                          title={`${c.name || c.color} — right-click to remove`}
+                          className="aspect-square rounded-xs border border-border hover:ring-1 hover:ring-primary transition-all"
+                          style={{ backgroundColor: c.color }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-muted/50">No saved colors yet. Click Save to add one.</p>
+                  )}
+                </div>
               )}
-            </div>
-
-            {/* 저장 팔레트 */}
-            {palette && (
-              <div className="mt-2.5 pt-2.5 border-t border-border">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-semibold text-muted tracking-wide">Saved</span>
-                  <button
-                    type="button"
-                    onClick={() => addColorAsset("", curHex)}
-                    title="Save the current color to the palette"
-                    className="inline-flex items-center gap-0.5 text-[10px] text-muted hover:text-foreground transition-colors"
-                  >
-                    <Plus size={11} /> Save
-                  </button>
-                </div>
-                {colorAssets.length > 0 ? (
-                  <div className="grid grid-cols-8 gap-1">
-                    {colorAssets.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setFromHex(c.color, true)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          removeColorAsset(c.id);
-                        }}
-                        title={`${c.name || c.color} — right-click to remove`}
-                        className="aspect-square rounded-xs border border-border hover:ring-1 hover:ring-primary transition-all"
-                        style={{ backgroundColor: c.color }}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-muted/50">No saved colors yet. Click Save to add one.</p>
-                )}
-              </div>
-            )}
-
             </div>
             {/* 드래그 중에만 뜨는 투명 캡처 레이어(overlay 아님 — 이동 종료 시 사라짐) */}
             {dragging && <div className="fixed inset-0 z-[60] cursor-move" onMouseMove={onDragMove} onMouseUp={endDrag} onMouseLeave={endDrag} />}
