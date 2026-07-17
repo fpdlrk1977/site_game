@@ -36,7 +36,8 @@ interface Props {
 
 // 선택/호버 외곽선 — boxGeometry + wireframe은 면마다 삼각형 대각선이 보이므로,
 // EdgesGeometry(실제 모서리만)로 그려 대각선을 없앤다. (박스=12개 변, 평면=4개 변)
-function EdgeBox({ size, center, color }: { size: [number, number, number]; center: [number, number, number]; color: string }) {
+// dashed=true면 점선(LineDashedMaterial). computeLineDistances 필요 → ref로 호출. 단일 선택 가이드용.
+function EdgeBox({ size, center, color, dashed }: { size: [number, number, number]; center: [number, number, number]; color: string; dashed?: boolean }) {
   const geo = useMemo(() => {
     const box = new THREE.BoxGeometry(size[0], size[1], size[2]);
     const edges = new THREE.EdgesGeometry(box);
@@ -44,13 +45,17 @@ function EdgeBox({ size, center, color }: { size: [number, number, number]; cent
     return edges;
   }, [size]);
   useEffect(() => () => geo.dispose(), [geo]);
+  const ref = useRef<THREE.LineSegments>(null);
+  useLayoutEffect(() => { if (dashed) ref.current?.computeLineDistances(); }, [dashed, geo]);
   return (
-    <lineSegments geometry={geo} position={center}>
-      <lineBasicMaterial color={color} />
+    <lineSegments ref={ref} geometry={geo} position={center}>
+      {dashed
+        ? <lineDashedMaterial color={color} dashSize={0.1} gapSize={0.06} />
+        : <lineBasicMaterial color={color} />}
     </lineSegments>
   );
 }
-function EdgePlane({ size, color }: { size: number; color: string }) {
+function EdgePlane({ size, color, dashed }: { size: number; color: string; dashed?: boolean }) {
   const geo = useMemo(() => {
     const p = new THREE.PlaneGeometry(size, size);
     const edges = new THREE.EdgesGeometry(p);
@@ -58,9 +63,13 @@ function EdgePlane({ size, color }: { size: number; color: string }) {
     return edges;
   }, [size]);
   useEffect(() => () => geo.dispose(), [geo]);
+  const ref = useRef<THREE.LineSegments>(null);
+  useLayoutEffect(() => { if (dashed) ref.current?.computeLineDistances(); }, [dashed, geo]);
   return (
-    <lineSegments geometry={geo}>
-      <lineBasicMaterial color={color} />
+    <lineSegments ref={ref} geometry={geo}>
+      {dashed
+        ? <lineDashedMaterial color={color} dashSize={0.1} gapSize={0.06} />
+        : <lineBasicMaterial color={color} />}
     </lineSegments>
   );
 }
@@ -493,6 +502,8 @@ export function EditorObjectInstance({ object }: Props) {
   const materialAssets = useSceneStore((s) => s.materialAssets);
   const wireframeMode = useSceneStore((s) => s.wireframeMode);
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
+  // 단일 선택(이 오브젝트만) — 선택 외곽선을 점선(dash)으로. 다중선택·호버는 실선.
+  const isSingleSel = selectedIds.length === 1 ? selectedIds[0] === object.id : selectedIds.length === 0 && selectedId === object.id;
   const [hovered, setHovered] = useState(false);
   // 잠긴 오브젝트는 선택뿐 아니라 호버 하이라이트도 뜨지 않도록 hovered=true를 무시한다
   const handlePointerOver = (e: { stopPropagation: () => void }) => { e.stopPropagation(); if (!object.locked) setHovered(true); };
@@ -675,7 +686,7 @@ export function EditorObjectInstance({ object }: Props) {
             <meshBasicMaterial color="#334155" />
           </mesh>
         )}
-        {(isSelected || hovered) && (
+        {(hovered || (isSelected && !isSingleSel)) && (
           <EdgePlane size={1.05} color="#0D99FF" />
         )}
         <ColliderOverlay object={object} size={bbox.size} center={bbox.center} />
@@ -696,6 +707,7 @@ export function EditorObjectInstance({ object }: Props) {
             url={assetRef.dracoUrl}
             objectId={object.id}
             selected={isSelected}
+            singleSelected={isSingleSel}
             hovered={hovered}
             onClick={(shiftKey) => handleClick(shiftKey)}
             onDoubleClick={(shiftKey) => selectExact(object, shiftKey)}
@@ -743,7 +755,8 @@ export function EditorObjectInstance({ object }: Props) {
           )}
         </mesh>
       )}
-      {!assetRef && (isSelected || hovered) && (
+      {/* per-type 외곽선은 호버·다중선택에만(실선). 단일 선택은 월드 공용 SelectionOutline(점선)이 담당 → 중복 방지. */}
+      {!assetRef && (hovered || (isSelected && !isSingleSel)) && (
         <EdgeBox size={[bbox.size[0] * 1.04, bbox.size[1] * 1.04, bbox.size[2] * 1.04]} center={bbox.center} color="#0D99FF" />
       )}
       {/* 콜라이더 시각화 — 에디터 전용 (GLB는 GlbObject가 실제 바운딩박스 기준으로 그림) */}

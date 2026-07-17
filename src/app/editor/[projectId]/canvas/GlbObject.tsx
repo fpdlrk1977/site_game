@@ -11,6 +11,8 @@ import { useSceneStore } from '@/store/sceneStore';
 interface Props {
   url: string;
   selected: boolean;
+  /** 단일 선택 여부 — true면 박스 헬퍼 대신 월드 공용 SelectionOutline(점선)이 담당(중복 방지) */
+  singleSelected?: boolean;
   hovered?: boolean;
   onClick: (shiftKey: boolean) => void;
   /** 더블클릭 — 그룹 안이어도 이 오브젝트를 직접 선택(그룹 진입) */
@@ -23,7 +25,7 @@ interface Props {
   objectId?: string;
 }
 
-export function GlbObject({ url, selected, hovered = false, onClick, onDoubleClick, onHoverChange, wireframe = false, colliderGuide, objectId }: Props) {
+export function GlbObject({ url, selected, singleSelected = false, hovered = false, onClick, onDoubleClick, onHoverChange, wireframe = false, colliderGuide, objectId }: Props) {
   const { scene } = useGLTF(url);
   const clone = useMemo(() => {
     const c = SkeletonUtils.clone(scene);
@@ -99,7 +101,8 @@ export function GlbObject({ url, selected, hovered = false, onClick, onDoubleCli
         onPointerOver={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onHoverChange?.(true); }}
         onPointerOut={(e: { stopPropagation: () => void }) => { e.stopPropagation(); onHoverChange?.(false); }}
       />
-      {(selected || hovered) && (
+      {/* 박스 헬퍼는 호버·다중선택에만. 단일 선택은 월드 공용 SelectionOutline(점선)이 담당. */}
+      {(hovered || (selected && !singleSelected)) && (
         <box3Helper args={[bbox, new THREE.Color('#0D99FF')]} />
       )}
       {/* 콜라이더 가이드 — 실제 모델 바운딩박스 크기·중심에 맞춤 (녹색=솔리드, 파랑=센서) */}

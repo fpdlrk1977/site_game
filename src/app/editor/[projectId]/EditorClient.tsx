@@ -1,37 +1,45 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useMemo } from 'react';
-import dynamic from 'next/dynamic';
-import { ChevronLeft, ChevronRight, Monitor, Square } from 'lucide-react';
-import { useSceneStore } from '@/store/sceneStore';
-import { buildSceneData } from '@/lib/saveScene';
-import { ViewportToolbar } from './panels/ViewportToolbar';
-import { EditorGnb, type GnbTab } from './panels/EditorGnb';
-import { LeftPanel } from './panels/LeftPanel';
-import { InspectorPanel } from './panels/InspectorPanel';
-import { TimelinePanel } from './panels/TimelinePanel';
-import { EditorEmptyState } from './panels/EditorEmptyState';
-import { EditorOnboarding } from './EditorOnboarding';
-import { ViewportStatusBar } from './canvas/ViewportStatusBar';
-import { ViewportFloatingToolbar } from './canvas/ViewportFloatingToolbar';
-import { ViewportOrientationGizmo } from './canvas/ViewportOrientationGizmo';
-import { CommandPalette } from './panels/CommandPalette';
-import { PenToolModal } from './panels/PenToolModal';
-import { VoxelToolModal } from './panels/VoxelToolModal';
-import { BoundaryShapeModal } from './panels/BoundaryShapeModal';
-import { Toaster } from '@/components/ui/Toaster';
-import type { ProjectSceneSchema } from '@/types/scene';
+import { useEffect, useState, useMemo } from "react";
+import dynamic from "next/dynamic";
+import { ChevronLeft, ChevronRight, Monitor, Square } from "lucide-react";
+import { useSceneStore } from "@/store/sceneStore";
+import { buildSceneData } from "@/lib/saveScene";
+import { ViewportToolbar } from "./panels/ViewportToolbar";
+import { EditorGnb, type GnbTab } from "./panels/EditorGnb";
+import { LeftPanel } from "./panels/LeftPanel";
+import { InspectorPanel } from "./panels/InspectorPanel";
+import { TimelinePanel } from "./panels/TimelinePanel";
+import { EditorEmptyState } from "./panels/EditorEmptyState";
+import { EditorOnboarding } from "./EditorOnboarding";
+import { ViewportStatusBar } from "./canvas/ViewportStatusBar";
+import { ViewportFloatingToolbar } from "./canvas/ViewportFloatingToolbar";
+import { ViewportOrientationGizmo } from "./canvas/ViewportOrientationGizmo";
+import { CommandPalette } from "./panels/CommandPalette";
+import { PenToolModal } from "./panels/PenToolModal";
+import { VoxelToolModal } from "./panels/VoxelToolModal";
+import { BoundaryShapeModal } from "./panels/BoundaryShapeModal";
+import { Toaster } from "@/components/ui/Toaster";
+import type { ProjectSceneSchema } from "@/types/scene";
 
-const EditorCanvas = dynamic(
-  () => import('./canvas/EditorCanvas').then((m) => m.EditorCanvas),
-  { ssr: false, loading: () => <div className="w-full h-full bg-surface flex items-center justify-center"><span className="text-muted text-sm">뷰포트 로딩 중...</span></div> },
-);
+const EditorCanvas = dynamic(() => import("./canvas/EditorCanvas").then((m) => m.EditorCanvas), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full bg-surface flex items-center justify-center">
+      <span className="text-muted text-sm">뷰포트 로딩 중...</span>
+    </div>
+  ),
+});
 
 // 인에디터 플레이 — 편집 중 씬을 뷰어 스택으로 구동(popup을 자체 렌더하도록 standalone 사용).
-const PlayViewer = dynamic(
-  () => import('@/app/space/[sceneId]/ViewerClient').then((m) => m.ViewerClient),
-  { ssr: false, loading: () => <div className="w-full h-full bg-canvas flex items-center justify-center"><span className="text-muted text-sm">플레이 로딩 중...</span></div> },
-);
+const PlayViewer = dynamic(() => import("@/app/space/[sceneId]/ViewerClient").then((m) => m.ViewerClient), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full bg-canvas flex items-center justify-center">
+      <span className="text-muted text-sm">플레이 로딩 중...</span>
+    </div>
+  ),
+});
 
 interface Props {
   projectName: string;
@@ -41,29 +49,45 @@ interface Props {
 
 export function EditorClient({ projectName, initialScene, initialVersion }: Props) {
   const {
-    loadScene, undo, redo, deleteSelected, duplicateSelected, duplicateInPlace,
-    setTransformMode, requestFocus, requestFocusAll, requestFocusSelected, requestCameraView,
-    groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark,
-    copyObjectProperties, pasteObjectProperties,
-    copySelection, pasteClipboard,
-    editorPlaying, setEditorPlaying,
-    animMode, selectedId, animClips,
+    loadScene,
+    undo,
+    redo,
+    deleteSelected,
+    duplicateSelected,
+    duplicateInPlace,
+    setTransformMode,
+    requestFocus,
+    requestFocusAll,
+    requestFocusSelected,
+    requestCameraView,
+    groupSelected,
+    ungroupSelected,
+    requestSaveBookmark,
+    requestRecallBookmark,
+    copyObjectProperties,
+    pasteObjectProperties,
+    copySelection,
+    pasteClipboard,
+    editorPlaying,
+    setEditorPlaying,
+    animMode,
+    selectedId,
+    animClips,
   } = useSceneStore();
 
   // 하단 타임라인(고급 모드) 표시 여부 — 선택 오브젝트에 클립이 있고 타임라인 모드일 때.
-  const timelineOpen = animMode === 'timeline'
-    && !editorPlaying
-    && animClips.some((c) => c.rootId === selectedId || c.tracks.some((t) => t.objectId === selectedId));
+  const timelineOpen =
+    animMode === "timeline" && !editorPlaying && animClips.some((c) => c.rootId === selectedId || c.tracks.some((t) => t.objectId === selectedId));
 
   // 플레이 시작 시점의 편집 상태를 스냅샷으로 굳혀 뷰어에 전달(항상 play 모드로 시작).
   const playScene = useMemo(() => {
     if (!editorPlaying) return null;
     const data = buildSceneData();
-    return { ...data, environment: { ...data.environment, defaultMode: 'play' as const } };
+    return { ...data, environment: { ...data.environment, defaultMode: "play" as const } };
   }, [editorPlaying]);
   const [isMobile, setIsMobile] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
-  const [gnbTab, setGnbTab] = useState<GnbTab>('objects');
+  const [gnbTab, setGnbTab] = useState<GnbTab>("objects");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   // GNB 탭 클릭: 같은 탭을 다시 누르면 패널 접기/펼치기, 다른 탭이면 전환 + 펼치기
@@ -89,19 +113,19 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     const handler = (e: BeforeUnloadEvent) => {
       if (useSceneStore.getState().isModified) {
         e.preventDefault();
-        e.returnValue = '';
+        e.returnValue = "";
       }
     };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
   // 모바일 감지
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1280);
     check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
 
   // 전역 키보드 단축키
@@ -110,49 +134,131 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       // 플레이 중엔 에디터 단축키(삭제·변환·undo 등) 비활성 — 뷰어 입력이 편집을 건드리지 않게
       if (useSceneStore.getState().editorPlaying) return;
       const tag = (e.target as HTMLElement)?.tagName;
-      const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
+      const isInput = tag === "INPUT" || tag === "TEXTAREA";
       // e.key는 IME(한글)·Shift 조합에서 값이 달라지므로 물리 키 기반 e.code로 판정
       const ctrl = e.ctrlKey || e.metaKey; // macOS Cmd 지원
 
       // 인풋에서도 동작해야 하는 단축키
-      if (ctrl && e.code === 'KeyS') { e.preventDefault(); document.getElementById('save-btn')?.click(); return; }
-      if (ctrl && e.code === 'KeyK') { e.preventDefault(); setShowCommandPalette((v) => !v); return; }
+      if (ctrl && e.code === "KeyS") {
+        e.preventDefault();
+        document.getElementById("save-btn")?.click();
+        return;
+      }
+      if (ctrl && e.code === "KeyK") {
+        e.preventDefault();
+        setShowCommandPalette((v) => !v);
+        return;
+      }
 
       // 인풋에서는 브라우저 기본 동작 허용 (텍스트 undo/redo/copy/paste)
       if (isInput) return;
 
-      if (ctrl && e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
-      if (ctrl && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ'))) { e.preventDefault(); redo(); return; }
-      if (ctrl && e.code === 'KeyD') { e.preventDefault(); duplicateSelected(); return; }
-      if (ctrl && !e.shiftKey && e.code === 'KeyC') { e.preventDefault(); copySelection(); return; }   // 오브젝트 복사(Ctrl+Shift+C=속성 복사와 구분)
-      if (ctrl && !e.shiftKey && e.code === 'KeyV') { e.preventDefault(); pasteClipboard(); return; }   // 오브젝트 붙여넣기(항상 최상위)
-      if (ctrl && e.shiftKey && e.code === 'KeyG') { e.preventDefault(); ungroupSelected(); return; }
-      if (ctrl && e.code === 'KeyG') { e.preventDefault(); groupSelected(); return; }
-      if (ctrl && e.shiftKey && e.code === 'KeyC') { e.preventDefault(); copyObjectProperties(); return; }
-      if (ctrl && e.shiftKey && e.code === 'KeyV') { e.preventDefault(); pasteObjectProperties(); return; }
+      if (ctrl && e.code === "KeyZ" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if (ctrl && (e.code === "KeyY" || (e.shiftKey && e.code === "KeyZ"))) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (ctrl && e.code === "KeyD") {
+        e.preventDefault();
+        duplicateSelected();
+        return;
+      }
+      if (ctrl && !e.shiftKey && e.code === "KeyC") {
+        e.preventDefault();
+        copySelection();
+        return;
+      } // 오브젝트 복사(Ctrl+Shift+C=속성 복사와 구분)
+      if (ctrl && !e.shiftKey && e.code === "KeyV") {
+        e.preventDefault();
+        pasteClipboard();
+        return;
+      } // 오브젝트 붙여넣기(항상 최상위)
+      if (ctrl && e.shiftKey && e.code === "KeyG") {
+        e.preventDefault();
+        ungroupSelected();
+        return;
+      }
+      if (ctrl && e.code === "KeyG") {
+        e.preventDefault();
+        groupSelected();
+        return;
+      }
+      if (ctrl && e.shiftKey && e.code === "KeyC") {
+        e.preventDefault();
+        copyObjectProperties();
+        return;
+      }
+      if (ctrl && e.shiftKey && e.code === "KeyV") {
+        e.preventDefault();
+        pasteObjectProperties();
+        return;
+      }
 
       // 이하 단일 키 단축키 — 브라우저 단축키(Ctrl+1 탭 전환, Ctrl+R 새로고침 등)와
       // 겹치지 않도록 modifier가 눌린 상태에서는 무시
       if (ctrl || e.altKey) return;
 
-      if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
-      if (e.code === 'KeyW') setTransformMode('translate');
-      if (e.code === 'KeyE') setTransformMode('rotate');
-      if (e.code === 'KeyR') setTransformMode('scale');
-      if (e.shiftKey && e.code === 'KeyF') { requestFocusAll(); return; } // 전체 맞춤(모든 오브젝트가 화면에 꽉 차게)
-      if (e.code === 'KeyF') requestFocusSelected(); // 선택물로 프레이밍(pivot 이동 + 거리 맞춤)
-      if (e.shiftKey && e.code === 'KeyD') { e.preventDefault(); duplicateInPlace(); return; }
-      if (e.code === 'Numpad7') { e.preventDefault(); requestCameraView('top'); return; }
-      if (e.code === 'Numpad1') { e.preventDefault(); requestCameraView('front'); return; }
-      if (e.code === 'Numpad3') { e.preventDefault(); requestCameraView('right'); return; }
+      if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
+      if (e.code === "KeyW") setTransformMode("translate");
+      if (e.code === "KeyE") setTransformMode("rotate");
+      if (e.code === "KeyR") setTransformMode("scale");
+      if (e.shiftKey && e.code === "KeyF") {
+        requestFocusAll();
+        return;
+      } // 전체 맞춤(모든 오브젝트가 화면에 꽉 차게)
+      if (e.code === "KeyF") requestFocusSelected(); // 선택물로 프레이밍(pivot 이동 + 거리 맞춤)
+      if (e.shiftKey && e.code === "KeyD") {
+        e.preventDefault();
+        duplicateInPlace();
+        return;
+      }
+      if (e.code === "Numpad7") {
+        e.preventDefault();
+        requestCameraView("top");
+        return;
+      }
+      if (e.code === "Numpad1") {
+        e.preventDefault();
+        requestCameraView("front");
+        return;
+      }
+      if (e.code === "Numpad3") {
+        e.preventDefault();
+        requestCameraView("right");
+        return;
+      }
       // Shift+숫자는 e.key가 '!' 등 특수문자가 되므로 e.code(Digit1~5)로 판정
       const digit = /^Digit([1-5])$/.exec(e.code);
       if (digit && !e.shiftKey) requestRecallBookmark(Number(digit[1]));
       if (digit && e.shiftKey) requestSaveBookmark(Number(digit[1]));
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, deleteSelected, duplicateSelected, duplicateInPlace, setTransformMode, requestFocus, requestFocusAll, requestFocusSelected, requestCameraView, groupSelected, ungroupSelected, requestSaveBookmark, requestRecallBookmark, copyObjectProperties, pasteObjectProperties, copySelection, pasteClipboard]);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    undo,
+    redo,
+    deleteSelected,
+    duplicateSelected,
+    duplicateInPlace,
+    setTransformMode,
+    requestFocus,
+    requestFocusAll,
+    requestFocusSelected,
+    requestCameraView,
+    groupSelected,
+    ungroupSelected,
+    requestSaveBookmark,
+    requestRecallBookmark,
+    copyObjectProperties,
+    pasteObjectProperties,
+    copySelection,
+    pasteClipboard,
+  ]);
 
   if (isMobile) {
     return (
@@ -168,12 +274,16 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
 
   // ── Floating layout (Figma/Spline) — 캔버스 풀블리드 + 유리 패널이 그 위에 뜬다 ──
   // 패널 배치 상수(px): 가장자리 여백 12, 상단바 높이 44, 레일 48, 좌패널 240, 인스펙터 288.
-  const railW = 48, leftW = 240, inspW = 288, edge = 12, gap = 8;
-  const panelTop = edge + 44 + gap;          // 상단바 아래 = 64
-  const leftPanelX = edge + railW + gap;      // 좌패널 시작 x = 68
+  const railW = 48,
+    leftW = 240,
+    inspW = 288,
+    edge = 12,
+    gap = 8;
+  const panelTop = edge + 44 + gap; // 상단바 아래 = 64
+  const leftPanelX = edge + railW + gap; // 좌패널 시작 x = 68
   const overlayLeft = leftOpen ? leftPanelX + leftW + gap : leftPanelX; // 자유 캔버스 좌측 경계
-  const overlayRight = edge + inspW + gap;    // 자유 캔버스 우측 경계 = 308
-  const panelShell = 'rounded-sm bg-surface border border-border overflow-hidden';
+  const overlayRight = edge + inspW + gap; // 자유 캔버스 우측 경계 = 308
+  const panelShell = "rounded-sm bg-surface border border-border overflow-hidden";
   // 하단 타임라인이 열리면 사이드 패널/오버레이 바닥을 그만큼 올린다(전체폭 바닥 패널 공간 확보).
   const TIMELINE_H = 172;
   const bottomInset = timelineOpen ? TIMELINE_H + gap : 0;
@@ -193,11 +303,11 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
           자식 오버레이의 기존 top-3/right-3/bottom-3 좌표는 이 컨테이너 기준으로 그대로 동작. */}
       <div
         className="absolute z-10 pointer-events-none"
-        style={{ top: panelTop - gap, bottom: panelBottom, left: overlayLeft, right: overlayRight, transition: 'left .18s ease, bottom .18s ease' }}
+        style={{ top: panelTop - gap, bottom: panelBottom, left: overlayLeft, right: overlayRight, transition: "left .18s ease, bottom .18s ease" }}
       >
         <ViewportFloatingToolbar />
         <ViewportOrientationGizmo />
-        <ViewportStatusBar />
+        {/* <ViewportStatusBar /> */}
       </div>
 
       {/* Floating top bar */}
@@ -220,9 +330,9 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       {/* Left panel toggle handle */}
       <button
         onClick={() => setLeftOpen((v) => !v)}
-        title={leftOpen ? 'Hide panel' : 'Show panel'}
+        title={leftOpen ? "Hide panel" : "Show panel"}
         className="absolute z-30 top-1/2 -translate-y-1/2 w-3.5 h-10 bg-surface border border-border rounded-r-sm flex items-center justify-center text-muted hover:text-foreground"
-        style={{ left: leftOpen ? leftPanelX + leftW : leftPanelX, transition: 'left .18s ease' }}
+        style={{ left: leftOpen ? leftPanelX + leftW : leftPanelX, transition: "left .18s ease" }}
       >
         {leftOpen ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
       </button>

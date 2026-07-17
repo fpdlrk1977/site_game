@@ -9,6 +9,7 @@ import { useSceneStore } from "@/store/sceneStore";
 import { EditorObjectInstance } from "./EditorObjectInstance";
 import { GizmoController } from "./GizmoController";
 import { ManipulationHandles } from "./ManipulationHandles";
+import { SelectionOutline } from "./SelectionOutline";
 import { ObjectRefsContext, useObjectRefs } from "./ObjectRefsContext";
 import { pointerDownOnObjectRef } from "./boxSelectState";
 import { PostProcessingEffects } from "@/components/three/PostProcessingEffects";
@@ -493,9 +494,8 @@ function SelectionOverlay({
     // ② 선택 바운더리. 드래그 중에도 실시간으로 따라오도록 '라이브 Three 객체(ref)'로 계산한다
     //    (worldBBox는 스키마 기반이라 기즈모 드래그 중엔 커밋 전까지 안 움직임 → 마우스 뗄 때 튀던 문제).
     //    - 2개 이상 선택: 주황(#ff7a0d) 묶음 가이드라인
-    //    - 그룹 1개 선택: 그룹은 자체 아웃라인이 없으므로 파랑(#0D99FF) 박스로 선택 표시(단일 오브젝트 가이드와 통일)
-    const single = selectedIds.length === 1 ? objects.find((o) => o.id === selectedIds[0]) : undefined;
-    const showBounds = selectedIds.length >= 2 || single?.isGroup === true;
+    //    - 단일 선택(그룹/프리팹 포함)은 월드 공용 SelectionOutline(점선)이 담당 → 여기선 안 그림(중복 방지).
+    const showBounds = selectedIds.length >= 2;
     if (showBounds) {
       const box = new THREE.Box3().makeEmpty();
       const tmp = new THREE.Box3();
@@ -590,6 +590,9 @@ export function EditorCanvas() {
   const cameraRef = useRef<THREE.Camera | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const gizmoDraggingRef = useRef(false);
+  // 핸들(ManipulationHandles) 드래그 전용 — 기즈모 자체 드래그와 분리해야 핸들로 스케일 중에도
+  // 기즈모 프록시 동기화(오브젝트 추종)가 멈추지 않고 실시간으로 따라온다.
+  const handleDraggingRef = useRef(false);
 
   // Box-select drag state — all in refs to avoid stale closures in event handlers
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -819,7 +822,7 @@ export function EditorCanvas() {
     }
     if (e.button !== 0) return;
     // 좌드래그는 회전 안 함(회전=Ctrl+우드래그로 통일). 기즈모/핸들 드래그 → 각자 처리(orbit는 그쪽이 관리).
-    if (gizmoDraggingRef.current) {
+    if (gizmoDraggingRef.current || handleDraggingRef.current) {
       pointerDownOnObjectRef.current = false;
       return;
     }
@@ -1116,7 +1119,8 @@ export function EditorCanvas() {
           <ClipPreview />
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
-          <ManipulationHandles orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
+          <ManipulationHandles orbitRef={orbitRef} handleDraggingRef={handleDraggingRef} />
+          <SelectionOutline />
 
           <PlacementGhost posRef={placeGhostPosRef} />
 

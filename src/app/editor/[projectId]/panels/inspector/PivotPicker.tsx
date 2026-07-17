@@ -15,7 +15,7 @@ const AXES: { key: 'x' | 'y' | 'z'; labels: [string, string, string] }[] = [
 ];
 const STEPS = [0, 0.5, 1] as const;
 
-export function PivotPicker({ value, onChange }: { value?: Vector3; onChange: (p?: Vector3) => void }) {
+export function PivotPicker({ value, onChange, hideHeader }: { value?: Vector3; onChange: (p?: Vector3) => void; hideHeader?: boolean }) {
   const p = value ?? CENTER;
   // 한 축 값 변경 → 전체가 중심이면 undefined(미설정)로 정리해 하위호환 유지.
   const setAxis = (axis: 'x' | 'y' | 'z', v: number) => {
@@ -26,12 +26,14 @@ export function PivotPicker({ value, onChange }: { value?: Vector3; onChange: (p
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-semibold text-muted/70 dark:text-muted tracking-wide">기준점 (앵커)</span>
-        {!isCenter(value) && (
-          <button onClick={() => onChange(undefined)} className="text-[9px] text-muted/60 hover:text-foreground transition-colors">중심으로</button>
-        )}
-      </div>
+      {!hideHeader && (
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] font-semibold text-muted/70 dark:text-muted tracking-wide">기준점 (앵커)</span>
+          {!isCenter(value) && (
+            <button onClick={() => onChange(undefined)} className="text-[9px] text-muted/60 hover:text-foreground transition-colors">중심으로</button>
+          )}
+        </div>
+      )}
       <div className="space-y-1">
         {AXES.map(({ key, labels }) => {
           const cur = stepIdx(p[key]);

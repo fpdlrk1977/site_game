@@ -21,8 +21,9 @@ const RAD2DEG = 180 / Math.PI;
 const _c = new THREE.Vector3();
 const _proj = new THREE.Vector3();
 const _center = new THREE.Vector3(); // bbox 중심 월드(앞뒤 판정 기준)
-const _out = new THREE.Vector3();    // 핸들 바깥 방향
-const _view = new THREE.Vector3();   // 카메라→핸들 시선 방향
+const _viewC = new THREE.Vector3();  // 중심→카메라
+const _nx = new THREE.Vector3(), _ny = new THREE.Vector3(), _nz = new THREE.Vector3(); // 월드 면 법선
+const _wq = new THREE.Quaternion();  // 오브젝트 월드 회전
 const CENTER_NORM = { x: 0.5, y: 0.5, z: 0.5 }; // bbox 중심 정규화
 const HANDLE = '#0d99ff', HOT = '#ffffff', ANCHOR = '#ff7a0d';
 // 화면 방향별 리사이즈 커서 — atan2 각도를 45°씩 8분할. 리사이즈 커서는 양방향이라 4종 순환.
@@ -44,8 +45,8 @@ const FACES: HandleDef[] = [
 ];
 const HANDLES: HandleDef[] = [...CORNERS, ...FACES];
 const normOf = (d: HandleDef): Vector3 => ({ x: d.nx, y: d.ny, z: d.nz });
-// 드래그 HUD 치수 문자열 — bbox 로컬치수 × 스케일 = 실제 W×H×D(m).
-const fmtDim = (n: number) => (Math.abs(n) < 10 ? n.toFixed(2) : n.toFixed(1));
+// 드래그 HUD 치수 문자열 — bbox 로컬치수 × 스케일 = 실제 W×H×D(m). 소수 1자리 반올림.
+const fmtDim = (n: number) => n.toFixed(1);
 const dimsText = (sz: THREE.Vector3, s: { x: number; y: number; z: number }) =>
   `${fmtDim(sz.x * s.x)} × ${fmtDim(sz.y * s.y)} × ${fmtDim(sz.z * s.z)} m`;
 
@@ -67,10 +68,12 @@ const pivotCornerIdx = (p?: Vector3): number | null => {
 
 interface Props {
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
-  gizmoDraggingRef: React.MutableRefObject<boolean>;
+  // 핸들 드래그 신호 — 기즈모 자체 드래그(gizmoDraggingRef)와 분리. 이걸 켜도 기즈모 프록시 동기화는
+  // 계속 돌아 핸들로 스케일 중에도 기즈모가 오브젝트를 실시간 추종한다.
+  handleDraggingRef: React.MutableRefObject<boolean>;
 }
 
-export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
+export function ManipulationHandles({ orbitRef, handleDraggingRef }: Props) {
   const { camera, size, gl } = useThree();
   const selectedIds = useSceneStore((s) => s.selectedIds);
   const objects = useSceneStore((s) => s.objects);
@@ -107,8 +110,9 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
     z: d.az ? (centerMode ? 1 - d.nz : pivot!.z) : d.nz,
   });
 
-  // 매 프레임 핸들 위치·크기 갱신(드래그 중에도 → 핸들이 커지는 박스를 따라감). 면 핸들은 조금 작게(부차적).
-  useFrame(() => {
+  // 핸들 위치·크기·앞뒤가시성 + HUD 추종 갱신. useFrame(매 프레임) + 드래그 move에서도 직접 호출
+  //   → 윈도우 pointermove로 스케일이 바뀌는 순간 핸들이 즉시 따라가게(실시간 추종 보장).
+  const layoutHandles = () => {
     if (!valid || !selectedId) return;
     const ref = refsMap.current.get(selectedId);
     if (!ref || !ref.parent) return;
@@ -116,23 +120,33 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
     if (!lb || lb.isEmpty()) return;
     ref.updateWorldMatrix(true, false);
     _center.copy(anchorLocalPoint(lb, CENTER_NORM)).applyMatrix4(ref.matrixWorld); // bbox 중심 월드
+    // 면 앞뒤 판정 — 오브젝트 월드 회전으로 축 법선 구하고 (중심→카메라)와 내적.
+    ref.getWorldQuaternion(_wq);
+    _nx.set(1, 0, 0).applyQuaternion(_wq);
+    _ny.set(0, 1, 0).applyQuaternion(_wq);
+    _nz.set(0, 0, 1).applyQuaternion(_wq);
+    _viewC.copy(camera.position).sub(_center);
+    const dX = _nx.dot(_viewC), dY = _ny.dot(_viewC), dZ = _nz.dot(_viewC);
+    const fXp = dX > 0, fXm = dX < 0, fYp = dY > 0, fYm = dY < 0, fZp = dZ > 0, fZm = dZ < 0;
+    const faceFront = [fXm, fXp, fYm, fYp, fZm, fZp]; // 면 인덱스 8..13 = -X,+X,-Y,+Y,-Z,+Z 앞면 여부
     for (let i = 0; i < HANDLES.length; i++) {
       const h = handleRefs.current[i];
       if (!h) continue;
       _c.copy(anchorLocalPoint(lb, normOf(HANDLES[i]))).applyMatrix4(ref.matrixWorld);
       h.position.copy(_c);
       h.scale.setScalar(Math.max(0.015, camera.position.distanceTo(_c) * 0.016) * (i >= 8 ? 0.8 : 1));
-      // 앞뒤 판정 — 바깥방향(_out)이 시선방향(_view)과 같은 쪽(카메라 반대=뒤면)이면 숨김.
-      _out.copy(_c).sub(_center);
-      _view.copy(_c).sub(camera.position);
-      h.visible = _out.dot(_view) <= 0;
+      // 가시성 — 코너는 인접 3면 중 하나라도 앞면이면 보임(완전히 가려진 코너만 숨김), 면은 그 면이 앞면일 때만.
+      h.visible = i < 8
+        ? ((i & 1 ? fXp : fXm) || (i & 2 ? fYp : fYm) || (i & 4 ? fZp : fZm))
+        : faceFront[i - 8];
     }
     // HUD 앵커를 잡은 핸들 위치로 추종(드래그 중).
     if (draggingRef.current && dragIdxRef.current != null && hudGroupRef.current) {
       const h = handleRefs.current[dragIdxRef.current];
       if (h) hudGroupRef.current.position.copy(h.position);
     }
-  });
+  };
+  useFrame(layoutHandles);
 
   // 드래그 시작 시 HUD 초기 치수 텍스트 세팅(첫 move 전 빈 표시 방지).
   useEffect(() => {
@@ -162,7 +176,7 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
     const lb = localBBox(objects, assets, selectedId);
     if (!ref || !cur || !lb || lb.isEmpty()) return;
     draggingRef.current = true;
-    gizmoDraggingRef.current = true;
+    handleDraggingRef.current = true;
     setHot(idx);
     // Alt = 중심 기준(앵커 무시 → 양쪽 대칭 성장). 앵커/축이 바뀌므로 시작 시 캡처.
     const altCenter = !!e.altKey;
@@ -211,6 +225,7 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
       const d = scaleAnchorDelta(A, rot, startScale, ns);
       ref.scale.set(ns.x, ns.y, ns.z);
       ref.position.set(startPos.x + d.x, startPos.y + d.y, startPos.z + d.z);
+      layoutHandles(); // 스케일 변경 즉시 핸들 위치 재배치(실시간 추종)
       if (hudRef.current) hudRef.current.textContent = dimsText(lbSize, ns); // HUD 실시간 치수
       useLiveTransformStore.getState().setLive({
         id: selectedId, position: { x: ref.position.x, y: ref.position.y, z: ref.position.z }, rotation: rot, scale: ns,
@@ -218,7 +233,7 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
     };
     const up = () => {
       draggingRef.current = false;
-      gizmoDraggingRef.current = false;
+      handleDraggingRef.current = false;
       dragIdxRef.current = null;
       setHot(null);
       setAltActive(false);

@@ -3,14 +3,16 @@
 // Transform 섹션 — 위치/회전/크기(라이브) + 실측 크기(m) + '바닥에 놓기'. 모든 오브젝트.
 // setPos/setRot/setScl·바닥스냅 헬퍼를 컴포넌트 안에서 store+lib로 재구성(동작 무변경).
 import * as THREE from 'three';
+import { useState } from 'react';
 import { ArrowDownToLine } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useEditorPrefsStore, SIZE_UNIT_FACTOR, SIZE_UNITS } from '@/store/editorPrefsStore';
 import { worldBBox, localBBox } from '@/lib/objectBBox';
 import { anchorLocalPoint, scaleAnchorDelta, isCenterAnchor } from '@/lib/pivotMath';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
-import { SectionHeader, GroupBox, XYZRow, LiveTransformRows } from './ui';
+import { SectionHeader, GroupBox, XYZRow, LiveTransformRows, Toggle } from './ui';
 import { PivotPicker } from './PivotPicker';
+import { InfoHint } from '@/components/ui/InfoHint';
 import type { ObjectNodeSchema, Vector3 } from '@/types/scene';
 
 export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
@@ -43,6 +45,9 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
     updateObject(obj.id, { scale: newScale });
   };
   const setPivot = (p?: Vector3) => { updateObject(obj.id, { pivot: p }); pushHistory(); };
+  // 기준점(앵커) 고정 토글 — pivot 값과 별도 로컬 스위치(중심으로 정리돼 pivot이 사라져도 열림 유지).
+  //   비중심 앵커가 있으면 켠 채로 시작. OFF 시 앵커 해제(중심 기본).
+  const [lockOpen, setLockOpen] = useState(!!obj.pivot);
 
   // GLB 밑면을 바닥(y=0)에 정렬 — 모델 로컬 bbox에 현재 회전·스케일을 적용해
   // 실제 최하단(min.y)을 구하고, position.y를 그만큼 올려 바닥에 앉힌다.
@@ -108,10 +113,29 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
                   />
                 );
               })()}
-              {/* 변형 기준점(앵커) — 스케일이 이 점 기준으로. 하단=바닥 고정 성장. 라이트 제외. */}
+              {/* 변형 기준점(앵커) 고정 — 토글 ON 시 XYZ 피커. 스케일/회전이 이 점 기준으로. 하단=바닥 고정 성장. 라이트 제외. */}
               {!obj.light && (
                 <div className="pt-1">
-                  <PivotPicker value={obj.pivot} onChange={setPivot} />
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted/70 dark:text-muted tracking-wide">
+                      기준점 (앵커) 고정
+                      <InfoHint text="켜면 선택한 점을 고정한 채 크기·회전이 일어납니다. 예: '하'로 두면 바닥에 붙은 채 위로만 커집니다. 끄면 중심 기준(기본)." />
+                    </span>
+                    <Toggle
+                      value={lockOpen}
+                      onChange={(v) => {
+                        setLockOpen(v);
+                        // ON = 기본 앵커를 하단 중앙('하', y=0)으로(바닥 고정+위로 성장). 기존 앵커 있으면 유지. OFF = 해제.
+                        if (v) { if (!obj.pivot) setPivot({ x: 0.5, y: 0, z: 0.5 }); }
+                        else setPivot(undefined);
+                      }}
+                    />
+                  </div>
+                  {lockOpen && (
+                    <div className="mt-1.5">
+                      <PivotPicker value={obj.pivot} onChange={setPivot} hideHeader />
+                    </div>
+                  )}
                 </div>
               )}
               {/* 밑면을 바닥에 정렬 — 원점이 발밑이 아니어서 바닥에 파묻히는 경우 교정(모든 루트 타입) */}
