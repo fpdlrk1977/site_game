@@ -125,8 +125,8 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
                       value={lockOpen}
                       onChange={(v) => {
                         setLockOpen(v);
-                        // ON = 기본 앵커를 하단 중앙('하', y=0)으로(바닥 고정+위로 성장). 기존 앵커 있으면 유지. OFF = 해제.
-                        if (v) { if (!obj.pivot) setPivot({ x: 0.5, y: 0, z: 0.5 }); }
+                        // ON = 기본 앵커를 하단-앞-좌 꼭지점 {좌,하,앞}={0,0,0}으로(바닥 고정). 기존 앵커 있으면 유지. OFF = 해제.
+                        if (v) { if (!obj.pivot) setPivot({ x: 0, y: 0, z: 0 }); }
                         else setPivot(undefined);
                       }}
                     />
