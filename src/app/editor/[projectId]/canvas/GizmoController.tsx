@@ -210,26 +210,28 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   //   origin = restOrigin + (pivot − R·pivot)로 baked 저장(= 런타임 pivotOffset과 픽셀 일치).
   useEffect(() => {
     if (isCharPreview || !selectedId) { cLocalRef.current.set(0, 0, 0); return; }
-    // 선택 오브젝트가 어느 클립의 트랙이고 그 트랙(또는 클립레벨 폴백)에 pivot이 있으면 그 경첩 기준으로 회전.
-    let pivot: { x: number; y: number; z: number } | undefined;
+    // 애니 경첩 pivot(회전 모드): 이 오브젝트가 어느 클립 트랙의 pivot을 가지면 그 경첩 기준으로 회전.
+    let animPivot: { x: number; y: number; z: number } | undefined;
     if (transformMode === 'rotate') {
       for (const cl of animClips) {
         const tr = cl.tracks.find((t) => t.objectId === selectedId);
-        if (tr) { pivot = tr.pivot ?? (cl.rootId === selectedId ? cl.pivot : undefined); break; }
+        if (tr) { animPivot = tr.pivot ?? (cl.rootId === selectedId ? cl.pivot : undefined); break; }
       }
     }
-    // 스케일 모드 + 오브젝트 앵커(pivot) 설정 → 그 앵커 점을 회전/스케일 중심(cLocal)으로.
-    //   → 기즈모가 앵커 기준으로 스케일(하단 앵커면 아래 고정). doc/PIVOT_MANIPULATION.md.
+    // 오브젝트 앵커(pivot) 설정 → 스케일·회전 **둘 다** 그 앵커 점을 중심(cLocal)으로.
+    //   → 기즈모가 앵커 기준으로 스케일(하단 앵커면 아래 고정)/회전(앵커 축 회전). doc/PIVOT_MANIPULATION.md.
+    //   애니 경첩(animPivot)이 있으면 그게 우선(기존 애니 경첩 편집 보존).
     const selObj = objects.find((o) => o.id === selectedId);
-    if (transformMode === 'scale' && !isCenterAnchor(selObj?.pivot)) {
+    const anchorSet = !isCenterAnchor(selObj?.pivot);
+    if ((transformMode === 'scale' || transformMode === 'rotate') && anchorSet && !animPivot) {
       const lb = localBBox(objects, assets, selectedId);
       cLocalRef.current.copy(lb && !lb.isEmpty() ? anchorLocalPoint(lb, selObj!.pivot!) : (localCenter(objects, assets, selectedId) ?? _p.set(0, 0, 0)));
-    } else if (pivot) {
+    } else if (animPivot) {
       const sc = selObj?.scale ?? { x: 1, y: 1, z: 1 };
       cLocalRef.current.set(
-        sc.x ? pivot.x / sc.x : 0,
-        sc.y ? pivot.y / sc.y : 0,
-        sc.z ? pivot.z / sc.z : 0,
+        sc.x ? animPivot.x / sc.x : 0,
+        sc.y ? animPivot.y / sc.y : 0,
+        sc.z ? animPivot.z / sc.z : 0,
       );
     } else {
       cLocalRef.current.copy(localCenter(objects, assets, selectedId) ?? _p.set(0, 0, 0));
