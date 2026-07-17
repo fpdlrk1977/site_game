@@ -6,6 +6,7 @@
 //   시각 피드백: 잡은 핸들=흰색 · 반대(앵커) 핸들=주황. Inspector 실시간 + 놓을 때 commit(undo 1회).
 import { useRef, useEffect, useState } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useSceneStore } from '@/store/sceneStore';
@@ -19,6 +20,10 @@ import type { Vector3 } from '@/types/scene';
 const RAD2DEG = 180 / Math.PI;
 const _c = new THREE.Vector3();
 const _proj = new THREE.Vector3();
+const _center = new THREE.Vector3(); // bbox 중심 월드(앞뒤 판정 기준)
+const _out = new THREE.Vector3();    // 핸들 바깥 방향
+const _view = new THREE.Vector3();   // 카메라→핸들 시선 방향
+const CENTER_NORM = { x: 0.5, y: 0.5, z: 0.5 }; // bbox 중심 정규화
 const HANDLE = '#0d99ff', HOT = '#ffffff', ANCHOR = '#ff7a0d';
 // 화면 방향별 리사이즈 커서 — atan2 각도를 45°씩 8분할. 리사이즈 커서는 양방향이라 4종 순환.
 const CURSORS = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize', 'ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'];
@@ -39,9 +44,14 @@ const FACES: HandleDef[] = [
 ];
 const HANDLES: HandleDef[] = [...CORNERS, ...FACES];
 const normOf = (d: HandleDef): Vector3 => ({ x: d.nx, y: d.ny, z: d.nz });
+// 드래그 HUD 치수 문자열 — bbox 로컬치수 × 스케일 = 실제 W×H×D(m).
+const fmtDim = (n: number) => (Math.abs(n) < 10 ? n.toFixed(2) : n.toFixed(1));
+const dimsText = (sz: THREE.Vector3, s: { x: number; y: number; z: number }) =>
+  `${fmtDim(sz.x * s.x)} × ${fmtDim(sz.y * s.y)} × ${fmtDim(sz.z * s.z)} m`;
 
-// 핸들을 항상 최우선으로 잡히게 — 오브젝트 뒤(가려진) 핸들도 레이캐스트에서 이기도록 거리를 0 근처로 강제.
+// 앞 핸들은 오브젝트 표면에 묻히지 않게 레이캐스트에서 최우선(거리 0 근처). 숨긴(뒤) 핸들은 제외.
 function topRaycast(this: THREE.Mesh, raycaster: THREE.Raycaster, intersects: THREE.Intersection[]) {
+  if (this.visible === false) return; // 뒤쪽 숨긴 핸들은 클릭 대상 아님(카메라 돌려 앞으로 와야 잡힘)
   const start = intersects.length;
   THREE.Mesh.prototype.raycast.call(this, raycaster, intersects);
   for (let k = start; k < intersects.length; k++) intersects[k].distance = 1e-6;
@@ -71,6 +81,11 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
   const draggingRef = useRef(false);
   const [hot, setHot] = useState<number | null>(null); // 잡은/올린 핸들 인덱스(색·앵커 표시용)
   const [altActive, setAltActive] = useState(false); // Alt=중심 기준 드래그 중(앵커 주황 표시 억제)
+  const [draggingState, setDraggingState] = useState(false); // 드래그 중(HUD 렌더 트리거)
+  const dragIdxRef = useRef<number | null>(null); // 드래그 중인 핸들 인덱스(HUD 위치용, useFrame)
+  const hudRef = useRef<HTMLDivElement>(null); // HUD 텍스트(명령형 갱신)
+  const hudInitRef = useRef(''); // 드래그 시작 시 초기 치수 문자열
+  const hudGroupRef = useRef<THREE.Group>(null); // HUD 앵커(핸들 위치 추종, useFrame)
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const obj = selectedId && selectedId !== CHARACTER_PREVIEW_ID ? objects.find((o) => o.id === selectedId) : null;
@@ -100,14 +115,29 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
     const lb = localBBox(objects, assets, selectedId);
     if (!lb || lb.isEmpty()) return;
     ref.updateWorldMatrix(true, false);
+    _center.copy(anchorLocalPoint(lb, CENTER_NORM)).applyMatrix4(ref.matrixWorld); // bbox 중심 월드
     for (let i = 0; i < HANDLES.length; i++) {
       const h = handleRefs.current[i];
       if (!h) continue;
       _c.copy(anchorLocalPoint(lb, normOf(HANDLES[i]))).applyMatrix4(ref.matrixWorld);
       h.position.copy(_c);
       h.scale.setScalar(Math.max(0.015, camera.position.distanceTo(_c) * 0.016) * (i >= 8 ? 0.8 : 1));
+      // 앞뒤 판정 — 바깥방향(_out)이 시선방향(_view)과 같은 쪽(카메라 반대=뒤면)이면 숨김.
+      _out.copy(_c).sub(_center);
+      _view.copy(_c).sub(camera.position);
+      h.visible = _out.dot(_view) <= 0;
+    }
+    // HUD 앵커를 잡은 핸들 위치로 추종(드래그 중).
+    if (draggingRef.current && dragIdxRef.current != null && hudGroupRef.current) {
+      const h = handleRefs.current[dragIdxRef.current];
+      if (h) hudGroupRef.current.position.copy(h.position);
     }
   });
+
+  // 드래그 시작 시 HUD 초기 치수 텍스트 세팅(첫 move 전 빈 표시 방지).
+  useEffect(() => {
+    if (draggingState && hudRef.current) hudRef.current.textContent = hudInitRef.current;
+  }, [draggingState]);
 
   if (!valid || !selectedId) return null;
 
@@ -145,9 +175,12 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
     const rot = cur.rotation;
     const anchorN = altCenter ? { x: 0.5, y: 0.5, z: 0.5 } : anchorNormFor(def, cur.pivot);
     const A = anchorLocalPoint(lb, anchorN); // 로컬 앵커 점(고정)
-    const lbSize = lb.getSize(new THREE.Vector3()); // 로컬 치수(Ctrl 그리드 스냅용)
+    const lbSize = lb.getSize(new THREE.Vector3()); // 로컬 치수(Ctrl 그리드 스냅·HUD용)
     const snapStep = useSceneStore.getState().snapTranslate || 0.5;
     const faceKey: 'x' | 'y' | 'z' | null = idx >= 8 ? (def.ax ? 'x' : def.ay ? 'y' : 'z') : null;
+    hudInitRef.current = dimsText(lbSize, startScale); // 시작 치수
+    dragIdxRef.current = idx;
+    setDraggingState(true);
     ref.updateWorldMatrix(true, false);
     const anchorScreen = toScreen(A.clone().applyMatrix4(ref.matrixWorld));
     const handleScreen = toScreen(anchorLocalPoint(lb, normOf(def)).applyMatrix4(ref.matrixWorld));
@@ -178,6 +211,7 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
       const d = scaleAnchorDelta(A, rot, startScale, ns);
       ref.scale.set(ns.x, ns.y, ns.z);
       ref.position.set(startPos.x + d.x, startPos.y + d.y, startPos.z + d.z);
+      if (hudRef.current) hudRef.current.textContent = dimsText(lbSize, ns); // HUD 실시간 치수
       useLiveTransformStore.getState().setLive({
         id: selectedId, position: { x: ref.position.x, y: ref.position.y, z: ref.position.z }, rotation: rot, scale: ns,
       });
@@ -185,8 +219,10 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
     const up = () => {
       draggingRef.current = false;
       gizmoDraggingRef.current = false;
+      dragIdxRef.current = null;
       setHot(null);
       setAltActive(false);
+      setDraggingState(false);
       if (orbitRef.current) orbitRef.current.enabled = true;
       gl.domElement.style.cursor = '';
       window.removeEventListener('pointermove', move);
@@ -239,6 +275,29 @@ export function ManipulationHandles({ orbitRef, gizmoDraggingRef }: Props) {
           </mesh>
         );
       })}
+      {/* 드래그 HUD — 잡은 핸들 옆 실시간 치수(명령형 텍스트 갱신). */}
+      {draggingState && (
+        <group ref={hudGroupRef}>
+          <Html center zIndexRange={[100, 0]} style={{ pointerEvents: 'none' }}>
+            <div
+              ref={hudRef}
+              style={{
+                transform: 'translate(16px, -16px)',
+                background: 'rgba(20, 20, 28, 0.9)',
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 500,
+                lineHeight: 1.3,
+                padding: '3px 7px',
+                borderRadius: 5,
+                whiteSpace: 'nowrap',
+                userSelect: 'none',
+                boxShadow: '0 1px 5px rgba(0,0,0,0.45)',
+              }}
+            />
+          </Html>
+        </group>
+      )}
     </>
   );
 }
