@@ -162,8 +162,13 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 </div>
               )}
 
+              <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
+                <Toggle value={act.collider === true} onChange={(v) => { setA({ collider: v }); pushHistory(); }} />
+                <span>콜라이더 동반 (플레이 모드에서 진짜 부딪히는 문/장애물)</span>
+              </label>
+
               <p className="text-[10px] text-muted/50">
-                에디터는 정적입니다. <b>▶ 플레이</b>로 실제 움직임을 확인하세요. Motion과 함께 못 씁니다(관절 우선). 변수·이벤트 구동과 콜라이더는 다음 단계(5b·5c).
+                에디터는 정적입니다. <b>▶ 플레이</b>로 실제 움직임을 확인하세요. Motion과 함께 못 씁니다(관절 우선). <b>콜라이더 OFF</b>=통과(장식), <b>ON</b>=부딪히는 관절(hull 근사·캐릭터 라이딩 미지원).
               </p>
             </>
           )}

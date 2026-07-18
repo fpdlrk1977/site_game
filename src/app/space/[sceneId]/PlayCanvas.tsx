@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useContext } from 'react';
 import { Physics, RigidBody, CuboidCollider } from '@react-three/rapier';
 import type { RapierRigidBody } from '@react-three/rapier';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema } from '@/types/scene';
@@ -11,7 +11,10 @@ import { PhysicsObject } from './PhysicsObject';
 import { PlayModeController } from './PlayModeController';
 import { effectiveDialogue } from './useObjectDialogue';
 import { computeMotion, makeWanderState } from '@/lib/motion';
-import { worldMatrix, localCenter } from '@/lib/objectBBox';
+import { computeActuator, computeDriveValue } from '@/lib/actuator';
+import { anchorLocalPoint } from '@/lib/pivotMath';
+import { worldMatrix, localCenter, localBBox } from '@/lib/objectBBox';
+import { ActuatorDriveContext } from './ActuatorDriveContext';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -54,6 +57,9 @@ const isVisualOnlyMotionObj = (o: ObjectNodeSchema) =>
 // 관절(액추에이터) 콜라이더 미동반 → 시각 전용(ViewerObject가 관절 구동). collider 동반은 5c. doc §6.
 const isActuatorVisualObj = (o: ObjectNodeSchema) =>
   !!o.actuator && o.actuator.collider !== true && !o.isGroup && !o.light;
+// 관절 콜라이더 동반 → kinematic 강체를 관절로 구동(진짜 부딪히는 문/장애물). doc §6 5c.
+const isActuatorColliderObj = (o: ObjectNodeSchema) =>
+  !!o.actuator && o.actuator.collider === true && !o.isGroup && !o.light;
 
 type ColliderAssets = Parameters<typeof ViewerObject>[0]['assets'];
 type ColliderOnEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
@@ -89,6 +95,63 @@ function MovingCollider({ object, assets, onEvent, allObjects }: {
     const rb = rbRef.current;
     if (!rb || !object.motion) return;
     computeMotion(object.motion, basePos, baseRot, worldScl, state.clock.elapsedTime + phase.current, dt, wander.current, _mcOut, pivot);
+    rb.setNextKinematicTranslation(_mcOut.pos);
+    rb.setNextKinematicRotation(_mcOut.quat);
+  });
+  return (
+    <RigidBody
+      ref={rbRef}
+      type="kinematicPosition"
+      colliders={getColliderType(object)}
+      position={basePos}
+      rotation={baseRot}
+      userData={{ objectId: object.id }}
+    >
+      <group scale={worldScl}>
+        <ViewerObject object={object} assets={assets} onEvent={onEvent} noTransform noMotion />
+      </group>
+    </RigidBody>
+  );
+}
+
+// 관절(actuator.collider) 오브젝트 — kinematic 강체를 관절로 구동해 "진짜 부딪히는 문/장애물"로.
+// 구동값: manual/oscillate=자체 계산 · variable/event=ActuatorDriveContext 목표를 향해 이징(MotionGroup과 동일).
+function ActuatorCollider({ object, assets, onEvent, allObjects }: {
+  object: ObjectNodeSchema;
+  assets: ColliderAssets;
+  onEvent: ColliderOnEvent;
+  allObjects: ObjectNodeSchema[];
+}) {
+  const rbRef = useRef<RapierRigidBody>(null);
+  const phase = useRef(Math.random() * 100);
+  const driveCur = useRef<number | null>(null);
+  const driveMap = useContext(ActuatorDriveContext);
+  worldMatrix(allObjects, object.id).decompose(_mcPos, _mcQuatBase, _mcScl);
+  _mcEuler.setFromQuaternion(_mcQuatBase);
+  const basePos: [number, number, number] = [_mcPos.x, _mcPos.y, _mcPos.z];
+  const baseRot: [number, number, number] = [_mcEuler.x, _mcEuler.y, _mcEuler.z];
+  const worldScl: [number, number, number] = [_mcScl.x, _mcScl.y, _mcScl.z];
+  const hingeVec = useMemo(() => {
+    const a = object.actuator;
+    if (!a) return null;
+    const lb = localBBox(allObjects, assets, object.id);
+    if (!lb || lb.isEmpty()) return null;
+    return anchorLocalPoint(lb, a.hinge ?? { x: 0.5, y: 0.5, z: 0.5 });
+  }, [object.actuator, object.id, allObjects, assets]);
+  useFrame((state, dt) => {
+    const rb = rbRef.current;
+    const a = object.actuator;
+    if (!rb || !a) return;
+    let dv: number;
+    if (a.drive === 'variable' || a.drive === 'event') {
+      const target = Math.max(0, Math.min(1, driveMap[object.id] ?? a.value ?? 0));
+      if (driveCur.current === null) driveCur.current = target;
+      else driveCur.current += (target - driveCur.current) * (1 - Math.pow(0.0001, Math.min(dt, 0.05) * (a.speed ?? 1) * 3));
+      dv = driveCur.current;
+    } else {
+      dv = computeDriveValue(a, state.clock.elapsedTime + phase.current);
+    }
+    computeActuator(a, hingeVec, basePos, baseRot, worldScl, dv, _mcOut);
     rb.setNextKinematicTranslation(_mcOut.pos);
     rb.setNextKinematicRotation(_mcOut.quat);
   });
@@ -372,11 +435,13 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   const visualMotionObjects = rootObjects.filter((o) => o.visible && isVisualOnlyMotionObj(o) && !isPassable(o));
   // 관절(콜라이더 미동반) 루트 — 시각 전용 ViewerObject(관절 구동). autoObjects에서 제외해 고정 콜라이더가 안 붙게.
   const actuatorVisualObjects = rootObjects.filter((o) => o.visible && isActuatorVisualObj(o) && !isPassable(o));
+  // 관절(콜라이더 동반) 루트 — kinematic 강체를 관절로 구동(진짜 부딪히는 문). 5c.
+  const actuatorColliderObjects = rootObjects.filter((o) => o.visible && isActuatorColliderObj(o) && !isPassable(o));
   // 통과(콜라이더 제거) 대상 루트 오브젝트 — 콜라이더 없이 시각만(모션 있으면 애니메이션도) 렌더. 문 열림.
   const passableVisualObjects = rootObjects.filter((o) => o.visible && !o.light && !o.isGroup && isPassable(o));
   // ⚠ 숨김(hide_object)·통과 오브젝트는 콜라이더에서 제외 — 예전엔 visible 무시로 '보이지 않는 벽'이 남았음.
-  const autoObjects = rootObjects.filter((o) => o.visible && !o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isVisualOnlyMotionObj(o) && !isActuatorVisualObj(o) && !isPassable(o));
-  const physicsObjects = rootObjects.filter((o) => o.visible && o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isPassable(o));
+  const autoObjects = rootObjects.filter((o) => o.visible && !o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isVisualOnlyMotionObj(o) && !isActuatorVisualObj(o) && !isActuatorColliderObj(o) && !isPassable(o));
+  const physicsObjects = rootObjects.filter((o) => o.visible && o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isActuatorColliderObj(o) && !isPassable(o));
 
   const characterAsset = scene.environment.playerCharacterId
     ? assets.find((a) => a.id === scene.environment.playerCharacterId)
@@ -478,9 +543,14 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
         <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
-      {/* 관절(콜라이더 미동반) — 시각 전용 ViewerObject가 관절 구동(문 여닫힘). 콜라이더 동반은 5c. */}
+      {/* 관절(콜라이더 미동반) — 시각 전용 ViewerObject가 관절 구동(문 여닫힘). */}
       {actuatorVisualObjects.map((obj) => (
         <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* 관절(콜라이더 동반) — kinematic 강체를 관절로 구동(진짜 부딪히는 문/장애물). 5c. */}
+      {actuatorColliderObjects.map((obj) => (
+        <ActuatorCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
       {/* 통과(set_passable/toggle_collision) 대상 루트 오브젝트 — 콜라이더 없이 시각만(문 열림) */}

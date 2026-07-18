@@ -61,14 +61,24 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **뷰어 적용**(`ViewerObject`): `MotionGroup`/`Xform`을 **motion·actuator 공용**으로 확장(actuator 우선). `actHinge`=`anchorLocalPoint(localBBox, hinge)`. 호출부 프롭에 `actuator`/`actHinge` 배선(replace_all 7곳 + Xform 내부). → **▶ 플레이·게시 뷰어에서 관절 동작**(에디터 뷰포트는 정적, motion과 동일 패턴).
 - **에디터 UI**(신규 `ActuatorSection.tsx`, InspectorPanel Motion 아래·기본 접힘): 사용 토글(켜면 motion 제거·기본 Y축 좌측경첩 문) + 종류/축 + **경첩 3×3 피커**(회전축 수직면, 중/엣지 포함 — 감췄던 "중" 여기서 씀) + Min/Max(°/m) + Drive(manual/oscillate) + value 미리보기/speed·loop. "▶로 확인·motion 배타·변수/콜라이더는 5b/5c" 안내.
 - **확인 필요(브라우저)**: 박스에 관절 켜기→문(Y·좌측경첩·0~90)·▶플레이서 여닫힘(manual value / oscillate 자동왕복) · 축/경첩 바꿔가며 · slide 피스톤 · motion과 배타.
-### Phase 5b (2026-07-17) — 변수·이벤트 구동 — 브라우저 확인 대기
-> "다가가서/클릭으로 문 열기" 게임 로직. tsc·컴파일 클린. **▶ 플레이 확인 대기.**
+### Phase 5b (2026-07-17) — 변수·이벤트 구동 — ✅ 이벤트 구동 확인 완료
+> "다가가서/클릭으로 문 열기" 게임 로직. tsc·컴파일 클린. **✅ Click→관절 여닫기(토글) ▶ 플레이 동작 확인(사용자).** variable 구동은 미확인.
 - **스키마**: `EventAction`에 **`set_actuator`** 추가. **컨텍스트**(신규 `ActuatorDriveContext.ts`): objectId→목표 driveValue(0..1), ViewerCanvas Provider(clip 옆·탐색/플레이 공통).
 - **뷰어 이징**(`ViewerObject` MotionGroup): drive=variable/event면 컨텍스트 목표(`actDrive`)를 향해 speed 비례 이징(첫 프레임 스냅), manual/oscillate는 `computeDriveValue`. `actDrive` prop 배선.
 - **런타임**(`ViewerClient`): `actuatorDrive` 상태 + **`set_actuator` 핸들러**(`"objId|open/close/toggle/0~1"`, toggle=현재값 반전) + **variable 동기**(`syncVarActuators`: 변수값 clamp01→목표, onVarsChanged·init, event 목표 머지 보존) + restart 리셋 + ViewerCanvas prop.
 - **에디터**: `ActuatorSection` Drive에 변수/이벤트(변수=바인딩 SelectBox·이벤트=안내·Ease speed) · `EventsSection` **set_actuator 액션**(관절 오브젝트 대상 + open/close/toggle).
 - **확인 필요(브라우저)**: Actuator Drive=이벤트 → 박스 Click(또는 interact/approach) '관절 여닫기·자신·토글' → ▶ 플레이서 클릭/근접 시 부드럽게 여닫힘 · 변수 구동은 변수 0↔1 시 따라감.
-- **다음**: 5c(콜라이더 동반 — 실제 부딪히는 문) → 5d(다관절 프리셋 등). ※에디터 뷰포트 read-only 가이드(경첩 마커·축선)는 소폭 후속.
+### Phase 5c (2026-07-17) — 콜라이더 동반 (진짜 부딪히는 관절) — ✅ 확인 완료
+> tsc·컴파일 클린. **✅ 콜라이더 동반 ON + 이벤트/oscillate 구동 → ▶ 플레이서 여닫히는 문에 캐릭터 충돌 확인(사용자).**
+- **신규 `ActuatorCollider`**(`PlayCanvas`, MovingCollider 패턴): `actuator.collider===true` 루트 → **kinematic 강체**를 매 프레임 `computeActuator`로 구동(`setNextKinematicTranslation/Rotation`). 구동값 = manual/oscillate 자체계산 · variable/event는 `ActuatorDriveContext` 목표를 향해 이징(MotionGroup과 동일). 월드베이스(`worldMatrix` decompose)·경첩(`anchorLocalPoint`)·`getColliderType`. 시각=`ViewerObject noTransform noMotion`(강체가 이동).
+- **라우팅**: `isActuatorColliderObj` + `actuatorColliderObjects` 필터, autoObjects·physicsObjects·actuatorVisual에서 제외, `<ActuatorCollider>` 렌더.
+- **UI**: `ActuatorSection`에 **콜라이더 동반 토글**.
+- **확인 필요(브라우저)**: 관절+콜라이더 ON → ▶ 플레이서 캐릭터가 **여닫히는 문/스윙 장애물에 실제로 막힘**. (제약: hull 근사·비균일 스케일 왜곡·라이딩 미지원)
+### 에디터 관절 가이드 (2026-07-17) — ✅ 확인 완료
+> 신규 `canvas/ActuatorGizmo.tsx`(EditorCanvas, SelectionOutline 패턴). 선택 관절 오브젝트의 **경첩(주황 구)+축(주황 선)** 을 에디터에 실시간 표시(읽기전용, raycast 제외). 경첩=`anchorLocalPoint`·축=오브젝트 월드회전 반영·선길이=월드bbox 최대변×0.6. tsc·컴파일 클린. **✅ 표시·경첩 이동 확인(사용자).**
+
+- **✅ Phase 5 핵심 완료·검증**: 5a(시각) · 5b(이벤트 구동) · 5c(콜라이더) · 에디터 가이드 전부 브라우저 확인 완료. (variable 구동만 미확인 — 이벤트와 동일 경로라 저위험)
+- **다음(선택)**: 5d(다관절 로봇팔 프리셋·범위 스윕 가이드·min/max 핸들·이징 종류).
 
 ## 🧭 진행 중 (2026-07-17) — 피벗/조작 근간 Phase 1: 오브젝트 앵커 + 스케일 앵커 (기준: `doc/PIVOT_MANIPULATION.md`) — 브라우저 확인 대기
 
