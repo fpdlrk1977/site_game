@@ -18,7 +18,7 @@ import { anchorLocalPoint } from "@/lib/pivotMath";
 import { PrimitiveMaterial } from "@/components/three/PrimitiveMaterial";
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig, ActuatorConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
-import { computeActuator, computeDriveValue } from "@/lib/actuator";
+import { computeActuator, computeDriveValue, makeDriveState, easeDrive } from "@/lib/actuator";
 import { createPrimitiveGeometry, createRoundedBoxDims, profileSig } from "@/lib/primitiveGeometry";
 import { voxelSig, voxelSkinsSig } from "@/lib/voxelGeometry";
 import { useVoxelSkinMaterials } from "@/components/three/useVoxelSkinMaterials";
@@ -366,7 +366,7 @@ function MotionGroup({
   const ref = useRef<THREE.Group>(null);
   const phase = useRef(Math.random() * 100); // 개별 위상(동시에 안 뛰게)
   const wander = useRef(makeWanderState());
-  const driveCur = useRef<number | null>(null); // variable/event 구동 현재값(이징 상태)
+  const driveState = useRef(makeDriveState()); // variable/event 구동 이징 상태(공용 헬퍼)
 
   useFrame((state, dt) => {
     const g = ref.current;
@@ -376,11 +376,8 @@ function MotionGroup({
       const h = actHinge ? _actHingeVec.set(actHinge[0], actHinge[1], actHinge[2]) : null;
       let dv: number;
       if (actuator.drive === 'variable' || actuator.drive === 'event') {
-        // 목표(actDrive)를 향해 speed에 비례해 이징. 첫 프레임은 스냅(로드 시 튐 방지).
-        const target = Math.max(0, Math.min(1, actDrive ?? actuator.value ?? 0));
-        if (driveCur.current === null) driveCur.current = target;
-        else driveCur.current += (target - driveCur.current) * (1 - Math.pow(0.0001, Math.min(dt, 0.05) * (actuator.speed ?? 1) * 3));
-        dv = driveCur.current;
+        // 목표(actDrive)를 향해 이징(공용 헬퍼 — 콜라이더와 동일 로직). 첫 프레임 스냅.
+        dv = easeDrive(driveState.current, actDrive ?? actuator.value ?? 0, actuator.ease, actuator.speed ?? 1, dt);
       } else {
         dv = computeDriveValue(actuator, t);
       }

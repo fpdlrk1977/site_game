@@ -519,7 +519,11 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       if (a?.drive === 'variable' && a.variable) {
         const raw = varsRef.current[a.variable];
         const n = typeof raw === 'boolean' ? (raw ? 1 : 0) : Number(raw);
-        upd[o.id] = Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
+        const v = Number.isFinite(n) ? n : 0;
+        // 범위 매핑: [varMin, varMax] → [0, 1] (기본 0..1). 역방향(varMin>varMax)도 허용.
+        const lo = a.varMin ?? 0, hi = a.varMax ?? 1;
+        const t = hi === lo ? 0 : (v - lo) / (hi - lo);
+        upd[o.id] = Math.max(0, Math.min(1, t));
       }
     }
     if (Object.keys(upd).length) setActuatorDrive((m) => ({ ...m, ...upd }));

@@ -133,6 +133,12 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                       options={[{ value: '', label: '(선택)' }, ...variables.map((v) => ({ value: v.name, label: v.name }))]}
                     />
                   )}
+                  {/* 범위 매핑 — 변수값 [varMin, varMax]을 구동 0~1로. 기본 0~1. */}
+                  <div className="grid grid-cols-2 gap-2 mt-1.5">
+                    <LabeledNum label="Var → 0 (varMin)" value={act.varMin ?? 0} onChange={(v) => setA({ varMin: v })} onCommit={pushHistory} precision={2} dragStep={0.5} />
+                    <LabeledNum label="Var → 1 (varMax)" value={act.varMax ?? 1} onChange={(v) => setA({ varMax: v })} onCommit={pushHistory} precision={2} dragStep={0.5} />
+                  </div>
+                  <p className="text-[9px] text-muted/50 mt-0.5">변수값이 varMin일 때 닫힘(0)·varMax일 때 열림(1). 예: 체력 0~100 → 0/100. 역방향(varMin&gt;varMax)도 됩니다.</p>
                 </div>
               )}
               {act.drive === 'event' && (
@@ -142,7 +148,21 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
               )}
 
               {(act.drive === 'variable' || act.drive === 'event') && (
-                <LabeledNum label="Ease speed" value={act.speed ?? 1} onChange={(v) => setA({ speed: v })} onCommit={pushHistory} min={0.1} max={10} precision={2} dragStep={0.1} />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">Ease</span>
+                    <SelectBox
+                      value={act.ease ?? 'smooth'}
+                      onChange={(v) => { setA({ ease: v as ActuatorConfig['ease'] }); pushHistory(); }}
+                      options={[
+                        { value: 'smooth', label: '부드럽게 (감쇠)' },
+                        { value: 'inout', label: '가감속 (ease-in-out)' },
+                        { value: 'linear', label: '등속 (linear)' },
+                      ]}
+                    />
+                  </div>
+                  <LabeledNum label="Ease speed" value={act.speed ?? 1} onChange={(v) => setA({ speed: v })} onCommit={pushHistory} min={0.1} max={10} precision={2} dragStep={0.1} />
+                </div>
               )}
 
               {act.drive === 'manual' && (

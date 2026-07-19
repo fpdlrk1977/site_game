@@ -1,9 +1,11 @@
 'use client';
 
 // 관절(액추에이터) 저작 가이드 — 선택 오브젝트의 경첩(주황 점)과 회전/이동 축(주황 선)을 에디터에 표시.
-//   읽기 전용(정적 표식). 실제 움직임은 ▶ 플레이. doc/PIVOT_MANIPULATION.md §6.
+//   rotate 관절은 min→max 회전 범위를 부채꼴(호)로 미리 보여주고, 양 끝의 핸들을 드래그해 각도를 직접 조절.
+//   경첩/축/부채꼴은 읽기 전용, min/max 핸들만 상호작용. 실제 움직임은 ▶ 플레이. doc/PIVOT_MANIPULATION.md §6.
 import { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { useSceneStore } from '@/store/sceneStore';
 import { useObjectRefs } from './ObjectRefsContext';
@@ -12,6 +14,11 @@ import { localBBox } from '@/lib/objectBBox';
 import { anchorLocalPoint } from '@/lib/pivotMath';
 
 const ORANGE = '#ff7a0d';
+const MIN_COL = '#ff7a0d'; // 닫힘(min)
+const MAX_COL = '#ffd24d'; // 열림(max)
+const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
+const FAN_SEG = 48; // 부채꼴 세그먼트 수
 const _h = new THREE.Vector3();
 const _axis = new THREE.Vector3();
 const _wq = new THREE.Quaternion();
@@ -19,39 +26,121 @@ const _wp = new THREE.Vector3();
 const _ws = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _wbox = new THREE.Box3();
+const _ref = new THREE.Vector3(); // 부채꼴 기준 반경 벡터(월드)
+const _rim = new THREE.Vector3(); // 부채꼴 테두리 점
+const _q = new THREE.Quaternion();
+const _size = new THREE.Vector3();
+// 드래그(핸들→각도) 계산용 임시
+const _ndc = new THREE.Vector2();
+const _hit = new THREE.Vector3();
+const _dv = new THREE.Vector3();
+const _cross = new THREE.Vector3();
 
-export function ActuatorGizmo() {
+export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitControlsImpl | null> }) {
   const selectedIds = useSceneStore((s) => s.selectedIds);
   const objects = useSceneStore((s) => s.objects);
   const assets = useSceneStore((s) => s.assets);
   const refsMap = useObjectRefs();
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
 
   const id = selectedIds.length === 1 ? selectedIds[0] : null;
   const obj = id && id !== CHARACTER_PREVIEW_ID ? objects.find((o) => o.id === id) : null;
   const act = obj?.actuator;
+  const showHandles = !!act && act.kind === 'rotate';
 
   const sphereRef = useRef<THREE.Mesh>(null);
   const lineRef = useRef<THREE.LineSegments>(null);
+  const fanRef = useRef<THREE.Mesh>(null);
+  const minRef = useRef<THREE.Mesh>(null);
+  const maxRef = useRef<THREE.Mesh>(null);
+  // 드래그 상태 + 최신 월드 프레임(핸들 pointermove가 참조)
+  const dragRef = useRef<'min' | 'max' | null>(null);
+  const hingeW = useRef(new THREE.Vector3());
+  const axisW = useRef(new THREE.Vector3());
+  const refW = useRef(new THREE.Vector3());
+  const ray = useMemo(() => new THREE.Raycaster(), []);
+  const plane = useMemo(() => new THREE.Plane(), []);
+
   const geo = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
     return g;
   }, []);
-  useEffect(() => () => geo.dispose(), [geo]);
+  // 부채꼴 채움: 중심(0) + 테두리 FAN_SEG+1 점, 삼각형 팬 인덱스는 1회 세팅.
+  const fanGeo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array((FAN_SEG + 2) * 3), 3));
+    const idx: number[] = [];
+    for (let i = 0; i < FAN_SEG; i++) idx.push(0, i + 1, i + 2);
+    g.setIndex(idx);
+    return g;
+  }, []);
+  // 부채꼴 테두리 라인(선 스트립): 중심→테두리 전체→중심 = 두 반경변 + 호.
+  const edgeGeo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array((FAN_SEG + 3) * 3), 3));
+    return g;
+  }, []);
+  // 부채꼴 테두리 라인 오브젝트(THREE.Line) — r3f `<line>` 태그 모호성 회피 위해 명령형 생성.
+  const edgeLine = useMemo(() => {
+    const l = new THREE.Line(edgeGeo, new THREE.LineBasicMaterial({ color: ORANGE, depthTest: false, transparent: true, opacity: 0.55 }));
+    l.renderOrder = 1001;
+    l.frustumCulled = false;
+    l.visible = false;
+    return l;
+  }, [edgeGeo]);
+  useEffect(() => () => {
+    geo.dispose(); fanGeo.dispose(); edgeGeo.dispose();
+    (edgeLine.material as THREE.Material).dispose();
+  }, [geo, fanGeo, edgeGeo, edgeLine]);
+
+  // 핸들 드래그 시작 — 포인터를 회전 평면에 투영해 각도(°)를 계산, min/max에 실시간 반영.
+  const startDrag = (which: 'min' | 'max') => (e: { stopPropagation: () => void }) => {
+    if (!id) return;
+    e.stopPropagation();
+    dragRef.current = which;
+    if (orbitRef?.current) orbitRef.current.enabled = false;
+    const move = (ev: PointerEvent) => {
+      if (dragRef.current !== which || !id) return;
+      const rect = gl.domElement.getBoundingClientRect();
+      _ndc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+      ray.setFromCamera(_ndc, camera);
+      plane.setFromNormalAndCoplanarPoint(axisW.current, hingeW.current);
+      if (!ray.ray.intersectPlane(plane, _hit)) return;
+      _dv.subVectors(_hit, hingeW.current);
+      // 기준(refW)으로부터 축(axisW) 둘레 부호 있는 각도. ±180° 범위.
+      const ang = Math.atan2(_cross.crossVectors(refW.current, _dv).dot(axisW.current), refW.current.dot(_dv)) * RAD2DEG;
+      const st = useSceneStore.getState();
+      const o = st.objects.find((x) => x.id === id);
+      if (!o?.actuator) return;
+      st.updateObject(id, { actuator: { ...o.actuator, [which]: Math.round(ang) } });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      dragRef.current = null;
+      if (orbitRef?.current) orbitRef.current.enabled = true;
+      useSceneStore.getState().pushHistory();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
 
   useFrame(() => {
-    const sp = sphereRef.current, ln = lineRef.current;
-    if (!sp || !ln) return;
-    if (!act || !id) { sp.visible = false; ln.visible = false; return; }
+    const sp = sphereRef.current, ln = lineRef.current, fan = fanRef.current, edge = edgeLine;
+    const minH = minRef.current, maxH = maxRef.current;
+    if (!sp || !ln || !fan || !edge || !minH || !maxH) return;
+    const hideAll = () => { sp.visible = false; ln.visible = false; fan.visible = false; edge.visible = false; minH.visible = false; maxH.visible = false; };
+    if (!act || !id) { hideAll(); return; }
     const ref = refsMap.current.get(id);
     const lb = localBBox(objects, assets, id);
-    if (!ref || !ref.parent || !lb || lb.isEmpty()) { sp.visible = false; ln.visible = false; return; }
+    if (!ref || !ref.parent || !lb || lb.isEmpty()) { hideAll(); return; }
     ref.updateWorldMatrix(true, false);
     // 경첩 월드 위치
     _h.copy(anchorLocalPoint(lb, act.hinge ?? { x: 0.5, y: 0.5, z: 0.5 })).applyMatrix4(ref.matrixWorld);
     sp.position.copy(_h);
-    sp.scale.setScalar(Math.max(0.02, camera.position.distanceTo(_h) * 0.02)); // 화면상 일정 크기
+    const hScale = Math.max(0.02, camera.position.distanceTo(_h) * 0.02); // 화면상 일정 크기
+    sp.scale.setScalar(hScale);
     // 축 방향(월드) — 오브젝트 회전 반영
     ref.matrixWorld.decompose(_wp, _wq, _ws);
     _axis.set(act.axis === 'x' ? 1 : 0, act.axis === 'y' ? 1 : 0, act.axis === 'z' ? 1 : 0).applyQuaternion(_wq).normalize();
@@ -66,10 +155,61 @@ export function ActuatorGizmo() {
     arr[3] = _p.x; arr[4] = _p.y; arr[5] = _p.z;
     geo.attributes.position.needsUpdate = true;
     sp.visible = true; ln.visible = true;
+
+    // slide는 부채꼴/핸들 없음(축 선만)
+    if (act.kind !== 'rotate') { fan.visible = false; edge.visible = false; minH.visible = false; maxH.visible = false; return; }
+
+    // 기준 반경 벡터 = 회전축에 수직인 로컬 축(bbox 긴 쪽) → 월드 → 반경 len.
+    lb.getSize(_size);
+    let refLocalX = 0, refLocalY = 0, refLocalZ = 0;
+    if (act.axis === 'y') { if (_size.z > _size.x) refLocalZ = 1; else refLocalX = 1; }
+    else if (act.axis === 'x') { if (_size.z > _size.y) refLocalZ = 1; else refLocalY = 1; }
+    else { if (_size.y > _size.x) refLocalY = 1; else refLocalX = 1; }
+    _ref.set(refLocalX, refLocalY, refLocalZ).applyQuaternion(_wq).normalize().multiplyScalar(len);
+    // 드래그 핸들러가 참조할 최신 월드 프레임 저장
+    hingeW.current.copy(_h);
+    axisW.current.copy(_axis);
+    refW.current.copy(_ref);
+
+    // min/max 핸들 위치 = _ref를 각도만큼 회전 + 경첩
+    _q.setFromAxisAngle(_axis, act.min * DEG2RAD);
+    minH.position.copy(_rim.copy(_ref).applyQuaternion(_q).add(_h));
+    minH.scale.setScalar(hScale * 1.1);
+    _q.setFromAxisAngle(_axis, act.max * DEG2RAD);
+    maxH.position.copy(_rim.copy(_ref).applyQuaternion(_q).add(_h));
+    maxH.scale.setScalar(hScale * 1.1);
+    minH.visible = true; maxH.visible = true;
+
+    // 스윕 부채꼴 — 범위가 있을 때만.
+    if (Math.abs(act.max - act.min) < 0.01) { fan.visible = false; edge.visible = false; return; }
+    const minRad = act.min * DEG2RAD, maxRad = act.max * DEG2RAD;
+    const fanArr = fanGeo.attributes.position.array as Float32Array;
+    const edgeArr = edgeGeo.attributes.position.array as Float32Array;
+    fanArr[0] = _h.x; fanArr[1] = _h.y; fanArr[2] = _h.z;
+    edgeArr[0] = _h.x; edgeArr[1] = _h.y; edgeArr[2] = _h.z;
+    for (let i = 0; i <= FAN_SEG; i++) {
+      const ang = minRad + (maxRad - minRad) * (i / FAN_SEG);
+      _q.setFromAxisAngle(_axis, ang);
+      _rim.copy(_ref).applyQuaternion(_q).add(_h);
+      const o = (i + 1) * 3;
+      fanArr[o] = _rim.x; fanArr[o + 1] = _rim.y; fanArr[o + 2] = _rim.z;
+      edgeArr[o] = _rim.x; edgeArr[o + 1] = _rim.y; edgeArr[o + 2] = _rim.z;
+    }
+    const last = (FAN_SEG + 2) * 3;
+    edgeArr[last] = _h.x; edgeArr[last + 1] = _h.y; edgeArr[last + 2] = _h.z;
+    fanGeo.attributes.position.needsUpdate = true;
+    edgeGeo.attributes.position.needsUpdate = true;
+    fanGeo.computeVertexNormals();
+    fan.visible = true; edge.visible = true;
   });
 
   return (
     <>
+      {/* 스윕 부채꼴(채움) — 회전 범위 시각화. 호 라인 아래(renderOrder 1000). */}
+      <mesh ref={fanRef} geometry={fanGeo} renderOrder={1000} visible={false} frustumCulled={false} raycast={() => null}>
+        <meshBasicMaterial color={ORANGE} depthTest={false} transparent opacity={0.16} side={THREE.DoubleSide} />
+      </mesh>
+      <primitive object={edgeLine} />
       <mesh ref={sphereRef} renderOrder={1002} visible={false} raycast={() => null}>
         <sphereGeometry args={[1, 12, 12]} />
         <meshBasicMaterial color={ORANGE} depthTest={false} transparent opacity={0.95} />
@@ -77,6 +217,15 @@ export function ActuatorGizmo() {
       <lineSegments ref={lineRef} geometry={geo} renderOrder={1002} visible={false} frustumCulled={false} raycast={() => null}>
         <lineBasicMaterial color={ORANGE} depthTest={false} transparent opacity={0.9} />
       </lineSegments>
+      {/* min/max 드래그 핸들 — 끌어서 각도 직접 조절. rotate 전용. */}
+      <mesh ref={minRef} renderOrder={1003} visible={false} onPointerDown={showHandles ? startDrag('min') : undefined}>
+        <sphereGeometry args={[1, 14, 14]} />
+        <meshBasicMaterial color={MIN_COL} depthTest={false} transparent opacity={0.98} />
+      </mesh>
+      <mesh ref={maxRef} renderOrder={1003} visible={false} onPointerDown={showHandles ? startDrag('max') : undefined}>
+        <sphereGeometry args={[1, 14, 14]} />
+        <meshBasicMaterial color={MAX_COL} depthTest={false} transparent opacity={0.98} />
+      </mesh>
     </>
   );
 }

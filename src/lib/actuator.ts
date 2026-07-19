@@ -17,6 +17,45 @@ const _ha = new THREE.Vector3(); // 경첩 월드(회전 후)
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+// ── variable/event 구동 이징 ─────────────────────────────────────────────
+// 목표(0..1)를 향해 프레임마다 접근. 시각(ViewerObject)과 콜라이더(ActuatorCollider)가
+// 동일 로직을 공유해야 "콜라이더 동반" 시 눈에 보이는 문과 부딪히는 문이 어긋나지 않는다.
+export interface DriveEaseState {
+  cur: number | null; // 현재 구동값(0..1), null=미초기화
+  start: number;      // ease='inout' 트윈 시작값
+  prog: number;       // ease='inout' 트윈 진행(0..1)
+  prevTarget: number | null; // ease='inout' 재타겟 감지
+}
+export function makeDriveState(): DriveEaseState {
+  return { cur: null, start: 0, prog: 1, prevTarget: null };
+}
+const easeInOut = (p: number) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+
+/** 이징 상태 st를 목표 target(0..1)을 향해 dt만큼 전진시키고 새 구동값을 반환. 첫 프레임은 스냅. */
+export function easeDrive(
+  st: DriveEaseState,
+  target: number,
+  ease: ActuatorConfig['ease'],
+  speed: number,
+  dt: number,
+): number {
+  const t = clamp01(target);
+  const d = Math.min(dt, 0.05); // 프레임 스파이크 방지
+  if (st.cur === null) { st.cur = t; st.prevTarget = t; return t; }
+  const e = ease ?? 'smooth';
+  if (e === 'linear') {
+    const delta = t - st.cur;
+    st.cur += Math.sign(delta) * Math.min(Math.abs(delta), speed * d); // 등속(초당 speed)
+  } else if (e === 'inout') {
+    if (st.prevTarget === null || Math.abs(t - st.prevTarget) > 1e-4) { st.start = st.cur; st.prog = 0; st.prevTarget = t; }
+    st.prog = Math.min(1, st.prog + speed * d);
+    st.cur = st.start + (t - st.start) * easeInOut(st.prog);
+  } else {
+    st.cur += (t - st.cur) * (1 - Math.pow(0.0001, d * speed * 3)); // smooth(기본, 지수 감쇠)
+  }
+  return st.cur;
+}
+
 /** 구동값(0..1) 산출 — manual/oscillate는 여기서, variable/event(5b)는 호출부가 override. */
 export function computeDriveValue(act: ActuatorConfig, t: number): number {
   if (act.drive === 'oscillate') {

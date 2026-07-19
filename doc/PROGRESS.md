@@ -78,7 +78,25 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 > 신규 `canvas/ActuatorGizmo.tsx`(EditorCanvas, SelectionOutline 패턴). 선택 관절 오브젝트의 **경첩(주황 구)+축(주황 선)** 을 에디터에 실시간 표시(읽기전용, raycast 제외). 경첩=`anchorLocalPoint`·축=오브젝트 월드회전 반영·선길이=월드bbox 최대변×0.6. tsc·컴파일 클린. **✅ 표시·경첩 이동 확인(사용자).**
 
 - **✅ Phase 5 핵심 완료·검증**: 5a(시각) · 5b(이벤트 구동) · 5c(콜라이더) · 에디터 가이드 전부 브라우저 확인 완료. (variable 구동만 미확인 — 이벤트와 동일 경로라 저위험)
-- **다음(선택)**: 5d(다관절 로봇팔 프리셋·범위 스윕 가이드·min/max 핸들·이징 종류).
+
+### 🦾 진행 중 (2026-07-19) — 액추에이터 Phase 6: 로봇팔 프리셋(A) + 스윕 가이드(B) + 다듬기(C) — 브라우저 확인 대기
+> Phase 5 핵심 완료 후, 아래 A·B·C **셋 다 구현**(사용자 "액추에이터 중요하니 제대로"). tsc 클린 + **easeDrive 테스트 10/10 · 로봇팔 구조 테스트 11/11** + dev 컴파일/편집 라우트 200. **브라우저 확인 대기.**
+
+- **(B) 범위 스윕 가이드 — `canvas/ActuatorGizmo.tsx`**: rotate 관절 선택 시 경첩 중심으로 **min→max 회전 범위를 주황 부채꼴(채움 opacity 0.16)+테두리 라인**으로 표시. 기준 반경 벡터=회전축 수직 로컬축(bbox 긴 쪽)→월드, 반경=축선 길이. 범위 0이면 부채꼴 숨김. slide는 부채꼴 없음(축 선만). depthTest off·raycast null(가이드).
+- **(C-2) min/max 뷰포트 핸들 — 같은 파일**: 부채꼴 양 끝에 **드래그 핸들**(min=주황·max=연노랑 구). 끌면 포인터를 회전 평면(경첩·축 법선)에 투영해 각도(°) 산출→`updateObject`로 min/max 실시간 반영(드래그 끝 `pushHistory` 1회). orbit는 드래그 중 비활성. `ActuatorGizmo`에 `orbitRef` prop 추가(EditorCanvas 배선). **±180° 범위 한계**(그 이상은 인스펙터 입력).
+- **(C-3) variable 범위 매핑 — `scene.ts`·`ViewerClient.syncVarActuators`·`ActuatorSection`**: `ActuatorConfig.varMin?/varMax?`(기본 0/1). 변수값 [varMin,varMax]→구동 [0,1] 정규화(역방향 허용). 예: 체력 0~100→0/100. UI=variable 구동 시 varMin/varMax 입력.
+- **(C-1) 이징 종류 — `lib/actuator.ts`(신규 `makeDriveState`/`easeDrive`·`DriveEaseState`)·`ViewerObject`·`PlayCanvas`·`ActuatorSection`**: `ActuatorConfig.ease?: 'smooth'|'linear'|'inout'`(기본 smooth=기존 지수감쇠, **회귀 0**). 이징 로직을 공용 헬퍼로 추출 → **시각(ViewerObject)·콜라이더(ActuatorCollider) 동일 로직 공유**(콜라이더 동반 시 어긋남 방지). smooth=감쇠·linear=등속·inout=가감속 트윈(재타겟 시 현재값서 새 트윈). 테스트 10/10(수렴·범위·등속·가감속·재타겟).
+- **(A) 로봇팔 다관절 프리셋 — `lib/objectPresets.ts`(신규 `PresetNode`/`NodePreset`/`NODE_PRESETS`·`ROBOT_ARM`)·`sceneStore.addNodePreset`·툴바**: **중첩 그룹 트리**를 한 번에 스탬프 = 베이스(Y턴테이블)→어깨(Z경첩)→팔꿈치(Z경첩)→손목(Y회전), 각 관절 그룹에 actuator + 시각 마디 메쉬. 자식 담으려면 **그룹이어야** 렌더가 자식 순회(확인함). 구동=**oscillate**(마디마다 속도 다름+개별 위상 → 자연 스윕, ▶ 플레이서 스스로 움직임). 경첩=각 그룹 밑면(hinge y:0). `addNodePreset`=key→UUID 리맵·parentId 연결·루트 placeAt·단일 undo. 툴바 프리셋 드롭다운에 '로봇팔(다관절)'(node:true→addNodePreset). **구조 테스트**: 관절 원점이 부모 마디 상단과 정확히 연결(gap 0)·경첩 y:0 확인.
+- **확인 필요(브라우저)**: ~~①로봇팔 스탬프→▶플레이서 4관절 스윕~~ **✅ 확인 완료(사용자, "잘 움직인다")** · ②박스 rotate 관절 선택 시 부채꼴 표시·min/max 핸들 드래그로 각도 조절(undo 1회) · ③variable 구동 varMin/varMax 매핑(체력바 등) · ④이징 smooth/linear/inout 느낌 차이(event/variable 구동) · ⑤콜라이더 동반 시 시각=콜라이더 이징 일치.
+- **미확인 잔여**: 액추에이터 variable 구동 자체(Phase 5b부터 미확인, 이벤트와 동일 경로).
+
+### (이전) 🧭 다음 작업 결정 대기 (2026-07-18)
+- **(D) Phase 5 마무리 → 다른 영역 전환**:
+  - **Phase 4** — 애니 피벗(AnimTrack.pivot) 통합(정규화 변환). *중, 회귀 위험(기존 애니 클립 건드림)*. 기준 `doc/PIVOT_MANIPULATION.md §3.1 결정①(A 단계적)`.
+  - **우클릭 컨텍스트 메뉴(Layer 3)** — `doc/PIVOT_MANIPULATION.md §5`(축 지정·정렬·복제·프리팹 통합). 대부분 기존 기능 재노출.
+  - **카메라** — `doc/CAMERA.md`(카메라 오브젝트·설정·플라이스루).
+  - **Improvements.md** — UX/UI 개선 백로그.
+- **미확인 잔여(저위험)**: 액추에이터 **variable 구동** 브라우저 확인(변수 0↔1 → 관절 따라감). 이벤트 구동과 동일 경로.
 
 ## 🧭 진행 중 (2026-07-17) — 피벗/조작 근간 Phase 1: 오브젝트 앵커 + 스케일 앵커 (기준: `doc/PIVOT_MANIPULATION.md`) — 브라우저 확인 대기
 

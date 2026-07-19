@@ -448,7 +448,10 @@ export interface ActuatorConfig {
   value?: number;                 // 현재 위치 0..1 (min=0·max=1). 에디터 미리보기·초기값. 기본 0
   speed?: number;                 // oscillate 속도배수 / event 이동속도(초당 0..1). 기본 1
   loop?: 'pingpong' | 'forward';  // oscillate 방식. 기본 pingpong
-  variable?: string;              // drive='variable'일 때 바인딩할 GameVariable.name (0..1 해석)
+  variable?: string;              // drive='variable'일 때 바인딩할 GameVariable.name
+  varMin?: number;                // variable 구동 범위 매핑: 이 변수값 → 구동 0. 기본 0
+  varMax?: number;                // variable 구동 범위 매핑: 이 변수값 → 구동 1. 기본 1
+  ease?: 'smooth' | 'linear' | 'inout'; // variable/event 구동 이징. 기본 smooth(지수 감쇠). doc §6
   collider?: boolean;             // 플레이 모드 콜라이더 동반(진짜 장애물). 기본 false=시각
 }
 

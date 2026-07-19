@@ -28,6 +28,7 @@ import {
   Disc,
   DoorClosed,
   Coins,
+  Bot,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
@@ -48,10 +49,11 @@ const SHAPES: { shape: PrimitiveShape; label: string; icon: LucideIcon }[] = [
 const SNAP_STEPS = [0.25, 0.5, 1, 2];
 
 // 완성형 프리셋(게임 재료) — id는 objectPresets.ts와 매칭
-const PRESET_ITEMS: { id: string; label: string; icon: LucideIcon }[] = [
+const PRESET_ITEMS: { id: string; label: string; icon: LucideIcon; node?: boolean }[] = [
   { id: "wheel", label: "바퀴 (굴러가는)", icon: Disc },
   { id: "door", label: "문 (E로 열림)", icon: DoorClosed },
   { id: "coin", label: "동전 (점수 +1)", icon: Coins },
+  { id: "robot_arm", label: "로봇팔 (다관절)", icon: Bot, node: true },
 ];
 
 type Menu = "align" | "snap" | "bookmark" | "shapes" | "presets" | null;
@@ -75,6 +77,7 @@ export function ViewportFloatingToolbar() {
     toggleWireframe,
     beginPlacement,
     addPreset,
+    addNodePreset,
     undo,
     redo,
     alignSelected,
@@ -264,11 +267,11 @@ export function ViewportFloatingToolbar() {
             </Tooltip>
             {openMenu === "presets" && (
               <div className="absolute top-full left-0 mt-2 bg-surface border border-border rounded-xs shadow-dropdown z-50 p-1 min-w-[160px]">
-                {PRESET_ITEMS.map(({ id, label, icon: Icon }) => (
+                {PRESET_ITEMS.map(({ id, label, icon: Icon, node }) => (
                   <button
                     key={id}
                     onClick={() => {
-                      addPreset(id);
+                      if (node) addNodePreset(id); else addPreset(id);
                       setOpenMenu(null);
                     }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xs text-[11px] text-foreground hover:bg-background transition-colors"

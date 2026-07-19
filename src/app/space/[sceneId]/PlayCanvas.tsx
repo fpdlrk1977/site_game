@@ -11,7 +11,7 @@ import { PhysicsObject } from './PhysicsObject';
 import { PlayModeController } from './PlayModeController';
 import { effectiveDialogue } from './useObjectDialogue';
 import { computeMotion, makeWanderState } from '@/lib/motion';
-import { computeActuator, computeDriveValue } from '@/lib/actuator';
+import { computeActuator, computeDriveValue, makeDriveState, easeDrive } from '@/lib/actuator';
 import { anchorLocalPoint } from '@/lib/pivotMath';
 import { worldMatrix, localCenter, localBBox } from '@/lib/objectBBox';
 import { ActuatorDriveContext } from './ActuatorDriveContext';
@@ -124,7 +124,7 @@ function ActuatorCollider({ object, assets, onEvent, allObjects }: {
 }) {
   const rbRef = useRef<RapierRigidBody>(null);
   const phase = useRef(Math.random() * 100);
-  const driveCur = useRef<number | null>(null);
+  const driveState = useRef(makeDriveState());
   const driveMap = useContext(ActuatorDriveContext);
   worldMatrix(allObjects, object.id).decompose(_mcPos, _mcQuatBase, _mcScl);
   _mcEuler.setFromQuaternion(_mcQuatBase);
@@ -144,10 +144,7 @@ function ActuatorCollider({ object, assets, onEvent, allObjects }: {
     if (!rb || !a) return;
     let dv: number;
     if (a.drive === 'variable' || a.drive === 'event') {
-      const target = Math.max(0, Math.min(1, driveMap[object.id] ?? a.value ?? 0));
-      if (driveCur.current === null) driveCur.current = target;
-      else driveCur.current += (target - driveCur.current) * (1 - Math.pow(0.0001, Math.min(dt, 0.05) * (a.speed ?? 1) * 3));
-      dv = driveCur.current;
+      dv = easeDrive(driveState.current, driveMap[object.id] ?? a.value ?? 0, a.ease, a.speed ?? 1, dt);
     } else {
       dv = computeDriveValue(a, state.clock.elapsedTime + phase.current);
     }

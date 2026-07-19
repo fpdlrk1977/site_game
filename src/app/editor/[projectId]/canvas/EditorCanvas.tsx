@@ -1122,7 +1122,7 @@ export function EditorCanvas() {
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
           <ManipulationHandles orbitRef={orbitRef} handleDraggingRef={handleDraggingRef} />
           <SelectionOutline />
-          <ActuatorGizmo />
+          <ActuatorGizmo orbitRef={orbitRef} />
 
           <PlacementGhost posRef={placeGhostPosRef} />
 

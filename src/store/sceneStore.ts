@@ -3,7 +3,7 @@ import { MathUtils, Quaternion, Euler, Vector3, Matrix4 } from 'three';
 import { worldBBox } from '@/lib/objectBBox';
 import { normalizeClipPivots } from '@/lib/animPivot';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
-import { OBJECT_PRESETS, PRESET_SELF } from '@/lib/objectPresets';
+import { OBJECT_PRESETS, PRESET_SELF, NODE_PRESETS } from '@/lib/objectPresets';
 
 // 추가 직후 아직 bbox(GLB 로드)가 없어 바닥 스냅을 못한 오브젝트 id들 — 로드되면 GlbObject가 재시도
 const pendingFloorSnap = new Set<string>();
@@ -146,6 +146,8 @@ interface SceneActions {
   addObject: (shape: PrimitiveShape, placeAt?: PlaceXZ) => void;
   // 완성형 프리셋(바퀴/문/동전)을 스탬프로 추가. 동전 등은 필요 시 'score' 변수 자동 생성.
   addPreset: (presetId: string, placeAt?: PlaceXZ) => void;
+  /** 다관절(중첩) 프리셋을 계층 트리로 스탬프(예: 로봇팔). 루트를 placeAt에 배치. */
+  addNodePreset: (presetId: string, placeAt?: PlaceXZ) => void;
   /** 펜 툴 프로파일로 돌출/회전체 오브젝트 생성 */
   addProfileObject: (shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean, profileRaw?: { x: number; y: number }[], smooth?: boolean) => void;
   /** 펜 툴 재편집 — 기존 돌출/회전체 오브젝트의 프로파일/두께를 갱신(형태 교체) */
@@ -716,6 +718,43 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       isModified: true,
       // 변수를 건드릴 때만 스냅샷에 포함(undo가 자동 생성 변수도 되돌리도록)
       ...withHistory({ objects, environment, ...(def.ensureScore ? { variables } : {}) }, past),
+    });
+  },
+
+  addNodePreset: (presetId, placeAt) => {
+    const def = NODE_PRESETS.find((p) => p.id === presetId);
+    if (!def) return;
+    objectCounter += 1;
+    // 노드 key → 새 UUID 매핑(부모 참조 리맵용)
+    const idByKey = new Map<string, string>();
+    for (const n of def.nodes) idByKey.set(n.key, MathUtils.generateUUID());
+    const rootKey = def.nodes.find((n) => !n.parentKey)?.key;
+    const created: ObjectNodeSchema[] = def.nodes.map((n) => {
+      const isRoot = !n.parentKey;
+      const base = makeBaseObject({
+        name: isRoot ? `${def.label} ${objectCounter}` : n.name,
+        isGroup: !!n.isGroup,
+        primitiveShape: n.primitiveShape,
+        material: n.material ? { ...n.material } : {},
+        parentId: n.parentKey ? (idByKey.get(n.parentKey) ?? null) : null,
+        position: { ...n.position },
+        rotation: n.rotation ? { ...n.rotation } : { x: 0, y: 0, z: 0 },
+        scale: n.scale ? { ...n.scale } : { x: 1, y: 1, z: 1 },
+      });
+      const o: ObjectNodeSchema = { ...base, id: idByKey.get(n.key)! };
+      if (n.actuator) o.actuator = { ...n.actuator, hinge: n.actuator.hinge ? { ...n.actuator.hinge } : undefined };
+      // 루트를 placeAt로 이동(자식은 부모 로컬이라 자동 따라감)
+      if (isRoot && placeAt) o.position = { ...o.position, x: placeAt.x, z: placeAt.z };
+      return o;
+    });
+    const rootId = rootKey ? idByKey.get(rootKey)! : created[0].id;
+    const { objects, environment, past } = get();
+    set({
+      objects: [...objects, ...created],
+      selectedId: rootId,
+      selectedIds: [rootId],
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
     });
   },
 
