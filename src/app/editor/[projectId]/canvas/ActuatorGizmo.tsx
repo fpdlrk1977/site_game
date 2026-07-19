@@ -134,20 +134,24 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
     if (!act || !id) { hideAll(); return; }
     const ref = refsMap.current.get(id);
     const lb = localBBox(objects, assets, id);
-    if (!ref || !ref.parent || !lb || lb.isEmpty()) { hideAll(); return; }
+    const haveBox = !!lb && !lb.isEmpty();
+    const isMotor = !!obj?.isActuator;
+    // 모터형은 bbox 없이도(빈 모터) 가이드 표시. 속성형은 bbox 필요.
+    if (!ref || !ref.parent || (!isMotor && !haveBox)) { hideAll(); return; }
     ref.updateWorldMatrix(true, false);
-    // 경첩 월드 위치
-    _h.copy(anchorLocalPoint(lb, act.hinge ?? { x: 0.5, y: 0.5, z: 0.5 })).applyMatrix4(ref.matrixWorld);
+    ref.matrixWorld.decompose(_wp, _wq, _ws);
+    // 경첩 월드 위치 — 모터형=자기 원점, 속성형=bbox 앵커
+    if (isMotor) _h.copy(_wp);
+    else _h.copy(anchorLocalPoint(lb!, act.hinge ?? { x: 0.5, y: 0.5, z: 0.5 })).applyMatrix4(ref.matrixWorld);
     sp.position.copy(_h);
     const hScale = Math.max(0.02, camera.position.distanceTo(_h) * 0.02); // 화면상 일정 크기
     sp.scale.setScalar(hScale);
     // 축 방향(월드) — 오브젝트 회전 반영
-    ref.matrixWorld.decompose(_wp, _wq, _ws);
     _axis.set(act.axis === 'x' ? 1 : 0, act.axis === 'y' ? 1 : 0, act.axis === 'z' ? 1 : 0).applyQuaternion(_wq).normalize();
-    // 선 길이 = 오브젝트 월드 bbox 최대 변의 60%(+여유)
-    _wbox.copy(lb).applyMatrix4(ref.matrixWorld);
-    _wbox.getSize(_p);
-    const len = Math.max(_p.x, _p.y, _p.z) * 0.6 + 0.2;
+    // 선 길이 = 월드 bbox 최대 변의 60%(+여유). 빈 모터는 기본 반경.
+    let len: number;
+    if (haveBox) { _wbox.copy(lb!).applyMatrix4(ref.matrixWorld); _wbox.getSize(_p); len = Math.max(_p.x, _p.y, _p.z) * 0.6 + 0.2; }
+    else len = 1.2;
     const arr = geo.attributes.position.array as Float32Array;
     _p.copy(_h).addScaledVector(_axis, -len);
     arr[0] = _p.x; arr[1] = _p.y; arr[2] = _p.z;
@@ -160,7 +164,7 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
     if (act.kind !== 'rotate') { fan.visible = false; edge.visible = false; minH.visible = false; maxH.visible = false; return; }
 
     // 기준 반경 벡터 = 회전축에 수직인 로컬 축(bbox 긴 쪽) → 월드 → 반경 len.
-    lb.getSize(_size);
+    if (haveBox) lb!.getSize(_size); else _size.set(1, 1, 1);
     let refLocalX = 0, refLocalY = 0, refLocalZ = 0;
     if (act.axis === 'y') { if (_size.z > _size.x) refLocalZ = 1; else refLocalX = 1; }
     else if (act.axis === 'x') { if (_size.z > _size.y) refLocalZ = 1; else refLocalY = 1; }

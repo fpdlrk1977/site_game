@@ -13,7 +13,7 @@ export function MotionSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
   const hasMotion = !!obj.motion;
   return (
           <GroupBox>
-          <SectionHeader title="Motion" hint="Ambient animation that always plays in the viewer. Float / Spin / Pulse / Orbit / Wander (roams freely within an area like a hot-air balloon). Visual-only by default; turn on 'With collider' to make it a real moving obstacle in play mode." isOpen={open} onToggle={onToggle} dot={hasMotion} />
+          <SectionHeader title="Motion (ambient)" hint="Decorative movement that always loops in the viewer — no trigger needed. Float / Spin / Pulse / Orbit / Wander (roams freely within an area like a hot-air balloon). Visual-only by default; turn on 'With collider' for a real moving obstacle. ↔ For a mechanical joint that opens/closes on cue use Actuator; for a scripted keyframe sequence use Animation." isOpen={open} onToggle={onToggle} dot={hasMotion} />
           {open && <div className="px-3 pb-4 space-y-2">
             {(() => {
               const m = obj.motion;

@@ -647,11 +647,12 @@ export function ViewerObject({
   // 경첩 로컬점(anchorLocalPoint) — rotate 관절의 고정점. slide/미설정이면 null.
   const actHinge = useMemo<[number, number, number] | null>(() => {
     if (!object.actuator) return null;
+    if (object.isActuator) return null; // 모터형: 자기 원점이 경첩(자식들이 원점 기준 회전)
     const lb = localBBox(allObjects, assets, object.id);
     if (!lb || lb.isEmpty()) return null;
     const h = anchorLocalPoint(lb, object.actuator.hinge ?? { x: 0.5, y: 0.5, z: 0.5 });
     return [h.x, h.y, h.z];
-  }, [object.actuator, object.id, allObjects, assets]);
+  }, [object.actuator, object.isActuator, object.id, allObjects, assets]);
   // variable/event 구동 목표(0..1) — ViewerClient가 컨텍스트로 제공. manual/oscillate는 null(MotionGroup 자체 계산).
   const actDriveMap = useContext(ActuatorDriveContext);
   const actDrive = actuator && (actuator.drive === 'variable' || actuator.drive === 'event')

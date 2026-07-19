@@ -90,6 +90,42 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **확인 필요(브라우저)**: ~~①로봇팔 스탬프→▶플레이서 4관절 스윕~~ **✅ 확인 완료(사용자, "잘 움직인다")** · ②박스 rotate 관절 선택 시 부채꼴 표시·min/max 핸들 드래그로 각도 조절(undo 1회) · ③variable 구동 varMin/varMax 매핑(체력바 등) · ④이징 smooth/linear/inout 느낌 차이(event/variable 구동) · ⑤콜라이더 동반 시 시각=콜라이더 이징 일치.
 - **미확인 잔여**: 액추에이터 variable 구동 자체(Phase 5b부터 미확인, 이벤트와 동일 경로).
 
+### 🦾 진행 중 (2026-07-19) — 액추에이터 Phase 7: 모터형(부품) 액추에이터 M1 — 브라우저 확인 대기
+> 사용자 요청·확정: **액추에이터를 "독립 부품(모터)"으로** — 씬에 모터 오브젝트(dot)를 놓고 **다른 오브젝트를 연결(재부모화)** 하면 모터가 그것을 구동. 기존 속성형(오브젝트에 actuator 얹기)과 **공존, 모터형을 주력**. 연결=재부모화. tsc 클린. **브라우저 확인 대기.**
+> - **핵심**: 모터 = `isGroup:true + isActuator:true + actuator`. 자식(연결된 오브젝트)을 **모터 원점(=경첩)** 기준으로 구동 → 런타임은 기존 그룹+actuator 중첩 경로 그대로 재사용(로봇팔과 동일 원리). 경첩=원점이라 3×3 피커 불필요(모터를 경첩 자리로 옮기고 회전시켜 축 맞춤).
+- **스키마**(`scene.ts`): `ObjectNodeSchema.isActuator?`(옵셔널·하위호환, normalize 통과 보존).
+- **스토어**(`sceneStore`): `addActuatorObject(placeAt?)`(모터 오브젝트 생성, 기본 Y회전·oscillate) + `PendingPlacement 'actuator'` + `commitPlacement`. **★ `moveObject`의 `recenterGroup`를 모터엔 스킵**(모터는 원점=경첩이라 재중심하면 경첩이 자식 중심으로 튐 — 중요 수정). `ungroupSelected`도 모터 제외(부품은 삭제로만).
+- **뷰어/콜라이더**: `ViewerObject.actHinge`·`PlayCanvas.hingeVec`가 `isActuator`면 **null(원점 경첩)** 반환 → 자식이 모터 원점 기준 회전. (motion과 배타·이징·drive 전부 승계.)
+- **에디터**: 신규 `MotorObjectInstance`(EditorObjectInstance 분기, isGroup보다 먼저) — 원점에 **클릭 가능한 주황 dot**(비어 있어도 선택 가능) + 자식 중첩 렌더. `ActuatorGizmo`가 모터면 경첩=원점·빈 모터도 축/부채꼴 표시(기본 반경 1.2).
+- **인스펙터**(`ActuatorSection` 모터 모드): 켜기 토글·경첩 피커·콜라이더 토글 숨김, "트리에서 드래그해 연결" 안내. `InspectorPanel`에서 모터는 Motion/Animation 숨기고 Actuator만 노출(항상 펼침).
+- **연결 = 트리 드래그**: 오브젝트를 모터 아래로 드롭 → `moveObject inside`가 **월드 변환 보존하며 재부모화**(기존 로직). → ▶ 플레이서 그 오브젝트가 모터 축 기준으로 돎.
+- **진입점/아이콘**: 툴바 ✨ 프리셋 드롭다운에 **"모터 (연결해서 돌리기)"**(`Cog`, 배치 모드) · 트리 아이콘 `Cog`.
+- **확인 필요(브라우저)**: 툴바→모터 배치(dot) → 트리에서 박스를 모터로 드래그(연결, 제자리 유지) → ▶ 플레이서 박스가 모터 원점 기준 회전 · 모터 옮겨도 경첩 안 튐 · 모터 선택 시 축/부채꼴/핸들 · 축·범위·drive(oscillate/event/variable) 바꿔보기.
+- **M1 미포함(후속 M2)**: 인스펙터 "연결/해제" 버튼(드래그 대신 클릭) · 로봇팔을 모터 체인으로 재구성 · 모터+콜라이더(그룹 콜라이더 구동) · set_actuator 이벤트 대상에 모터 노출 확인 · 모터 라벨/문구 다듬기.
+
+#### Phase 7 M2 (2026-07-19) — 모터 연결 UX·콜라이더·모터체인 + ★M1 플레이 라우팅 버그픽스 — 브라우저 확인 대기
+> M1 위에 M2 전부 구현(사용자 "컨펌 없이 순차 진행"). tsc 클린 + **로봇팔(모터체인) 구조 테스트 11/11** + dev 컴파일/편집·플레이 라우트 200.
+- **★ M1 플레이 라우팅 버그픽스(중요)**: 모터(그룹·모션없음)가 `PlayCanvas`에서 `groupObjects→GroupWithCollision`(정적 자식 콜라이더)로 가서 **플레이 모드에서 관절이 안 돌던** 문제. `groupObjects`에서 `isActuator` 제외 → 모터는 `movingGroups`(시각)로 가 **ViewerObject가 actuator 구동**(자식 회전). (M1 시각 검증은 됐으나 플레이 콜라이더 경로가 정적으로 굳던 것.)
+- **M2-1 연결/해제 UI**(신규 `MotorLinkSection.tsx` + `sceneStore.reparentObject`): 신규 `reparentObject(objId, newParentId|null)`(월드 변환 보존 재부모화·단일 undo). 인스펙터 = 모터 선택 시 **연결된 부품 목록+해제**, 일반 오브젝트 선택 시(씬에 모터 있으면) **"모터에 연결" 드롭다운/해제**. InspectorPanel Actuator 아래 렌더. (트리 드래그 연결과 병행.)
+- **M2-2 이벤트 대상**: `set_actuator`가 이미 `objects.filter(o=>o.actuator)`라 **모터 자동 포함**(모터 Drive=이벤트로 설정 시 여닫힘). 무변경 확인.
+- **M2-4 모터+콜라이더**: `PlayCanvas`에 `actuatorGroupColliders`(=`isActuator && actuator.collider`) 버킷 추가 → **기존 `ActuatorCollider` 재사용**(hinge=원점 이미 처리·`ViewerObject noTransform noMotion`에 `allObjects` 전달해 자식 서브트리 렌더 → hull/trimesh 콜라이더 자동 생성, kinematic 구동). `ActuatorSection` 모터에도 **콜라이더 토글 재노출**. → 연결된 부품이 플레이서 진짜 부딪힘.
+- **M2-5 로봇팔=모터 체인**: `ROBOT_ARM` 4관절을 `isActuator:true`(hinge 제거·원점=경첩)로 전환 = **모터 체인**. 마디 base가 각 모터 원점이라 예전 hinge{y:0}과 **동일 거동**(behavior-preserving). `PresetNode.isActuator?` + `addNodePreset` 반영. 구조 테스트 11/11(연결 정렬·모터·hinge 없음).
+- **확인 필요(브라우저)**: ①모터 배치→오브젝트 선택→인스펙터 "모터에 연결"(또는 트리 드래그)→▶플레이서 회전(**콜라이더 경로 버그픽스 확인**) · ②모터 선택 시 연결 부품 목록·해제 · ③모터 콜라이더 ON→캐릭터가 도는 부품에 막힘 · ~~④로봇팔 스탬프→관절이 모터(dot·Cog 아이콘)로 표시~~ **✅ 관절=모터(Cog) 표시 확인(사용자)** · 플레이 스윕 동일(미확인).
+
+### 🔜 다음 세션 시작점 (2026-07-20, 다른 PC) — 모터 액추에이터 이어보기
+> 오늘(07-19) 모터형 액추에이터 M1+M2 구현 완료. 내일은 **모터 부분을 더 다듬는다**(사용자). 아래부터 시작.
+- **① 남은 브라우저 검증**(오늘 못 본 것): ⓐ모터에 오브젝트 연결→**▶ 플레이서 실제 회전**(오늘 M1 플레이 라우팅 버그픽스했음 — 이게 핵심 확인) · ⓑ인스펙터 "연결/해제" 동작 · ⓒ모터 콜라이더 ON→캐릭터가 도는 부품에 막힘 · ⓓ모터 variable/event 구동.
+- **② 모터 다듬기 후보(M3)** — 골라서:
+  - 뷰포트에서 **3D로 연결**(오브젝트 클릭→모터 클릭, 트리 드래그 대안) · 모터 **축 방향 드래그 기즈모**(로컬축 회전 대신 자유 방향)
+  - **모터 프리셋**: 문(모터+판자)·엘리베이터(slide 모터)·기어 한 쌍·회전문 — 스탬프로 바로
+  - 한 모터에 **여러 부품**(양문·톱니 여러 개) UX 확인(런타임은 이미 됨)
+  - 모터 라벨/문구·가이드 색·dot 크기 다듬기
+- **핵심 파일**: 모델=`types/scene.ts`(`isActuator`) · 생성/연결=`sceneStore`(`addActuatorObject`·`reparentObject`·`addNodePreset`) · 에디터=`EditorObjectInstance`(`MotorObjectInstance` dot)·`ActuatorGizmo`(경첩=원점 분기)·`ActuatorSection`(모터 모드)·`MotorLinkSection`(연결 UI) · 플레이=`PlayCanvas`(`actuatorGroupColliders`·`groupObjects`서 모터 제외) · 뷰어=`ViewerObject`(actHinge null) · 프리셋=`objectPresets.ts`(로봇팔 모터체인).
+- **기준 문서**: `doc/PIVOT_MANIPULATION.md §6`. 위 "Phase 7 M1/M2" 블록에 상세.
+
+### 프리셋 배치 모드 (2026-07-19) — ✅ 확인 완료
+> 툴바 ✨ 프리셋(바퀴·문·동전·로봇팔)도 프리미티브처럼 **클릭 위치에 배치**(사용자 요청). `PendingPlacement`에 `preset`/`nodePreset` 종류 추가 + `commitPlacement`가 `addPreset`/`addNodePreset(presetId, at)` 호출. 툴바는 직접 생성 대신 `beginPlacement` 사용(고스트·ESC 취소·배너 기존 시스템 재사용). 로봇팔은 루트만 placeAt로 옮기고 자식 관절은 로컬이라 자동 추종. tsc·컴파일 클린. **✅ 확인 완료(사용자, "잘된다").**
+
 ### (이전) 🧭 다음 작업 결정 대기 (2026-07-18)
 - **(D) Phase 5 마무리 → 다른 영역 전환**:
   - **Phase 4** — 애니 피벗(AnimTrack.pivot) 통합(정규화 변환). *중, 회귀 위험(기존 애니 클립 건드림)*. 기준 `doc/PIVOT_MANIPULATION.md §3.1 결정①(A 단계적)`.

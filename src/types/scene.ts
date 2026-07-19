@@ -350,6 +350,10 @@ export interface ObjectNodeSchema {
   motion?: MotionConfig;
   // 관절(액추에이터) — 경첩 기준 축 회전/직선 이동. motion과 배타(있으면 motion 무시). doc/PIVOT_MANIPULATION.md §6.
   actuator?: ActuatorConfig;
+  // 모터형 액추에이터 — 이 오브젝트 자체가 "모터 부품"(메쉬 없는 그룹, 에디터에 dot 표식).
+  //   연결된 자식들을 자기 원점(=경첩)·축 기준으로 구동. isGroup:true와 함께 씀. hinge는 원점 고정(피커 없음).
+  //   (속성형: 일반 오브젝트에 actuator만 얹어 그 오브젝트가 직접 움직임 — 하위호환 공존.)
+  isActuator?: boolean;
   // 기본 애니메이션 클립 — GLB 내장 클립 중 트리거 없이 씬 로드 시 자동 루프 재생할 클립 이름.
   // 이벤트(click/hover/area/animate_object) 트리거 클립이 오면 fadeOut되며 덮인다(복귀 없음 — MVP).
   defaultClip?: string;

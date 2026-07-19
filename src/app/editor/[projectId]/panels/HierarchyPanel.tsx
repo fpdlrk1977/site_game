@@ -32,6 +32,7 @@ import {
   PenTool,
   Boxes,
   CirclePile,
+  Cog,
   Focus,
   Unlink,
 } from "lucide-react";
@@ -55,6 +56,7 @@ const SHAPE_ICONS: Record<string, LucideIcon> = {
 };
 
 function getIcon(obj: ObjectNodeSchema, isCopyRoot = false): LucideIcon {
+  if (obj.isActuator) return Cog; // 모터형 액추에이터(부품)
   if (obj.clonerClone) return CircleDot; // 클로너가 생성한 복제본
   if (obj.clonerConfig) return Grid3x3; // 클로너 그룹
   if (obj.isGroup && obj.prefabId) return isCopyRoot ? Focus : CirclePile; // 프리팹 루트 — 원본=CirclePile, 사본=Focus

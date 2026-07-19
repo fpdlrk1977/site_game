@@ -14,6 +14,7 @@ import { EnvironmentPanel } from './inspector/EnvironmentPanel';
 import { GlbClipPicker, useGlbClipNames } from './inspector/GlbClipPicker';
 import { MotionSection } from './inspector/MotionSection';
 import { ActuatorSection } from './inspector/ActuatorSection';
+import { MotorLinkSection } from './inspector/MotorLinkSection';
 import { AnimationClipSection } from './inspector/AnimationClipSection';
 import { PhysicsSection } from './inspector/PhysicsSection';
 import { LightSection } from './inspector/LightSection';
@@ -282,14 +283,17 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
         {/* Physics — 그룹·라이트 제외. enable 스위치만(화살표 없음) */}
         {!obj.light && !obj.isGroup && <PhysicsSection obj={obj} />}
 
-        {/* Motion — 앰비언트 애니메이션 (라이트 제외) */}
-        {!obj.light && <MotionSection obj={obj} open={isOpen('motion')} onToggle={() => toggleSection('motion')} />}
+        {/* Motion — 앰비언트 애니메이션 (라이트·모터 제외) */}
+        {!obj.light && !obj.isActuator && <MotionSection obj={obj} open={isOpen('motion')} onToggle={() => toggleSection('motion')} />}
 
-        {/* Actuator — 관절(경첩 회전/직선 이동, 라이트 제외). doc/PIVOT_MANIPULATION.md §6 */}
-        {!obj.light && <ActuatorSection obj={obj} open={isOpen('actuator')} onToggle={() => toggleSection('actuator')} />}
+        {/* Actuator — 관절(경첩 회전/직선 이동, 라이트 제외). 모터형은 항상 노출. doc/PIVOT_MANIPULATION.md §6 */}
+        {!obj.light && <ActuatorSection obj={obj} open={isOpen('actuator') || !!obj.isActuator} onToggle={() => toggleSection('actuator')} />}
 
-        {/* Animation — 사용자 저작 키프레임 클립 (라이트 제외, 그룹 포함). ANIMATION.md */}
-        {!obj.light && <AnimationClipSection obj={obj} open={isOpen('animclip')} onToggle={() => toggleSection('animclip')} />}
+        {/* 모터 연결/해제 — 모터엔 연결된 부품 목록, 일반 오브젝트엔 모터에 연결(라이트 제외) */}
+        {!obj.light && <MotorLinkSection obj={obj} />}
+
+        {/* Animation — 사용자 저작 키프레임 클립 (라이트·모터 제외, 그룹 포함). ANIMATION.md */}
+        {!obj.light && !obj.isActuator && <AnimationClipSection obj={obj} open={isOpen('animclip')} onToggle={() => toggleSection('animclip')} />}
 
         {/* Animation — GLB 내장 클립을 트리거 없이 자동 재생(idle/앰비언트). GLB 오브젝트 전용 */}
         {!obj.isGroup && obj.assetId && animGlbUrl && animClips && animClips.length > 0 && (() => {

@@ -19,6 +19,7 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
   const { updateObject, pushHistory } = useSceneStore();
   const variables = useSceneStore((s) => s.variables);
   const act = obj.actuator;
+  const motor = !!obj.isActuator; // 모터형: 항상 켜짐·경첩=원점(피커 없음)
   const setA = (patch: Partial<ActuatorConfig>) =>
     updateObject(obj.id, { actuator: { ...(obj.actuator ?? { kind: 'rotate', axis: 'y', min: 0, max: 90, drive: 'manual' }), ...patch } });
 
@@ -42,18 +43,26 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
   return (
     <GroupBox>
       <SectionHeader
-        title="Actuator (joint)"
-        hint="Turn an object into a joint: rotate around a hinge (door/arm) or slide along an axis (piston), within a min~max range. Exclusive with Motion. Preview the movement in ▶ Play."
+        title={motor ? 'Motor' : 'Actuator (joint)'}
+        hint={motor
+          ? '이 오브젝트는 모터(부품)입니다. 트리에서 다른 오브젝트를 이 모터 아래로 끌어 연결하면, 연결된 것이 모터의 원점(=경첩)·축을 중심으로 돕니다. 축·범위·구동을 아래에서 설정하고 ▶ 플레이로 확인하세요.'
+          : 'Turn an object into a mechanical joint: rotate around a hinge (door/arm) or slide along an axis (piston), within a min~max range. Reacts to game state (variable/event), holds its position, can carry a real collider. Exclusive with Motion; preview in ▶ Play. ↔ For a free-form scripted sequence (curved path, several channels at once) use Animation; for always-on decorative movement use Motion.'}
         isOpen={open}
         onToggle={onToggle}
         dot={!!act}
       />
       {open && (
         <div className="px-3 pb-4 space-y-2">
-          <label className="flex items-center gap-2 text-[10px] text-muted/70">
-            <Toggle value={!!act} onChange={enable} />
-            <span>관절 사용 (motion과 배타)</span>
-          </label>
+          {motor ? (
+            <p className="text-[10px] text-muted/60">
+              경첩 = <b>모터 위치</b>(dot). 모터를 경첩 자리로 옮기고 회전시켜 축 방향을 맞추세요. 트리에서 오브젝트를 이 모터로 <b>드래그하면 연결</b>됩니다.
+            </p>
+          ) : (
+            <label className="flex items-center gap-2 text-[10px] text-muted/70">
+              <Toggle value={!!act} onChange={enable} />
+              <span>관절 사용 (motion과 배타)</span>
+            </label>
+          )}
 
           {act && (
             <>
@@ -76,8 +85,8 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 </div>
               </div>
 
-              {/* 경첩 3×3 — 회전축에 수직인 평면. rotate 전용. */}
-              {act.kind === 'rotate' && (
+              {/* 경첩 3×3 — 회전축에 수직인 평면. rotate 전용. 모터형은 원점=경첩이라 숨김. */}
+              {act.kind === 'rotate' && !motor && (
                 <div>
                   <span className="text-[10px] text-muted/50 block mb-1 font-semibold tracking-wide">경첩 (Hinge) · {act.axis.toUpperCase()}축 수직면</span>
                   <div className="flex gap-2 items-start">
@@ -182,13 +191,14 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                 </div>
               )}
 
+              {/* 콜라이더 동반 — 속성형·모터형 공통. 모터형은 연결된 부품 서브트리가 부딪히는 장애물이 됨. */}
               <label className="flex items-center gap-2 text-[10px] text-muted/70 pt-0.5">
                 <Toggle value={act.collider === true} onChange={(v) => { setA({ collider: v }); pushHistory(); }} />
-                <span>콜라이더 동반 (플레이 모드에서 진짜 부딪히는 문/장애물)</span>
+                <span>{motor ? '콜라이더 동반 (연결된 부품이 진짜 부딪히는 장애물)' : '콜라이더 동반 (플레이 모드에서 진짜 부딪히는 문/장애물)'}</span>
               </label>
 
               <p className="text-[10px] text-muted/50">
-                에디터는 정적입니다. <b>▶ 플레이</b>로 실제 움직임을 확인하세요. Motion과 함께 못 씁니다(관절 우선). <b>콜라이더 OFF</b>=통과(장식), <b>ON</b>=부딪히는 관절(hull 근사·캐릭터 라이딩 미지원).
+                에디터는 정적입니다. <b>▶ 플레이</b>로 실제 움직임을 확인하세요.{motor ? ' 연결(자식)된 오브젝트가 함께 돕니다.' : ' Motion과 함께 못 씁니다(관절 우선). '}<b>콜라이더 OFF</b>=통과(장식), <b>ON</b>=부딪히는 관절(hull/trimesh 근사·캐릭터 라이딩 미지원).
               </p>
             </>
           )}

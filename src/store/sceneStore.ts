@@ -47,7 +47,10 @@ export type PendingPlacement =
   | { kind: 'asset'; asset: AssetRefSchema }
   | { kind: 'content'; contentType: ContentType }
   | { kind: 'particle'; preset: ParticlePreset }
-  | { kind: 'light'; lightType: LightType };
+  | { kind: 'light'; lightType: LightType }
+  | { kind: 'preset'; presetId: string }        // 완성형 프리셋(바퀴/문/동전)
+  | { kind: 'nodePreset'; presetId: string }    // 다관절 프리셋(로봇팔)
+  | { kind: 'actuator' };                        // 모터형 액추에이터 부품
 type PlaceXZ = { x: number; z: number };
 
 interface HistoryEntry {
@@ -148,6 +151,8 @@ interface SceneActions {
   addPreset: (presetId: string, placeAt?: PlaceXZ) => void;
   /** 다관절(중첩) 프리셋을 계층 트리로 스탬프(예: 로봇팔). 루트를 placeAt에 배치. */
   addNodePreset: (presetId: string, placeAt?: PlaceXZ) => void;
+  /** 모터형 액추에이터 오브젝트(부품) 추가 — 자식으로 연결한 오브젝트를 원점 기준으로 구동. */
+  addActuatorObject: (placeAt?: PlaceXZ) => void;
   /** 펜 툴 프로파일로 돌출/회전체 오브젝트 생성 */
   addProfileObject: (shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean, profileRaw?: { x: number; y: number }[], smooth?: boolean) => void;
   /** 펜 툴 재편집 — 기존 돌출/회전체 오브젝트의 프로파일/두께를 갱신(형태 교체) */
@@ -191,6 +196,8 @@ interface SceneActions {
   commitTransforms: (updates: { id: string; position: Vec3Schema; rotation: Vec3Schema; scale: Vec3Schema }[]) => void;
   setObjectLocked: (id: string, locked: boolean) => void;
   moveObject: (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
+  /** 월드 변환을 보존하며 새 부모로 재부모화(null=최상위). 모터 연결/해제 등에 사용. 단일 undo. */
+  reparentObject: (objId: string, newParentId: string | null) => void;
   duplicateSelected: () => void;
   // 오브젝트 클립보드(Ctrl+C/V) — transient(저장 안 함, 세션 유지=씬 넘어 붙여넣기 가능). 붙여넣기는 항상 최상위(root).
   clipboard: { objects: ObjectNodeSchema[]; clips: AnimClip[] } | null;
@@ -734,6 +741,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       const base = makeBaseObject({
         name: isRoot ? `${def.label} ${objectCounter}` : n.name,
         isGroup: !!n.isGroup,
+        ...(n.isActuator ? { isActuator: true } : {}),
         primitiveShape: n.primitiveShape,
         material: n.material ? { ...n.material } : {},
         parentId: n.parentKey ? (idByKey.get(n.parentKey) ?? null) : null,
@@ -753,6 +761,26 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       objects: [...objects, ...created],
       selectedId: rootId,
       selectedIds: [rootId],
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  addActuatorObject: (placeAt) => {
+    objectCounter += 1;
+    const obj = makeBaseObject({
+      name: `모터 ${objectCounter}`,
+      isGroup: true,        // 자식을 담아 함께 구동(그룹 렌더 경로 재사용)
+      isActuator: true,     // 모터 표식 — dot 렌더·경첩=원점·전용 인스펙터
+      position: { x: placeAt?.x ?? 0, y: 0.5, z: placeAt?.z ?? 0 },
+      // 기본: Y축 회전 모터, 자동 왕복(연결하면 ▶ 플레이서 바로 돎)
+      actuator: { kind: 'rotate', axis: 'y', min: 0, max: 90, drive: 'oscillate', speed: 1, loop: 'pingpong', value: 0 },
+    });
+    const { objects, environment, past } = get();
+    set({
+      objects: [...objects, obj],
+      selectedId: obj.id,
+      selectedIds: [obj.id],
       isModified: true,
       ...withHistory({ objects, environment }, past),
     });
@@ -915,6 +943,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     else if (p.kind === 'content') get().addContentObject(p.contentType, at);
     else if (p.kind === 'particle') get().addParticleObject(p.preset, at);
     else if (p.kind === 'light') get().addLightObject(p.lightType, at);
+    else if (p.kind === 'preset') get().addPreset(p.presetId, at);
+    else if (p.kind === 'nodePreset') get().addNodePreset(p.presetId, at);
+    else if (p.kind === 'actuator') get().addActuatorObject(at);
     set({ pendingPlacement: null });
   },
 
@@ -1231,16 +1262,38 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
     // 멤버십이 바뀐 경우에만 관련 그룹 피벗을 자식 중심으로 재배치
     // (같은 부모 내 순서 변경은 중심이 그대로이므로 제외)
+    // ★ 모터(isActuator)는 원점=경첩이라 재중심 금지 — 옮기면 경첩이 자식 중심으로 튐.
     const oldParentId = dragged.parentId;
     if (newParentId !== oldParentId) {
-      if (newParentId && next.find((o) => o.id === newParentId)?.isGroup) {
-        next = recenterGroup(next, newParentId);
-      }
-      if (oldParentId && next.find((o) => o.id === oldParentId)?.isGroup) {
-        next = recenterGroup(next, oldParentId);
-      }
+      const np = newParentId ? next.find((o) => o.id === newParentId) : null;
+      const op = oldParentId ? next.find((o) => o.id === oldParentId) : null;
+      if (np?.isGroup && !np.isActuator) next = recenterGroup(next, newParentId!);
+      if (op?.isGroup && !op.isActuator) next = recenterGroup(next, oldParentId!);
     }
 
+    set({ objects: next, isModified: true, ...withHistory({ objects, environment }, past) });
+  },
+
+  reparentObject: (objId, newParentId) => {
+    const { objects, environment, past } = get();
+    const obj = objects.find((o) => o.id === objId);
+    if (!obj || newParentId === obj.parentId || newParentId === objId) return;
+    // 순환 방지 — 새 부모가 자기 자손이면 거부
+    if (newParentId && isDescendant(objects, newParentId, objId)) return;
+    // 월드 변환 유지 → 새 부모 기준 로컬로 변환
+    const world = computeWorldMatrix(objects, objId);
+    const parentWorld = newParentId ? computeWorldMatrix(objects, newParentId) : new Matrix4();
+    const local = parentWorld.invert().multiply(world);
+    const p = new Vector3(), q = new Quaternion(), s = new Vector3();
+    local.decompose(p, q, s);
+    const e = new Euler().setFromQuaternion(q);
+    const next = objects.map((o) => o.id === objId ? {
+      ...o,
+      parentId: newParentId,
+      position: { x: p.x, y: p.y, z: p.z },
+      rotation: { x: e.x * RAD2DEG_M, y: e.y * RAD2DEG_M, z: e.z * RAD2DEG_M },
+      scale: { x: s.x, y: s.y, z: s.z },
+    } : o);
     set({ objects: next, isModified: true, ...withHistory({ objects, environment }, past) });
   },
 
@@ -1697,6 +1750,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const group = objects.find((o) => o.id === selectedId);
     if (!group?.isGroup) return;
     if (group.prefabId) return; // 프리팹(원본/사본)은 그룹 해제 불가 — 사본은 '프리팹 해제(detach)'로만 링크 해제.
+    if (group.isActuator) return; // 모터는 그룹 해제 불가 — 부품(모터)은 삭제로만 없앤다.
 
     // 행렬 기반: 자식의 참 월드행렬(그룹 체인 포함)을 새 부모(그룹의 부모=중첩이면 조부모, 아니면 root)
     // 기준 로컬로 변환해 decompose. 회전+비균일 스케일에서도 위치/방향/크기가 어긋나지 않는다

@@ -491,6 +491,59 @@ function GroupObjectInstance({ object }: Props) {
   );
 }
 
+const MOTOR_COLOR = '#ff7a0d';
+// 모터형 액추에이터 — 메쉬 없는 그룹. 원점에 클릭 가능한 dot을 그려 비어 있어도 찾고/선택할 수 있게 한다.
+// 연결된 자식(재부모화된 오브젝트)은 그룹처럼 중첩 렌더. 실제 구동은 ▶ 플레이/뷰어(에디터는 정적).
+function MotorObjectInstance({ object }: Props) {
+  const groupRef = useRef<THREE.Group>(null);
+  const refsMap = useObjectRefs();
+  const selectedIds = useSceneStore((s) => s.selectedIds);
+  const selectedId = useSceneStore((s) => s.selectedId);
+  const children = useSceneStore(useShallow((s) => s.objects.filter((o) => o.parentId === object.id)));
+  const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
+
+  useLayoutEffect(() => {
+    if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
+    return () => { refsMap.current.delete(object.id); };
+  }, [object.id, refsMap]);
+  useLayoutEffect(() => {
+    const g = groupRef.current;
+    if (!g) return;
+    g.position.set(object.position.x, object.position.y, object.position.z);
+    g.rotation.set(object.rotation.x * DEG2RAD, object.rotation.y * DEG2RAD, object.rotation.z * DEG2RAD);
+    g.scale.set(object.scale.x, object.scale.y, object.scale.z);
+    g.visible = object.visible;
+  }, [object.position.x, object.position.y, object.position.z,
+      object.rotation.x, object.rotation.y, object.rotation.z,
+      object.scale.x, object.scale.y, object.scale.z, object.visible]);
+
+  return (
+    <group ref={groupRef} onPointerDown={markObjectHit}>
+      {/* 모터 dot — 클릭/더블클릭 선택 (비어 있어도 보이도록 항상 렌더) */}
+      <mesh
+        onClick={(e) => { e.stopPropagation(); selectByClick(object, e.nativeEvent.shiftKey); }}
+        onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
+      >
+        <sphereGeometry args={[0.12, 16, 16]} />
+        <meshBasicMaterial color={MOTOR_COLOR} />
+      </mesh>
+      <mesh raycast={() => null}>
+        <sphereGeometry args={[0.2, 12, 12]} />
+        <meshBasicMaterial color={MOTOR_COLOR} transparent opacity={0.14} depthWrite={false} />
+      </mesh>
+      {isSelected && (
+        <mesh raycast={() => null}>
+          <sphereGeometry args={[0.3, 10, 10]} />
+          <meshBasicMaterial color="#0D99FF" wireframe />
+        </mesh>
+      )}
+      {children.map((child) => (
+        <EditorObjectInstance key={child.id} object={child} />
+      ))}
+    </group>
+  );
+}
+
 export function EditorObjectInstance({ object }: Props) {
   const groupRef = useRef<THREE.Group>(null);
   const refsMap = useObjectRefs();
@@ -537,6 +590,7 @@ export function EditorObjectInstance({ object }: Props) {
   ]);
 
   // 그룹 오브젝트는 별도 컴포넌트로 렌더 (hooks 이후에 early return)
+  if (object.isActuator) return <MotorObjectInstance object={object} />;
   if (object.isGroup) return <GroupObjectInstance object={object} />;
   if (object.light) return <LightObjectInstance object={object} />;
 

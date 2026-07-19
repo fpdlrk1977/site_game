@@ -38,6 +38,7 @@ export interface PresetNode {
   parentKey?: string;                   // 부모 노드 key. 없으면 루트
   name: string;
   isGroup?: boolean;                    // 자식을 담는 관절 그룹은 true
+  isActuator?: boolean;                 // 모터형 액추에이터(부품·경첩=원점). isGroup과 함께 씀
   primitiveShape?: ObjectNodeSchema['primitiveShape'];
   material?: ObjectNodeSchema['material'];
   position: Vec3;                       // 부모 로컬 좌표
@@ -57,30 +58,31 @@ const JOINT_COL = { color: '#2f3238', roughness: 0.4, metalness: 0.65 }; // 관�
 const BASE_COL = { color: '#3a3d44', roughness: 0.4, metalness: 0.7 };   // 베이스
 
 // 로봇팔 — 베이스(Y회전 턴테이블) → 어깨(Z경첩) → 팔꿈치(Z경첩) → 손목(Y회전).
-// 각 관절 그룹은 경첩을 자기 밑면(hinge y:0)에 두고, 시각 마디 메쉬 + 다음 관절 그룹을 자식으로 갖는다.
+// 각 관절은 모터(isActuator·경첩=원점)이며, 시각 마디 메쉬 + 다음 관절 모터를 자식으로 갖는다(모터 체인).
 // 기본 구동 = oscillate(마디마다 다른 속도·개별 위상 → 자연스러운 스윕). ▶ 플레이서 스스로 움직인다.
+// (마디 base가 각 모터 원점이므로 예전 hinge{y:0}과 동일 거동 — 표현만 모터형으로 통일.)
 const ROBOT_ARM: NodePreset = {
   id: 'robot_arm',
   label: '로봇팔',
-  desc: '베이스+어깨+팔꿈치+손목 4관절이 자동으로 움직이는 다관절 팔(oscillate). ▶ 플레이서 스윕.',
+  desc: '베이스+어깨+팔꿈치+손목 4개 모터가 자동으로 움직이는 다관절 팔(oscillate). ▶ 플레이서 스윕.',
   nodes: [
-    { key: 'base', name: '로봇팔', isGroup: true, position: { x: 0, y: 0, z: 0 },
-      actuator: { kind: 'rotate', axis: 'y', hinge: { x: 0.5, y: 0, z: 0.5 }, min: -70, max: 70, drive: 'oscillate', speed: 0.6, loop: 'pingpong', value: 0 } },
+    { key: 'base', name: '로봇팔', isGroup: true, isActuator: true, position: { x: 0, y: 0, z: 0 },
+      actuator: { kind: 'rotate', axis: 'y', min: -70, max: 70, drive: 'oscillate', speed: 0.6, loop: 'pingpong', value: 0 } },
     { key: 'base_mesh', parentKey: 'base', name: '베이스', primitiveShape: 'cylinder', material: { ...BASE_COL },
       position: { x: 0, y: 0.15, z: 0 }, scale: { x: 0.9, y: 0.3, z: 0.9 } },
 
-    { key: 'shoulder', parentKey: 'base', name: '어깨', isGroup: true, position: { x: 0, y: 0.3, z: 0 },
-      actuator: { kind: 'rotate', axis: 'z', hinge: { x: 0.5, y: 0, z: 0.5 }, min: -25, max: 50, drive: 'oscillate', speed: 0.85, loop: 'pingpong', value: 0 } },
+    { key: 'shoulder', parentKey: 'base', name: '어깨', isGroup: true, isActuator: true, position: { x: 0, y: 0.3, z: 0 },
+      actuator: { kind: 'rotate', axis: 'z', min: -25, max: 50, drive: 'oscillate', speed: 0.85, loop: 'pingpong', value: 0 } },
     { key: 'seg1', parentKey: 'shoulder', name: '상완', primitiveShape: 'box', material: { ...ARM_COL },
       position: { x: 0, y: 0.7, z: 0 }, scale: { x: 0.28, y: 1.4, z: 0.28 } },
 
-    { key: 'elbow', parentKey: 'shoulder', name: '팔꿈치', isGroup: true, position: { x: 0, y: 1.4, z: 0 },
-      actuator: { kind: 'rotate', axis: 'z', hinge: { x: 0.5, y: 0, z: 0.5 }, min: 5, max: 95, drive: 'oscillate', speed: 1.05, loop: 'pingpong', value: 0 } },
+    { key: 'elbow', parentKey: 'shoulder', name: '팔꿈치', isGroup: true, isActuator: true, position: { x: 0, y: 1.4, z: 0 },
+      actuator: { kind: 'rotate', axis: 'z', min: 5, max: 95, drive: 'oscillate', speed: 1.05, loop: 'pingpong', value: 0 } },
     { key: 'seg2', parentKey: 'elbow', name: '전완', primitiveShape: 'box', material: { ...ARM_COL },
       position: { x: 0, y: 0.55, z: 0 }, scale: { x: 0.22, y: 1.1, z: 0.22 } },
 
-    { key: 'wrist', parentKey: 'elbow', name: '손목', isGroup: true, position: { x: 0, y: 1.1, z: 0 },
-      actuator: { kind: 'rotate', axis: 'y', hinge: { x: 0.5, y: 0, z: 0.5 }, min: -60, max: 60, drive: 'oscillate', speed: 1.4, loop: 'pingpong', value: 0 } },
+    { key: 'wrist', parentKey: 'elbow', name: '손목', isGroup: true, isActuator: true, position: { x: 0, y: 1.1, z: 0 },
+      actuator: { kind: 'rotate', axis: 'y', min: -60, max: 60, drive: 'oscillate', speed: 1.4, loop: 'pingpong', value: 0 } },
     { key: 'hand', parentKey: 'wrist', name: '그리퍼', primitiveShape: 'box', material: { ...JOINT_COL },
       position: { x: 0, y: 0.12, z: 0 }, scale: { x: 0.4, y: 0.24, z: 0.3 } },
   ],

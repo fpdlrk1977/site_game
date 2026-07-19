@@ -134,10 +134,11 @@ function ActuatorCollider({ object, assets, onEvent, allObjects }: {
   const hingeVec = useMemo(() => {
     const a = object.actuator;
     if (!a) return null;
+    if (object.isActuator) return null; // 모터형: 원점이 경첩
     const lb = localBBox(allObjects, assets, object.id);
     if (!lb || lb.isEmpty()) return null;
     return anchorLocalPoint(lb, a.hinge ?? { x: 0.5, y: 0.5, z: 0.5 });
-  }, [object.actuator, object.id, allObjects, assets]);
+  }, [object.actuator, object.isActuator, object.id, allObjects, assets]);
   useFrame((state, dt) => {
     const rb = rbRef.current;
     const a = object.actuator;
@@ -162,7 +163,8 @@ function ActuatorCollider({ object, assets, onEvent, allObjects }: {
       userData={{ objectId: object.id }}
     >
       <group scale={worldScl}>
-        <ViewerObject object={object} assets={assets} onEvent={onEvent} noTransform noMotion />
+        {/* allObjects 전달 — 모터형(그룹)이면 자식(연결된 부품)까지 렌더돼 hull/trimesh 콜라이더가 생성됨 */}
+        <ViewerObject object={object} assets={assets} onEvent={onEvent} allObjects={allObjects} noTransform noMotion />
       </group>
     </RigidBody>
   );
@@ -401,11 +403,14 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   // move_object로 옮겨지는(모션 없는) 그룹 → 하나의 kinematic 강체로 묶어 콜라이더까지 함께 이동(유령 콜라이더 방지).
   //   모션 그룹은 위 movingGroupColliders/아래 movingGroups가 담당하므로 여기선 !motion만.
   const movedGroups = allGroups.filter((o) => isMoved(o) && !o.motion && !isPassable(o));
-  // 모션 없는 그룹 → 기존 정적 GroupWithCollision(자식별 콜라이더). 통과·이동(move_object) 대상 제외.
-  const groupObjects = allGroups.filter((o) => !o.motion && !isPassable(o) && !isMoved(o));
-  // 나머지 그룹 → 시각 전용(장식). ViewerObject로 렌더해 애니메이션/표시만, 콜라이더 없음.
-  //   = 모션+콜라이더 미동반 그룹 + 통과 대상 그룹(모션·콜라이더 유무 무관). 여집합으로 잡아 누락 방지.
-  const movingGroups = allGroups.filter((o) => !movingGroupColliders.includes(o) && !groupObjects.includes(o) && !movedGroups.includes(o));
+  // 모터형 액추에이터 그룹(콜라이더 동반) → 자식 서브트리를 하나의 kinematic 강체로 묶어 관절로 구동(진짜 부딪히는 문). doc §6.
+  const actuatorGroupColliders = allGroups.filter((o) => o.isActuator && o.actuator?.collider === true && !isPassable(o));
+  // 모션 없는 그룹 → 기존 정적 GroupWithCollision(자식별 콜라이더). 통과·이동(move_object)·모터 제외.
+  //   ★ 모터(isActuator)는 정적 콜라이더면 관절이 안 돌아 정적으로 굳으므로 제외 → 시각(ViewerObject)이 구동.
+  const groupObjects = allGroups.filter((o) => !o.motion && !isPassable(o) && !isMoved(o) && !o.isActuator);
+  // 나머지 그룹 → 시각 전용(장식/모터 시각구동). ViewerObject로 렌더해 애니메이션/관절 구동, 콜라이더 없음.
+  //   = 모션+콜라이더 미동반 그룹 + 통과 그룹 + 모터(콜라이더 미동반). 여집합으로 잡아 누락 방지.
+  const movingGroups = allGroups.filter((o) => !movingGroupColliders.includes(o) && !groupObjects.includes(o) && !movedGroups.includes(o) && !actuatorGroupColliders.includes(o));
   // 조상 체인 정보 — 자식이 숨은 그룹 아래인지, 움직이는 그룹(하나의 강체로 이동) 아래인지.
   //   움직이는 그룹의 자식은 그 그룹 강체에 실려 함께 이동하므로 개별 콜라이더 라우팅에서 제외한다.
   const ancestorInfo = (o: ObjectNodeSchema) => {
@@ -547,6 +552,11 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
 
       {/* 관절(콜라이더 동반) — kinematic 강체를 관절로 구동(진짜 부딪히는 문/장애물). 5c. */}
       {actuatorColliderObjects.map((obj) => (
+        <ActuatorCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
+      ))}
+
+      {/* 모터형(콜라이더 동반) 그룹 — 연결된 부품 서브트리를 kinematic 강체로 묶어 관절 구동(진짜 부딪히는 모터). */}
+      {actuatorGroupColliders.map((obj) => (
         <ActuatorCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
