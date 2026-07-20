@@ -222,6 +222,9 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
     //   → 기즈모가 앵커 기준으로 스케일(하단 앵커면 아래 고정)/회전(앵커 축 회전). doc/PIVOT_MANIPULATION.md.
     //   애니 경첩(animPivot)이 있으면 그게 우선(기존 애니 경첩 편집 보존).
     const selObj = objects.find((o) => o.id === selectedId);
+    // 모터(액추에이터): 원점=경첩(dot)이 곧 회전축 → 이동/회전/스케일 기즈모를 항상 원점에 둔다.
+    //   (일반 그룹처럼 자식 bbox 중심에 두면 위젯이 경첩과 어긋나 헷갈림. doc/PIVOT_MANIPULATION.md §6)
+    if (selObj?.isActuator) { cLocalRef.current.set(0, 0, 0); return; }
     const anchorSet = !isCenterAnchor(selObj?.pivot);
     if ((transformMode === 'scale' || transformMode === 'rotate') && anchorSet && !animPivot) {
       const lb = localBBox(objects, assets, selectedId);

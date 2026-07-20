@@ -110,11 +110,17 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **M2-2 이벤트 대상**: `set_actuator`가 이미 `objects.filter(o=>o.actuator)`라 **모터 자동 포함**(모터 Drive=이벤트로 설정 시 여닫힘). 무변경 확인.
 - **M2-4 모터+콜라이더**: `PlayCanvas`에 `actuatorGroupColliders`(=`isActuator && actuator.collider`) 버킷 추가 → **기존 `ActuatorCollider` 재사용**(hinge=원점 이미 처리·`ViewerObject noTransform noMotion`에 `allObjects` 전달해 자식 서브트리 렌더 → hull/trimesh 콜라이더 자동 생성, kinematic 구동). `ActuatorSection` 모터에도 **콜라이더 토글 재노출**. → 연결된 부품이 플레이서 진짜 부딪힘.
 - **M2-5 로봇팔=모터 체인**: `ROBOT_ARM` 4관절을 `isActuator:true`(hinge 제거·원점=경첩)로 전환 = **모터 체인**. 마디 base가 각 모터 원점이라 예전 hinge{y:0}과 **동일 거동**(behavior-preserving). `PresetNode.isActuator?` + `addNodePreset` 반영. 구조 테스트 11/11(연결 정렬·모터·hinge 없음).
-- **확인 필요(브라우저)**: ①모터 배치→오브젝트 선택→인스펙터 "모터에 연결"(또는 트리 드래그)→▶플레이서 회전(**콜라이더 경로 버그픽스 확인**) · ②모터 선택 시 연결 부품 목록·해제 · ③모터 콜라이더 ON→캐릭터가 도는 부품에 막힘 · ~~④로봇팔 스탬프→관절이 모터(dot·Cog 아이콘)로 표시~~ **✅ 관절=모터(Cog) 표시 확인(사용자)** · 플레이 스윕 동일(미확인).
+- ~~**확인 필요(브라우저)**: ①모터 연결→▶플레이서 회전(콜라이더 경로 버그픽스) · ②연결 부품 목록·해제 · ③모터 콜라이더 ON→캐릭터 막힘~~ **✅ 전부 확인 완료(사용자, 2026-07-20 — TC-1~5). ④로봇팔 관절=모터(Cog) 표시도 확인.**
+
+### ✅ 모터 액추에이터 M1+M2 브라우저 검증 완료 (2026-07-20)
+> 사용자 TC-1~5 전부 확인("잘되는거 같아"). 액추에이터 핵심 기능 검증 종료. **variable 구동도 확인(Phase 5b부터 미확인이던 잔여 해소).**
+- ✅ **TC-1 ★모터 연결→▶플레이서 회전** (M1 플레이 라우팅 버그픽스 검증 — 최우선) · ✅ TC-2 인스펙터 연결/해제(`MotorLinkSection`) · ✅ TC-3 모터 콜라이더 ON→캐릭터 막힘 · ✅ TC-4 이벤트 구동(set_actuator toggle) · ✅ TC-5 variable 구동(boolean 변수 토글 0↔1).
+- **이번 세션 수정**: ①**기즈모 피벗** — 모터 선택 시 이동/회전/스케일 기즈모가 자식 중심이 아니라 **원점(dot=경첩)** 에 뜨도록 `GizmoController`에 `isActuator` 분기 추가(`cLocal=(0,0,0)`). ②**TC-5 안내 정정** — number 변수엔 토글 연산 없음(add/sub/…만), **boolean 변수라야 한 버튼 토글(반전)** 가능. `syncVarActuators`가 boolean을 0/1로 매핑(거짓=닫힘·참=열림).
+- **알려진 제약(보류)**: 무빙/액추에이터 콜라이더가 **가만히 선 캐릭터를 밀지 못하고 관통**(W 놓으면 통과) — Rapier kinematic character controller 한계. 하단 '알려진 제약/한계' 참고.
 
 ### 🔜 다음 세션 시작점 (2026-07-20, 다른 PC) — 모터 액추에이터 이어보기
-> 오늘(07-19) 모터형 액추에이터 M1+M2 구현 완료. 내일은 **모터 부분을 더 다듬는다**(사용자). 아래부터 시작.
-- **① 남은 브라우저 검증**(오늘 못 본 것): ⓐ모터에 오브젝트 연결→**▶ 플레이서 실제 회전**(오늘 M1 플레이 라우팅 버그픽스했음 — 이게 핵심 확인) · ⓑ인스펙터 "연결/해제" 동작 · ⓒ모터 콜라이더 ON→캐릭터가 도는 부품에 막힘 · ⓓ모터 variable/event 구동.
+> 오늘(07-19) 모터형 액추에이터 M1+M2 구현 완료. **✅ 2026-07-20 브라우저 검증 완료(위 블록).** 다음은 **모터 다듬기(M3)** 중 골라서.
+- ~~**① 남은 브라우저 검증**~~ **✅ 완료(2026-07-20, TC-1~5).**
 - **② 모터 다듬기 후보(M3)** — 골라서:
   - 뷰포트에서 **3D로 연결**(오브젝트 클릭→모터 클릭, 트리 드래그 대안) · 모터 **축 방향 드래그 기즈모**(로컬축 회전 대신 자유 방향)
   - **모터 프리셋**: 문(모터+판자)·엘리베이터(slide 모터)·기어 한 쌍·회전문 — 스탬프로 바로
@@ -1138,6 +1144,7 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 
 ## 알려진 제약/한계
 
+- **액추에이터/무빙 콜라이더 "미는" 미지원 (2026-07-20 확인, 보류)**: 움직이는 콜라이더(actuator/moving = kinematicPosition)가 **가만히 선 캐릭터를 밀지 못하고 관통**한다. 원인 = Rapier `KinematicCharacterController.computeColliderMovement`가 **캐릭터 자신의 `desired` 이동에 대해서만** 충돌 해결(움직이는 콜라이더가 나를 미는 건 미계산). 증상: W로 밀 땐 캐릭터 전진이 막혀 밀리는 듯 보이나, **밀리는 중 W를 놓으면 물체가 통과**. 해결하려면 무빙 플랫폼 "pusher" 로직(접촉 시 콜라이더 변위를 캐릭터 `desired`에 합산) 필요 — 회귀 위험으로 **보류**. 다시 문제되면 그때 구현. (`PlayModeController.tsx:359`, `PlayCanvas.tsx` ActuatorCollider/MovingCollider)
 - `go_to_scene`: **경로의 현재 씬 id를 대상 id로 치환**해 이동 → `/space`·`/embed`·커스텀도메인(경로에 id 포함 시) 모두 대응. 경로에 id 없으면 `/space/{id}` 폴백. (뷰어 통합 리팩터 2026-07-07)
 - `focus_object`: 탐색=OrbitControls 이동, **플레이=팔로우 대신 대상 줌**(2026-07-08, 팝업 닫기/Esc로 복귀+이동 잠금 해제). `reset_camera`: 탐색(orbit) 모드 전용 — 플레이는 캐릭터 팔로우 카메라라 무시됨.
 - ~~솔리드는 area 트리거로 애니메이션 재생 안 됨~~ **[해소 — 2026-07-10]**: `ViewerClient.handleObjectEvent`가 **모든 트리거에서 `play_animation` 처리**(→ clipRequests→externalClip)하고, 솔리드는 `PlayModeController`의 물리 접촉 콜백 `onObstacleEnter`가 area_enter를 발동하므로 → **솔리드+area+애니메이션 동작**. (센서는 PhysicsObject activeClip 경로와 중복이나 같은 클립이라 무해.)
