@@ -13,7 +13,8 @@ import { localBBox } from '@/lib/objectBBox';
 import { useSceneStore, CHARACTER_PREVIEW_ID } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { SectionHeader, GroupBox, Toggle } from './ui';
-import type { ObjectNodeSchema, AnimClip, AnimKeyframe } from '@/types/scene';
+import { PivotPicker } from './PivotPicker';
+import type { ObjectNodeSchema, AnimClip, AnimKeyframe, Vector3 } from '@/types/scene';
 
 const snap = (o: ObjectNodeSchema): Omit<AnimKeyframe, 'time'> => ({
   position: { ...o.position }, rotation: { ...o.rotation }, scale: { ...o.scale },
@@ -110,15 +111,18 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
   const lb = localBBox(objects, assets, obj.id);
   const bx = lb ? { minx: lb.min.x, maxx: lb.max.x, miny: lb.min.y, maxy: lb.max.y, minz: lb.min.z, maxz: lb.max.z }
                 : { minx: -0.5, maxx: 0.5, miny: -0.5, maxy: 0.5, minz: -0.5, maxz: 0.5 };
-  const pivotPresets: { id: string; label: string; pivot?: { x: number; y: number; z: number } }[] = [
-    { id: 'center', label: '중심', pivot: undefined },
-    { id: 'left', label: '좌 −X', pivot: { x: bx.minx * s.x, y: 0, z: 0 } },
-    { id: 'right', label: '우 +X', pivot: { x: bx.maxx * s.x, y: 0, z: 0 } },
-    { id: 'front', label: '앞 −Z', pivot: { x: 0, y: 0, z: bx.minz * s.z } },
-    { id: 'back', label: '뒤 +Z', pivot: { x: 0, y: 0, z: bx.maxz * s.z } },
-    { id: 'bottom', label: '아래 −Y', pivot: { x: 0, y: bx.miny * s.y, z: 0 } },
-    { id: 'top', label: '위 +Y', pivot: { x: 0, y: bx.maxy * s.y, z: 0 } },
-  ];
+  // 오브젝트 앵커와 동일한 코너 피커(PivotPicker) 사용 → 정규화(0~1 코너) ↔ 애니 피벗(원점 기준 스케일드 로컬 오프셋) 변환.
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const invLerp = (a: number, b: number, v: number) => (Math.abs(b - a) < 1e-6 ? 0.5 : (v - a) / (b - a));
+  const snap01 = (t: number) => (Math.abs(t) < 0.25 ? 0 : Math.abs(t - 1) < 0.25 ? 1 : 0.5);
+  // 정규화 코너 → 애니 피벗 오프셋. 중심(undefined)=회전 중심(피벗 없음).
+  const normToAnimPivot = (p?: Vector3) => p
+    ? { x: lerp(bx.minx, bx.maxx, p.x) * s.x, y: lerp(bx.miny, bx.maxy, p.y) * s.y, z: lerp(bx.minz, bx.maxz, p.z) * s.z }
+    : undefined;
+  // 애니 피벗 오프셋 → 정규화(피커 하이라이트용). 코너로 딱 떨어지면 그 코너, 아니면(레거시 면/중심) 미표시.
+  const animPivotToNorm = (o?: { x: number; y: number; z: number }): Vector3 | undefined => o
+    ? { x: snap01(invLerp(bx.minx, bx.maxx, s.x ? o.x / s.x : 0)), y: snap01(invLerp(bx.miny, bx.maxy, s.y ? o.y / s.y : 0)), z: snap01(invLerp(bx.minz, bx.maxz, s.z ? o.z / s.z : 0)) }
+    : undefined;
   // 유효 피벗 = 트랙 피벗, 없으면 (내가 root면) 레거시 클립레벨 폴백. (리로드 전 in-memory 레거시 클립 대비)
   const effPivot = myTrack?.pivot ?? (clip && clip.rootId === obj.id ? clip.pivot : undefined);
   // 회전축(경첩) 변경 — 선택 오브젝트 '트랙'의 키만 재-bake(retroactive, WYSIWYG·가역). 다른 트랙 무영향.
@@ -145,13 +149,6 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
     if (clip.rootId === obj.id && clip.pivot) { patch.pivot = undefined; patch.pivotBaked = undefined; } // 레거시 클립레벨 정리
     updateAnimClip(clip.id, patch);
     pushHistory();
-  };
-
-  const isPivot = (p?: { x: number; y: number; z: number }) => {
-    const cur = effPivot;
-    if (!p) return !cur;
-    if (!cur) return false;
-    return Math.abs(p.x - cur.x) < 1e-4 && Math.abs(p.y - cur.y) < 1e-4 && Math.abs(p.z - cur.z) < 1e-4;
   };
 
   // 트랙으로 추가 가능한 오브젝트 — 루트(비중첩)·이미 트랙 아님·캐릭터 프리뷰 아님.
@@ -301,15 +298,12 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
               {!obj.isGroup && (
                 <div className="pt-0.5">
                   <span className="text-[10px] font-semibold text-muted/70 dark:text-muted tracking-wide block mb-1">회전축 (경첩) · <span className="text-primary">{obj.name}</span></span>
-                  <div className="grid grid-cols-4 gap-1">
-                    {pivotPresets.map((p) => (
-                      <button key={p.id} onClick={() => setPivot(p.pivot)}
-                        className={`py-1 rounded-xs text-[9px] transition-colors ${isPivot(p.pivot) ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}>
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[9px] text-muted/70 dark:text-muted mt-1">뷰포트의 <b className="text-amber-500">노란 표식</b>이 이 오브젝트의 회전축입니다. 축을 정하면 <b>회전 기즈모가 그 모서리를 경첩처럼</b> 돌립니다. (양문은 각 문을 선택해 좌/우로 따로 지정)</p>
+                  <PivotPicker value={animPivotToNorm(effPivot)} onChange={(p) => setPivot(normToAnimPivot(p))} hideHeader />
+                  <button onClick={() => setPivot(undefined)}
+                    className={`w-full py-1 rounded-xs text-[9px] transition-colors ${!effPivot ? 'bg-primary text-white' : 'bg-background text-muted hover:bg-surface hover:text-foreground'}`}>
+                    중심으로 (회전 중심)
+                  </button>
+                  <p className="text-[9px] text-muted/70 dark:text-muted mt-1">뷰포트의 <b className="text-amber-500">노란 표식</b>이 이 오브젝트의 회전축입니다. 꼭지점을 정하면 <b>회전 기즈모가 그 모서리를 경첩처럼</b> 돌립니다. (양문은 각 문을 선택해 좌/우로 따로 지정)</p>
                 </div>
               )}
               <p className="text-[10px] text-primary/70 dark:text-muted bg-primary/10 border border-primary/20 rounded-xs px-2 py-1.5 leading-snug">재생하려면 이벤트(Events)에서 <b>트리거 → 애니 재생(play_clip)</b>으로 이 애니를 선택하세요. (반복 애니는 '시작 시(scene_start)' 트리거)</p>
