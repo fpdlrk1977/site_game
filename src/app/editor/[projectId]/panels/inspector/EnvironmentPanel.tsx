@@ -477,11 +477,18 @@ export function EnvironmentPanel() {
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">Color</span>
-                <ColorPicker
-                  value={env.fog.color}
-                  onChange={(hex) => updateEnvironment({ fog: { ...env.fog, color: hex } })}
-                  onCommit={pushHistory}
-                />
+                {((env.hdrPreset ?? 'none') === 'none' && env.sky.type !== 'sky') ? (
+                  // 단색 배경이면 fog 색을 하늘색에 자동 일치(수평선이 매끄럽게 사라짐) → 색 지정 대신 안내.
+                  <div className="text-[10px] text-muted/60 border border-border/60 rounded-xs px-2 py-2 leading-snug">
+                    하늘색에 <b>자동</b>으로 맞춰집니다 (수평선이 매끄럽게 사라짐). 색을 바꾸려면 <b>Sky 색</b>을 바꾸세요.
+                  </div>
+                ) : (
+                  <ColorPicker
+                    value={env.fog.color}
+                    onChange={(hex) => updateEnvironment({ fog: { ...env.fog, color: hex } })}
+                    onCommit={pushHistory}
+                  />
+                )}
               </div>
 
               <div className="flex-1 min-w-0">

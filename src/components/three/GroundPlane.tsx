@@ -6,6 +6,10 @@ import * as THREE from 'three';
 import { getGroundTexture } from '@/lib/groundTextures';
 import type { GroundPreset } from '@/types/scene';
 
+// 바닥의 환경광 반사 세기 — 낮춰 평평한 바닥에 뜨는 넓은 radial 하이라이트("스포트라이트 같은 흰 빛")를 완화.
+//   오브젝트는 그대로(각 재질 기본 1) 두고 바닥만 억제. (scene.environmentIntensity와 곱해짐)
+const GROUND_ENV = 0.3;
+
 // ── 물 (실시간 반사) ──────────────────────────────────────────────────────────
 function WaterPlane({ positionY }: { positionY: number }) {
   return (
@@ -43,6 +47,7 @@ function TexturedGround({ preset, positionY }: { preset: Exclude<GroundPreset, '
         normalScale={new THREE.Vector2(1, 1)}
         roughness={roughness}
         metalness={metalness}
+        envMapIntensity={GROUND_ENV}
       />
     </mesh>
   );
@@ -56,7 +61,7 @@ function UrlTextureGround({ url, positionY }: { url: string; positionY: number }
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, positionY, 0]} receiveShadow>
       <planeGeometry args={[1000, 1000]} />
-      <meshStandardMaterial map={texture} roughness={0.85} metalness={0} />
+      <meshStandardMaterial map={texture} roughness={0.85} metalness={0} envMapIntensity={GROUND_ENV} />
     </mesh>
   );
 }
@@ -80,7 +85,7 @@ export function GroundPlane({ preset = 'custom', color, textureUrl, positionY = 
         <Suspense fallback={
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, positionY, 0]} receiveShadow>
             <planeGeometry args={[1000, 1000]} />
-            <meshStandardMaterial color={color} roughness={0.9} metalness={0} />
+            <meshStandardMaterial color={color} roughness={0.9} metalness={0} envMapIntensity={GROUND_ENV} />
           </mesh>
         }>
           <UrlTextureGround url={textureUrl} positionY={positionY} />
@@ -90,7 +95,7 @@ export function GroundPlane({ preset = 'custom', color, textureUrl, positionY = 
     return (
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, positionY, 0]} receiveShadow>
         <planeGeometry args={[1000, 1000]} />
-        <meshStandardMaterial color={color} roughness={0.9} metalness={0} />
+        <meshStandardMaterial color={color} roughness={0.9} metalness={0} envMapIntensity={GROUND_ENV} />
       </mesh>
     );
   }

@@ -392,12 +392,14 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* HDR 미설정 시에도 은은한 IBL 제공 → PBR 재질 생기 (에디터와 동일) */}
       {!useHdr && <DefaultEnvironment />}
 
-      {/* ── Fog ── linear(near/far) 또는 exp(FogExp2, density) ── */}
-      {environment.fog.enabled && (
-        environment.fog.mode === 'exp'
-          ? <fogExp2 attach="fog" args={[environment.fog.color, environment.fog.density ?? 0.02]} />
-          : <fog attach="fog" args={[environment.fog.color, environment.fog.near, environment.fog.far]} />
-      )}
+      {/* ── Fog ── linear(near/far) 또는 exp(FogExp2, density) ──
+          단색 배경이면 fog 색 = 하늘색으로 자동 일치 → 먼 바닥이 하늘로 매끄럽게 사라짐(수평선 하드컷 완화). */}
+      {environment.fog.enabled && (() => {
+        const fogColor = (!useHdr && !isSkyMode) ? skyColor : environment.fog.color;
+        return environment.fog.mode === 'exp'
+          ? <fogExp2 attach="fog" args={[fogColor, environment.fog.density ?? 0.02]} />
+          : <fog attach="fog" args={[fogColor, environment.fog.near, environment.fog.far]} />;
+      })()}
 
       {/* ── 조명 ── */}
       {/* fill 광을 낮춰 방향광 그림자를 더 진하게. ambient/hemisphere/IBL이 그림자를 씻어내므로

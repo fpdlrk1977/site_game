@@ -184,6 +184,12 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **마우스 커서 숨김(2026-07-20, 사용자 지적)**: 플레이+데스크톱(centerPointer)이면 Canvas `cursor: none`(크로스헤어가 포인터 역할). 단 **팝업/포커스(movementLocked) 중엔 커서 복귀 + 크로스헤어 숨김**(DOM 팝업 클릭용). 캔버스 명시 cursor가 body cursor보다 우선이라 ViewerObject hover cursor 무영향.
 - ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "잘된다") — 중앙 조준 클릭/호버/강조·커서 숨김 동작.** 단 사용자 "이 부분 좀 손봐야 함 — 테스트 거쳐 나중에 추가 요청 예정"(디테일 다듬기 여지 남김).
 
+### 🌅 배경/바닥 룩 개선 (2026-07-20) — 수평선 하드컷·radial 흰빛 완화 (A+B) — 브라우저 확인 대기
+> 사용자: 수평선 잘림·fog 흰 그라데이션·fog 끄면 중앙 radial 흰빛. **설명 결과 = 평면 바닥+환경조명의 정상 3D 동작**(버그 아님). 사용자 선택 A+B로 개선. tsc 클린 + dev 컴파일. **브라우저 확인 대기.**
+- **A — fog 색 = 하늘색 자동 일치(`ViewerCanvas`·`EditorCanvas`)**: 단색 배경(`!useHdr && !isSkyMode`)이면 fog 색을 `environment.fog.color` 대신 **skyColor**로 렌더 → 먼 바닥이 하늘로 매끄럽게 사라짐(수평선 하드컷·fog 색 불일치 완화). Sky/HDR 모드는 기존 fog.color 유지(그라데이션 하늘/이미지가 이미 블렌드). 에디터 Fog 패널 Color 필드는 단색 배경일 때 "하늘색 자동" 안내로 대체(Sky 색으로 조절).
+- **B — 바닥 환경반사 억제(`GroundPlane`)**: 평평한 matte 바닥이 DefaultEnvironment(스튜디오 IBL)를 반사해 생기는 넓은 radial 하이라이트("스포트라이트 흰빛") → 바닥 재질 `envMapIntensity={0.3}`(신규 `GROUND_ENV`)로 낮춤. **오브젝트는 무영향**(각 재질 기본 1). 물(MeshReflectorMaterial)은 제외.
+- ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "지금까진 좋아") — 수평선·radial 흰빛 개선 만족.**
+
 #### 🐛 버그픽스 (2026-07-20) — 빈 모터/그룹 선택 시 원점에 파란 박스 — 브라우저 확인 대기
 > 사용자 보고: "모터 배치하면 푸른색 박스가 화면 중간에 생긴다." 원인 규명 후 수정. tsc 클린.
 - **원인**: `ManipulationHandles`(코너/면 스케일 핸들 = `boxGeometry[1,1,1]`·파란 `#0d99ff`·depthTest off·renderOrder 1000)의 렌더 조건 `valid = obj && !locked && visible`이 **bbox 없는 오브젝트를 안 걸러냄**. 빈 모터(자식 없음→`localBBox=null`)는 valid=true라 핸들이 렌더되나, 위치 계산 `layoutHandles`가 null bbox에 조기 return → 핸들 14개가 위치 못 잡고 **월드 원점·크기1 기본값**에 겹쳐 1×1×1 파란 박스로 보임(화면 중앙). 기존 잠복 버그(모터=배치 직후 선택되는 빈 그룹이라 표면화).
