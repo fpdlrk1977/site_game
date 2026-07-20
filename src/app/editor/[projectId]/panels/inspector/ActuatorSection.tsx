@@ -42,26 +42,28 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
 
   return (
     <GroupBox>
+      <div className={motor ? undefined : 'relative'}>
       <SectionHeader
         title={motor ? '모터 (Motor)' : 'Actuator (joint)'}
         hint={motor
           ? '이 오브젝트는 모터(부품)입니다. 트리에서 다른 오브젝트를 이 모터 아래로 끌어 연결하면, 연결된 것이 모터의 원점(=경첩)·축을 중심으로 돕니다. 축·범위·구동을 아래에서 설정하고 ▶ 플레이로 확인하세요.'
           : 'Turn an object into a mechanical joint: rotate around a hinge (door/arm) or slide along an axis (piston), within a min~max range. Reacts to game state (variable/event), holds its position, can carry a real collider. Exclusive with Motion; preview in ▶ Play. ↔ For a free-form scripted sequence (curved path, several channels at once) use Animation; for always-on decorative movement use Motion.'}
-        isOpen={open}
-        onToggle={onToggle}
-        dot={!!act}
+        isOpen={motor ? open : undefined}
+        onToggle={motor ? onToggle : undefined}
+        dot={motor ? !!act : false}
       />
-      {open && (
+      {/* 속성형 — Subdivision 패턴: 헤더 스위치로 '관절 사용' 켜고/끄기(화살표 없음). 모터는 항상 활성이라 스위치 없음. */}
+      {!motor && (
+        <label className="flex items-center cursor-pointer absolute top-4.5 right-4">
+          <Toggle value={!!act} onChange={enable} />
+        </label>
+      )}
+      {(motor ? open : !!act) && (
         <div className="px-3 pb-4 space-y-2">
-          {motor ? (
+          {motor && (
             <p className="text-[10px] text-muted/60">
               경첩 = <b>모터 위치</b>(dot). 모터를 경첩 자리로 옮기고 회전시켜 축 방향을 맞추세요. 트리에서 오브젝트를 이 모터로 <b>드래그하면 연결</b>됩니다.
             </p>
-          ) : (
-            <label className="flex items-center gap-2 text-[10px] text-muted/70">
-              <Toggle value={!!act} onChange={enable} />
-              <span>관절 사용 (motion과 배타)</span>
-            </label>
           )}
 
           {act && (
@@ -204,6 +206,7 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
           )}
         </div>
       )}
+      </div>
     </GroupBox>
   );
 }

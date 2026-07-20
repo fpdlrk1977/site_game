@@ -286,8 +286,8 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
         {/* Motion — 앰비언트 애니메이션 (라이트·모터 제외) */}
         {!obj.light && !obj.isActuator && <MotionSection obj={obj} open={isOpen('motion')} onToggle={() => toggleSection('motion')} />}
 
-        {/* Actuator — 관절(경첩 회전/직선 이동, 라이트 제외). 모터형은 항상 노출. doc/PIVOT_MANIPULATION.md §6 */}
-        {!obj.light && <ActuatorSection obj={obj} open={isOpen('actuator') || !!obj.isActuator} onToggle={() => toggleSection('actuator')} />}
+        {/* Actuator — 관절(경첩 회전/직선 이동, 라이트 제외). 모터형은 별도 키('motor')로 기본 펼침 + 접기 토글 동작. doc/PIVOT_MANIPULATION.md §6 */}
+        {!obj.light && <ActuatorSection obj={obj} open={isOpen(obj.isActuator ? 'motor' : 'actuator')} onToggle={() => toggleSection(obj.isActuator ? 'motor' : 'actuator')} />}
 
         {/* 모터 연결/해제 — 모터엔 연결된 부품 목록, 일반 오브젝트엔 모터에 연결(라이트 제외) */}
         {!obj.light && <MotorLinkSection obj={obj} />}

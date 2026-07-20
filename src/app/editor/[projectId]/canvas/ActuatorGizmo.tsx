@@ -16,8 +16,8 @@ import { anchorLocalPoint } from '@/lib/pivotMath';
 const ORANGE = '#ff7a0d';
 const MIN_COL = '#ff7a0d'; // 닫힘(min)
 const MAX_COL = '#ffd24d'; // 열림(max)
-// 회전 커서 — 부채꼴 핸들 위/드래그 시. 원형 화살표(주황) SVG, 핫스팟 중앙, 폴백 grab.
-const ROTATE_CUR = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%23ff7a0d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12a9 9 0 1 1-2.64-6.36'/><path d='M21 3v6h-6'/></svg>\") 14 14, grab";
+// 회전 커서 — 부채꼴 핸들 위/드래그 시. 원형 화살표(검정), 핫스팟 중앙, 폴백 grab.
+const ROTATE_CUR = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12a9 9 0 1 1-2.64-6.36'/><path d='M21 3v6h-6'/></svg>\") 11 11, grab";
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 const FAN_SEG = 48; // 부채꼴 세그먼트 수
