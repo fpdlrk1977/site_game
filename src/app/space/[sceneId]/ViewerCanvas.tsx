@@ -272,6 +272,36 @@ function HoverUpdater() {
 
 // 탐색 모드 진입 시 1회 자동 전체 맞춤 — 저장한 공간을 다시 열 때 카메라가 너무 가깝지 않도록
 // 모든 루트 오브젝트가 화면에 들어오는 뷰로 시작(에디터 Shift+F 전체 맞춤과 동일 기준).
+// 둘러보기 카메라 제한값 계산.
+//   ★ 핵심 규칙: **저장된 시작 뷰(startView)는 제한보다 우선**한다.
+//   OrbitControls.update()가 polar/거리를 제한으로 clamp하기 때문에, 제한이 시작 뷰보다 좁으면
+//   사용자가 정면에서 저장한 뷰가 조용히 탑다운으로 튕겨나간다(실제 발생한 버그).
+//   → 제한을 항상 startView를 포함하도록 넓혀서, 저장한 뷰는 반드시 그대로 보이게 한다.
+function exploreLimits(env: EnvSchema) {
+  const ec = env.exploreCamera;
+  const DEFAULT_MAX_POLAR = Math.PI / 2 - 0.02; // 지평선 살짝 위
+  let maxPolar = ec?.maxPolarDeg != null ? (ec.maxPolarDeg * Math.PI) / 180 : DEFAULT_MAX_POLAR;
+  // min > max로 뒤집힌 값이 들어와도 뷰어가 잠기지 않게 정렬(패널에서도 막지만 기존 씬 방어).
+  let minDistance = Math.max(0.1, ec?.minDistance ?? 1);
+  let maxDistance = Math.max(minDistance + 0.1, ec?.maxDistance ?? 200);
+
+  const sv = env.startView;
+  if (sv) {
+    const dx = sv.position.x - sv.target.x;
+    const dy = sv.position.y - sv.target.y;
+    const dz = sv.position.z - sv.target.z;
+    const r = Math.hypot(dx, dy, dz);
+    if (r > 1e-6) {
+      // polar: 0 = 바로 위(탑다운), PI/2 = 지평선(눈높이)
+      const polar = Math.acos(Math.min(1, Math.max(-1, dy / r)));
+      maxPolar = Math.min(Math.max(maxPolar, polar + 0.05), DEFAULT_MAX_POLAR);
+      minDistance = Math.min(minDistance, r);
+      maxDistance = Math.max(maxDistance, r);
+    }
+  }
+  return { maxPolar, minDistance, maxDistance };
+}
+
 function InitialFit({ objects, orbitRef, startView, exploreFov }: {
   objects: ObjectNodeSchema[];
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
@@ -318,6 +348,8 @@ function InitialFit({ objects, orbitRef, startView, exploreFov }: {
 
 export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked, centerPointer, cameraMode, cameraFixedId }: Props) {
   const { environment, objects } = scene;
+  // 둘러보기 카메라 제한(시작 뷰를 항상 포함하도록 보정) — 아래 OrbitControls에서 사용.
+  const exploreLim = exploreLimits(environment);
   const azimuthRef = useRef(0);
   // 중앙 조준 포인터 — events.compute가 매 이벤트 참조(리렌더 무관하게 ref).
   const centerPointerRef = useRef(!!centerPointer);
@@ -529,9 +561,9 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           ref={orbitRef}
           makeDefault
           minPolarAngle={0.1}
-          maxPolarAngle={environment.exploreCamera?.maxPolarDeg != null ? (environment.exploreCamera.maxPolarDeg * Math.PI) / 180 : Math.PI / 2 - 0.02}
-          minDistance={environment.exploreCamera?.minDistance ?? 1}
-          maxDistance={environment.exploreCamera?.maxDistance ?? 200}
+          maxPolarAngle={exploreLim.maxPolar}
+          minDistance={exploreLim.minDistance}
+          maxDistance={exploreLim.maxDistance}
           autoRotate={environment.exploreCamera?.autoRotate === true}
           autoRotateSpeed={environment.exploreCamera?.autoRotateSpeed ?? 1}
         />

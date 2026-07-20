@@ -1258,6 +1258,17 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
   - **🎉 카메라 로드맵 4단계(①벽뚫기 ②1인칭 ③구역전환 ④탑다운/고정) 전부 완료·검증.**
 - **C1 게시 시작 뷰(startView) — ✅ 구현, 브라우저 확인 대기**: CAMERA.md 1순위(★최대). 다른 3D 서비스의 "기본 카메라 패널 = 시작 위치" 부재를 사용자가 지적 → 구현. `EnvSchema.startView?{position,target,fov?}`(옵셔널·미설정=자동fit 기존). **저장**: 에디터 `requestSaveStartView()`(요청-틱)→EditorCanvas가 현재 orbit 카메라(pos/target/fov) 읽어 `updateEnvironment({startView})`. **적용**: 뷰어 `InitialFit`이 startView 있으면 자동fit 대신 그 위치·시선·fov에서 시작(둘러보기 모드만·플레이는 팔로우라 무관). **UI**: Environment 패널 신규 **Start View 섹션**(기본 접힘) — "📷 현재 시점으로 저장" + "초기화" + 상태 안내. saveScene은 environment 통째 저장이라 자동 보존.
   - **확인 필요(브라우저)**: 에디터서 카메라 각도 맞춤→"현재 시점으로 저장"→게시/둘러보기 뷰어가 그 위치·방향에서 시작(자동fit 대신) · 초기화→자동fit 복귀 · 저장 후 새로고침 유지.
+- **C2 카메라 설정(둘러보기 제한) — ✅ 구현, 브라우저 확인 대기**: CAMERA.md 2순위. `EnvSchema.exploreCamera?{fov, minDistance, maxDistance, maxPolarDeg, autoRotate, autoRotateSpeed}`(옵셔널·미설정=기존 기본값). **방문자가 카메라를 이상한 각도/거리로 못 가게 제한**.
+  - **뷰어 배선(`ViewerCanvas`)**: 탐색 OrbitControls에 `maxPolarAngle`(maxPolarDeg°→rad, 기본 90−0.02rad)·`minDistance`(기본 1)·`maxDistance`(기본 200)·`autoRotate`/`autoRotateSpeed`(기본 off/1). `InitialFit`에 `exploreFov` prop — **fov 우선순위 = `startView.fov` > `exploreCamera.fov`**(둘 다 없으면 카메라 기본 유지). 플레이(걷기)는 캐릭터 팔로우 카메라라 **무관**.
+  - **에디터 UI(`EnvironmentPanel`)**: 신규 **Camera 섹션**(기본 접힘) — Field of view 슬라이더(20~90°)·가까이/멀리 한도(m)·내려다보기 최대 각도(10~90°)·자동 회전(턴테이블) 토글+속도. "에디터엔 미반영 — 게시/둘러보기 뷰어에 적용" 안내. `environment` 통째 저장이라 persist 자동.
+  - **⚠️ 중단 지점이었음 (2026-07-20 재개 시 발견)**: 이 블록이 PROGRESS에 기록되지 않은 채 **tsc 에러 2건**(`EnvironmentPanel` 가까이/멀리 한도의 `LabeledNum`에 필수 prop `label` 누락 — 수동 `<span>`으로 라벨을 그리고 있었음)으로 멈춰 있었음. → **수동 span 제거 + `label` prop 전달**로 수정(LabeledNum이 동일 스팬 마크업을 자체 렌더 → 시각 결과 동일, 파일 내 Fog Near/Far 패턴과 일치). **tsc 클린 + dev 편집 라우트 200 확인.**
+  - **확인 필요(브라우저)**: Environment▸Camera에서 FOV/줌 범위/각도 제한 설정 → **게시(둘러보기) 뷰어**에서 그 범위 밖으로 줌·회전 안 됨 · 자동 회전 턴테이블 · startView 저장 시 그 fov가 우선.
+  - **🔴 C2 치명 버그픽스 (2026-07-20, 사용자 보고 "카메라가 단단히 잘못됐다")**: 정면에서 startView 저장 + 카메라 제한 설정 후 게시 뷰어에 들어가니 **거의 탑다운에서 시작 + 상하 회전 불가**. 원인 3종:
+    - **① `maxPolarDeg` 의미가 직관과 반대인데 설명까지 틀렸음(주원인)**: polar angle은 **수직(머리 위) 기준** — `0°=탑다운·90°=지평선(눈높이)`. `minPolarAngle`이 0.1rad(≈5.7°)로 고정이라 **maxPolarDeg=10을 주면 허용 범위가 [5.7°, 10°] = 머리 위에 고정**됨. 그런데 InfoHint가 "낮추면 위에서 내려다보는 각도를 제한"이라고 **정반대로** 써 있어 사용자가 낮은 값을 넣도록 유도했음. → 라벨 **"카메라가 내려갈 수 있는 높이"**, 설명을 사실대로(90°=눈높이까지·낮출수록 위에 묶임·30° 미만은 탑다운 고정) 수정 + **45° 미만이면 인라인 경고** 표시.
+    - **② startView가 제한에 조용히 잘림**: `OrbitControls.update()`가 polar/거리를 제한으로 clamp → `InitialFit`이 정면 startView를 세팅해도 **제한이 좁으면 탑다운으로 튕겨나감**(저장한 뷰가 무시되는 것처럼 보임). → 신규 **`exploreLimits(env)`**(`ViewerCanvas`)가 **제한을 항상 startView를 포함하도록 넓힘**(maxPolar=max(설정, startView polar+여유), 거리도 startView 반경 포함). **규칙: 저장한 시작 뷰가 제한보다 우선.**
+    - **③ min/max 거리 검증 없음**: 가까이 한도 > 멀리 한도로 뒤집어 넣을 수 있었고 그러면 뷰어 카메라가 잠김. → 패널에서 상호 clamp(Fog Near/Far 패턴) + `exploreLimits`에서도 방어(기존 씬 대비).
+    - tsc 클린. **확인 필요(브라우저)**: 정면 startView 저장 → 둘러보기 뷰어가 **정면에서 시작** · 상하 회전 정상 · 각도 45° 미만 시 경고 문구.
+  - **C2 남은 범위(CAMERA.md §8 기준)**: **투영 전환(원근/직교)** · **near/far 클리핑** · **follow(3인칭) 세부**(거리·높이·어깨오프셋). ※노출은 기존 `toneMappingExposure`로 이미 있음. ※에디터 T/F/S near-ortho는 에디터 전용이라 뷰어 투영 설정과 별개.
 
 ## 알려진 제약/한계
 

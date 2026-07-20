@@ -335,26 +335,27 @@ export function EnvironmentPanel() {
             </div>
             <div className="flex gap-2">
               <div className="flex-1">
-                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">가까이 한도(m)</span>
                 <LabeledNum
+                  label="가까이 한도(m)"
                   value={env.exploreCamera?.minDistance ?? 1}
-                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, minDistance: Math.max(0.1, v) } })}
+                  // 멀리 한도를 넘지 못하게(뒤집히면 뷰어 카메라가 잠김) — Fog Near/Far와 동일 패턴.
+                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, minDistance: Math.min(Math.max(0.1, v), (env.exploreCamera?.maxDistance ?? 200) - 0.1) } })}
                   onCommit={pushHistory} min={0.1} max={50} precision={1} dragStep={0.5}
                 />
               </div>
               <div className="flex-1">
-                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">멀리 한도(m)</span>
                 <LabeledNum
+                  label="멀리 한도(m)"
                   value={env.exploreCamera?.maxDistance ?? 200}
-                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, maxDistance: Math.max(1, v) } })}
+                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, maxDistance: Math.max(v, (env.exploreCamera?.minDistance ?? 1) + 0.1) } })}
                   onCommit={pushHistory} min={1} max={1000} precision={0} dragStep={5}
                 />
               </div>
             </div>
             <div>
               <div className="flex items-center gap-1 mb-1">
-                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">내려다보기 최대 각도</span>
-                <InfoHint text="90°=지평선까지. 낮추면 위에서 내려다보는 각도를 제한(바닥 아래나 뒤집힘 방지)." />
+                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">카메라가 내려갈 수 있는 높이</span>
+                <InfoHint text="카메라를 아래로 돌릴 수 있는 한계입니다. 90°(기본)=눈높이(지평선)까지 내려갈 수 있음. 값을 줄일수록 카메라가 위쪽에 묶여 '내려다보는' 시점만 남고, 30° 아래로 내리면 사실상 탑다운으로 고정돼 상하 회전이 거의 안 됩니다." />
               </div>
               <RangeSlider
                 value={env.exploreCamera?.maxPolarDeg ?? 89}
@@ -362,6 +363,12 @@ export function EnvironmentPanel() {
                 onCommit={pushHistory}
                 min={10} max={90} step={1} showValue precision={0}
               />
+              {/* 값이 작을수록 카메라가 머리 위로 묶인다 — 의미가 직관과 반대라 실제로 오해가 발생했음. */}
+              {(env.exploreCamera?.maxPolarDeg ?? 89) < 45 && (
+                <p className="text-[9px] text-amber-500 mt-1">
+                  ⚠️ 값이 낮아 카메라가 위쪽에 묶입니다 — 방문자가 거의 탑다운 시점에서 시작하고 상하 회전이 막혀요. 정면 시점을 원하면 90°에 가깝게 두세요.
+                </p>
+              )}
             </div>
             <label className="flex items-center justify-between cursor-pointer pt-1">
               <span className="text-[10px] text-muted/70 dark:text-muted">자동 회전 (턴테이블)</span>
