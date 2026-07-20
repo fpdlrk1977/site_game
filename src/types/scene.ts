@@ -120,6 +120,7 @@ export type EventAction =
   | 'swap_model'
   | 'play_clip'
   | 'set_actuator'
+  | 'set_camera_mode'
   | 'run_script';
 
 export interface EventSchema {

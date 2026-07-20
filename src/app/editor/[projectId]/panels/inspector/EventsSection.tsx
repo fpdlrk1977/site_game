@@ -55,6 +55,7 @@ const ACTION_LABELS: Record<string, string> = {
   swap_model: "모델 교체",
   play_clip: "애니 재생",
   set_actuator: "관절 여닫기",
+  set_camera_mode: "카메라 시점 전환",
   run_script: "스크립트 실행",
 };
 
@@ -328,6 +329,7 @@ export function EventsSection({
               { value: "swap_model", label: "모델 교체" },
               { value: "play_clip", label: "애니 재생 (키프레임)" },
               { value: "set_actuator", label: "관절 여닫기 (액추에이터)" },
+              { value: "set_camera_mode", label: "카메라 시점 전환 (구역별)" },
               { value: "game_win", label: "게임 승리" },
               { value: "game_lose", label: "게임 오버" },
               { value: "run_script", label: "스크립트 실행 (고급)" },
@@ -674,6 +676,37 @@ export function EventsSection({
                   />
                 )}
                 <p className="text-muted/70 dark:text-muted text-[10px]">대상 관절의 Drive를 <b>이벤트</b>로 두면 이 액션이 부드럽게 여닫습니다.</p>
+              </div>
+            );
+          }
+          if (newAction === "set_camera_mode") {
+            // value = "third" | "first" | "topdown" | "fixed|<대상objectId>". 구역(area_enter)에 걸어 방마다 시점 전환.
+            const [mode = "third", fixedId = ""] = newValue.split("|");
+            const fixedOpts = objects.filter((o) => !o.isGroup || true).map((o) => ({ value: o.id, label: o.name }));
+            return (
+              <div className="space-y-1.5">
+                <SelectBox
+                  value={mode}
+                  onChange={(m) => setNewValue(m === "fixed" ? `fixed|${fixedId}` : m)}
+                  options={[
+                    { value: "third", label: "3인칭 (뒤에서 따라감)" },
+                    { value: "first", label: "1인칭 (눈 시점)" },
+                    { value: "topdown", label: "위에서 (탑다운·쿼터뷰)" },
+                    { value: "fixed", label: "고정 시점 (특정 위치에서)" },
+                  ]}
+                />
+                {mode === "fixed" && (
+                  <>
+                    <SelectBox
+                      value={fixedId}
+                      onChange={(id) => setNewValue(`fixed|${id}`)}
+                      options={fixedOpts}
+                      placeholder="카메라 위치가 될 오브젝트 선택..."
+                    />
+                    <p className="text-muted/70 dark:text-muted text-[10px]">그 오브젝트 <b>위치</b>에 카메라를 두고 캐릭터를 바라봅니다. 빈 오브젝트(작은 박스)를 방 구석에 놓아 카메라 자리로 쓰세요.</p>
+                  </>
+                )}
+                <p className="text-muted/70 dark:text-muted text-[10px]">보통 방 입구에 <b>센서</b>를 두고 <b>구역 진입(area_enter)</b> 트리거로 걸어 방마다 시점을 바꿉니다.</p>
               </div>
             );
           }

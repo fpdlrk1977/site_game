@@ -1252,7 +1252,10 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - **① 카메라 벽 뚫기 수정(camera collision) — ✅ 확인 완료(2026-07-20, 사용자 "잘된다")**: `PlayModeController` 팔로우 카메라에 **Rapier 레이캐스트**(camTarget→카메라 방향, `world.castRay`, EXCLUDE_SENSORS·플레이어 제외) 추가 → 사이에 벽(콜라이더) 있으면 `timeOfImpact-0.3`(최소 0.4)까지 **카메라 당김** → 벽 안 뚫고 방 안에 머묾.
 - **② 1인칭 토글 — ✅ 구현, 브라우저 확인 대기**: `PlayModeController`에 `firstPerson` prop + 분기 — 카메라를 캐릭터 눈높이(y+1.5)에 두고 방위(az)+고도(el) 방향 바라봄(시선=3인칭 오프셋의 반대), **캐릭터 모델 숨김**. prop 체인(ViewerClient→ViewerCanvas→PlayCanvas→PlayModeController). ViewerClient에 `firstPerson` state + **상단 중앙 "👁 1인칭/🎥 3인칭" 토글 버튼**(플레이 모드), 모드 이탈 시 리셋. tsc·컴파일 클린.
   - **확인 필요(브라우저)**: 버튼으로 1인칭↔3인칭 전환 · 1인칭서 캐릭터 안 보이고 눈높이 시점 · 마우스로 시선 회전 · 크로스헤어 조준 정상 · 3인칭 복귀 정상.
-- **③ 카메라 모드 + 구역별 전환**(area_enter로 3인칭/1인칭/탑다운/고정 전환) + **④ 탑다운/고정 모드** — 큰 시스템, 마지막. 미착수. (CAMERA.md `set_active_camera`·다중 뷰 재사용.)
+- **③+④ 카메라 모드 + 구역별 전환 — ✅ 확인 완료(2026-07-20, 사용자 "전환 잘된다")**: 4모드(third/first/topdown/fixed)를 `PlayModeController`에 통합(기존 firstPerson → `cameraMode`+`fixedTarget`). **topdown**=캐릭터 위 H14·back5서 내려다봄(심즈/쿼터뷰, az 회전). **fixed**=지정 오브젝트 월드위치에 카메라 두고 캐릭터 바라봄(방 전체 앵글, 전환 시 lerp). **구역별 전환** = 신규 이벤트 액션 **`set_camera_mode`**(value=`third`|`first`|`topdown`|`fixed|<objId>`) → 방 입구 센서에 `area_enter`로 걸면 방마다 시점 바뀜.
+  - **배선**: prop 체인 firstPerson→cameraMode/cameraFixedId(ViewerClient→ViewerCanvas→PlayCanvas→PlayModeController). PlayCanvas가 `cameraFixedId`→월드위치(worldMatrix) 계산해 fixedTarget 전달. ViewerClient에 `set_camera_mode` 핸들러 + 좌하단 토글 버튼(3인칭↔1인칭, 라벨은 4모드 표시) + 모드 이탈 리셋. EventsSection에 액션 UI(모드 드롭다운 + fixed 대상 선택 + 안내).
+  - ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "전환 잘된다") — 구역별 카메라 전환 동작.** (팁: 센서를 문간이 아니라 "방 전체"로 덮어야 진입/이탈이 순식간에 안 겹침 — 사용자와 확인.)
+  - **🎉 카메라 로드맵 4단계(①벽뚫기 ②1인칭 ③구역전환 ④탑다운/고정) 전부 완료·검증.**
 
 ## 알려진 제약/한계
 

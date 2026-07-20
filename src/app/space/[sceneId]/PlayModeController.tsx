@@ -142,8 +142,10 @@ interface Props {
   focusPoint?: { x: number; y: number; z: number; radius: number } | null;
   /** true면 캐릭터 이동(WASD/모바일/점프) 잠금 — 팝업·포커스 등 상호작용 진행 중 */
   movementLocked?: boolean;
-  /** 1인칭 모드 — 카메라를 캐릭터 눈높이에 두고 방위(az) 방향을 바라봄. 캐릭터 모델 숨김. */
-  firstPerson?: boolean;
+  /** 카메라 모드 — third(3인칭 팔로우)·first(1인칭)·topdown(위에서)·fixed(고정 지점). 구역별 전환/토글용. */
+  cameraMode?: 'third' | 'first' | 'topdown' | 'fixed';
+  /** fixed 모드일 때 카메라가 놓일 월드 지점(그 위치에서 캐릭터를 바라봄). */
+  fixedTarget?: { x: number; y: number; z: number } | null;
 }
 
 export function PlayModeController({
@@ -167,7 +169,8 @@ export function PlayModeController({
   onApproachExit,
   focusPoint,
   movementLocked = false,
-  firstPerson = false,
+  cameraMode = 'third',
+  fixedTarget = null,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   // 현재 근접한 상호작용 대상 id (useFrame이 갱신, keydown이 읽음)
@@ -477,7 +480,7 @@ export function PlayModeController({
     }
 
     // 1인칭이면 캐릭터 모델 숨김(카메라가 머리 안에 있어 시야 가림 방지), 아니면 표시.
-    if (characterGroupRef.current) characterGroupRef.current.visible = !firstPerson;
+    if (characterGroupRef.current) characterGroupRef.current.visible = cameraMode !== 'first';
 
     // 카메라 — 포커스 지점이 있으면 대상을 프레이밍(줌), 없으면 캐릭터 팔로우
     if (focusPoint) {
@@ -495,14 +498,29 @@ export function PlayModeController({
       camera.position.lerp(_camPos.current, 0.12);
       camTarget.current.lerp(_targetPos.current, 0.15);
       camera.lookAt(camTarget.current);
-    } else if (firstPerson) {
-      // 1인칭 — 카메라를 캐릭터 눈높이에 두고 방위(az)+고도(el) 방향을 바라봄. (캐릭터 모델은 아래에서 숨김)
+    } else if (cameraMode === 'first') {
+      // 1인칭 — 카메라를 캐릭터 눈높이에 두고 방위(az)+고도(el) 방향을 바라봄. (캐릭터 모델은 위에서 숨김)
       const el = elevationRef.current;
       _targetPos.current.set(newPos.x, newPos.y + 1.5, newPos.z);
       camera.position.copy(_targetPos.current);
       // 시선 방향 = 3인칭에서 카메라가 캐릭터를 보던 방향과 동일(=궤도 오프셋의 반대).
       _camDir.current.set(-Math.sin(az) * Math.cos(el), -Math.sin(el), -Math.cos(az) * Math.cos(el));
       camTarget.current.copy(_targetPos.current).addScaledVector(_camDir.current, 10);
+      camera.lookAt(camTarget.current);
+    } else if (cameraMode === 'topdown') {
+      // 탑다운 — 캐릭터 위 높은 곳에서 살짝 뒤로 기울여 내려다봄(심즈/쿼터뷰 느낌). 방위(az)로 회전 가능.
+      _targetPos.current.set(newPos.x, newPos.y + 1, newPos.z);
+      camTarget.current.lerp(_targetPos.current, 0.15);
+      const H = 14, back = 5;
+      _camPos.current.set(camTarget.current.x + Math.sin(az) * back, camTarget.current.y + H, camTarget.current.z + Math.cos(az) * back);
+      camera.position.copy(_camPos.current);
+      camera.lookAt(camTarget.current);
+    } else if (cameraMode === 'fixed' && fixedTarget) {
+      // 고정 — 지정 지점(fixedTarget)에 카메라를 두고 캐릭터를 계속 바라봄(방 전체가 보이는 고정 앵글).
+      _targetPos.current.set(newPos.x, newPos.y + 1, newPos.z);
+      camTarget.current.lerp(_targetPos.current, 0.15);
+      _camPos.current.set(fixedTarget.x, fixedTarget.y, fixedTarget.z);
+      camera.position.lerp(_camPos.current, 0.2); // 전환 시 부드럽게 이동
       camera.lookAt(camTarget.current);
     } else {
       // 팔로우 카메라 (3인칭)

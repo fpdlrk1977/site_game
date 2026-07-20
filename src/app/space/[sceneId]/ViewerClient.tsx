@@ -116,7 +116,8 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 플레이 모드에서 캐릭터가 근접한 interact 대상 (E 프롬프트 표시용). 탐색 모드에선 항상 null.
   const [interactTarget, setInteractTarget] = useState<{ id: string; name: string } | null>(null);
   const [crosshairHot, setCrosshairHot] = useState(false); // 중앙 조준점이 상호작용 대상 위 → 레티클 강조
-  const [firstPerson, setFirstPerson] = useState(false);   // 1인칭↔3인칭 토글(플레이)
+  const [cameraMode, setCameraMode] = useState<'third' | 'first' | 'topdown' | 'fixed'>('third'); // 카메라 모드(구역별/토글)
+  const [cameraFixedId, setCameraFixedId] = useState<string | null>(null); // fixed 모드 대상 오브젝트
   // E키를 누를 때마다 증가 — 대화 열기/다음 문장(DialogueAdvanceContext로 3D 트리에 전달)
   const [dialogueNonce, setDialogueNonce] = useState(0);
 
@@ -385,7 +386,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
   // 모드 전환 시 근접 프롬프트 + 진행 중 상호작용(포커스/잠금) 정리 — 잠금이 다음 모드로 새는 것 방지
   useEffect(() => {
-    if (!playMode) { setInteractTarget(null); setCrosshairHot(false); setFirstPerson(false); }
+    if (!playMode) { setInteractTarget(null); setCrosshairHot(false); setCameraMode('third'); setCameraFixedId(null); }
     setPlayFocus(null);
     setInteractionLock(false);
   }, [playMode]);
@@ -706,6 +707,13 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
           else { const n = parseFloat(tRaw); target = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1; }
           return { ...m, [id]: target };
         });
+      } else if (ev.action === 'set_camera_mode' && ev.value) {
+        // value = "third" | "first" | "topdown" | "fixed|<대상objectId>" — 플레이 카메라 모드 전환(구역별).
+        const [mode = 'third', fixedId = ''] = ev.value.split('|');
+        if (mode === 'first' || mode === 'topdown' || mode === 'fixed' || mode === 'third') {
+          setCameraMode(mode);
+          setCameraFixedId(mode === 'fixed' ? (fixedId || null) : null);
+        }
       } else if (ev.action === 'despawn_object') {
         // value = 대상 objectId (빈 값이면 자기 자신). Phase 2.
         const target = ev.value || obj.id;
@@ -758,7 +766,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 고정 화면 비율(frameAspect) — 설정 시 캔버스를 그 비율로 레터박스(가운데 정렬 + 배경 여백).
   const frameAspect = scene.environment.frameAspect && scene.environment.frameAspect > 0 ? scene.environment.frameAspect : null;
   const viewerCanvasEl = (
-    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} centerPointer={playMode && !isTouch} firstPerson={playMode && firstPerson} />
+    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} centerPointer={playMode && !isTouch} cameraMode={playMode ? cameraMode : 'third'} cameraFixedId={cameraFixedId} />
   );
 
   return (
@@ -875,14 +883,14 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
       {/* 화면 중앙 조준점(crosshair) — 플레이 모드(데스크톱). 내가 어디를 보는지 표시(FPS식 레티클).
           (다음 단계: 조준점이 상호작용 대상 위에 오면 강조 + 중앙을 클릭/호버 포인터로 사용) */}
-      {/* 1인칭 ↔ 3인칭 전환 (플레이 모드) — 좌하단(상단 중앙='편집으로'·상단 우측='탐색 모드'·하단 중앙=WASD힌트와 겹침 회피). */}
+      {/* 시점 전환 (플레이) — 좌하단. 클릭 = 3인칭↔1인칭 수동 토글(topdown/fixed는 구역 이벤트로, 클릭 시 3인칭 복귀). */}
       {playMode && !interactionLock && !isTouch && (
         <button
-          onClick={() => setFirstPerson((v) => !v)}
+          onClick={() => { setCameraMode((m) => (m === 'first' ? 'third' : 'first')); setCameraFixedId(null); }}
           title="시점 전환 (1인칭/3인칭)"
           className="absolute bottom-4 left-4 z-20 px-3 py-1.5 rounded-xs bg-black/50 hover:bg-black/65 backdrop-blur-sm border border-white/15 text-white/85 text-[11px] font-medium transition-colors"
         >
-          {firstPerson ? '👁 1인칭 시점' : '🎥 3인칭 시점'}
+          {cameraMode === 'first' ? '👁 1인칭 시점' : cameraMode === 'topdown' ? '🚁 위에서' : cameraMode === 'fixed' ? '🎬 고정 시점' : '🎥 3인칭 시점'}
         </button>
       )}
 

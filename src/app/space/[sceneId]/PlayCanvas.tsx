@@ -365,11 +365,13 @@ interface Props {
   focusPoint?: { x: number; y: number; z: number; radius: number } | null;
   /** 캐릭터 이동 잠금 — 팝업·포커스 등 상호작용 진행 중 */
   movementLocked?: boolean;
-  /** 1인칭 모드 */
-  firstPerson?: boolean;
+  /** 카메라 모드 (구역별/토글) */
+  cameraMode?: 'third' | 'first' | 'topdown' | 'fixed';
+  /** fixed 카메라 대상 오브젝트 id — 그 위치에서 캐릭터를 바라봄 */
+  cameraFixedId?: string | null;
 }
 
-export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, movedIds, focusPoint, movementLocked, firstPerson }: Props) {
+export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, movedIds, focusPoint, movementLocked, cameraMode, cameraFixedId }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
@@ -396,6 +398,14 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
   // 런타임 통과(콜라이더 제거) 대상 — set_passable/toggle_collision. 시각은 유지하고 콜라이더만 뺀다(문 열림).
   const isPassable = (o: ObjectNodeSchema) => !!passableIds?.has(o.id);
   const isMoved = (o: ObjectNodeSchema) => !!movedIds?.has(o.id);
+  // fixed 카메라 대상 오브젝트의 월드 위치(그 지점에서 캐릭터를 바라봄). 대상 없으면 null → third로 폴백.
+  const cameraFixedTarget = useMemo(() => {
+    if (cameraMode !== 'fixed' || !cameraFixedId) return null;
+    if (!allObjects.some((o) => o.id === cameraFixedId)) return null;
+    const m = worldMatrix(allObjects, cameraFixedId);
+    const pos = new THREE.Vector3().setFromMatrixPosition(m);
+    return { x: pos.x, y: pos.y, z: pos.z };
+  }, [cameraMode, cameraFixedId, allObjects]);
   const rootObjects = allObjects.filter((o) => !o.parentId);
   const lightObjects = rootObjects.filter((o) => o.light && o.visible);
   // 그룹은 GroupWithCollision으로 처리: 자식 오브젝트 각각에 콜라이더 적용
@@ -624,7 +634,8 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
         }}
         focusPoint={focusPoint}
         movementLocked={movementLocked}
-        firstPerson={firstPerson}
+        cameraMode={cameraFixedTarget || cameraMode !== 'fixed' ? cameraMode : 'third'}
+        fixedTarget={cameraFixedTarget}
       />
     </Physics>
   );
