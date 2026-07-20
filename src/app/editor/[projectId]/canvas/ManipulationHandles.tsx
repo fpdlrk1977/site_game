@@ -24,6 +24,7 @@ const _center = new THREE.Vector3(); // bbox 중심 월드(앞뒤 판정 기준)
 const _viewC = new THREE.Vector3();  // 중심→카메라
 const _nx = new THREE.Vector3(), _ny = new THREE.Vector3(), _nz = new THREE.Vector3(); // 월드 면 법선
 const _wq = new THREE.Quaternion();  // 오브젝트 월드 회전
+const _wsz = new THREE.Vector3(), _wsc = new THREE.Vector3(); // 오브젝트 로컬 크기·월드 스케일(핸들 크기 상한용)
 const CENTER_NORM = { x: 0.5, y: 0.5, z: 0.5 }; // bbox 중심 정규화
 const HANDLE = '#0d99ff', HOT = '#ffffff', ANCHOR = '#ff7a0d';
 // 화면 방향별 리사이즈 커서 — atan2 각도를 45°씩 8분할. 리사이즈 커서는 양방향이라 4종 순환.
@@ -132,12 +133,20 @@ export function ManipulationHandles({ orbitRef, handleDraggingRef }: Props) {
     const dX = _nx.dot(_viewC), dY = _ny.dot(_viewC), dZ = _nz.dot(_viewC);
     const fXp = dX > 0, fXm = dX < 0, fYp = dY > 0, fYm = dY < 0, fZp = dZ > 0, fZm = dZ < 0;
     const faceFront = [fXm, fXp, fYm, fYp, fZm, fZp]; // 면 인덱스 8..13 = -X,+X,-Y,+Y,-Z,+Z 앞면 여부
+    // 뷰포트 높이 보정 — 창/뷰포트 크기가 바뀌어도 화면상 픽셀 크기가 일정하도록(기준 높이 800px 대비).
+    const vpk = 800 / Math.max(1, size.height);
+    // 오브젝트 월드 최대 변 — 줌아웃 시 핸들이 오브젝트를 가리지 않게 핸들 크기 상한(cap)에 씀.
+    ref.getWorldScale(_wsc);
+    lb.getSize(_wsz);
+    const objMax = Math.max(_wsz.x * Math.abs(_wsc.x), _wsz.y * Math.abs(_wsc.y), _wsz.z * Math.abs(_wsc.z));
+    const capW = Math.max(0.02, objMax * 0.12); // 오브젝트 최대 변의 12% 이하
     for (let i = 0; i < HANDLES.length; i++) {
       const h = handleRefs.current[i];
       if (!h) continue;
       _c.copy(anchorLocalPoint(lb, normOf(HANDLES[i]))).applyMatrix4(ref.matrixWorld);
       h.position.copy(_c);
-      h.scale.setScalar(Math.max(0.015, camera.position.distanceTo(_c) * 0.016) * (i >= 8 ? 0.8 : 1));
+      // 화면상 일정 크기(거리+뷰포트) + 오브젝트 비율 상한 → 가까이선 잡기 좋고 멀리선 안 가림.
+      h.scale.setScalar(Math.min(Math.max(0.015, camera.position.distanceTo(_c) * 0.016 * vpk), capW) * (i >= 8 ? 0.8 : 1));
       // 가시성 — 코너는 인접 3면 중 하나라도 앞면이면 보임(완전히 가려진 코너만 숨김), 면은 그 면이 앞면일 때만.
       h.visible = i < 8
         ? ((i & 1 ? fXp : fXm) || (i & 2 ? fYp : fYm) || (i & 4 ? fZp : fZm))

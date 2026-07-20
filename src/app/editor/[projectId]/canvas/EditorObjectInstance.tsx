@@ -3,7 +3,7 @@
 import { useRef, useLayoutEffect, useMemo, useEffect, useState, Suspense } from 'react';
 import * as THREE from 'three';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
-import { Text3D, Center, Line } from '@react-three/drei';
+import { Text3D, Center, Line, Billboard, Html } from '@react-three/drei';
 import { createPrimitiveGeometry, createRoundedBoxDims, primitiveGeomKey, profileSig } from '@/lib/primitiveGeometry';
 import { voxelSig, voxelSkinsSig } from '@/lib/voxelGeometry';
 import { useVoxelSkinMaterials } from '@/components/three/useVoxelSkinMaterials';
@@ -505,6 +505,30 @@ function GroupObjectInstance({ object }: Props) {
 }
 
 const MOTOR_COLOR = '#ff7a0d';
+// 모터 아이콘 = 톱니바퀴(기어) 실루엣. 사다리꼴 이빨 8개 + 가운데 구멍. 한 번만 생성해 전 모터가 공유.
+//   빌보드로 항상 카메라를 향하게 렌더 → 어느 각도서도 '기계 부품(모터)'으로 읽힌다.
+const MOTOR_GEAR_GEO = (() => {
+  const teeth = 8, rTip = 1.0, rRoot = 0.72, rHole = 0.38, depth = 0.4;
+  const shape = new THREE.Shape();
+  const step = (Math.PI * 2) / teeth;
+  const fr = [0, 0.28, 0.36, 0.64, 0.72];       // 이빨 한 칸 내 프로파일(바닥→상승→이빨상단→하강)
+  const rr = [rRoot, rRoot, rTip, rTip, rRoot];
+  let first = true;
+  for (let i = 0; i < teeth; i++) {
+    for (let k = 0; k < fr.length; k++) {
+      const ang = (i + fr[k]) * step;
+      const x = Math.cos(ang) * rr[k], y = Math.sin(ang) * rr[k];
+      if (first) { shape.moveTo(x, y); first = false; } else shape.lineTo(x, y);
+    }
+  }
+  shape.closePath();
+  const hole = new THREE.Path();
+  hole.absarc(0, 0, rHole, 0, Math.PI * 2, true);
+  shape.holes.push(hole);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 6 });
+  geo.center();
+  return geo;
+})();
 // 모터형 액추에이터 — 메쉬 없는 그룹. 원점에 클릭 가능한 dot을 그려 비어 있어도 찾고/선택할 수 있게 한다.
 // 연결된 자식(재부모화된 오브젝트)은 그룹처럼 중첩 렌더. 실제 구동은 ▶ 플레이/뷰어(에디터는 정적).
 function MotorObjectInstance({ object }: Props) {
@@ -532,7 +556,7 @@ function MotorObjectInstance({ object }: Props) {
 
   return (
     <group ref={groupRef} onPointerDown={markObjectHit}>
-      {/* 클릭 히트 영역 — 보이는 dot보다 크게(잡기 쉽게) · 항상 최상단(depthTest off)이라 부품에 묻혀도 잡힘 */}
+      {/* 클릭 히트 영역 — 아이콘보다 크게(잡기 쉽게) · 항상 최상단(depthTest off)이라 부품에 묻혀도 잡힘 */}
       <mesh
         renderOrder={999}
         onClick={(e) => { e.stopPropagation(); selectByClick(object, e.nativeEvent.shiftKey); }}
@@ -541,20 +565,28 @@ function MotorObjectInstance({ object }: Props) {
         <sphereGeometry args={[0.24, 12, 12]} />
         <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
       </mesh>
-      {/* 보이는 dot — 연결 부품(로봇팔 베이스·기어 등)에 묻혀도 찾도록 항상 최상단 */}
-      <mesh raycast={() => null} renderOrder={1000}>
-        <sphereGeometry args={[0.12, 16, 16]} />
-        <meshBasicMaterial color={MOTOR_COLOR} depthTest={false} />
-      </mesh>
-      <mesh raycast={() => null} renderOrder={999}>
-        <sphereGeometry args={[0.2, 12, 12]} />
-        <meshBasicMaterial color={MOTOR_COLOR} transparent opacity={0.14} depthTest={false} depthWrite={false} />
-      </mesh>
+      {/* 모터 아이콘 = 기어(빌보드로 항상 카메라를 향함) · 부품에 묻혀도 찾도록 항상 최상단 */}
+      <Billboard>
+        <mesh geometry={MOTOR_GEAR_GEO} scale={0.15} raycast={() => null} renderOrder={1000}>
+          <meshBasicMaterial color={MOTOR_COLOR} depthTest={false} />
+        </mesh>
+        <mesh geometry={MOTOR_GEAR_GEO} scale={0.19} raycast={() => null} renderOrder={999}>
+          <meshBasicMaterial color={MOTOR_COLOR} transparent opacity={0.16} depthTest={false} depthWrite={false} />
+        </mesh>
+      </Billboard>
       {isSelected && (
         <mesh raycast={() => null} renderOrder={1000}>
           <sphereGeometry args={[0.32, 10, 10]} />
           <meshBasicMaterial color="#0D99FF" wireframe depthTest={false} />
         </mesh>
+      )}
+      {/* 빌보드 라벨 — 선택 시에만(여러 모터일 때 화면 지저분 방지). 한글이라 DOM(Html)로 렌더. */}
+      {isSelected && (
+        <Html center position={[0, 0.34, 0]} zIndexRange={[80, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', background: 'rgba(20,20,28,0.85)', color: '#fff', border: '1px solid #ff7a0d', borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 600 }}>
+            <span style={{ color: '#ff7a0d' }}>⚙</span> 모터
+          </div>
+        </Html>
       )}
       {children.map((child) => (
         <EditorObjectInstance key={child.id} object={child} />

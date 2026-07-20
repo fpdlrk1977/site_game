@@ -16,6 +16,8 @@ import { anchorLocalPoint } from '@/lib/pivotMath';
 const ORANGE = '#ff7a0d';
 const MIN_COL = '#ff7a0d'; // 닫힘(min)
 const MAX_COL = '#ffd24d'; // 열림(max)
+// 회전 커서 — 부채꼴 핸들 위/드래그 시. 원형 화살표(주황) SVG, 핫스팟 중앙, 폴백 grab.
+const ROTATE_CUR = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%23ff7a0d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12a9 9 0 1 1-2.64-6.36'/><path d='M21 3v6h-6'/></svg>\") 14 14, grab";
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 const FAN_SEG = 48; // 부채꼴 세그먼트 수
@@ -41,7 +43,7 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
   const objects = useSceneStore((s) => s.objects);
   const assets = useSceneStore((s) => s.assets);
   const refsMap = useObjectRefs();
-  const { camera, gl } = useThree();
+  const { camera, gl, size } = useThree();
 
   const id = selectedIds.length === 1 ? selectedIds[0] : null;
   const obj = id && id !== CHARACTER_PREVIEW_ID ? objects.find((o) => o.id === id) : null;
@@ -95,11 +97,19 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
   }, [geo, fanGeo, edgeGeo, edgeLine]);
 
   // 핸들 드래그 시작 — 포인터를 회전 평면에 투영해 각도(°)를 계산, min/max에 실시간 반영.
+  //   atan2는 ±180°만 나오므로 프레임 간 델타를 unwrap해 누적 → 180°를 넘겨도 부채꼴이 뒤집히지 않고
+  //   연속으로 돈다. **반대 핸들 기준 상대 클램프**로 스윕(max−min)이 0~360°를 벗어나지 않게 한다
+  //   (절대 [-360,360]만 막으면 min 음수 + max 양수로 스윕이 360°를 넘어버림).
   const startDrag = (which: 'min' | 'max') => (e: { stopPropagation: () => void }) => {
     if (!id) return;
     e.stopPropagation();
     dragRef.current = which;
     if (orbitRef?.current) orbitRef.current.enabled = false;
+    gl.domElement.style.cursor = ROTATE_CUR;
+    // 시작 각도(저장값)에서 누적. prevRaw는 첫 move에서 기준만 잡고 값 갱신은 건너뜀(잡는 순간 점프 방지).
+    const o0 = useSceneStore.getState().objects.find((x) => x.id === id);
+    let accum = (o0?.actuator?.[which] as number) ?? 0;
+    let prevRaw: number | null = null;
     const move = (ev: PointerEvent) => {
       if (dragRef.current !== which || !id) return;
       const rect = gl.domElement.getBoundingClientRect();
@@ -108,17 +118,28 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
       plane.setFromNormalAndCoplanarPoint(axisW.current, hingeW.current);
       if (!ray.ray.intersectPlane(plane, _hit)) return;
       _dv.subVectors(_hit, hingeW.current);
-      // 기준(refW)으로부터 축(axisW) 둘레 부호 있는 각도. ±180° 범위.
-      const ang = Math.atan2(_cross.crossVectors(refW.current, _dv).dot(axisW.current), refW.current.dot(_dv)) * RAD2DEG;
+      // 기준(refW)으로부터 축(axisW) 둘레 부호 있는 각도(±180°).
+      const raw = Math.atan2(_cross.crossVectors(refW.current, _dv).dot(axisW.current), refW.current.dot(_dv)) * RAD2DEG;
+      if (prevRaw === null) { prevRaw = raw; return; } // 첫 프레임: 기준만 잡음
+      let d = raw - prevRaw; // 프레임 간 델타 unwrap → 경계(±180°) 넘어도 연속
+      if (d > 180) d -= 360; else if (d < -180) d += 360;
+      prevRaw = raw;
       const st = useSceneStore.getState();
       const o = st.objects.find((x) => x.id === id);
       if (!o?.actuator) return;
-      st.updateObject(id, { actuator: { ...o.actuator, [which]: Math.round(ang) } });
+      // 반대 핸들 기준 클램프: min ≤ max ≤ min+360 (스윕 0~360° 보장, 360° 초과·역전 방지).
+      const other = (which === 'max' ? o.actuator.min : o.actuator.max) ?? 0;
+      accum += d;
+      accum = which === 'max'
+        ? Math.max(other, Math.min(other + 360, accum))
+        : Math.max(other - 360, Math.min(other, accum));
+      st.updateObject(id, { actuator: { ...o.actuator, [which]: Math.round(accum) } });
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       dragRef.current = null;
+      gl.domElement.style.cursor = '';
       if (orbitRef?.current) orbitRef.current.enabled = true;
       useSceneStore.getState().pushHistory();
     };
@@ -144,14 +165,18 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
     if (isMotor) _h.copy(_wp);
     else _h.copy(anchorLocalPoint(lb!, act.hinge ?? { x: 0.5, y: 0.5, z: 0.5 })).applyMatrix4(ref.matrixWorld);
     sp.position.copy(_h);
-    const hScale = Math.max(0.02, camera.position.distanceTo(_h) * 0.02); // 화면상 일정 크기
-    sp.scale.setScalar(hScale);
-    // 축 방향(월드) — 오브젝트 회전 반영
-    _axis.set(act.axis === 'x' ? 1 : 0, act.axis === 'y' ? 1 : 0, act.axis === 'z' ? 1 : 0).applyQuaternion(_wq).normalize();
-    // 선 길이 = 월드 bbox 최대 변의 60%(+여유). 빈 모터는 기본 반경.
+    // 축/부채꼴 반경(len) = 월드 bbox 최대 변의 60%(+여유). 빈 모터는 기본 반경. (핸들 크기 상한에도 씀)
     let len: number;
     if (haveBox) { _wbox.copy(lb!).applyMatrix4(ref.matrixWorld); _wbox.getSize(_p); len = Math.max(_p.x, _p.y, _p.z) * 0.6 + 0.2; }
     else len = 1.2;
+    // 화면상 일정 크기(거리+뷰포트 보정) — 단, 줌아웃 시 오브젝트/부채꼴을 가리지 않도록 len의 일정 비율로 상한(cap).
+    const hScale = Math.min(
+      Math.max(0.02, camera.position.distanceTo(_h) * 0.02 * (800 / Math.max(1, size.height))),
+      len * 0.16,
+    );
+    sp.scale.setScalar(hScale);
+    // 축 방향(월드) — 오브젝트 회전 반영
+    _axis.set(act.axis === 'x' ? 1 : 0, act.axis === 'y' ? 1 : 0, act.axis === 'z' ? 1 : 0).applyQuaternion(_wq).normalize();
     const arr = geo.attributes.position.array as Float32Array;
     _p.copy(_h).addScaledVector(_axis, -len);
     arr[0] = _p.x; arr[1] = _p.y; arr[2] = _p.z;
@@ -221,12 +246,22 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
       <lineSegments ref={lineRef} geometry={geo} renderOrder={1002} visible={false} frustumCulled={false} raycast={() => null}>
         <lineBasicMaterial color={ORANGE} depthTest={false} transparent opacity={0.9} />
       </lineSegments>
-      {/* min/max 드래그 핸들 — 끌어서 각도 직접 조절. rotate 전용. */}
-      <mesh ref={minRef} renderOrder={1003} visible={false} onPointerDown={showHandles ? startDrag('min') : undefined}>
+      {/* min/max 드래그 핸들 — 끌어서 각도 직접 조절(회전 커서). rotate 전용. */}
+      <mesh
+        ref={minRef} renderOrder={1003} visible={false}
+        onPointerDown={showHandles ? startDrag('min') : undefined}
+        onPointerOver={showHandles ? (e) => { e.stopPropagation(); if (!dragRef.current) gl.domElement.style.cursor = ROTATE_CUR; } : undefined}
+        onPointerOut={showHandles ? () => { if (!dragRef.current) gl.domElement.style.cursor = ''; } : undefined}
+      >
         <sphereGeometry args={[1, 14, 14]} />
         <meshBasicMaterial color={MIN_COL} depthTest={false} transparent opacity={0.98} />
       </mesh>
-      <mesh ref={maxRef} renderOrder={1003} visible={false} onPointerDown={showHandles ? startDrag('max') : undefined}>
+      <mesh
+        ref={maxRef} renderOrder={1003} visible={false}
+        onPointerDown={showHandles ? startDrag('max') : undefined}
+        onPointerOver={showHandles ? (e) => { e.stopPropagation(); if (!dragRef.current) gl.domElement.style.cursor = ROTATE_CUR; } : undefined}
+        onPointerOut={showHandles ? () => { if (!dragRef.current) gl.domElement.style.cursor = ''; } : undefined}
+      >
         <sphereGeometry args={[1, 14, 14]} />
         <meshBasicMaterial color={MAX_COL} depthTest={false} transparent opacity={0.98} />
       </mesh>
