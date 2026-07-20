@@ -190,6 +190,13 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **B — 바닥 환경반사 억제(`GroundPlane`)**: 평평한 matte 바닥이 DefaultEnvironment(스튜디오 IBL)를 반사해 생기는 넓은 radial 하이라이트("스포트라이트 흰빛") → 바닥 재질 `envMapIntensity={0.3}`(신규 `GROUND_ENV`)로 낮춤. **오브젝트는 무영향**(각 재질 기본 1). 물(MeshReflectorMaterial)은 제외.
 - ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "지금까진 좋아") — 수평선·radial 흰빛 개선 만족.**
 
+### 🧭 배치 편의 (2026-07-20) — ① 바닥 드롭라인/발자국 + ② 시점 버튼 — 브라우저 확인 대기
+> 사용자: 에디터서 오브젝트 3D 위치 파악 어려움. 확정 ①+②. tsc 클린 + dev 컴파일. **브라우저 확인 대기.**
+- **① 신규 `SelectionGroundGuide.tsx`**(EditorCanvas, SelectionOutline 패턴): 단일 선택 오브젝트의 **월드 AABB**에서 → 밑면 중앙→바닥 **수직 점선**(떠 있을 때만) + 바닥 **발자국 윤곽(점선)+반투명 채움**(#0D99FF) + **높이 라벨**(`baseY.toFixed(2)m`, drei Html, 떠 있을 때만). 라이트/파티클 제외·단일 선택·드래그 중 라이브(매 프레임). depthTest off·raycast 무관(가이드).
+- **② 시점 버튼(`ViewportFloatingToolbar`)**: 그리드 버튼 옆에 **T/F/S 버튼**(Top/Front/Side) → 기존 `requestCameraView('top'|'front'|'right')`(키보드 Numpad 7/1/3만 있던 것) 클릭 노출. 그리드 툴팁 영어화 겸사.
+- **⚠️ 알려진 이슈(사용자 지적) — 시점 프리셋 원근감**: Top/Front/Right가 **원근 투영(PerspectiveCamera fov 60)** 이라 foreshortening으로 정렬 판단이 애매. **world/local 문제 아님 = 투영 방식(perspective) 문제.** 진짜 도면뷰엔 **orthographic(평행 투영)** 필요 → 별도 제안/확정 후 진행 예정(구조적 변경).
+- **확인 필요(브라우저)**: ①오브젝트 선택 시 바닥 점선·발자국·높이 라벨(떠 있을 때)·바닥에 붙으면 점선/라벨 사라짐·드래그 중 추종 · ②T/F/S 버튼 시점 전환.
+
 #### 🐛 버그픽스 (2026-07-20) — 빈 모터/그룹 선택 시 원점에 파란 박스 — 브라우저 확인 대기
 > 사용자 보고: "모터 배치하면 푸른색 박스가 화면 중간에 생긴다." 원인 규명 후 수정. tsc 클린.
 - **원인**: `ManipulationHandles`(코너/면 스케일 핸들 = `boxGeometry[1,1,1]`·파란 `#0d99ff`·depthTest off·renderOrder 1000)의 렌더 조건 `valid = obj && !locked && visible`이 **bbox 없는 오브젝트를 안 걸러냄**. 빈 모터(자식 없음→`localBBox=null`)는 valid=true라 핸들이 렌더되나, 위치 계산 `layoutHandles`가 null bbox에 조기 return → 핸들 14개가 위치 못 잡고 **월드 원점·크기1 기본값**에 겹쳐 1×1×1 파란 박스로 보임(화면 중앙). 기존 잠복 버그(모터=배치 직후 선택되는 빈 그룹이라 표면화).

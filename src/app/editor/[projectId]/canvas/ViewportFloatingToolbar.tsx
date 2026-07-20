@@ -88,6 +88,7 @@ export function ViewportFloatingToolbar() {
     setSnap,
     toggleWireframe,
     beginPlacement,
+    requestCameraView,
     undo,
     redo,
     alignSelected,
@@ -309,8 +310,22 @@ export function ViewportFloatingToolbar() {
           </button>
         </Tooltip>
 
+        {/* 시점 프리셋 — Top/Front/Side (정렬 확인·배치용) */}
+        <div className="flex items-center bg-background/50 rounded-xs p-0.5 gap-0.5">
+          {([['top', 'T', 'Top view (위에서)'], ['front', 'F', 'Front view (앞에서)'], ['right', 'S', 'Side view (옆에서)']] as const).map(([view, label, tip]) => (
+            <Tooltip key={view} content={tip}>
+              <button
+                onClick={() => requestCameraView(view)}
+                className="w-7 h-7 rounded-xs flex items-center justify-center text-[11px] font-bold text-muted hover:text-foreground hover:bg-background transition-all"
+              >
+                {label}
+              </button>
+            </Tooltip>
+          ))}
+        </div>
+
         {/* 기준 격자 평면 순환 (바닥 XZ → 벽 XY → 벽 YZ) */}
-        <Tooltip content={`격자 평면: ${gridPlane.toUpperCase()} (클릭해 전환)`}>
+        <Tooltip content={`Grid plane: ${gridPlane.toUpperCase()} (click to switch)`}>
           <button
             onClick={cycleGridPlane}
             className="h-7 pl-1.5 pr-1.5 rounded-xs flex items-center gap-1 text-muted hover:text-foreground hover:bg-background transition-all"
