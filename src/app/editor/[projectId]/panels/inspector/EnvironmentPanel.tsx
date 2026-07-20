@@ -34,13 +34,19 @@ import { SectionHeader, GroupBox, LabeledNum, XYZRow, Toggle, NumInput } from ".
 import { SunDial } from "./SunDial";
 import type { EnvSchema, HdrPreset, GroundPreset, PopupConfig, PostProcessPreset } from "@/types/scene";
 
+// 분위기 프리셋 — **하늘(그라데이션) + 빛(색·강도·방향) + 노출**을 한 번에 잡는다.
+//   2026-07-20 재설계: 예전엔 hdrPreset(=HDRI 사진 배경)을 갈아끼우는 게 핵심이라 "사진 붙인 느낌"이 났다.
+//   HDR을 조명 전용으로 내리면서 Mood가 하늘을 못 건드리는 반쪽이 됐고 → **sky 그라데이션까지 포함**하도록 확장.
+//   이제 Mood = 한 번에 룩 잡는 프리셋, Sky/Lights 섹션 = 세부 조정(계층 관계, 중복 아님).
+//   ※ 색 값 주의: 톤매핑이 Linear라 1을 넘으면 하드클립(흰색 뭉개짐) → 노출은 1 이하, 강도도 보수적으로.
 const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<EnvSchema> }[] = [
-  // 기본값 복귀 — HDR/라이트/노출을 DEFAULT_ENVIRONMENT 상태로 되돌린다(무드 해제).
+  // 무드 해제 — 중립 상태로 복귀(아주 옅은 그라데이션 + 흰 빛).
   {
     id: "default",
     label: "Default",
     icon: RotateCcw,
     env: {
+      sky: { type: "gradient", value: "#dfe9f5", value2: "#f4f6f8" },
       hdrPreset: "none",
       toneMappingExposure: 1,
       lights: {
@@ -52,80 +58,90 @@ const MOOD_PRESETS: { id: string; label: string; icon: LucideIcon; env: Partial<
       },
     },
   },
+  // 아침 — 부드러운 하늘 + 크림빛 지평선, 낮고 따뜻한 해.
   {
     id: "morning",
     label: "Morning",
     icon: Sunrise,
     env: {
+      sky: { type: "gradient", value: "#a8c8e8", value2: "#ffe8d0" },
       hdrPreset: "dawn",
-      toneMappingExposure: 1.05,
+      toneMappingExposure: 1,
       lights: {
-        ambientIntensity: 0.55,
+        ambientIntensity: 0.5,
         directionalIntensity: 1.0,
         directionalPosition: { x: 8, y: 5, z: 6 },
-        directionalColor: "#ffe4c4",
-        ambientColor: "#dfe8ff",
+        directionalColor: "#ffd9b0",
+        ambientColor: "#d8e4f5",
       },
     },
   },
+  // 한낮 — 맑은 파란 하늘, 높은 해, 중성 백색광.
   {
     id: "noon",
     label: "Noon",
     icon: Sun,
     env: {
+      sky: { type: "gradient", value: "#6fb0e8", value2: "#cfe6f7" },
       hdrPreset: "park",
-      toneMappingExposure: 1.0,
+      toneMappingExposure: 1,
       lights: {
-        ambientIntensity: 0.6,
-        directionalIntensity: 1.5,
+        ambientIntensity: 0.55,
+        directionalIntensity: 1.35,
         directionalPosition: { x: 4, y: 12, z: 4 },
-        directionalColor: "#fffaf0",
-        ambientColor: "#ffffff",
+        directionalColor: "#fffdf7",
+        ambientColor: "#eaf3ff",
       },
     },
   },
+  // 노을 — 위는 보랏빛, 지평선은 주황. 해는 낮게 깔린다.
   {
     id: "sunset",
     label: "Sunset",
     icon: Sunset,
     env: {
+      sky: { type: "gradient", value: "#7b6aa8", value2: "#ffa87a" },
       hdrPreset: "sunset",
       toneMappingExposure: 0.95,
       lights: {
-        ambientIntensity: 0.5,
+        ambientIntensity: 0.45,
         directionalIntensity: 1.0,
         directionalPosition: { x: 10, y: 3, z: 2 },
         directionalColor: "#ff9d5c",
-        ambientColor: "#ffcfa8",
+        ambientColor: "#ffd0b8",
       },
     },
   },
+  // 밤 — 짙은 남색에서 옅은 청보라로. 달빛처럼 약하고 차가운 빛.
   {
     id: "night",
     label: "Night",
     icon: Moon,
     env: {
+      sky: { type: "gradient", value: "#101a33", value2: "#2d3f66" },
       hdrPreset: "night",
-      toneMappingExposure: 0.85,
+      toneMappingExposure: 0.9,
       lights: {
         ambientIntensity: 0.3,
-        directionalIntensity: 0.4,
+        directionalIntensity: 0.45,
         directionalPosition: { x: 3, y: 8, z: 5 },
         directionalColor: "#9db4e8",
         ambientColor: "#4a5a80",
       },
     },
   },
+  // 스튜디오 — 무채색 배경 + 고른 빛(제품/포트폴리오용).
   {
     id: "studio",
     label: "Studio",
     icon: Lightbulb,
     env: {
+      sky: { type: "gradient", value: "#d8dde3", value2: "#f0f2f4" },
       hdrPreset: "studio",
-      toneMappingExposure: 1.0,
+      toneMappingExposure: 1,
       lights: {
         ambientIntensity: 0.7,
-        directionalIntensity: 1.2,
+        directionalIntensity: 1.1,
         directionalPosition: { x: 5, y: 10, z: 5 },
         directionalColor: "#ffffff",
         ambientColor: "#ffffff",
@@ -311,88 +327,6 @@ export function EnvironmentPanel() {
         )}
       </GroupBox>
 
-      {/* Camera — 둘러보기 카메라 설정(시야각·줌/회전 제한·자동회전) */}
-      <GroupBox>
-        <SectionHeader
-          title="Camera"
-          hint="게시된 뷰어의 둘러보기 카메라 동작. 시야각(FOV), 줌(가까이/멀리) 범위, 내려다보는 각도 제한, 자동 회전(턴테이블)을 정해 방문자가 이상한 각도로 못 가게 합니다. 플레이(걷기) 모드는 캐릭터 카메라라 별개."
-          isOpen={envOpen("camera")}
-          onToggle={() => envToggle("camera")}
-        />
-        {envOpen("camera") && (
-          <div className="px-3 pb-4 space-y-2">
-            <div>
-              <div className="flex items-center gap-1 mb-1">
-                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Field of view (시야각)</span>
-                <InfoHint text="작을수록 망원(멀리 압축), 클수록 광각(넓게·왜곡). 기본 60°. 시작 뷰를 저장하면 그때 값이 우선됩니다." />
-              </div>
-              <RangeSlider
-                value={env.exploreCamera?.fov ?? 60}
-                onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, fov: v } })}
-                onCommit={pushHistory}
-                min={20} max={90} step={1} showValue precision={0}
-              />
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <LabeledNum
-                  label="가까이 한도(m)"
-                  value={env.exploreCamera?.minDistance ?? 1}
-                  // 멀리 한도를 넘지 못하게(뒤집히면 뷰어 카메라가 잠김) — Fog Near/Far와 동일 패턴.
-                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, minDistance: Math.min(Math.max(0.1, v), (env.exploreCamera?.maxDistance ?? 200) - 0.1) } })}
-                  onCommit={pushHistory} min={0.1} max={50} precision={1} dragStep={0.5}
-                />
-              </div>
-              <div className="flex-1">
-                <LabeledNum
-                  label="멀리 한도(m)"
-                  value={env.exploreCamera?.maxDistance ?? 200}
-                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, maxDistance: Math.max(v, (env.exploreCamera?.minDistance ?? 1) + 0.1) } })}
-                  onCommit={pushHistory} min={1} max={1000} precision={0} dragStep={5}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-1 mb-1">
-                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">카메라가 내려갈 수 있는 높이</span>
-                <InfoHint text="카메라를 아래로 돌릴 수 있는 한계입니다. 90°(기본)=눈높이(지평선)까지 내려갈 수 있음. 값을 줄일수록 카메라가 위쪽에 묶여 '내려다보는' 시점만 남고, 30° 아래로 내리면 사실상 탑다운으로 고정돼 상하 회전이 거의 안 됩니다." />
-              </div>
-              <RangeSlider
-                value={env.exploreCamera?.maxPolarDeg ?? 89}
-                onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, maxPolarDeg: v } })}
-                onCommit={pushHistory}
-                min={10} max={90} step={1} showValue precision={0}
-              />
-              {/* 값이 작을수록 카메라가 머리 위로 묶인다 — 의미가 직관과 반대라 실제로 오해가 발생했음. */}
-              {(env.exploreCamera?.maxPolarDeg ?? 89) < 45 && (
-                <p className="text-[9px] text-amber-500 mt-1">
-                  ⚠️ 값이 낮아 카메라가 위쪽에 묶입니다 — 방문자가 거의 탑다운 시점에서 시작하고 상하 회전이 막혀요. 정면 시점을 원하면 90°에 가깝게 두세요.
-                </p>
-              )}
-            </div>
-            <label className="flex items-center justify-between cursor-pointer pt-1">
-              <span className="text-[10px] text-muted/70 dark:text-muted">자동 회전 (턴테이블)</span>
-              <Toggle
-                value={env.exploreCamera?.autoRotate === true}
-                onChange={(v) => { updateEnvironment({ exploreCamera: { ...env.exploreCamera, autoRotate: v } }); pushHistory(); }}
-              />
-            </label>
-            {env.exploreCamera?.autoRotate && (
-              <div>
-                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">회전 속도</span>
-                <RangeSlider
-                  value={env.exploreCamera?.autoRotateSpeed ?? 1}
-                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, autoRotateSpeed: v } })}
-                  onCommit={pushHistory}
-                  min={0.2} max={5} step={0.1} showValue precision={1}
-                />
-              </div>
-            )}
-            <p className="text-[9px] text-muted/50">에디터엔 미반영 — 게시/둘러보기 뷰어에 적용됩니다.</p>
-          </div>
-        )}
-      </GroupBox>
-
       {/* Frame — 게시 뷰어 고정 화면 비율 */}
       <GroupBox>
         <SectionHeader
@@ -431,8 +365,9 @@ export function EnvironmentPanel() {
           <div className="px-3 pb-3 space-y-2">
             {/* 모드 탭 */}
             {(() => {
-              const useHdr = (env.hdrPreset ?? "none") !== "none";
-              const mode = useHdr ? "hdr" : env.sky.type === "sky" ? "sky" : "color";
+              // 배경(sky.type)과 HDR 조명(hdrPreset)은 **독립**이다 — HDR은 더 이상 배경을 덮지 않는다(조명/반사 전용).
+              //   레거시 'hdr' 타입은 배경 소스가 없어졌으므로 단색으로 표시.
+              const mode = env.sky.type === "sky" ? "sky" : env.sky.type === "gradient" ? "gradient" : "color";
               const HDR_PRESETS: { id: HdrPreset; label: string }[] = [
                 { id: "sunset", label: "Sunset" },
                 { id: "dawn", label: "Dawn" },
@@ -451,18 +386,18 @@ export function EnvironmentPanel() {
                     <SelectBox
                       value={mode}
                       onChange={(v) => {
-                        const t = v as "color" | "sky" | "hdr";
-                        if (t === "hdr") {
-                          updateEnvironment({ hdrPreset: env.hdrPreset && env.hdrPreset !== "none" ? env.hdrPreset : "sunset" });
-                        } else {
-                          updateEnvironment({ sky: { ...env.sky, type: t }, hdrPreset: "none" });
-                        }
+                        const t = v as "color" | "sky" | "gradient";
+                        // 그라데이션 최초 선택 시 수평선 색 기본값을 채워준다(위=하늘색, 아래=옅은 색).
+                        const next = t === "gradient" && !env.sky.value2
+                          ? { ...env.sky, type: t, value2: "#e8eef5" }
+                          : { ...env.sky, type: t };
+                        updateEnvironment({ sky: next });
                         pushHistory();
                       }}
                       options={[
+                        { value: "gradient", label: "Gradient" },
                         { value: "color", label: "Solid color" },
                         { value: "sky", label: "Sky" },
-                        { value: "hdr", label: "HDR" },
                       ]}
                     />
 
@@ -474,16 +409,45 @@ export function EnvironmentPanel() {
                       />
                     )}
 
-                    {mode === "hdr" && (
-                      <SelectBox
-                        value={env.hdrPreset ?? "sunset"}
-                        onChange={(v) => {
-                          updateEnvironment({ hdrPreset: v as HdrPreset });
-                          pushHistory();
-                        }}
-                        options={HDR_PRESETS.map(({ id, label }) => ({ value: id, label }))}
-                      />
+                    {mode === "gradient" && (
+                      <>
+                        <ColorPicker
+                          value={env.sky.value}
+                          onChange={(hex) => updateEnvironment({ sky: { ...env.sky, value: hex } })}
+                          onCommit={pushHistory}
+                          title="위쪽(천정) 색"
+                        />
+                        <ColorPicker
+                          value={env.sky.value2 ?? "#e8eef5"}
+                          onChange={(hex) => updateEnvironment({ sky: { ...env.sky, value2: hex } })}
+                          onCommit={pushHistory}
+                          title="수평선 색"
+                        />
+                      </>
                     )}
+                  </div>
+
+                  {mode === "gradient" && (
+                    <p className="text-[9px] text-muted/50">위쪽 → 수평선 2단 그라데이션. Fog를 켜면 바닥이 수평선 색으로 사라져 경계가 부드러워집니다.</p>
+                  )}
+
+                  {/* HDR = 조명/반사(IBL) 전용. 배경은 위 하늘 설정이 담당한다. */}
+                  <div className="pt-1 space-y-1">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">HDR 조명</span>
+                      <InfoHint text="주변광과 반사를 만드는 환경맵(IBL)입니다. 배경으로 보이지는 않아요 — 배경은 위 하늘 설정이 담당합니다. 금속·유리 재질의 반사가 자연스러워집니다." />
+                    </div>
+                    <SelectBox
+                      value={env.hdrPreset ?? "none"}
+                      onChange={(v) => {
+                        updateEnvironment({ hdrPreset: v as HdrPreset });
+                        pushHistory();
+                      }}
+                      options={[
+                        { value: "none", label: "기본 (스튜디오)" },
+                        ...HDR_PRESETS.map(({ id, label }) => ({ value: id, label })),
+                      ]}
+                    />
                   </div>
                 </>
               );

@@ -16,6 +16,7 @@ import { ObjectRefsContext, useObjectRefs } from "./ObjectRefsContext";
 import { pointerDownOnObjectRef } from "./boxSelectState";
 import { PostProcessingEffects } from "@/components/three/PostProcessingEffects";
 import { GroundPlane } from "@/components/three/GroundPlane";
+import { GradientSky } from "@/components/three/GradientSky";
 import { worldBBox } from "@/lib/objectBBox";
 import { sampleClip } from "@/lib/animSample";
 import { exportObjectsToGlb } from "@/lib/exportGlb";
@@ -1065,9 +1066,13 @@ export function EditorCanvas() {
     resetDrag();
   }, [resetDrag]);
 
+  // HDR은 **조명/반사(IBL) 전용** — 배경은 sky.type이 담당(뷰어와 동일 규칙, 2026-07-20).
   const useHdr = (environment.hdrPreset ?? "none") !== "none";
-  const isSkyMode = !useHdr && environment.sky.type === "sky";
-  const skyColor = environment.sky.type === "color" ? environment.sky.value : "#f3f1f1";
+  const isSkyMode = environment.sky.type === "sky";
+  const isGradient = environment.sky.type === "gradient";
+  const isSolid = !isSkyMode && !isGradient; // 레거시 'hdr' 타입도 단색 폴백
+  const skyColor = environment.sky.value || "#f3f1f1";
+  const skyHorizon = environment.sky.value2 || skyColor;
 
   return (
     <ObjectRefsContext.Provider value={objectRefsRef}>
@@ -1110,7 +1115,8 @@ export function EditorCanvas() {
           <SceneToneMapping exposure={environment.toneMappingExposure ?? 1} />
 
           {/* ── 배경 (HDR / Sky / 단색 — 상호 배타) ── */}
-          {!useHdr && !isSkyMode && <color attach="background" args={[skyColor]} />}
+          {isSolid && <color attach="background" args={[skyColor]} />}
+          {isGradient && <GradientSky top={skyColor} horizon={skyHorizon} />}
           {isSkyMode && (
             <Sky
               sunPosition={[
@@ -1126,12 +1132,14 @@ export function EditorCanvas() {
           )}
           {useHdr && (
             <Suspense fallback={null}>
-              <Environment preset={environment.hdrPreset as Exclude<HdrPreset, "none">} background />
+              {/* background 프롭 없음 = 조명/반사만. 배경은 위 sky.type이 그린다. */}
+              <Environment preset={environment.hdrPreset as Exclude<HdrPreset, "none">} />
             </Suspense>
           )}
           {/* ── Fog ── 뷰어와 동일. 단색 배경이면 fog 색 = 하늘색 자동 일치. near-ortho 평행뷰(flatView)에선 카메라가 멀어 fog가 씬을 덮으므로 끔. ── */}
           {environment.fog.enabled && !flatView && (() => {
-            const fogColor = (!useHdr && !isSkyMode) ? skyColor : environment.fog.color;
+            // fog 색 = 배경이 수렴하는 색과 일치(지평선 하드컷 제거). 그라데이션이면 수평선 색.
+            const fogColor = isGradient ? skyHorizon : isSolid ? skyColor : environment.fog.color;
             return environment.fog.mode === 'exp'
               ? <fogExp2 attach="fog" args={[fogColor, environment.fog.density ?? 0.02]} />
               : <fog attach="fog" args={[fogColor, environment.fog.near, environment.fog.far]} />;

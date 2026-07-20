@@ -8,12 +8,14 @@ import * as THREE from 'three';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset, AssetRefSchema, EnvSchema } from '@/types/scene';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { worldBBox } from '@/lib/objectBBox';
+import { cameraLimits } from '@/lib/cameraLimits';
 import { BoundaryWalls } from '@/components/three/BoundaryWalls';
 import { ViewerObject } from './ViewerObject';
 import { InstancedPrimitives, getInstancedIds } from './InstancedPrimitives';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
 import { PostProcessingEffects } from '@/components/three/PostProcessingEffects';
 import { GroundPlane } from '@/components/three/GroundPlane';
+import { GradientSky } from '@/components/three/GradientSky';
 import { DefaultEnvironment } from '@/components/three/DefaultEnvironment';
 import { PlayModeContext } from './PlayModeContext';
 import { ClipRequestContext, type ClipReq } from './ClipRequestContext';
@@ -272,41 +274,10 @@ function HoverUpdater() {
 
 // 탐색 모드 진입 시 1회 자동 전체 맞춤 — 저장한 공간을 다시 열 때 카메라가 너무 가깝지 않도록
 // 모든 루트 오브젝트가 화면에 들어오는 뷰로 시작(에디터 Shift+F 전체 맞춤과 동일 기준).
-// 둘러보기 카메라 제한값 계산.
-//   ★ 핵심 규칙: **저장된 시작 뷰(startView)는 제한보다 우선**한다.
-//   OrbitControls.update()가 polar/거리를 제한으로 clamp하기 때문에, 제한이 시작 뷰보다 좁으면
-//   사용자가 정면에서 저장한 뷰가 조용히 탑다운으로 튕겨나간다(실제 발생한 버그).
-//   → 제한을 항상 startView를 포함하도록 넓혀서, 저장한 뷰는 반드시 그대로 보이게 한다.
-function exploreLimits(env: EnvSchema) {
-  const ec = env.exploreCamera;
-  const DEFAULT_MAX_POLAR = Math.PI / 2 - 0.02; // 지평선 살짝 위
-  let maxPolar = ec?.maxPolarDeg != null ? (ec.maxPolarDeg * Math.PI) / 180 : DEFAULT_MAX_POLAR;
-  // min > max로 뒤집힌 값이 들어와도 뷰어가 잠기지 않게 정렬(패널에서도 막지만 기존 씬 방어).
-  let minDistance = Math.max(0.1, ec?.minDistance ?? 1);
-  let maxDistance = Math.max(minDistance + 0.1, ec?.maxDistance ?? 200);
-
-  const sv = env.startView;
-  if (sv) {
-    const dx = sv.position.x - sv.target.x;
-    const dy = sv.position.y - sv.target.y;
-    const dz = sv.position.z - sv.target.z;
-    const r = Math.hypot(dx, dy, dz);
-    if (r > 1e-6) {
-      // polar: 0 = 바로 위(탑다운), PI/2 = 지평선(눈높이)
-      const polar = Math.acos(Math.min(1, Math.max(-1, dy / r)));
-      maxPolar = Math.min(Math.max(maxPolar, polar + 0.05), DEFAULT_MAX_POLAR);
-      minDistance = Math.min(minDistance, r);
-      maxDistance = Math.max(maxDistance, r);
-    }
-  }
-  return { maxPolar, minDistance, maxDistance };
-}
-
-function InitialFit({ objects, orbitRef, startView, exploreFov }: {
+function InitialFit({ objects, orbitRef, startView }: {
   objects: ObjectNodeSchema[];
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
   startView?: EnvSchema['startView'];
-  exploreFov?: number;
 }) {
   const done = useRef(false);
   const camObj = useThree((s) => s.camera);
@@ -316,8 +287,8 @@ function InitialFit({ objects, orbitRef, startView, exploreFov }: {
     const orbit = orbitRef.current;
     if (!orbit) return;
     done.current = true;
-    // 둘러보기 기본 시야각(startView.fov 우선). 미설정이면 그대로.
-    const fov = startView?.fov ?? exploreFov;
+    // 시작 뷰에 저장된 시야각이 있으면 적용. 없으면 카메라 기본값 그대로.
+    const fov = startView?.fov;
     if (fov && (camObj as THREE.PerspectiveCamera).isPerspectiveCamera) {
       (camObj as THREE.PerspectiveCamera).fov = fov;
       (camObj as THREE.PerspectiveCamera).updateProjectionMatrix();
@@ -348,8 +319,8 @@ function InitialFit({ objects, orbitRef, startView, exploreFov }: {
 
 export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked, centerPointer, cameraMode, cameraFixedId }: Props) {
   const { environment, objects } = scene;
-  // 둘러보기 카메라 제한(시작 뷰를 항상 포함하도록 보정) — 아래 OrbitControls에서 사용.
-  const exploreLim = exploreLimits(environment);
+  // 둘러보기 카메라 제한 — 고정 기본값 + 저장된 시작 뷰가 잘리지 않도록 보정. lib/cameraLimits.ts 참고.
+  const exploreLim = cameraLimits(environment).effective;
   const azimuthRef = useRef(0);
   // 중앙 조준 포인터 — events.compute가 매 이벤트 참조(리렌더 무관하게 ref).
   const centerPointerRef = useRef(!!centerPointer);
@@ -389,10 +360,15 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       })()
     : null;
 
+  // HDR은 **조명/반사(IBL) 전용** — 배경은 아래 sky.type이 담당한다(2026-07-20).
+  //   예전엔 <Environment background />로 HDRI 사진을 배경에 깔아 "사진 붙인 느낌 + 지평선 하드컷"이 났다.
   const useHdr = (environment.hdrPreset ?? 'none') !== 'none';
-  const isSkyMode = !useHdr && environment.sky.type === 'sky';
-  // 단색 배경 — HDR/Sky 모두 아닐 때만 사용
-  const skyColor = environment.sky.type === 'color' ? environment.sky.value : '#f3f1f1';
+  const isSkyMode = environment.sky.type === 'sky';
+  const isGradient = environment.sky.type === 'gradient';
+  // 레거시 sky.type==='hdr'은 배경 소스가 없어졌으므로 단색으로 폴백.
+  const isSolid = !isSkyMode && !isGradient;
+  const skyColor = environment.sky.value || '#f3f1f1';
+  const skyHorizon = environment.sky.value2 || skyColor;
 
   const instancedIds = useMemo(() => getInstancedIds(objects), [objects]);
   const particleObjects = useMemo(() => objects.filter((o) => o.visible && o.particle), [objects]);
@@ -422,7 +398,8 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       <CameraAzimuthCapture playMode={playMode} azimuthRef={azimuthRef} />
 
       {/* ── 배경 (HDR / Sky / 단색 — 상호 배타) ── */}
-      {!useHdr && !isSkyMode && <color attach="background" args={[skyColor]} />}
+      {isSolid && <color attach="background" args={[skyColor]} />}
+      {isGradient && <GradientSky top={skyColor} horizon={skyHorizon} />}
       {isSkyMode && (
         <Sky
           sunPosition={[
@@ -438,7 +415,8 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       )}
       {useHdr && (
         <Suspense fallback={null}>
-          <Environment preset={environment.hdrPreset as Exclude<HdrPreset, 'none'>} background />
+          {/* background 프롭 없음 = 조명/반사만. 배경은 위 sky.type이 그린다. */}
+          <Environment preset={environment.hdrPreset as Exclude<HdrPreset, 'none'>} />
         </Suspense>
       )}
       {/* HDR 미설정 시에도 은은한 IBL 제공 → PBR 재질 생기 (에디터와 동일) */}
@@ -447,7 +425,9 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* ── Fog ── linear(near/far) 또는 exp(FogExp2, density) ──
           단색 배경이면 fog 색 = 하늘색으로 자동 일치 → 먼 바닥이 하늘로 매끄럽게 사라짐(수평선 하드컷 완화). */}
       {environment.fog.enabled && (() => {
-        const fogColor = (!useHdr && !isSkyMode) ? skyColor : environment.fog.color;
+        // fog 색 = 배경이 수렴하는 색과 일치시켜 지평선 하드컷을 없앤다.
+        //   그라데이션이면 **수평선 색**, 단색이면 하늘색, 대기(Sky) 모드만 사용자가 지정한 fog 색.
+        const fogColor = isGradient ? skyHorizon : isSolid ? skyColor : environment.fog.color;
         return environment.fog.mode === 'exp'
           ? <fogExp2 attach="fog" args={[fogColor, environment.fog.density ?? 0.02]} />
           : <fog attach="fog" args={[fogColor, environment.fog.near, environment.fog.far]} />;
@@ -564,13 +544,11 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           maxPolarAngle={exploreLim.maxPolar}
           minDistance={exploreLim.minDistance}
           maxDistance={exploreLim.maxDistance}
-          autoRotate={environment.exploreCamera?.autoRotate === true}
-          autoRotateSpeed={environment.exploreCamera?.autoRotateSpeed ?? 1}
         />
       )}
 
       {/* 탐색 진입 시 1회 자동 전체 맞춤(너무 가까운 초기 뷰 방지) */}
-      {!playMode && <InitialFit objects={objects} orbitRef={orbitRef} startView={environment.startView} exploreFov={environment.exploreCamera?.fov} />}
+      {!playMode && <InitialFit objects={objects} orbitRef={orbitRef} startView={environment.startView} />}
 
       {/* focus_object 액션 — 탐색 모드에서만 (플레이 모드는 orbitRef 없음 → no-op) */}
       {!playMode && <CameraFocus request={focusRequest ?? null} objects={objects} assets={scene.assets ?? []} orbitRef={orbitRef} />}
