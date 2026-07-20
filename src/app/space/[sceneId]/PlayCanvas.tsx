@@ -365,9 +365,11 @@ interface Props {
   focusPoint?: { x: number; y: number; z: number; radius: number } | null;
   /** 캐릭터 이동 잠금 — 팝업·포커스 등 상호작용 진행 중 */
   movementLocked?: boolean;
+  /** 1인칭 모드 */
+  firstPerson?: boolean;
 }
 
-export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, movedIds, focusPoint, movementLocked }: Props) {
+export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, movedIds, focusPoint, movementLocked, firstPerson }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
@@ -622,6 +624,7 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
         }}
         focusPoint={focusPoint}
         movementLocked={movementLocked}
+        firstPerson={firstPerson}
       />
     </Physics>
   );

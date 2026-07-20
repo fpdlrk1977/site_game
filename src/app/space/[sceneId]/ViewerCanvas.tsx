@@ -253,6 +253,8 @@ interface Props {
   movementLocked?: boolean;
   /** 중앙 조준(crosshair) 포인터 — true면 hover/click 레이캐스트를 마우스가 아니라 화면 중앙에서(플레이 데스크톱). */
   centerPointer?: boolean;
+  /** 1인칭 모드 (플레이) */
+  firstPerson?: boolean;
 }
 
 const EMPTY_CLIPS: Record<string, ClipReq> = {};
@@ -296,7 +298,7 @@ function InitialFit({ objects, orbitRef }: {
   return null;
 }
 
-export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked, centerPointer }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked, centerPointer, firstPerson }: Props) {
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
   // 중앙 조준 포인터 — events.compute가 매 이벤트 참조(리렌더 무관하게 ref).
@@ -493,7 +495,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* ── 플레이 모드 ── */}
       {playMode && (
         <Suspense fallback={null}>
-          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} movedIds={movedIds} focusPoint={playFocusPoint} movementLocked={movementLocked} />
+          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} movedIds={movedIds} focusPoint={playFocusPoint} movementLocked={movementLocked} firstPerson={firstPerson} />
         </Suspense>
       )}
 

@@ -142,6 +142,8 @@ interface Props {
   focusPoint?: { x: number; y: number; z: number; radius: number } | null;
   /** true면 캐릭터 이동(WASD/모바일/점프) 잠금 — 팝업·포커스 등 상호작용 진행 중 */
   movementLocked?: boolean;
+  /** 1인칭 모드 — 카메라를 캐릭터 눈높이에 두고 방위(az) 방향을 바라봄. 캐릭터 모델 숨김. */
+  firstPerson?: boolean;
 }
 
 export function PlayModeController({
@@ -165,6 +167,7 @@ export function PlayModeController({
   onApproachExit,
   focusPoint,
   movementLocked = false,
+  firstPerson = false,
 }: Props) {
   const keys = useRef({ w: false, a: false, s: false, d: false, space: false });
   // 현재 근접한 상호작용 대상 id (useFrame이 갱신, keydown이 읽음)
@@ -178,7 +181,7 @@ export function PlayModeController({
   const lockedRef = useRef(movementLocked);
   lockedRef.current = movementLocked;
   const { camera } = useThree();
-  const { world } = useRapier();
+  const { world, rapier } = useRapier();
   const elevationRef = useRef(0.45);
   const cameraDistanceRef = useRef(8);
   const isDragging = useRef(false);
@@ -186,6 +189,7 @@ export function PlayModeController({
   const lastTouchRef = useRef({ x: 0, y: 0 });
   const _targetPos = useRef(new THREE.Vector3());
   const _camPos = useRef(new THREE.Vector3());
+  const _camDir = useRef(new THREE.Vector3()); // 카메라 충돌(벽 뚫음 방지) 레이 방향
   const camTarget = useRef(new THREE.Vector3());
 
   // 캐릭터 방향 + 애니메이션 상태 공유
@@ -472,6 +476,9 @@ export function PlayModeController({
       );
     }
 
+    // 1인칭이면 캐릭터 모델 숨김(카메라가 머리 안에 있어 시야 가림 방지), 아니면 표시.
+    if (characterGroupRef.current) characterGroupRef.current.visible = !firstPerson;
+
     // 카메라 — 포커스 지점이 있으면 대상을 프레이밍(줌), 없으면 캐릭터 팔로우
     if (focusPoint) {
       // 대상 크기(radius)에 맞춰 적당한 거리로 다가감.
@@ -488,8 +495,17 @@ export function PlayModeController({
       camera.position.lerp(_camPos.current, 0.12);
       camTarget.current.lerp(_targetPos.current, 0.15);
       camera.lookAt(camTarget.current);
+    } else if (firstPerson) {
+      // 1인칭 — 카메라를 캐릭터 눈높이에 두고 방위(az)+고도(el) 방향을 바라봄. (캐릭터 모델은 아래에서 숨김)
+      const el = elevationRef.current;
+      _targetPos.current.set(newPos.x, newPos.y + 1.5, newPos.z);
+      camera.position.copy(_targetPos.current);
+      // 시선 방향 = 3인칭에서 카메라가 캐릭터를 보던 방향과 동일(=궤도 오프셋의 반대).
+      _camDir.current.set(-Math.sin(az) * Math.cos(el), -Math.sin(el), -Math.cos(az) * Math.cos(el));
+      camTarget.current.copy(_targetPos.current).addScaledVector(_camDir.current, 10);
+      camera.lookAt(camTarget.current);
     } else {
-      // 팔로우 카메라
+      // 팔로우 카메라 (3인칭)
       const d = cameraDistanceRef.current;
       const el = elevationRef.current;
       _targetPos.current.set(newPos.x, newPos.y + 1, newPos.z);
@@ -500,6 +516,20 @@ export function PlayModeController({
       const camZ = camTarget.current.z + d * Math.cos(az) * Math.cos(el);
 
       _camPos.current.set(camX, camY, camZ);
+      // ── 카메라 충돌(벽 뚫음 방지) ── 캐릭터(camTarget)→카메라 방향으로 레이를 쏴, 사이에 벽(콜라이더)이
+      //   있으면 카메라를 벽 앞까지 당긴다. → 3인칭 카메라가 벽을 뚫고 밖으로 나가 외부가 보이는 문제 해결.
+      //   센서(트리거)·플레이어 자신은 제외. 벽 앞 0.3m 버퍼 + 최소 0.4m(캐릭터 안으로 안 파고들게).
+      _camDir.current.subVectors(_camPos.current, camTarget.current);
+      const wantDist = _camDir.current.length();
+      if (wantDist > 1e-3) {
+        _camDir.current.multiplyScalar(1 / wantDist); // normalize
+        const rayC = new rapier.Ray(camTarget.current, _camDir.current);
+        const hit = world.castRay(rayC, wantDist, true, QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, playerRef.current ?? undefined);
+        if (hit && hit.timeOfImpact < wantDist) {
+          const dClamped = Math.max(0.4, hit.timeOfImpact - 0.3);
+          _camPos.current.copy(camTarget.current).addScaledVector(_camDir.current, dClamped);
+        }
+      }
       // 관성 제거 — 카메라 위치를 궤도 지점에 즉시 반영(회전 시 미끄러지지 않고 손 떼면 즉시 멈춤).
       // 캐릭터 추적의 부드러움은 위의 camTarget lerp(0.12)가 담당하므로 팔로우 자체는 여전히 부드럽다.
       camera.position.copy(_camPos.current);

@@ -1245,7 +1245,14 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - **빛 방향 = 반투명 원뿔(부채꼴)**: 태양 apex→원점 쪽으로 벌어지는 오렌지 원뿔(openEnded)로 "빛이 이쪽으로" 표현.
 - **B. 방위/고도 다이얼(신규 `SunDial.tsx`, 패널)**: 원형 패드 = 중심(머리 위/정오)·가장자리(지평선)·각도(방위 N/E). dot 드래그로 `directionalPosition` 상호 변환(크기 보존). XYZRow(Sun Position) 대체.
 - **라이트 on/off 토글(패널)**: Lights 섹션을 **화살표(접기) → 헤더 스위치(sunEnabled, Fog 패턴)**. 끄면 **directionalLight·그림자·태양 기즈모·태양 관련 컨트롤(다이얼/Sun 강도/Sun Color/Shadow) 숨김**, ambient/IBL만 유지. `EnvSchema.lights.sunEnabled?`(옵셔널·기본 true). 에디터+뷰어 directionalLight 게이트(게시 씬 일관).
-- **확인 필요(브라우저)**: ①뷰포트서 와이어 구 드래그→태양/그림자 실시간 이동 · ②원뿔이 빛 방향 표시 · ③패널 다이얼 드래그로 방향(크기 보존) · ④Lights 헤더 스위치 off→태양/그림자/기즈모 꺼지고 ambient만·컨트롤 숨김 · ⑤undo · ⑥뷰어(게시)도 sunEnabled 반영.
+- ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "이정도면 좋아"). 오브젝트 라이트 표식도 와이어프레임 구+코어로 통일(사용자 요청). 세부 다듬기는 테스트 후 추가 요청 예정.**
+
+### 🎥 카메라 개선 로드맵 (2026-07-20) — 사용자 요청(사무실 씬: 걷기·대화·웹). 우선순위대로 4단계
+> 사용자: 3인칭 카메라가 벽 뚫고 외부 보임 + 1인칭/구역별/새 모드 원함. **모두 구현, 우선순위 순.** 기준 `doc/CAMERA.md`.
+- **① 카메라 벽 뚫기 수정(camera collision) — ✅ 확인 완료(2026-07-20, 사용자 "잘된다")**: `PlayModeController` 팔로우 카메라에 **Rapier 레이캐스트**(camTarget→카메라 방향, `world.castRay`, EXCLUDE_SENSORS·플레이어 제외) 추가 → 사이에 벽(콜라이더) 있으면 `timeOfImpact-0.3`(최소 0.4)까지 **카메라 당김** → 벽 안 뚫고 방 안에 머묾.
+- **② 1인칭 토글 — ✅ 구현, 브라우저 확인 대기**: `PlayModeController`에 `firstPerson` prop + 분기 — 카메라를 캐릭터 눈높이(y+1.5)에 두고 방위(az)+고도(el) 방향 바라봄(시선=3인칭 오프셋의 반대), **캐릭터 모델 숨김**. prop 체인(ViewerClient→ViewerCanvas→PlayCanvas→PlayModeController). ViewerClient에 `firstPerson` state + **상단 중앙 "👁 1인칭/🎥 3인칭" 토글 버튼**(플레이 모드), 모드 이탈 시 리셋. tsc·컴파일 클린.
+  - **확인 필요(브라우저)**: 버튼으로 1인칭↔3인칭 전환 · 1인칭서 캐릭터 안 보이고 눈높이 시점 · 마우스로 시선 회전 · 크로스헤어 조준 정상 · 3인칭 복귀 정상.
+- **③ 카메라 모드 + 구역별 전환**(area_enter로 3인칭/1인칭/탑다운/고정 전환) + **④ 탑다운/고정 모드** — 큰 시스템, 마지막. 미착수. (CAMERA.md `set_active_camera`·다중 뷰 재사용.)
 
 ## 알려진 제약/한계
 

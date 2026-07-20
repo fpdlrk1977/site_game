@@ -116,6 +116,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 플레이 모드에서 캐릭터가 근접한 interact 대상 (E 프롬프트 표시용). 탐색 모드에선 항상 null.
   const [interactTarget, setInteractTarget] = useState<{ id: string; name: string } | null>(null);
   const [crosshairHot, setCrosshairHot] = useState(false); // 중앙 조준점이 상호작용 대상 위 → 레티클 강조
+  const [firstPerson, setFirstPerson] = useState(false);   // 1인칭↔3인칭 토글(플레이)
   // E키를 누를 때마다 증가 — 대화 열기/다음 문장(DialogueAdvanceContext로 3D 트리에 전달)
   const [dialogueNonce, setDialogueNonce] = useState(0);
 
@@ -384,7 +385,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
   // 모드 전환 시 근접 프롬프트 + 진행 중 상호작용(포커스/잠금) 정리 — 잠금이 다음 모드로 새는 것 방지
   useEffect(() => {
-    if (!playMode) { setInteractTarget(null); setCrosshairHot(false); }
+    if (!playMode) { setInteractTarget(null); setCrosshairHot(false); setFirstPerson(false); }
     setPlayFocus(null);
     setInteractionLock(false);
   }, [playMode]);
@@ -757,7 +758,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 고정 화면 비율(frameAspect) — 설정 시 캔버스를 그 비율로 레터박스(가운데 정렬 + 배경 여백).
   const frameAspect = scene.environment.frameAspect && scene.environment.frameAspect > 0 ? scene.environment.frameAspect : null;
   const viewerCanvasEl = (
-    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} centerPointer={playMode && !isTouch} />
+    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} centerPointer={playMode && !isTouch} firstPerson={playMode && firstPerson} />
   );
 
   return (
@@ -874,6 +875,17 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
       {/* 화면 중앙 조준점(crosshair) — 플레이 모드(데스크톱). 내가 어디를 보는지 표시(FPS식 레티클).
           (다음 단계: 조준점이 상호작용 대상 위에 오면 강조 + 중앙을 클릭/호버 포인터로 사용) */}
+      {/* 1인칭 ↔ 3인칭 전환 (플레이 모드) — 좌하단(상단 중앙='편집으로'·상단 우측='탐색 모드'·하단 중앙=WASD힌트와 겹침 회피). */}
+      {playMode && !interactionLock && !isTouch && (
+        <button
+          onClick={() => setFirstPerson((v) => !v)}
+          title="시점 전환 (1인칭/3인칭)"
+          className="absolute bottom-4 left-4 z-20 px-3 py-1.5 rounded-xs bg-black/50 hover:bg-black/65 backdrop-blur-sm border border-white/15 text-white/85 text-[11px] font-medium transition-colors"
+        >
+          {firstPerson ? '👁 1인칭 시점' : '🎥 3인칭 시점'}
+        </button>
+      )}
+
       {playMode && !isTouch && !interactionLock && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
           {/* 대상 조준 시 강조 = 커지고 노란 링. 평소 = 작은 흰 십자. */}
