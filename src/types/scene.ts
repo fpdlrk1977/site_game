@@ -81,6 +81,12 @@ export interface EnvSchema {
   // 게시 뷰어의 고정 화면 비율(width/height). 미설정/0 = 자유(브라우저 채움). 예: 16/9≈1.778, 1(정사각), 9/16≈0.5625.
   //   설정 시 뷰어가 이 비율의 프레임으로 레터박스(가운데 정렬 + 배경 여백)한다.
   frameAspect?: number;
+  // 게시 시작 뷰(둘러보기 모드 초기 카메라). 미설정 = 자동 전체맞춤(기존). 설정 시 방문자가 이 위치·시선에서 시작.
+  //   position=카메라 위치, target=바라보는 지점, fov=시야각(옵션).
+  startView?: { position: Vector3; target: Vector3; fov?: number };
+  // 둘러보기 카메라 설정(제한). 미설정 = 기존 기본값. 방문자가 카메라를 너무 멀리/이상하게 돌리지 못하게 제한.
+  //   fov=시야각(°)·minDistance/maxDistance=줌 범위(m)·maxPolarDeg=내려다보는 최대 각도(90=지평선)·autoRotate=자동 회전(턴테이블).
+  exploreCamera?: { fov?: number; minDistance?: number; maxDistance?: number; maxPolarDeg?: number; autoRotate?: boolean; autoRotateSpeed?: number };
   postProcessing?: { preset: PostProcessPreset };
   // 렌더러 노출(밝기) — LinearToneMapping의 toneMappingExposure. 미설정 = 1(기본).
   // 톤매핑은 코드에서 Linear로 고정 — 저장 색을 최대한 그대로 렌더(측정상 none과 동일 정확도).

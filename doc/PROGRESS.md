@@ -1256,6 +1256,8 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
   - **배선**: prop 체인 firstPerson→cameraMode/cameraFixedId(ViewerClient→ViewerCanvas→PlayCanvas→PlayModeController). PlayCanvas가 `cameraFixedId`→월드위치(worldMatrix) 계산해 fixedTarget 전달. ViewerClient에 `set_camera_mode` 핸들러 + 좌하단 토글 버튼(3인칭↔1인칭, 라벨은 4모드 표시) + 모드 이탈 리셋. EventsSection에 액션 UI(모드 드롭다운 + fixed 대상 선택 + 안내).
   - ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "전환 잘된다") — 구역별 카메라 전환 동작.** (팁: 센서를 문간이 아니라 "방 전체"로 덮어야 진입/이탈이 순식간에 안 겹침 — 사용자와 확인.)
   - **🎉 카메라 로드맵 4단계(①벽뚫기 ②1인칭 ③구역전환 ④탑다운/고정) 전부 완료·검증.**
+- **C1 게시 시작 뷰(startView) — ✅ 구현, 브라우저 확인 대기**: CAMERA.md 1순위(★최대). 다른 3D 서비스의 "기본 카메라 패널 = 시작 위치" 부재를 사용자가 지적 → 구현. `EnvSchema.startView?{position,target,fov?}`(옵셔널·미설정=자동fit 기존). **저장**: 에디터 `requestSaveStartView()`(요청-틱)→EditorCanvas가 현재 orbit 카메라(pos/target/fov) 읽어 `updateEnvironment({startView})`. **적용**: 뷰어 `InitialFit`이 startView 있으면 자동fit 대신 그 위치·시선·fov에서 시작(둘러보기 모드만·플레이는 팔로우라 무관). **UI**: Environment 패널 신규 **Start View 섹션**(기본 접힘) — "📷 현재 시점으로 저장" + "초기화" + 상태 안내. saveScene은 environment 통째 저장이라 자동 보존.
+  - **확인 필요(브라우저)**: 에디터서 카메라 각도 맞춤→"현재 시점으로 저장"→게시/둘러보기 뷰어가 그 위치·방향에서 시작(자동fit 대신) · 초기화→자동fit 복귀 · 저장 후 새로고침 유지.
 
 ## 알려진 제약/한계
 

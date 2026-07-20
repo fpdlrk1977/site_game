@@ -5,7 +5,7 @@ import { Canvas, useThree, useFrame, events as createPointerEvents } from '@reac
 import { OrbitControls, Grid, Sky, Environment, ContactShadows } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
-import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset, AssetRefSchema } from '@/types/scene';
+import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, HdrPreset, AssetRefSchema, EnvSchema } from '@/types/scene';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { worldBBox } from '@/lib/objectBBox';
 import { BoundaryWalls } from '@/components/three/BoundaryWalls';
@@ -272,17 +272,33 @@ function HoverUpdater() {
 
 // 탐색 모드 진입 시 1회 자동 전체 맞춤 — 저장한 공간을 다시 열 때 카메라가 너무 가깝지 않도록
 // 모든 루트 오브젝트가 화면에 들어오는 뷰로 시작(에디터 Shift+F 전체 맞춤과 동일 기준).
-function InitialFit({ objects, orbitRef }: {
+function InitialFit({ objects, orbitRef, startView, exploreFov }: {
   objects: ObjectNodeSchema[];
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
+  startView?: EnvSchema['startView'];
+  exploreFov?: number;
 }) {
   const done = useRef(false);
+  const camObj = useThree((s) => s.camera);
   // useFrame 1회 — orbitRef가 준비될 때까지 프레임마다 대기 후 fit(useEffect의 ref 타이밍 취약성 회피).
   useFrame(() => {
     if (done.current) return;
     const orbit = orbitRef.current;
     if (!orbit) return;
     done.current = true;
+    // 둘러보기 기본 시야각(startView.fov 우선). 미설정이면 그대로.
+    const fov = startView?.fov ?? exploreFov;
+    if (fov && (camObj as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      (camObj as THREE.PerspectiveCamera).fov = fov;
+      (camObj as THREE.PerspectiveCamera).updateProjectionMatrix();
+    }
+    // 게시 시작 뷰가 있으면 자동fit 대신 저장된 위치·시선(·fov)에서 시작.
+    if (startView) {
+      orbit.object.position.set(startView.position.x, startView.position.y, startView.position.z);
+      orbit.target.set(startView.target.x, startView.target.y, startView.target.z);
+      orbit.update();
+      return;
+    }
     const roots = objects.filter((o) => o.visible && o.parentId === null);
     if (roots.length === 0) return;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -513,14 +529,16 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           ref={orbitRef}
           makeDefault
           minPolarAngle={0.1}
-          maxPolarAngle={Math.PI / 2 - 0.02}
-          minDistance={1}
-          maxDistance={200}
+          maxPolarAngle={environment.exploreCamera?.maxPolarDeg != null ? (environment.exploreCamera.maxPolarDeg * Math.PI) / 180 : Math.PI / 2 - 0.02}
+          minDistance={environment.exploreCamera?.minDistance ?? 1}
+          maxDistance={environment.exploreCamera?.maxDistance ?? 200}
+          autoRotate={environment.exploreCamera?.autoRotate === true}
+          autoRotateSpeed={environment.exploreCamera?.autoRotateSpeed ?? 1}
         />
       )}
 
       {/* 탐색 진입 시 1회 자동 전체 맞춤(너무 가까운 초기 뷰 방지) */}
-      {!playMode && <InitialFit objects={objects} orbitRef={orbitRef} />}
+      {!playMode && <InitialFit objects={objects} orbitRef={orbitRef} startView={environment.startView} exploreFov={environment.exploreCamera?.fov} />}
 
       {/* focus_object 액션 — 탐색 모드에서만 (플레이 모드는 orbitRef 없음 → no-op) */}
       {!playMode && <CameraFocus request={focusRequest ?? null} objects={objects} assets={scene.assets ?? []} orbitRef={orbitRef} />}

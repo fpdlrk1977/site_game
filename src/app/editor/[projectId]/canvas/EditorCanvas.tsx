@@ -672,6 +672,7 @@ export function EditorCanvas() {
     objects,
     bookmarkSaveRequest,
     bookmarkRecallRequest,
+    startViewSaveRequest,
     setCameraBookmark,
     pendingPlacement,
     connectMotorId,
@@ -853,6 +854,21 @@ export function EditorCanvas() {
     const tgt = orbitRef.current.target;
     setCameraBookmark(bookmarkSaveRequest.slot, [cam.position.x, cam.position.y, cam.position.z], [tgt.x, tgt.y, tgt.z]);
   }, [bookmarkSaveRequest, setCameraBookmark]);
+
+  // 게시 시작 뷰 저장 — 현재 에디터 카메라(위치·타겟·fov)를 environment.startView에 저장.
+  useEffect(() => {
+    if (!startViewSaveRequest || !orbitRef.current) return;
+    const cam = orbitRef.current.object as THREE.PerspectiveCamera;
+    const tgt = orbitRef.current.target;
+    useSceneStore.getState().updateEnvironment({
+      startView: {
+        position: { x: cam.position.x, y: cam.position.y, z: cam.position.z },
+        target: { x: tgt.x, y: tgt.y, z: tgt.z },
+        fov: cam.isPerspectiveCamera ? cam.fov : undefined,
+      },
+    });
+    useSceneStore.getState().pushHistory();
+  }, [startViewSaveRequest]);
 
   useEffect(() => {
     if (!bookmarkRecallRequest || !orbitRef.current) return;

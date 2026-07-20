@@ -127,6 +127,8 @@ interface SceneState {
   cameraBookmarks: Record<number, { position: [number, number, number]; target: [number, number, number] }>;
   bookmarkSaveRequest: { slot: number; _tick: number } | null;
   bookmarkRecallRequest: { slot: number; _tick: number } | null;
+  // 게시 시작 뷰 저장 요청 — 에디터가 현재 카메라(orbit)를 읽어 environment.startView에 저장(요청-틱 패턴).
+  startViewSaveRequest: number | null;
   copiedProperties: { material?: ObjectNodeSchema['material']; physics?: ObjectNodeSchema['physics'] } | null;
   _prevSnapshot: HistoryEntry | null;
 }
@@ -194,6 +196,8 @@ interface SceneActions {
   duplicateInPlace: () => void;
   requestSaveBookmark: (slot: number) => void;
   requestRecallBookmark: (slot: number) => void;
+  /** 현재 에디터 카메라를 게시 시작 뷰로 저장 요청(에디터 핸들러가 orbit 읽어 저장) */
+  requestSaveStartView: () => void;
   setCameraBookmark: (slot: number, position: [number, number, number], target: [number, number, number]) => void;
   updateObject: (id: string, patch: Partial<ObjectNodeSchema>) => void;
   /** 여러 오브젝트의 트랜스폼을 한 번에 원자적으로 커밋(기즈모 전용). _prevSnapshot에 의존하지 않아 undo 기준 오염이 없다. */
@@ -623,6 +627,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   pendingPlacement: null,
   connectMotorId: null,
   bookmarkSaveRequest: null,
+  startViewSaveRequest: null,
   bookmarkRecallRequest: null,
   copiedProperties: null,
   _prevSnapshot: null,
@@ -959,6 +964,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   },
 
   requestSaveBookmark: (slot) => set({ bookmarkSaveRequest: { slot, _tick: Date.now() } }),
+  requestSaveStartView: () => set({ startViewSaveRequest: Date.now() }),
   requestRecallBookmark: (slot) => set({ bookmarkRecallRequest: { slot, _tick: Date.now() } }),
   setCameraBookmark: (slot, position, target) =>
     set((s) => ({ cameraBookmarks: { ...s.cameraBookmarks, [slot]: { position, target } } })),

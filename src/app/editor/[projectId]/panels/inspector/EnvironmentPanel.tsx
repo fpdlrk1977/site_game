@@ -182,11 +182,11 @@ function SizeField({
 
 // ── Environment 패널 (오브젝트 미선택 시) ──────────────────────
 export function EnvironmentPanel() {
-  const { environment, updateEnvironment, pushHistory, assets, addAsset, projectId, setBoundaryShapeOpen } = useSceneStore();
+  const { environment, updateEnvironment, pushHistory, assets, addAsset, projectId, setBoundaryShapeOpen, requestSaveStartView } = useSceneStore();
   const { addToast } = useToast();
   const [notesOpen, setNotesOpen] = useState(false);
   // 표시용(보여주기만) 섹션의 화살표 접기 상태 — enable 스위치 섹션(Ground/Fog/Player)은 제외.
-  const [envCollapsed, setEnvCollapsed] = useState<Set<string>>(new Set(["interaction", "post", "frame", "popup", "gamelogic"]));
+  const [envCollapsed, setEnvCollapsed] = useState<Set<string>>(new Set(["interaction", "post", "frame", "popup", "gamelogic", "startview"]));
   const envToggle = (k: string) =>
     setEnvCollapsed((prev) => {
       const n = new Set(prev);
@@ -275,6 +275,117 @@ export function EnvironmentPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto">
+      {/* Start View — 게시(둘러보기) 진입 시 카메라 위치·시선 */}
+      <GroupBox>
+        <SectionHeader
+          title="Start View"
+          hint="게시된 뷰어(둘러보기)에 방문자가 처음 들어왔을 때 보이는 카메라 위치·방향. 지정 안 하면 씬 전체가 담기게 자동 맞춤됩니다. 에디터에서 원하는 각도로 카메라를 맞춘 뒤 '현재 시점으로 저장'을 누르세요."
+          isOpen={envOpen("startview")}
+          onToggle={() => envToggle("startview")}
+        />
+        {envOpen("startview") && (
+          <div className="px-3 pb-4 space-y-2">
+            <p className="text-[10px] text-muted/70 dark:text-muted">
+              {environment.startView
+                ? "시작 뷰가 저장돼 있어요. 방문자는 이 위치·방향에서 시작합니다."
+                : "저장된 시작 뷰가 없어요. 방문자는 자동 전체맞춤 뷰에서 시작합니다."}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { requestSaveStartView(); addToast("현재 시점을 시작 뷰로 저장했어요"); }}
+                className="flex-1 px-2 py-1.5 rounded-xs bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors"
+              >
+                📷 현재 시점으로 저장
+              </button>
+              {environment.startView && (
+                <button
+                  onClick={() => { updateEnvironment({ startView: undefined }); pushHistory(); addToast("시작 뷰를 초기화했어요 (자동 맞춤)"); }}
+                  className="px-2 py-1.5 rounded-xs border border-border text-muted text-[11px] hover:text-foreground hover:border-primary transition-colors"
+                >
+                  초기화
+                </button>
+              )}
+            </div>
+            <p className="text-[9px] text-muted/50">플레이(걷기) 모드는 캐릭터 팔로우 카메라라 이 설정과 무관합니다 — 둘러보기 모드 진입 뷰에만 적용됩니다.</p>
+          </div>
+        )}
+      </GroupBox>
+
+      {/* Camera — 둘러보기 카메라 설정(시야각·줌/회전 제한·자동회전) */}
+      <GroupBox>
+        <SectionHeader
+          title="Camera"
+          hint="게시된 뷰어의 둘러보기 카메라 동작. 시야각(FOV), 줌(가까이/멀리) 범위, 내려다보는 각도 제한, 자동 회전(턴테이블)을 정해 방문자가 이상한 각도로 못 가게 합니다. 플레이(걷기) 모드는 캐릭터 카메라라 별개."
+          isOpen={envOpen("camera")}
+          onToggle={() => envToggle("camera")}
+        />
+        {envOpen("camera") && (
+          <div className="px-3 pb-4 space-y-2">
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Field of view (시야각)</span>
+                <InfoHint text="작을수록 망원(멀리 압축), 클수록 광각(넓게·왜곡). 기본 60°. 시작 뷰를 저장하면 그때 값이 우선됩니다." />
+              </div>
+              <RangeSlider
+                value={env.exploreCamera?.fov ?? 60}
+                onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, fov: v } })}
+                onCommit={pushHistory}
+                min={20} max={90} step={1} showValue precision={0}
+              />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">가까이 한도(m)</span>
+                <LabeledNum
+                  value={env.exploreCamera?.minDistance ?? 1}
+                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, minDistance: Math.max(0.1, v) } })}
+                  onCommit={pushHistory} min={0.1} max={50} precision={1} dragStep={0.5}
+                />
+              </div>
+              <div className="flex-1">
+                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">멀리 한도(m)</span>
+                <LabeledNum
+                  value={env.exploreCamera?.maxDistance ?? 200}
+                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, maxDistance: Math.max(1, v) } })}
+                  onCommit={pushHistory} min={1} max={1000} precision={0} dragStep={5}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">내려다보기 최대 각도</span>
+                <InfoHint text="90°=지평선까지. 낮추면 위에서 내려다보는 각도를 제한(바닥 아래나 뒤집힘 방지)." />
+              </div>
+              <RangeSlider
+                value={env.exploreCamera?.maxPolarDeg ?? 89}
+                onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, maxPolarDeg: v } })}
+                onCommit={pushHistory}
+                min={10} max={90} step={1} showValue precision={0}
+              />
+            </div>
+            <label className="flex items-center justify-between cursor-pointer pt-1">
+              <span className="text-[10px] text-muted/70 dark:text-muted">자동 회전 (턴테이블)</span>
+              <Toggle
+                value={env.exploreCamera?.autoRotate === true}
+                onChange={(v) => { updateEnvironment({ exploreCamera: { ...env.exploreCamera, autoRotate: v } }); pushHistory(); }}
+              />
+            </label>
+            {env.exploreCamera?.autoRotate && (
+              <div>
+                <span className="text-[10px] text-muted/70 dark:text-muted block mb-1">회전 속도</span>
+                <RangeSlider
+                  value={env.exploreCamera?.autoRotateSpeed ?? 1}
+                  onChange={(v) => updateEnvironment({ exploreCamera: { ...env.exploreCamera, autoRotateSpeed: v } })}
+                  onCommit={pushHistory}
+                  min={0.2} max={5} step={0.1} showValue precision={1}
+                />
+              </div>
+            )}
+            <p className="text-[9px] text-muted/50">에디터엔 미반영 — 게시/둘러보기 뷰어에 적용됩니다.</p>
+          </div>
+        )}
+      </GroupBox>
+
       {/* Frame — 게시 뷰어 고정 화면 비율 */}
       <GroupBox>
         <SectionHeader
