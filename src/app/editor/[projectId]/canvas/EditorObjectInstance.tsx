@@ -401,6 +401,19 @@ function scopeChildOnPath(object: ObjectNodeSchema, scopeId: string): string | n
 // 그 스코프 안에서 형제(스코프의 직속 자식)를 선택한다. 스코프 밖을 클릭하면 스코프 해제 후 최상위 선택.
 function selectByClick(object: ObjectNodeSchema, shiftKey: boolean) {
   const store = useSceneStore.getState();
+  // 모터 3D 연결 모드 — 클릭한 오브젝트(최상위 조상)를 대상 모터에 연결(reparent). 모드 유지(연속 연결).
+  //   모든 클릭 경로가 이 함수를 거치므로 여기 한 곳이면 프리미티브·그룹·모터dot·GLB·라이트·콘텐츠 전부 커버.
+  const connectMotorId = store.connectMotorId;
+  if (connectMotorId) {
+    const motor = store.objects.find((o) => o.id === connectMotorId);
+    if (!motor) { store.cancelConnect(); return; }
+    const targetId = findRootAncestorId(object);
+    if (targetId !== connectMotorId) {
+      store.reparentObject(targetId, connectMotorId); // self/자손/사이클은 reparentObject 내부에서 no-op
+      store.selectObject(connectMotorId);             // 모터 재선택 → 인스펙터 부품 목록 즉시 갱신
+    }
+    return; // 일반 선택 스킵(모드 유지 — ESC/빈곳 클릭으로 종료)
+  }
   if (object.locked) { if (!shiftKey) { store.selectObject(null); store.setGroupScope(null); } return; }
 
   const scope = store.groupScope;
@@ -519,22 +532,28 @@ function MotorObjectInstance({ object }: Props) {
 
   return (
     <group ref={groupRef} onPointerDown={markObjectHit}>
-      {/* 모터 dot — 클릭/더블클릭 선택 (비어 있어도 보이도록 항상 렌더) */}
+      {/* 클릭 히트 영역 — 보이는 dot보다 크게(잡기 쉽게) · 항상 최상단(depthTest off)이라 부품에 묻혀도 잡힘 */}
       <mesh
+        renderOrder={999}
         onClick={(e) => { e.stopPropagation(); selectByClick(object, e.nativeEvent.shiftKey); }}
         onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
       >
-        <sphereGeometry args={[0.12, 16, 16]} />
-        <meshBasicMaterial color={MOTOR_COLOR} />
+        <sphereGeometry args={[0.24, 12, 12]} />
+        <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
       </mesh>
-      <mesh raycast={() => null}>
+      {/* 보이는 dot — 연결 부품(로봇팔 베이스·기어 등)에 묻혀도 찾도록 항상 최상단 */}
+      <mesh raycast={() => null} renderOrder={1000}>
+        <sphereGeometry args={[0.12, 16, 16]} />
+        <meshBasicMaterial color={MOTOR_COLOR} depthTest={false} />
+      </mesh>
+      <mesh raycast={() => null} renderOrder={999}>
         <sphereGeometry args={[0.2, 12, 12]} />
-        <meshBasicMaterial color={MOTOR_COLOR} transparent opacity={0.14} depthWrite={false} />
+        <meshBasicMaterial color={MOTOR_COLOR} transparent opacity={0.14} depthTest={false} depthWrite={false} />
       </mesh>
       {isSelected && (
-        <mesh raycast={() => null}>
-          <sphereGeometry args={[0.3, 10, 10]} />
-          <meshBasicMaterial color="#0D99FF" wireframe />
+        <mesh raycast={() => null} renderOrder={1000}>
+          <sphereGeometry args={[0.32, 10, 10]} />
+          <meshBasicMaterial color="#0D99FF" wireframe depthTest={false} />
         </mesh>
       )}
       {children.map((child) => (

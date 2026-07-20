@@ -92,7 +92,10 @@ export function ManipulationHandles({ orbitRef, handleDraggingRef }: Props) {
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const obj = selectedId && selectedId !== CHARACTER_PREVIEW_ID ? objects.find((o) => o.id === selectedId) : null;
-  const valid = !!obj && !obj.locked && obj.visible;
+  // 스케일 핸들은 실제 bbox가 있는 형상만 대상. 라이트/파티클/모터, 그리고 자식 없는 빈 그룹(bbox 없음)은 제외.
+  //   ★ 제외 안 하면 위치를 못 잡은 핸들 14개가 월드 원점에 1×1 파란 박스로 떠 버린다(빈 모터/빈 그룹 배치 시).
+  const hbb = obj && !obj.light && !obj.particle && !obj.isActuator ? localBBox(objects, assets, obj.id) : null;
+  const valid = !!obj && !obj.locked && obj.visible && !!hbb && !hbb.isEmpty();
   const centerMode = isCenterAnchor(obj?.pivot);
 
   useEffect(() => {

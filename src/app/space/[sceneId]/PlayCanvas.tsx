@@ -301,7 +301,10 @@ function GroupWithCollision({ object, assets, onEvent, allObjects }: {
       {children.map((child) => {
         if (child.isGroup) {
           // 중첩 모션 그룹은 루트 그룹만 kinematic 지원 → 여기선 시각 전용(콜라이더 미동반)으로 애니메이션만.
-          if (child.motion) {
+          // 모터(액추에이터) 자식도 마찬가지 — 정적 GroupWithCollision로 두면 관절이 굳어 안 돈다.
+          //   → ViewerObject가 서브트리를 구동(자식 회전). 이로써 평범한 그룹 안에 모터 여러 개를 넣은
+          //   조립품(기어 한 쌍·쌍여닫이문 등)도 플레이 모드에서 동작한다. doc/PIVOT_MANIPULATION.md §6.
+          if (child.motion || child.isActuator) {
             return <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />;
           }
           return (

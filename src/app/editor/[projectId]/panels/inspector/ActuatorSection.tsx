@@ -43,7 +43,7 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
   return (
     <GroupBox>
       <SectionHeader
-        title={motor ? 'Motor' : 'Actuator (joint)'}
+        title={motor ? '모터 (Motor)' : 'Actuator (joint)'}
         hint={motor
           ? '이 오브젝트는 모터(부품)입니다. 트리에서 다른 오브젝트를 이 모터 아래로 끌어 연결하면, 연결된 것이 모터의 원점(=경첩)·축을 중심으로 돕니다. 축·범위·구동을 아래에서 설정하고 ▶ 플레이로 확인하세요.'
           : 'Turn an object into a mechanical joint: rotate around a hinge (door/arm) or slide along an axis (piston), within a min~max range. Reacts to game state (variable/event), holds its position, can carry a real collider. Exclusive with Motion; preview in ▶ Play. ↔ For a free-form scripted sequence (curved path, several channels at once) use Animation; for always-on decorative movement use Motion.'}

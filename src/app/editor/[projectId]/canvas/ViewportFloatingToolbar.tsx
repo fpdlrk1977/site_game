@@ -27,9 +27,13 @@ import {
   Sparkles,
   Disc,
   DoorClosed,
+  DoorOpen,
   Coins,
   Bot,
   Cog,
+  ArrowUpDown,
+  RotateCw,
+  Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
@@ -55,6 +59,10 @@ const PRESET_ITEMS: { id: string; label: string; icon: LucideIcon; node?: boolea
   { id: "door", label: "문 (E로 열림)", icon: DoorClosed },
   { id: "coin", label: "동전 (점수 +1)", icon: Coins },
   { id: "robot_arm", label: "로봇팔 (다관절)", icon: Bot, node: true },
+  { id: "hinged_door", label: "여닫이문 (경첩)", icon: DoorOpen, node: true },
+  { id: "elevator", label: "엘리베이터 (오르내림)", icon: ArrowUpDown, node: true },
+  { id: "revolving_door", label: "회전문", icon: RotateCw, node: true },
+  { id: "gears", label: "기어 한 쌍", icon: Settings, node: true },
   { id: "actuator", label: "모터 (연결해서 돌리기)", icon: Cog, actuator: true },
 ];
 

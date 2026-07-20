@@ -3,7 +3,7 @@
 // 모터 연결/해제 — 모터형 액추에이터에 오브젝트를 붙이거나 떼는 UX(트리 드래그 대안).
 //   모터 선택 시: 연결된 부품 목록 + 해제. 일반 오브젝트 선택 시: 모터에 연결 / 해제.
 //   내부적으로 reparentObject(월드 변환 보존 재부모화)만 호출. doc/PIVOT_MANIPULATION.md §6.
-import { Link2, Unlink } from 'lucide-react';
+import { Link2, Unlink, MousePointerClick } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { GroupBox } from './ui';
@@ -13,17 +13,33 @@ export function MotorLinkSection({ obj }: { obj: ObjectNodeSchema }) {
   const objects = useSceneStore((s) => s.objects);
   const reparentObject = useSceneStore((s) => s.reparentObject);
   const selectObject = useSceneStore((s) => s.selectObject);
+  const connectMotorId = useSceneStore((s) => s.connectMotorId);
+  const beginConnect = useSceneStore((s) => s.beginConnect);
+  const cancelConnect = useSceneStore((s) => s.cancelConnect);
   const motors = objects.filter((o) => o.isActuator && o.id !== obj.id);
 
   // ── 모터 쪽: 연결된 부품 목록 + 해제 ─────────────────────────────
   if (obj.isActuator) {
     const parts = objects.filter((o) => o.parentId === obj.id);
+    const connecting = connectMotorId === obj.id;
     return (
       <GroupBox>
         <div className="px-3 py-3 space-y-2">
           <div className="text-[11px] font-semibold text-muted flex items-center gap-1.5">
             <Link2 size={13} /> 연결된 부품 ({parts.length})
           </div>
+          {/* 3D 연결 모드 — 뷰포트에서 오브젝트를 클릭해 이 모터에 연결(트리 드래그 대안). 연속 연결 가능. */}
+          <button
+            onClick={() => (connecting ? cancelConnect() : beginConnect(obj.id))}
+            className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-xs border text-[10px] transition-colors ${
+              connecting
+                ? 'bg-[#ff7a0d] border-[#ff7a0d] text-white'
+                : 'border-border/70 text-muted hover:text-foreground hover:border-primary'
+            }`}
+          >
+            <MousePointerClick size={12} />
+            {connecting ? '연결 중… 오브젝트 클릭 (빈 곳/ESC 종료)' : '3D로 부품 연결 (클릭해서 붙이기)'}
+          </button>
           {parts.length === 0 ? (
             <p className="text-[10px] text-muted/50">
               아직 없음 — 트리에서 오브젝트를 이 모터로 <b>드래그</b>하거나, 그 오브젝트를 선택해 <b>모터에 연결</b>을 쓰세요.

@@ -623,6 +623,7 @@ export function EditorCanvas() {
     bookmarkRecallRequest,
     setCameraBookmark,
     pendingPlacement,
+    connectMotorId,
     gridPlane,
   } = useSceneStore();
   // 기준 격자 평면 — 바닥(XZ)/벽(XY·YZ). 시각 참조용 회전만.
@@ -653,6 +654,19 @@ export function EditorCanvas() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [pendingPlacement]);
+
+  // ESC로 모터 3D 연결 모드 종료
+  useEffect(() => {
+    if (!connectMotorId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        useSceneStore.getState().cancelConnect();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [connectMotorId]);
 
   useEffect(() => {
     if (!focusTarget || !orbitRef.current) return;
@@ -821,6 +835,8 @@ export function EditorCanvas() {
       }
       return;
     }
+    // 모터 3D 연결 모드: 마퀴/드래그 시작 안 함(오브젝트 onClick=연결·빈곳 onPointerMissed=종료가 처리)
+    if (useSceneStore.getState().connectMotorId) { pointerDownOnObjectRef.current = false; return; }
     if (e.button !== 0) return;
     // 좌드래그는 회전 안 함(회전=Ctrl+우드래그로 통일). 기즈모/핸들 드래그 → 각자 처리(orbit는 그쪽이 관리).
     if (gizmoDraggingRef.current || handleDraggingRef.current) {
@@ -906,7 +922,9 @@ export function EditorCanvas() {
     };
 
     for (const obj of objects) {
-      if (obj.locked || !obj.visible || obj.isGroup) continue;
+      // 그룹은 자식→루트 해석으로 선택되므로 스킵. 단 모터(isActuator)는 자식 없는 빈 그룹일 수 있어
+      // 잡아줄 자식이 없다 → 모터는 스킵 제외(dot/연결 부품 bbox로 직접 마퀴 선택, getRootId가 루트 해석).
+      if (obj.locked || !obj.visible || (obj.isGroup && !obj.isActuator)) continue;
       const obj3d = objectRefsRef.current.get(obj.id);
       if (!obj3d) continue;
 
@@ -970,7 +988,7 @@ export function EditorCanvas() {
     <ObjectRefsContext.Provider value={objectRefsRef}>
       <div
         ref={wrapperRef}
-        style={{ position: "relative", width: "100%", height: "100%", cursor: pendingPlacement ? "crosshair" : undefined }}
+        style={{ position: "relative", width: "100%", height: "100%", cursor: (pendingPlacement || connectMotorId) ? "crosshair" : undefined }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -985,6 +1003,11 @@ export function EditorCanvas() {
             // 배치 직후엔 새로 생성·선택된 오브젝트를 해제하지 않도록 1회 무시
             if (justPlacedRef.current) {
               justPlacedRef.current = false;
+              return;
+            }
+            // 모터 3D 연결 모드 중 빈 곳 클릭 → 연결 종료(선택 해제 대신)
+            if (useSceneStore.getState().connectMotorId) {
+              useSceneStore.getState().cancelConnect();
               return;
             }
             if (useSceneStore.getState().pendingPlacement) return;
@@ -1157,6 +1180,16 @@ export function EditorCanvas() {
               <span>클릭해서 배치</span>
               <span className="opacity-70">·</span>
               <span className="opacity-90">ESC 취소</span>
+            </div>
+          </div>
+        )}
+
+        {connectMotorId && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ff7a0d] text-white text-[11px] rounded-xs shadow-floating">
+              <span>모터에 연결할 오브젝트를 클릭</span>
+              <span className="opacity-70">·</span>
+              <span className="opacity-90">빈 곳/ESC 종료</span>
             </div>
           </div>
         )}

@@ -166,6 +166,10 @@ interface SceneActions {
   beginPlacement: (p: PendingPlacement) => void;
   commitPlacement: (x: number, z: number) => void;
   cancelPlacement: () => void;
+  /** 모터 3D 연결 모드 — 이 모터 id가 설정되면 뷰포트에서 클릭한 오브젝트를 이 모터에 연결(reparent). ESC/빈곳=종료. */
+  connectMotorId: string | null;
+  beginConnect: (motorId: string) => void;
+  cancelConnect: () => void;
   setSnap: (enabled: boolean, translate?: number, rotate?: number) => void;
   requestFocus: () => void;
   requestFocusAll: () => void;
@@ -615,6 +619,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   future: [],
   cameraBookmarks: {},
   pendingPlacement: null,
+  connectMotorId: null,
   bookmarkSaveRequest: null,
   bookmarkRecallRequest: null,
   copiedProperties: null,
@@ -934,6 +939,8 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   beginPlacement: (p) => set({ pendingPlacement: p }),
   cancelPlacement: () => set({ pendingPlacement: null }),
+  beginConnect: (motorId) => set({ connectMotorId: motorId, pendingPlacement: null }),
+  cancelConnect: () => set({ connectMotorId: null }),
   commitPlacement: (x, z) => {
     const p = get().pendingPlacement;
     if (!p) return;
