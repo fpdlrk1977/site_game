@@ -172,7 +172,17 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **③ 토러스(도넛) 프리미티브**: `PrimitiveShape`에 `torus` + `PrimitiveGeom.tubeRatio`(관 굵기). `createPrimitiveGeometry` TorusGeometry(외경 1·눕힘)·`primitiveGeomKey`·SHAPE_NAMES/DEFAULT_GEOM·툴바 SHAPES(Donut)·CommandPalette·GeometrySection(Tube thickness 슬라이더)·HierarchyPanel 아이콘(Donut)·InspectorPanel geometry 노출. 콜라이더=hull 근사(무변경).
 - **④ 선택 해제 버그 수정(`EditorCanvas` handlePointerUp)**: 확대 시 선택 오브젝트 화면 AABB가 커서, 빈 곳 클릭에 미세 드래그(≥6px)가 섞이면 작은 마퀴가 그 AABB에 걸쳐 재선택돼 해제 안 되던 문제 → **마퀴 사각형이 아주 작으면(가로·세로 <8px) 클릭으로 간주해 선택 해제**(selectObject(null)). 진짜 드래그 선택은 무영향.
 - **⑤ 크로스헤어(플레이 모드) — 시각만 우선(`ViewerClient`)**: 플레이+데스크톱에서 화면 중앙에 `+` 레티클(흰색+그림자). **미완(다음 단계)**: 중앙 조준을 클릭/호버 포인터로 사용 + 상호작용 대상 위에서 강조 → **뷰어 코어(ViewerObject 브랜치 objectId 태깅 + 중앙 레이캐스트 + handleObjectEvent 마우스 억제 게이트)** 손봐야 해 검증 필요. 시각은 안전(추가만). 결정: 플레이=중앙조준·둘러보기=마우스 유지, 대상 위 강조.
-- ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "잘된다") — 아이콘·영어화·토러스·선택해제·크로스헤어 시각 정상.** (⑤ 상호작용[중앙=포인터 클릭/호버+강조]은 미착수 — 다음 단계.)
+- ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "잘된다") — 아이콘·영어화·토러스·선택해제·크로스헤어 시각 정상.**
+
+#### ⑤ 크로스헤어 상호작용 (2026-07-20) — 중앙 조준 = 클릭/호버 포인터 + 강조 — 브라우저 확인 대기
+> ⑤의 상호작용 부분 구현. tsc 클린 + dev 컴파일. **브라우저 확인 대기.**
+- **핵심 = R3F `events.compute` 오버라이드(`ViewerCanvas`)**: 플레이+데스크톱(`centerPointer`)이면 hover/click 레이캐스트 원점을 마우스가 아니라 **화면 중앙(0,0)** 으로. → **기존 ViewerObject onClick/onPointerOver 파이프라인이 그대로 "중앙 조준" 기준으로 동작**(오브젝트 태깅·새 레이캐스터 불필요, 검증된 경로 재사용). 탐색 모드는 `base.compute`(R3F 기본) 그대로 → **무변경**.
+- **`HoverUpdater`**(신규, Canvas 내부): 매 프레임 `events.update()` 호출 → R3F가 포인터 이동 때만 교차 판정하는 한계 보완, **카메라가 움직여도(걷기/둘러봄) 중앙 hover 갱신**.
+- **크로스헤어 강조(`ViewerClient`)**: `handleObjectEvent`의 hover_enter/exit로 `crosshairHot` 토글 → 레티클이 **커지고 노란 링**으로 강조. (hover 이벤트 있는 대상 기준 — 클릭전용 대상은 클릭은 되나 강조는 미표시, MVP 한계.)
+- **배선**: `ViewerCanvas` props에 `centerPointer` + `eventsFactory`(memoized) · `ViewerClient`가 `centerPointer={playMode && !isTouch}` 전달 · 모드 이탈 시 crosshairHot 리셋.
+- **드래그-룩 무영향**: PlayModeController는 자체 window 리스너라 compute와 무관. 클릭=비드래그 시 중앙 오브젝트 클릭.
+- **마우스 커서 숨김(2026-07-20, 사용자 지적)**: 플레이+데스크톱(centerPointer)이면 Canvas `cursor: none`(크로스헤어가 포인터 역할). 단 **팝업/포커스(movementLocked) 중엔 커서 복귀 + 크로스헤어 숨김**(DOM 팝업 클릭용). 캔버스 명시 cursor가 body cursor보다 우선이라 ViewerObject hover cursor 무영향.
+- ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "잘된다") — 중앙 조준 클릭/호버/강조·커서 숨김 동작.** 단 사용자 "이 부분 좀 손봐야 함 — 테스트 거쳐 나중에 추가 요청 예정"(디테일 다듬기 여지 남김).
 
 #### 🐛 버그픽스 (2026-07-20) — 빈 모터/그룹 선택 시 원점에 파란 박스 — 브라우저 확인 대기
 > 사용자 보고: "모터 배치하면 푸른색 박스가 화면 중간에 생긴다." 원인 규명 후 수정. tsc 클린.

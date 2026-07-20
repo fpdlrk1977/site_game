@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useEffect, Suspense, lazy, useMemo } from 'react';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { useRef, useEffect, Suspense, lazy, useMemo, useCallback } from 'react';
+import { Canvas, useThree, useFrame, events as createPointerEvents } from '@react-three/fiber';
 import { OrbitControls, Grid, Sky, Environment, ContactShadows } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
@@ -251,10 +251,20 @@ interface Props {
   playFocusId?: string | null;
   /** 캐릭터 이동 잠금 — 팝업·포커스 등 상호작용 진행 중 */
   movementLocked?: boolean;
+  /** 중앙 조준(crosshair) 포인터 — true면 hover/click 레이캐스트를 마우스가 아니라 화면 중앙에서(플레이 데스크톱). */
+  centerPointer?: boolean;
 }
 
 const EMPTY_CLIPS: Record<string, ClipReq> = {};
 const EMPTY_DRIVE: Record<string, number> = {};
+
+// 매 프레임 R3F 포인터 이벤트 재평가 — 중앙 조준(compute=center)에서 카메라가 움직여도(걷기/둘러봄) hover가 갱신되게.
+//   (R3F는 기본적으로 실제 포인터 이동 때만 교차 판정 → 마우스 안 움직이고 걸어가면 hover가 안 바뀜)
+function HoverUpdater() {
+  const update = useThree((s) => s.events.update);
+  useFrame(() => update?.());
+  return null;
+}
 
 // 탐색 모드 진입 시 1회 자동 전체 맞춤 — 저장한 공간을 다시 열 때 카메라가 너무 가깝지 않도록
 // 모든 루트 오브젝트가 화면에 들어오는 뷰로 시작(에디터 Shift+F 전체 맞춤과 동일 기준).
@@ -286,9 +296,28 @@ function InitialFit({ objects, orbitRef }: {
   return null;
 }
 
-export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked, centerPointer }: Props) {
   const { environment, objects } = scene;
   const azimuthRef = useRef(0);
+  // 중앙 조준 포인터 — events.compute가 매 이벤트 참조(리렌더 무관하게 ref).
+  const centerPointerRef = useRef(!!centerPointer);
+  centerPointerRef.current = !!centerPointer;
+  // R3F 이벤트 매니저 — 기본 포인터 이벤트 + compute만 override(중앙 조준). 메모이즈로 재설정 방지.
+  const eventsFactory = useCallback((store: Parameters<typeof createPointerEvents>[0]) => {
+    const base = createPointerEvents(store);
+    return {
+      ...base,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      compute: (event: any, s: any, previous: any) => {
+        if (centerPointerRef.current) {
+          s.pointer.set(0, 0); // 화면 중앙(조준점)에서 레이캐스트
+          s.raycaster.setFromCamera(s.pointer, s.camera);
+        } else {
+          base.compute?.(event, s, previous); // 탐색 모드는 R3F 기본 compute 그대로(정확성 보존)
+        }
+      },
+    };
+  }, []);
   const orbitRef = useRef<OrbitControlsImpl>(null);
   // 플레이 모드 포커스 지점 — 대상의 월드 bbox '중심'과 반경을 PlayCanvas에 넘겨 카메라 줌에 사용.
   //   (원점 objWorldPos가 아니라 형상 중심 → GLB 원점이 발밑/한쪽이라 가까이서 프레임 밖으로 밀리는 문제 방지)
@@ -327,7 +356,8 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       shadows="percentage"
       camera={{ position: [5, 4, 8], fov: 60 }}
       gl={{ toneMapping: THREE.LinearToneMapping }}
-      style={{ width: '100%', height: '100%' }}
+      events={eventsFactory}
+      style={{ width: '100%', height: '100%', cursor: (centerPointer && !movementLocked) ? 'none' : undefined }}
     >
       <PlayModeContext.Provider value={playMode}>
       <ClipRequestContext.Provider value={clipRequests ?? EMPTY_CLIPS}>
@@ -452,6 +482,9 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           ))}
         </>
       )}
+
+      {/* 중앙 조준 hover — 카메라가 움직여도(걷기/둘러봄) 매 프레임 중앙 레이캐스트 재평가(R3F는 기본적으로 포인터 이동 때만 갱신). */}
+      {centerPointer && <HoverUpdater />}
 
       {/* ── 플레이 모드 ── */}
       {playMode && (

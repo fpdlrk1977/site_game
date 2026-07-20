@@ -115,6 +115,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   const [playMode, setPlayMode] = useState(scene.environment.defaultMode === 'play' && !walkDisabled);
   // 플레이 모드에서 캐릭터가 근접한 interact 대상 (E 프롬프트 표시용). 탐색 모드에선 항상 null.
   const [interactTarget, setInteractTarget] = useState<{ id: string; name: string } | null>(null);
+  const [crosshairHot, setCrosshairHot] = useState(false); // 중앙 조준점이 상호작용 대상 위 → 레티클 강조
   // E키를 누를 때마다 증가 — 대화 열기/다음 문장(DialogueAdvanceContext로 3D 트리에 전달)
   const [dialogueNonce, setDialogueNonce] = useState(0);
 
@@ -383,7 +384,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
   // 모드 전환 시 근접 프롬프트 + 진행 중 상호작용(포커스/잠금) 정리 — 잠금이 다음 모드로 새는 것 방지
   useEffect(() => {
-    if (!playMode) setInteractTarget(null);
+    if (!playMode) { setInteractTarget(null); setCrosshairHot(false); }
     setPlayFocus(null);
     setInteractionLock(false);
   }, [playMode]);
@@ -723,6 +724,9 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   }
 
   const handleObjectEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => {
+    // 중앙 조준(crosshair) 하이라이트 — hover 이벤트가 있는 대상을 조준하면 레티클 강조.
+    if (trigger === 'hover_enter') setCrosshairHot(true);
+    if (trigger === 'hover_exit') setCrosshairHot(false);
     if (trigger === 'click') trackEvent('click', obj.id, obj.name);
     if (trigger === 'area_enter') trackEvent('area_enter', obj.id, obj.name);
     if (trigger === 'area_exit') trackEvent('area_exit', obj.id, obj.name);
@@ -753,7 +757,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 고정 화면 비율(frameAspect) — 설정 시 캔버스를 그 비율로 레터박스(가운데 정렬 + 배경 여백).
   const frameAspect = scene.environment.frameAspect && scene.environment.frameAspect > 0 ? scene.environment.frameAspect : null;
   const viewerCanvasEl = (
-    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} />
+    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} centerPointer={playMode && !isTouch} />
   );
 
   return (
@@ -870,11 +874,16 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
       {/* 화면 중앙 조준점(crosshair) — 플레이 모드(데스크톱). 내가 어디를 보는지 표시(FPS식 레티클).
           (다음 단계: 조준점이 상호작용 대상 위에 오면 강조 + 중앙을 클릭/호버 포인터로 사용) */}
-      {playMode && !isTouch && (
+      {playMode && !isTouch && !interactionLock && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
-          <div className="relative w-4 h-4" style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.9))' }}>
-            <div className="absolute top-1/2 left-0 w-4 h-[1.5px] -translate-y-1/2 bg-white/80 rounded-full" />
-            <div className="absolute left-1/2 top-0 h-4 w-[1.5px] -translate-x-1/2 bg-white/80 rounded-full" />
+          {/* 대상 조준 시 강조 = 커지고 노란 링. 평소 = 작은 흰 십자. */}
+          <div
+            className="relative transition-all duration-100"
+            style={{ width: crosshairHot ? 22 : 16, height: crosshairHot ? 22 : 16, filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.9))' }}
+          >
+            <div className="absolute top-1/2 left-0 w-full h-[1.5px] -translate-y-1/2 rounded-full" style={{ background: crosshairHot ? '#ffd24d' : 'rgba(255,255,255,0.8)' }} />
+            <div className="absolute left-1/2 top-0 h-full w-[1.5px] -translate-x-1/2 rounded-full" style={{ background: crosshairHot ? '#ffd24d' : 'rgba(255,255,255,0.8)' }} />
+            {crosshairHot && <div className="absolute inset-0 rounded-full border-2 border-[#ffd24d]/80" />}
           </div>
         </div>
       )}
