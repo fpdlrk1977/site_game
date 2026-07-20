@@ -196,37 +196,85 @@ function SpawnMarker({ position }: { position: Vec3 }) {
 // 화면 어디서 어느 방향으로 비추는지 보여준다. 전역 directionalLight는 이 위치에서 원점(0,0,0)을
 // 향해 비추므로, 광선 방향 = normalize(-directionalPosition). 조명 동작/값은 건드리지 않는 순수
 // 에디터 표식(뷰어/플레이 미표시). 노랑 구=태양 위치(dir×R), 화살표=광선 방향(태양→원점).
-function SunDirectionGizmo({ position }: { position: Vec3 }) {
-  const R = 10;
-  const shaftLen = 2.4;
-  const { sunPos, quat } = useMemo(() => {
-    const dir = new THREE.Vector3(position.x, position.y, position.z);
-    if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
-    dir.normalize();
-    const sun = dir.clone().multiplyScalar(R);
-    const rayDir = dir.clone().multiplyScalar(-1); // 태양 → 원점(광선이 나아가는 방향)
-    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), rayDir);
-    return { sunPos: sun, quat: q };
-  }, [position.x, position.y, position.z]);
+const SUN_COLOR = "#f59e0b";
+const _sunSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
+// 전역 태양 기즈모 — 와이어프레임 구(가이드) = 드래그 핸들, 빛 방향 = 반투명 원뿔(부채꼴처럼 퍼짐).
+//   구를 잡아 하늘 돔 위로 끌면 directionalPosition(방향) 실시간 갱신 → 그림자가 즉시 따라옴.
+//   directionalLight는 이 위치에서 원점(0,0,0)을 향해 비춘다(광선=normalize(-position)). 에디터 전용 표식.
+function SunDirectionGizmo({ orbitRef }: { orbitRef: React.RefObject<OrbitControlsImpl | null> }) {
+  const lights = useSceneStore((s) => s.environment.lights);
+  const { camera, gl } = useThree();
+  const dragging = useRef(false);
+  const ray = useMemo(() => new THREE.Raycaster(), []);
+  const sunEnabled = lights.sunEnabled !== false;
+  const p = lights.directionalPosition;
 
-  // depthTest=false + 높은 renderOrder → 바닥/그리드/오브젝트에 가려지지 않고 항상 위에 그려짐
-  // (카메라를 낮춰도 높이 뜬 태양 표식이 바닥에 가리지 않게 하는 오버레이 규칙).
+  const { sunPos, quat, R, coneLen, coneRad } = useMemo(() => {
+    const dir = new THREE.Vector3(p.x, p.y, p.z);
+    if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
+    const r = Math.min(20, Math.max(8, dir.length())); // 돔 반경 = 현재 크기(8~20 클램프)
+    const nd = dir.clone().normalize();
+    const sun = nd.clone().multiplyScalar(r);
+    const rayDir = nd.clone().multiplyScalar(-1); // 태양 → 원점(광선 방향)
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), rayDir);
+    return { sunPos: sun, quat: q, R: r, coneLen: r * 0.5, coneRad: r * 0.14 };
+  }, [p.x, p.y, p.z]);
+
+  const startDrag = (e: { stopPropagation: () => void }) => {
+    if (!sunEnabled) return;
+    e.stopPropagation();
+    dragging.current = true;
+    if (orbitRef?.current) orbitRef.current.enabled = false;
+    const move = (ev: PointerEvent) => {
+      if (!dragging.current) return;
+      const rect = gl.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      _sunSphere.radius = R;
+      const hit = new THREE.Vector3();
+      if (!ray.ray.intersectSphere(_sunSphere, hit)) return; // 돔 밖이면 무시
+      const nd = hit.normalize();
+      // 지평선 위로 클램프(태양이 바닥 아래로 안 가게)
+      if (nd.y < 0.15) {
+        const xz = Math.sqrt(1 - 0.15 * 0.15);
+        const l = Math.hypot(nd.x, nd.z) || 1;
+        nd.set((nd.x / l) * xz, 0.15, (nd.z / l) * xz);
+      }
+      nd.multiplyScalar(R);
+      const st = useSceneStore.getState();
+      st.updateEnvironment({ lights: { ...st.environment.lights, directionalPosition: { x: nd.x, y: nd.y, z: nd.z } } });
+    };
+    const up = () => {
+      dragging.current = false;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      if (orbitRef?.current) orbitRef.current.enabled = true;
+      useSceneStore.getState().pushHistory();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  if (!sunEnabled) return null;
+
+  // depthTest=false + 높은 renderOrder → 바닥/그리드/오브젝트에 안 가리고 항상 위에.
   return (
     <group renderOrder={999}>
-      {/* 태양 위치 */}
-      <mesh position={[sunPos.x, sunPos.y, sunPos.z]} renderOrder={999}>
-        <sphereGeometry args={[0.5, 16, 16]} />
-        <meshBasicMaterial color="#facc15" depthTest={false} depthWrite={false} />
+      {/* 와이어프레임 가이드 구 = 드래그 핸들 */}
+      <mesh position={[sunPos.x, sunPos.y, sunPos.z]} onPointerDown={startDrag} renderOrder={1000}>
+        <sphereGeometry args={[R * 0.035, 18, 12]} />
+        <meshBasicMaterial color={SUN_COLOR} wireframe depthTest={false} depthWrite={false} transparent opacity={0.95} />
       </mesh>
-      {/* 광선 방향 화살표(태양 → 원점) — 로컬 +Y축이 rayDir을 향하도록 회전 */}
+      {/* 잡기 쉬운 반투명 코어 */}
+      <mesh position={[sunPos.x, sunPos.y, sunPos.z]} onPointerDown={startDrag} renderOrder={999}>
+        <sphereGeometry args={[R * 0.0225, 12, 10]} />
+        <meshBasicMaterial color={SUN_COLOR} depthTest={false} depthWrite={false} transparent opacity={0.45} />
+      </mesh>
+      {/* 빛 방향 원뿔(부채꼴처럼 퍼짐) — 태양 apex → 원점 쪽으로 벌어짐 */}
       <group position={[sunPos.x, sunPos.y, sunPos.z]} quaternion={quat}>
-        <mesh position={[0, shaftLen / 2, 0]} renderOrder={999}>
-          <cylinderGeometry args={[0.05, 0.05, shaftLen, 8]} />
-          <meshBasicMaterial color="#facc15" depthTest={false} depthWrite={false} />
-        </mesh>
-        <mesh position={[0, shaftLen + 0.25, 0]} renderOrder={999}>
-          <coneGeometry args={[0.2, 0.5, 12]} />
-          <meshBasicMaterial color="#facc15" depthTest={false} depthWrite={false} />
+        <mesh position={[0, coneLen / 2, 0]} rotation={[Math.PI, 0, 0]} raycast={() => null} renderOrder={997}>
+          <coneGeometry args={[coneRad, coneLen, 28, 1, true]} />
+          <meshBasicMaterial color={SUN_COLOR} transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
         </mesh>
       </group>
     </group>
@@ -1079,22 +1127,24 @@ export function EditorCanvas() {
               fill 기여를 줄인다(ambient는 저장값의 0.35배, hemisphere 0.04). */}
           <hemisphereLight args={["#b9d5ff", "#4a5568", 0.02]} />
           <ambientLight intensity={environment.lights.ambientIntensity * 0.2} color={environment.lights.ambientColor ?? "#ffffff"} />
-          <directionalLight
-            position={[environment.lights.directionalPosition.x, environment.lights.directionalPosition.y, environment.lights.directionalPosition.z]}
-            intensity={environment.lights.directionalIntensity}
-            color={environment.lights.directionalColor ?? "#ffffff"}
-            castShadow
-            shadow-intensity={environment.lights.shadowIntensity ?? 1}
-            shadow-mapSize={[2048, 2048]}
-            shadow-bias={-0.0004}
-            shadow-normalBias={0.03}
-            shadow-camera-near={0.5}
-            shadow-camera-far={120}
-            shadow-camera-left={-50}
-            shadow-camera-right={50}
-            shadow-camera-top={50}
-            shadow-camera-bottom={-50}
-          />
+          {environment.lights.sunEnabled !== false && (
+            <directionalLight
+              position={[environment.lights.directionalPosition.x, environment.lights.directionalPosition.y, environment.lights.directionalPosition.z]}
+              intensity={environment.lights.directionalIntensity}
+              color={environment.lights.directionalColor ?? "#ffffff"}
+              castShadow
+              shadow-intensity={environment.lights.shadowIntensity ?? 1}
+              shadow-mapSize={[2048, 2048]}
+              shadow-bias={-0.0004}
+              shadow-normalBias={0.03}
+              shadow-camera-near={0.5}
+              shadow-camera-far={120}
+              shadow-camera-left={-50}
+              shadow-camera-right={50}
+              shadow-camera-top={50}
+              shadow-camera-bottom={-50}
+            />
+          )}
 
           <Grid
             position={gridPos}
@@ -1157,8 +1207,8 @@ export function EditorCanvas() {
               <SpawnMarker position={environment.playerStartPosition} />
             ) : null)}
 
-          {/* 전역 태양 방향 표식(읽기 전용) — Sun Position이 어느 방향으로 비추는지 시각화 */}
-          <SunDirectionGizmo position={environment.lights.directionalPosition} />
+          {/* 전역 태양 기즈모 — 와이어프레임 구를 드래그해 태양 방향 조절(+빛 방향 원뿔). sunEnabled면 표시. */}
+          <SunDirectionGizmo orbitRef={orbitRef} />
 
           {/* 애니 회전 피벗(경첩) 표식 — 선택 오브젝트에 클립이 있을 때 축 위치 시각화 */}
           <AnimPivotGizmo />

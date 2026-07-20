@@ -288,18 +288,21 @@ function LightObjectInstance({ object }: Props) {
       )}
       {isDir && <primitive object={targetObj} position={[0, -LIGHT_HANDLE_DIST, 0]} />}
 
-      {/* 아이콘 — 클릭 가능한 시각 표시자 */}
+      {/* 아이콘 — 와이어프레임 가이드 구(태양 기즈모와 통일) */}
       <mesh
         onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
         onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
       >
-        <octahedronGeometry args={[0.18, 0]} />
-        <meshBasicMaterial color={iconColor} />
+        <sphereGeometry args={[0.2, 16, 12]} />
+        <meshBasicMaterial color={iconColor} wireframe transparent opacity={0.9} />
       </mesh>
-      {/* 외곽 glow ring */}
-      <mesh>
-        <sphereGeometry args={[0.28, 8, 8]} />
-        <meshBasicMaterial color={iconColor} transparent opacity={0.12} depthWrite={false} />
+      {/* 잡기 쉬운 반투명 코어 */}
+      <mesh
+        onClick={(e) => { e.stopPropagation(); handleClick(e.nativeEvent.shiftKey); }}
+        onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
+      >
+        <sphereGeometry args={[0.11, 12, 10]} />
+        <meshBasicMaterial color={iconColor} transparent opacity={0.4} depthWrite={false} />
       </mesh>
       {/* spot: 방향 콘 와이어프레임 — 로컬 -Y(빔)로 펼쳐져 회전 시 함께 돌며 방향을 보여줌 */}
       {lc.type === 'spot' && (

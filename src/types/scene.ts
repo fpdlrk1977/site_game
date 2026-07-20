@@ -56,6 +56,8 @@ export interface EnvSchema {
     directionalColor?: string;
     // 그림자 농도(directionalLight.shadow.intensity, 0~1). 1=진함, 0.5=옅음, 0=그림자 없음. 미설정=1(기존 동작).
     shadowIntensity?: number;
+    // 태양(방향광) 사용 여부. 미설정=true(기존 동작). false면 directionalLight·그림자·태양 기즈모 끔(ambient/IBL만).
+    sunEnabled?: boolean;
   };
   playerCharacterId?: string;
   playerCharacterScale?: number;

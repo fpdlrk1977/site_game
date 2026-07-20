@@ -1239,6 +1239,14 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - **기본(방향광) 그림자 더 진하게**: fill 광이 그림자를 씻어내던 걸 줄임 — `ViewerCanvas`·`EditorCanvas`의 ambient 배수 0.5→**0.2**, hemisphere 0.08→**0.02**, `DefaultEnvironment` IBL 기본값 0.35→**0.25**. 측정(`/test/shadow`): 그림자/바닥 밝기 140/165 → **119/149**로 심도↑. 트레이드오프: fill이 줄어 씬 전체가 약간 어두워짐(특히 그림자 밖 어두운 구석)·PBR 재질 IBL 반사 살짝 감소. 더 진하게 원하면 fill을 더 낮추거나 per-scene 그림자 강도 슬라이더 추가 고려.
 - **ContactShadows 플레이 모드 트레일 버그 수정**: 접지 그림자 켠 채 플레이하면 캐릭터 이동 경로에 검은 그림자가 칠해지던 문제 → **플레이 모드에선 ContactShadows 미렌더**(`!playMode` 게이트, `ViewerCanvas`). 접지 그림자는 정적 씬(탐색/에디터)용. 헤드리스에선 ContactShadows 자체가 안 그려져 트레일 재현·확인 불가지만, 컴포넌트를 트리에서 빼므로 구조적으로 트레일 불가능.
 
+### 💡 조명 UX 개선 (2026-07-20) — 태양 드래그 + 다이얼 + on/off 토글 — 브라우저 확인 대기
+> 사용자: 오렌지 화살표(읽기전용)만 있고 XYZ 패널로만 조절 → 어디서 빛 오는지 모름·허술. 확정 A+B+원뿔+토글. tsc 클린 + dev 컴파일. **브라우저 확인 대기.**
+- **A. 드래그 태양 기즈모(`EditorCanvas` SunDirectionGizmo 재작성)**: 읽기전용 노랑 구 → **와이어프레임 가이드 구(드래그 핸들)**. 잡아 하늘 돔(반경=현재 크기)에 끌면 ray-sphere 교차로 방향 산출(지평선 위 클램프)→`directionalPosition` 실시간 갱신→그림자 즉시 따라옴. 놓을 때 pushHistory. orbit는 드래그 중 비활성.
+- **빛 방향 = 반투명 원뿔(부채꼴)**: 태양 apex→원점 쪽으로 벌어지는 오렌지 원뿔(openEnded)로 "빛이 이쪽으로" 표현.
+- **B. 방위/고도 다이얼(신규 `SunDial.tsx`, 패널)**: 원형 패드 = 중심(머리 위/정오)·가장자리(지평선)·각도(방위 N/E). dot 드래그로 `directionalPosition` 상호 변환(크기 보존). XYZRow(Sun Position) 대체.
+- **라이트 on/off 토글(패널)**: Lights 섹션을 **화살표(접기) → 헤더 스위치(sunEnabled, Fog 패턴)**. 끄면 **directionalLight·그림자·태양 기즈모·태양 관련 컨트롤(다이얼/Sun 강도/Sun Color/Shadow) 숨김**, ambient/IBL만 유지. `EnvSchema.lights.sunEnabled?`(옵셔널·기본 true). 에디터+뷰어 directionalLight 게이트(게시 씬 일관).
+- **확인 필요(브라우저)**: ①뷰포트서 와이어 구 드래그→태양/그림자 실시간 이동 · ②원뿔이 빛 방향 표시 · ③패널 다이얼 드래그로 방향(크기 보존) · ④Lights 헤더 스위치 off→태양/그림자/기즈모 꺼지고 ambient만·컨트롤 숨김 · ⑤undo · ⑥뷰어(게시)도 sunEnabled 반영.
+
 ## 알려진 제약/한계
 
 - **액추에이터/무빙 콜라이더 "미는" 미지원 (2026-07-20 확인, 보류)**: 움직이는 콜라이더(actuator/moving = kinematicPosition)가 **가만히 선 캐릭터를 밀지 못하고 관통**한다. 원인 = Rapier `KinematicCharacterController.computeColliderMovement`가 **캐릭터 자신의 `desired` 이동에 대해서만** 충돌 해결(움직이는 콜라이더가 나를 미는 건 미계산). 증상: W로 밀 땐 캐릭터 전진이 막혀 밀리는 듯 보이나, **밀리는 중 W를 놓으면 물체가 통과**. 해결하려면 무빙 플랫폼 "pusher" 로직(접촉 시 콜라이더 변위를 캐릭터 `desired`에 합산) 필요 — 회귀 위험으로 **보류**. 다시 문제되면 그때 구현. (`PlayModeController.tsx:359`, `PlayCanvas.tsx` ActuatorCollider/MovingCollider)

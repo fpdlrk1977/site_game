@@ -406,26 +406,28 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           fill 기여를 줄인다(ambient 저장값의 0.2배, hemisphere 0.02, IBL 0.25). */}
       <hemisphereLight args={['#b9d5ff', '#4a5568', 0.02]} />
       <ambientLight intensity={environment.lights.ambientIntensity * 0.2} color={environment.lights.ambientColor ?? '#ffffff'} />
-      <directionalLight
-        position={[
-          environment.lights.directionalPosition.x,
-          environment.lights.directionalPosition.y,
-          environment.lights.directionalPosition.z,
-        ]}
-        intensity={environment.lights.directionalIntensity}
-        color={environment.lights.directionalColor ?? '#ffffff'}
-        castShadow
-        shadow-intensity={environment.lights.shadowIntensity ?? 1}
-        shadow-mapSize={[2048, 2048]}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.03}
-        shadow-camera-near={0.5}
-        shadow-camera-far={120}
-        shadow-camera-left={-50}
-        shadow-camera-right={50}
-        shadow-camera-top={50}
-        shadow-camera-bottom={-50}
-      />
+      {environment.lights.sunEnabled !== false && (
+        <directionalLight
+          position={[
+            environment.lights.directionalPosition.x,
+            environment.lights.directionalPosition.y,
+            environment.lights.directionalPosition.z,
+          ]}
+          intensity={environment.lights.directionalIntensity}
+          color={environment.lights.directionalColor ?? '#ffffff'}
+          castShadow
+          shadow-intensity={environment.lights.shadowIntensity ?? 1}
+          shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.03}
+          shadow-camera-near={0.5}
+          shadow-camera-far={120}
+          shadow-camera-left={-50}
+          shadow-camera-right={50}
+          shadow-camera-top={50}
+          shadow-camera-bottom={-50}
+        />
+      )}
 
       {/* ── 에디터 전용: 그리드 ── */}
       {!playMode && (
