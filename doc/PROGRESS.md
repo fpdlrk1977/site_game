@@ -194,7 +194,17 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 > 사용자: 에디터서 오브젝트 3D 위치 파악 어려움. 확정 ①+②. tsc 클린 + dev 컴파일. **브라우저 확인 대기.**
 - **① 신규 `SelectionGroundGuide.tsx`**(EditorCanvas, SelectionOutline 패턴): 단일 선택 오브젝트의 **월드 AABB**에서 → 밑면 중앙→바닥 **수직 점선**(떠 있을 때만) + 바닥 **발자국 윤곽(점선)+반투명 채움**(#0D99FF) + **높이 라벨**(`baseY.toFixed(2)m`, drei Html, 떠 있을 때만). 라이트/파티클 제외·단일 선택·드래그 중 라이브(매 프레임). depthTest off·raycast 무관(가이드).
 - **② 시점 버튼(`ViewportFloatingToolbar`)**: 그리드 버튼 옆에 **T/F/S 버튼**(Top/Front/Side) → 기존 `requestCameraView('top'|'front'|'right')`(키보드 Numpad 7/1/3만 있던 것) 클릭 노출. 그리드 툴팁 영어화 겸사.
-- **⚠️ 알려진 이슈(사용자 지적) — 시점 프리셋 원근감**: Top/Front/Right가 **원근 투영(PerspectiveCamera fov 60)** 이라 foreshortening으로 정렬 판단이 애매. **world/local 문제 아님 = 투영 방식(perspective) 문제.** 진짜 도면뷰엔 **orthographic(평행 투영)** 필요 → 별도 제안/확정 후 진행 예정(구조적 변경).
+- **⚠️ 시점 프리셋 원근감 → near-ortho로 해결(2026-07-20)**: 원인 = **원근 투영**(world/local 아님). 진짜 직교 카메라 스왑은 에디터 카메라 핵심(OrbitControls·기즈모 크기·마퀴·camera 참조)에 파급 커서 위험 → 사용자 승인 하에 **near-ortho(준-직교)** 채택.
+  - **프리셋 핸들러(`EditorCanvas`)**: T/F/S 시 카메라 **화각 fov=14로 좁히고(망원) 거리 `spread*0.7/tan(7°)`로 멀리** 배치 → 원근 왜곡 거의 사라져 **평행 도면 룩**. 원근 카메라 그대로라 OrbitControls·기즈모·마퀴 전부 정상.
+  - **focus-all("3D" 복귀)**: fov를 60으로 복원(near-ortho→원근). 툴바에 **"3D" 버튼**(requestFocusAll) 추가 — T/F/S 옆.
+  - **화각 보정 핸들 크기(`ManipulationHandles`·`ActuatorGizmo`)**: 거리기반 크기에 `fovK=tan(fov/2)/tan(30°)`(fov 60=1, **무변**) 곱해, 좁은 화각+먼 거리서 핸들 거대해짐 방지. (GizmoController=drei TransformControls는 자체 스크린스페이스라 무변.)
+  - ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "잘된다").**
+  - **near-ortho 부작용 픽스(2026-07-20)**: 카메라가 멀어 ①fog가 씬 통째로 덮음 ②격자 fade 밖으로 사라짐 → `flatView` state로 **평행뷰에선 fog off + 격자 fadeDistance 2000**. `3D`/Shift+F 복귀 시 원래대로.
+
+### 🙈 숨긴 오브젝트 뷰포트 클릭 선택 차단 (2026-07-20) — ✅ 확인 완료
+> 사용자 보고: visibility off 오브젝트가 눈엔 안 보이는데 뷰포트 클릭으로 선택됨(패널 바뀜). **원인 = three Raycaster는 invisible 메쉬를 안 건너뜀**(`.visible===false` 체크가 렌더러에만 있음). tsc·컴파일 클린. **✅ 확인 완료(2026-07-20, 사용자 "잘된다").**
+- **수정(`EditorObjectInstance`)**: 중앙 클릭 함수 `selectByClick`·`selectExact`에 `if (!object.visible) return` 가드. → 숨긴 오브젝트 뷰포트 클릭 선택 불가. **트리(HierarchyPanel)는 `selectObject` 직접 호출이라 무영향** — 숨긴 것도 트리서 선택해 편집/재표시 가능.
+- (한계) 숨긴 메쉬는 여전히 `stopPropagation`으로 클릭을 소비 → 바로 뒤 오브젝트로 클릭 통과는 안 됨(선택만 차단). 필요 시 raycast 게이트로 후속.
 - **확인 필요(브라우저)**: ①오브젝트 선택 시 바닥 점선·발자국·높이 라벨(떠 있을 때)·바닥에 붙으면 점선/라벨 사라짐·드래그 중 추종 · ②T/F/S 버튼 시점 전환.
 
 #### 🐛 버그픽스 (2026-07-20) — 빈 모터/그룹 선택 시 원점에 파란 박스 — 브라우저 확인 대기

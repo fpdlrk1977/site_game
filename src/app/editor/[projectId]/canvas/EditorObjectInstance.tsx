@@ -400,6 +400,9 @@ function scopeChildOnPath(object: ObjectNodeSchema, scopeId: string): string | n
 // 단일 클릭 — 기본은 최상위 조상 그룹 선택. 단, 그룹 격리 스코프에 '진입'한 상태면
 // 그 스코프 안에서 형제(스코프의 직속 자식)를 선택한다. 스코프 밖을 클릭하면 스코프 해제 후 최상위 선택.
 function selectByClick(object: ObjectNodeSchema, shiftKey: boolean) {
+  // 숨긴(visibility off) 오브젝트는 뷰포트 클릭으로 선택 불가 — three 레이캐스터는 invisible 메쉬도 히트하므로
+  //   눈에 안 보이는데 클릭되면 안 됨. (트리 선택은 selectObject 직접 호출이라 무영향 → 숨긴 것도 트리서 선택 가능.)
+  if (!object.visible) return;
   const store = useSceneStore.getState();
   // 모터 3D 연결 모드 — 클릭한 오브젝트(최상위 조상)를 대상 모터에 연결(reparent). 모드 유지(연속 연결).
   //   모든 클릭 경로가 이 함수를 거치므로 여기 한 곳이면 프리미티브·그룹·모터dot·GLB·라이트·콘텐츠 전부 커버.
@@ -438,7 +441,7 @@ function selectByClick(object: ObjectNodeSchema, shiftKey: boolean) {
 // R3F onDoubleClick은 레이가 맞은 가장 깊은 메쉬에서 먼저 발생하므로 중첩 그룹이어도 정확히 그 자식을 고른다.
 // (계층 트리는 selectedId 변화를 감지해 조상 그룹들을 자동으로 펼친다.)
 function selectExact(object: ObjectNodeSchema, shiftKey: boolean) {
-  if (object.locked) return;
+  if (object.locked || !object.visible) return; // 숨긴 오브젝트는 뷰포트 클릭/더블클릭 선택 불가
   const store = useSceneStore.getState();
   // 그룹을 더블클릭하면 그 그룹으로 진입(scope=자기 자신), 리프면 부모 그룹으로 진입.
   store.setGroupScope(object.isGroup ? object.id : (object.parentId ?? null));

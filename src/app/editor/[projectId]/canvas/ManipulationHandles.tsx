@@ -135,6 +135,10 @@ export function ManipulationHandles({ orbitRef, handleDraggingRef }: Props) {
     const faceFront = [fXm, fXp, fYm, fYp, fZm, fZp]; // 면 인덱스 8..13 = -X,+X,-Y,+Y,-Z,+Z 앞면 여부
     // 뷰포트 높이 보정 — 창/뷰포트 크기가 바뀌어도 화면상 픽셀 크기가 일정하도록(기준 높이 800px 대비).
     const vpk = 800 / Math.max(1, size.height);
+    // 화각 보정 — 거리기반 크기는 fov가 바뀌면 화면 크기가 달라짐. tan(fov/2)/tan(30°)로 보정(fov 60=1, 무변).
+    //   near-ortho 프리셋(좁은 화각+먼 거리)에서 핸들이 거대해지는 걸 방지.
+    const persp = camera as THREE.PerspectiveCamera;
+    const fovK = persp.isPerspectiveCamera ? Math.tan((persp.fov * Math.PI) / 360) / Math.tan(Math.PI / 6) : 1;
     // 오브젝트 월드 최대 변 — 줌아웃 시 핸들이 오브젝트를 가리지 않게 핸들 크기 상한(cap)에 씀.
     ref.getWorldScale(_wsc);
     lb.getSize(_wsz);
@@ -146,7 +150,7 @@ export function ManipulationHandles({ orbitRef, handleDraggingRef }: Props) {
       _c.copy(anchorLocalPoint(lb, normOf(HANDLES[i]))).applyMatrix4(ref.matrixWorld);
       h.position.copy(_c);
       // 화면상 일정 크기(거리+뷰포트) + 오브젝트 비율 상한 → 가까이선 잡기 좋고 멀리선 안 가림.
-      h.scale.setScalar(Math.min(Math.max(0.015, camera.position.distanceTo(_c) * 0.016 * vpk), capW) * (i >= 8 ? 0.8 : 1));
+      h.scale.setScalar(Math.min(Math.max(0.015, camera.position.distanceTo(_c) * 0.016 * vpk * fovK), capW) * (i >= 8 ? 0.8 : 1));
       // 가시성 — 코너는 인접 3면 중 하나라도 앞면이면 보임(완전히 가려진 코너만 숨김), 면은 그 면이 앞면일 때만.
       h.visible = i < 8
         ? ((i & 1 ? fXp : fXm) || (i & 2 ? fYp : fYm) || (i & 4 ? fZp : fZm))

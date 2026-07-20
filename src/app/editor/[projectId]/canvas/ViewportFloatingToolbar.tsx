@@ -89,6 +89,7 @@ export function ViewportFloatingToolbar() {
     toggleWireframe,
     beginPlacement,
     requestCameraView,
+    requestFocusAll,
     undo,
     redo,
     alignSelected,
@@ -312,7 +313,7 @@ export function ViewportFloatingToolbar() {
 
         {/* 시점 프리셋 — Top/Front/Side (정렬 확인·배치용) */}
         <div className="flex items-center bg-background/50 rounded-xs p-0.5 gap-0.5">
-          {([['top', 'T', 'Top view (위에서)'], ['front', 'F', 'Front view (앞에서)'], ['right', 'S', 'Side view (옆에서)']] as const).map(([view, label, tip]) => (
+          {([['top', 'T', 'Top view (위에서 · 평행)'], ['front', 'F', 'Front view (앞에서 · 평행)'], ['right', 'S', 'Side view (옆에서 · 평행)']] as const).map(([view, label, tip]) => (
             <Tooltip key={view} content={tip}>
               <button
                 onClick={() => requestCameraView(view)}
@@ -322,6 +323,14 @@ export function ViewportFloatingToolbar() {
               </button>
             </Tooltip>
           ))}
+          <Tooltip content="3D view (원근 · 전체 맞춤)">
+            <button
+              onClick={() => requestFocusAll()}
+              className="w-8 h-7 rounded-xs flex items-center justify-center text-[10px] font-bold text-muted hover:text-foreground hover:bg-background transition-all"
+            >
+              3D
+            </button>
+          </Tooltip>
         </div>
 
         {/* 기준 격자 평면 순환 (바닥 XZ → 벽 XY → 벽 YZ) */}

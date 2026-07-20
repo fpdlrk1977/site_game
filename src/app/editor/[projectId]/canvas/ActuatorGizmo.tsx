@@ -169,9 +169,12 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
     let len: number;
     if (haveBox) { _wbox.copy(lb!).applyMatrix4(ref.matrixWorld); _wbox.getSize(_p); len = Math.max(_p.x, _p.y, _p.z) * 0.6 + 0.2; }
     else len = 1.2;
-    // 화면상 일정 크기(거리+뷰포트 보정) — 단, 줌아웃 시 오브젝트/부채꼴을 가리지 않도록 len의 일정 비율로 상한(cap).
+    // 화면상 일정 크기(거리+뷰포트+화각 보정) — 단, 줌아웃 시 오브젝트/부채꼴을 가리지 않도록 len의 일정 비율로 상한(cap).
+    //   fovK = tan(fov/2)/tan(30°) (fov 60=1, 무변). near-ortho(좁은 화각+먼 거리)서 핸들 거대해짐 방지.
+    const persp = camera as THREE.PerspectiveCamera;
+    const fovK = persp.isPerspectiveCamera ? Math.tan((persp.fov * Math.PI) / 360) / Math.tan(Math.PI / 6) : 1;
     const hScale = Math.min(
-      Math.max(0.02, camera.position.distanceTo(_h) * 0.02 * (800 / Math.max(1, size.height))),
+      Math.max(0.02, camera.position.distanceTo(_h) * 0.02 * (800 / Math.max(1, size.height)) * fovK),
       len * 0.16,
     );
     sp.scale.setScalar(hScale);

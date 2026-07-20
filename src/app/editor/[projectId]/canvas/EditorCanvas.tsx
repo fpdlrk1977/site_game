@@ -588,6 +588,8 @@ function SelectionOverlay({
 
 export function EditorCanvas() {
   const orbitRef = useRef<OrbitControlsImpl>(null);
+  // near-ortho 평행뷰(T/F/S) 중 — 카메라가 멀어 fog가 씬을 통째로 덮으므로 이 뷰에선 fog를 끈다.
+  const [flatView, setFlatView] = useState(false);
   const objectRefsRef = useRef<Map<string, THREE.Object3D>>(new Map());
   const cameraRef = useRef<THREE.Camera | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -698,6 +700,10 @@ export function EditorCanvas() {
       cy = (minY + maxY) / 2,
       cz = (minZ + maxZ) / 2;
     const spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
+    // near-ortho 프리셋(좁은 화각)에서 돌아올 때 원근(fov 60) 복원 = "3D 뷰"로 복귀.
+    const cam = orbitRef.current.object as THREE.PerspectiveCamera;
+    if (cam.isPerspectiveCamera && cam.fov !== 60) { cam.fov = 60; cam.updateProjectionMatrix(); }
+    setFlatView(false); // 원근 복귀 → fog 다시 켬
     orbitRef.current.target.set(cx, cy, cz);
     orbitRef.current.object.position.set(cx + spread * 0.8, cy + spread * 0.6, cz + spread * 0.8);
     orbitRef.current.update();
@@ -779,7 +785,13 @@ export function EditorCanvas() {
       cz = (minZ + maxZ) / 2;
       spread = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 4);
     }
-    const d = spread * 1.4; // 전체 맞춤과 비슷한 프레이밍
+    // near-ortho(준-직교) — 화각을 좁히고(망원) 멀리 배치하면 원근 왜곡이 거의 사라져 평행 뷰가 됨.
+    //   진짜 직교 카메라 스왑 없이(원근 카메라 유지) 정렬 확인용 도면 룩을 냄. "3D"(focus-all)로 복귀.
+    const FLAT_FOV = 14;
+    const cam = orbitRef.current.object as THREE.PerspectiveCamera;
+    if (cam.isPerspectiveCamera) { cam.fov = FLAT_FOV; cam.updateProjectionMatrix(); }
+    setFlatView(true); // 이 뷰에선 fog 끔(카메라가 멀어 fog가 씬을 덮음)
+    const d = (spread * 0.7) / Math.tan((FLAT_FOV * Math.PI) / 360); // 좁은 화각에서 씬을 담을 거리(멀어짐)
     orbitRef.current.target.set(cx, cy, cz);
     if (view === "top") orbitRef.current.object.position.set(cx, cy + d, cz + 0.001);
     else if (view === "front") orbitRef.current.object.position.set(cx, cy, cz + d);
@@ -1053,8 +1065,8 @@ export function EditorCanvas() {
               <Environment preset={environment.hdrPreset as Exclude<HdrPreset, "none">} background />
             </Suspense>
           )}
-          {/* ── Fog ── 뷰어와 동일. 단색 배경이면 fog 색 = 하늘색 자동 일치 → 먼 바닥이 하늘로 매끄럽게 사라짐(수평선 하드컷 완화). ── */}
-          {environment.fog.enabled && (() => {
+          {/* ── Fog ── 뷰어와 동일. 단색 배경이면 fog 색 = 하늘색 자동 일치. near-ortho 평행뷰(flatView)에선 카메라가 멀어 fog가 씬을 덮으므로 끔. ── */}
+          {environment.fog.enabled && !flatView && (() => {
             const fogColor = (!useHdr && !isSkyMode) ? skyColor : environment.fog.color;
             return environment.fog.mode === 'exp'
               ? <fogExp2 attach="fog" args={[fogColor, environment.fog.density ?? 0.02]} />
@@ -1094,7 +1106,7 @@ export function EditorCanvas() {
             sectionSize={5}
             sectionThickness={0.8}
             sectionColor="#ddd"
-            fadeDistance={100}
+            fadeDistance={flatView ? 2000 : 100}
             fadeStrength={1}
             infiniteGrid
           />
