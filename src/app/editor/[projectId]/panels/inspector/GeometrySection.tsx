@@ -45,6 +45,18 @@ export function GeometrySection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                     <p className="text-[10px] text-muted/50">0 = a sharp pyramid, 1 = a box. Top scale relative to the bottom.</p>
                   </>
                 )}
+                {obj.primitiveShape === 'torus' && (
+                  <>
+                    <LabeledNum
+                      label="Tube thickness"
+                      value={obj.geom?.tubeRatio ?? 0.28}
+                      onChange={(v) => updateObject(obj.id, { geom: { ...obj.geom, tubeRatio: Math.max(0.05, Math.min(0.5, v)) } })}
+                      onCommit={pushHistory}
+                      min={0.05} max={0.5} precision={2} dragStep={0.02}
+                    />
+                    <p className="text-[10px] text-muted/50">Donut tube thickness relative to the overall radius. Small = thin ring, large = fat donut.</p>
+                  </>
+                )}
                 {obj.primitiveShape === 'loft' && (() => {
                   const sections = obj.geom?.sections && obj.geom.sections.length >= 2 ? obj.geom.sections : [1, 0.7, 0.4];
                   const setSections = (next: number[]) => updateObject(obj.id, { geom: { ...obj.geom, sections: next } });

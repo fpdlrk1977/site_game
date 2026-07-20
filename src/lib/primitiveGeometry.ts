@@ -132,6 +132,15 @@ function buildBaseGeometry(
       return new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
     case 'plane':
       return new THREE.PlaneGeometry(1, 1);
+    case 'torus': {
+      // 도넛 — 전체 외경 1(단위 박스). tubeRatio = 관 굵기 / 외경반경. 눕혀 바닥에 놓음(구멍=수직 Y).
+      const A = 0.5;
+      const tr = Math.min(0.5, Math.max(0.05, geom?.tubeRatio ?? 0.28));
+      const tube = tr * A;
+      const g = new THREE.TorusGeometry(A - tube, tube, 20, 48);
+      g.rotateX(Math.PI / 2);
+      return g;
+    }
     case 'voxel':
       return buildVoxelGeometry(geom?.voxels, geom?.cellSize, !!(geom?.voxelSkins && geom.voxelSkins.length)) ?? new THREE.BoxGeometry(1, 1, 1);
     default:
@@ -149,5 +158,5 @@ export function profileSig(geom?: PrimitiveGeom): string {
 }
 
 export function primitiveGeomKey(shape: PrimitiveShape | undefined, geom?: PrimitiveGeom): string {
-  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}|${voxelSig(geom?.voxels)}|${geom?.cellSize ?? 1}|${voxelSkinsSig(geom?.voxelSkins)}`;
+  return `${shape ?? 'box'}|${geom?.cornerRadius ?? 0}|${geom?.cornerSegments ?? 4}|${geom?.topScale ?? 0.5}|${geom?.tubeRatio ?? 0.28}|${(geom?.sections ?? []).join(',')}|${geom?.extrudeDepth ?? 0}|${geom?.profileClosed ? 'C' : 'O'}|${geom?.subdivisions ?? 0}|${profileSig(geom)}|${voxelSig(geom?.voxels)}|${geom?.cellSize ?? 1}|${voxelSkinsSig(geom?.voxelSkins)}`;
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Command as CommandIcon, X, Search, Maximize, Frame, Grid3x3, Undo2, Redo2,
   CopyPlus, Copy, Trash2, Group, Ungroup, ClipboardCopy, ClipboardPaste,
-  Box, Circle, Cylinder, Cone, Hexagon, Square, PenTool, Boxes,
+  Box, Circle, Cylinder, Cone, Hexagon, Square, PenTool, Boxes, Donut,
   Lightbulb, Flashlight, Sun, Folder, Package, CircleDot,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -56,6 +56,7 @@ export function CommandPalette({ onClose }: Props) {
     { id: 'add-frustum', label: '각뿔대 추가', icon: Cone, group: '추가', action: () => { addObject('frustum'); onClose(); } },
     { id: 'add-loft', label: '로프트 추가', icon: Hexagon, group: '추가', action: () => { addObject('loft'); onClose(); } },
     { id: 'add-plane', label: '평면 추가', icon: Square, group: '추가', action: () => { addObject('plane'); onClose(); } },
+    { id: 'add-torus', label: '도넛(토러스) 추가', icon: Donut, group: '추가', action: () => { addObject('torus'); onClose(); } },
     { id: 'pen-tool', label: '펜 툴 (그려서 3D 만들기)', icon: PenTool, group: '추가', action: () => { useSceneStore.getState().setPenToolOpen(true); onClose(); } },
     { id: 'voxel-tool', label: '복셀 (큐브 쌓아 만들기)', icon: Boxes, group: '추가', action: () => { useSceneStore.getState().setVoxelToolOpen(true); onClose(); } },
     { id: 'add-light-point', label: '포인트 라이트 추가', icon: Lightbulb, group: '추가', action: () => { addLightObject('point'); onClose(); } },

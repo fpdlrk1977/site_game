@@ -253,7 +253,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
         {obj.primitiveShape && !obj.content && !obj.assetId && !obj.light && !obj.particle && <SubdivisionSection obj={obj} />}
 
         {/* Geometry — 프리미티브 확장 파라미터(둥근 박스·각뿔대·로프트) */}
-        {(obj.primitiveShape === 'box' || obj.primitiveShape === 'frustum' || obj.primitiveShape === 'loft') && <GeometrySection obj={obj} open={isOpen('geometry')} onToggle={() => toggleSection('geometry')} />}
+        {(obj.primitiveShape === 'box' || obj.primitiveShape === 'frustum' || obj.primitiveShape === 'loft' || obj.primitiveShape === 'torus') && <GeometrySection obj={obj} open={isOpen('geometry')} onToggle={() => toggleSection('geometry')} />}
 
         {/* Cloner (라이브 비파괴 배열) */}
         {obj.clonerConfig && <ClonerSection obj={obj} open={isOpen('cloner')} onToggle={() => toggleSection('cloner')} />}

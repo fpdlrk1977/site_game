@@ -868,6 +868,17 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         </div>
       )}
 
+      {/* 화면 중앙 조준점(crosshair) — 플레이 모드(데스크톱). 내가 어디를 보는지 표시(FPS식 레티클).
+          (다음 단계: 조준점이 상호작용 대상 위에 오면 강조 + 중앙을 클릭/호버 포인터로 사용) */}
+      {playMode && !isTouch && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
+          <div className="relative w-4 h-4" style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.9))' }}>
+            <div className="absolute top-1/2 left-0 w-4 h-[1.5px] -translate-y-1/2 bg-white/80 rounded-full" />
+            <div className="absolute left-1/2 top-0 h-4 w-[1.5px] -translate-x-1/2 bg-white/80 rounded-full" />
+          </div>
+        </div>
+      )}
+
       {/* 근접 상호작용 프롬프트 (데스크톱) — 범위 내 대상이 있을 때만. E 키캡만 표시(대상은 3D 하이라이트로 구분) */}
       {playMode && !isTouch && interactTarget && interactTargetHasE && (
         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-none">

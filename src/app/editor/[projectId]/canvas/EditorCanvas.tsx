@@ -890,6 +890,14 @@ export function EditorCanvas() {
     }
 
     const { x1, y1, x2, y2 } = dragRectRef.current;
+    // 아주 작은 마퀴(미세하게 흔들린 클릭) → 마퀴 선택 대신 빈 곳 클릭으로 간주해 선택 해제.
+    //   확대 시 선택 오브젝트의 화면 AABB가 커서, 작은 마퀴가 그 위에 걸쳐 재선택돼 해제 안 되던 문제 해결.
+    if (x2 - x1 < 8 && y2 - y1 < 8) {
+      useSceneStore.getState().selectObject(null);
+      useSceneStore.getState().setGroupScope(null);
+      resetDrag();
+      return;
+    }
     const wr = dragCanvasRectRef.current ?? wrapperRef.current.getBoundingClientRect();
     const { objects, selectObjects } = useSceneStore.getState();
     const matchingIds: string[] = [];

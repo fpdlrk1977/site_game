@@ -309,15 +309,16 @@ interface SceneActions {
 export const CHARACTER_PREVIEW_ID = '__character_preview__';
 
 const SHAPE_NAMES: Record<PrimitiveShape, string> = {
-  box: '박스',
-  sphere: '구체',
-  cylinder: '원기둥',
-  plane: '평면',
-  frustum: '각뿔대',
-  loft: '로프트',
-  extrude: '돌출',
-  lathe: '회전체',
-  voxel: '복셀',
+  box: 'Box',
+  sphere: 'Sphere',
+  cylinder: 'Cylinder',
+  plane: 'Plane',
+  frustum: 'Frustum',
+  loft: 'Loft',
+  extrude: 'Extrude',
+  lathe: 'Lathe',
+  voxel: 'Voxel',
+  torus: 'Torus',
 };
 
 // 히스토리 스택 최대 길이 (past/future 공통)
@@ -483,6 +484,7 @@ function makeBaseObject(overrides: Partial<ObjectNodeSchema> & { name: string })
 const SHAPE_DEFAULT_GEOM: Partial<Record<PrimitiveShape, ObjectNodeSchema['geom']>> = {
   frustum: { topScale: 0.5 },
   loft: { sections: [1, 0.7, 0.4] },
+  torus: { tubeRatio: 0.28 },
 };
 
 function makeObject(shape: PrimitiveShape): ObjectNodeSchema {
@@ -774,7 +776,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   addActuatorObject: (placeAt) => {
     objectCounter += 1;
     const obj = makeBaseObject({
-      name: `모터 ${objectCounter}`,
+      name: `Motor ${objectCounter}`,
       isGroup: true,        // 자식을 담아 함께 구동(그룹 렌더 경로 재사용)
       isActuator: true,     // 모터 표식 — dot 렌더·경첩=원점·전용 인스펙터
       position: { x: placeAt?.x ?? 0, y: 0.5, z: placeAt?.z ?? 0 },
@@ -797,7 +799,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       ? { profile, extrudeDepth, profileRaw, profileSmooth: smooth }
       : { profile, profileClosed: closed, profileRaw, profileSmooth: smooth };
     const obj = makeBaseObject({
-      name: `${shape === 'lathe' ? '회전체' : '돌출'} ${objectCounter}`,
+      name: `${shape === 'lathe' ? 'Lathe' : 'Extrude'} ${objectCounter}`,
       primitiveShape: shape,
       geom,
       material: { color: '#a78bfa', roughness: 0.5, metalness: 0.1 },
@@ -866,7 +868,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     // skinUrl=단일 스킨(material.textureUrl, 모든 면 한 장) · voxelSkins=색별 스킨(geom, 색→텍스처). 색별이 있으면 렌더가 우선.
     const gm = { voxels, ...(cellSize && cellSize !== 1 ? { cellSize } : {}), ...(voxelSkins && voxelSkins.length ? { voxelSkins } : {}) };
     const obj = makeBaseObject({
-      name: `복셀 ${objectCounter}`,
+      name: `Voxel ${objectCounter}`,
       primitiveShape: 'voxel',
       geom: gm,
       material: { color: '#ffffff', roughness: 0.75, metalness: 0, ...(skinUrl ? { textureUrl: skinUrl } : {}) },
@@ -920,7 +922,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       const newGroupId = MathUtils.generateUUID();
       idMap.set(src.id, newGroupId);
       collectAll(src.id);
-      const newGroup: ObjectNodeSchema = { ...src, id: newGroupId, name: `${src.name} 복사` };
+      const newGroup: ObjectNodeSchema = { ...src, id: newGroupId, name: `${src.name} copy` };
       const fixedDescendants = newDescendants.map((o) => ({
         ...o,
         parentId: idMap.get(o.parentId!) ?? o.parentId,
@@ -930,7 +932,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       set({ objects: [...objects, ...remapped], animClips: dupClips.length ? [...animClips, ...dupClips] : animClips, selectedId: newGroupId, selectedIds: [newGroupId], isModified: true, ...withHistory({ objects, environment, animClips }, past) });
     } else {
       // 그룹 내부 오브젝트는 같은 부모 아래에 제자리 복제
-      const copy: ObjectNodeSchema = { ...src, id: MathUtils.generateUUID(), name: `${src.name} 복사`, parentId: src.parentId };
+      const copy: ObjectNodeSchema = { ...src, id: MathUtils.generateUUID(), name: `${src.name} copy`, parentId: src.parentId };
       const { clips: dupClips, clipIdMap } = dupAnimClips(animClips, new Map([[src.id, copy.id]]));
       const [remappedCopy] = remapPlayClipEvents([copy], clipIdMap);
       set({ objects: [...objects, remappedCopy], animClips: dupClips.length ? [...animClips, ...dupClips] : animClips, selectedId: copy.id, selectedIds: [copy.id], isModified: true, ...withHistory({ objects, environment, animClips }, past) });
@@ -969,7 +971,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       video: { url: '' },
     };
     const obj = makeBaseObject({
-      name: type === 'text' ? `텍스트 ${objectCounter}` : type === 'image' ? `이미지 ${objectCounter}` : `동영상 ${objectCounter}`,
+      name: type === 'text' ? `Text ${objectCounter}` : type === 'image' ? `Image ${objectCounter}` : `Video ${objectCounter}`,
       primitiveShape: 'plane',
       position: { x: placeAt?.x ?? 0, y: 0.5, z: placeAt?.z ?? 0 },
       scale: type === 'video' ? { x: 16 / 9, y: 1, z: 1 } : { x: 2, y: 1, z: 1 },
@@ -987,9 +989,9 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   addParticleObject: (preset, placeAt) => {
     objectCounter += 1;
-    const PRESET_NAMES: Record<string, string> = { fire: '불꽃', dust: '먼지', light: '빛 파티클', snow: '눈' };
+    const PRESET_NAMES: Record<string, string> = { fire: 'Fire', dust: 'Dust', light: 'Light Particle', snow: 'Snow' };
     const obj = makeBaseObject({
-      name: `${PRESET_NAMES[preset] ?? '파티클'} ${objectCounter}`,
+      name: `${PRESET_NAMES[preset] ?? 'Particle'} ${objectCounter}`,
       ...(placeAt ? { position: { x: placeAt.x, y: 0.5, z: placeAt.z } } : {}),
       particle: { preset },
     });
@@ -1488,7 +1490,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       const newGroup: ObjectNodeSchema = {
         ...src,
         id: newGroupId,
-        name: `${src.name} 복사`,
+        name: `${src.name} copy`,
         position: { ...src.position, x: src.position.x + 1 },
       };
       // parentId를 새로 생성된 ID로 교체
@@ -1513,7 +1515,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       const copy: ObjectNodeSchema = {
         ...src,
         id: MathUtils.generateUUID(),
-        name: `${src.name} 복사`,
+        name: `${src.name} copy`,
         position: { ...src.position, x: src.position.x + 1 },
         parentId: src.parentId,
       };
@@ -1678,7 +1680,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     const cfg: ClonerConfig = config ? { ...config } : { ...DEFAULT_CLONER };
     objectCounter += 1;
     const clonerGroup = makeBaseObject({
-      name: `클로너 ${objectCounter}`,
+      name: `Cloner ${objectCounter}`,
       isGroup: true,
       position: { ...src.position }, // 그룹(=패턴 중심)을 소스 자리에
       clonerConfig: cfg,
@@ -1730,7 +1732,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
     objectCounter += 1;
     const groupObj = makeBaseObject({
-      name: `그룹 ${objectCounter}`,
+      name: `Group ${objectCounter}`,
       position: { x: cx, y: cy, z: cz },
       isGroup: true,
     });
@@ -2350,7 +2352,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   addLightObject: (type, placeAt) => {
     objectCounter += 1;
-    const LIGHT_NAMES: Record<LightType, string> = { point: '포인트 라이트', spot: '스팟 라이트', directional: '방향 라이트' };
+    const LIGHT_NAMES: Record<LightType, string> = { point: 'Point Light', spot: 'Spot Light', directional: 'Directional Light' };
     const obj = makeBaseObject({
       name: `${LIGHT_NAMES[type]} ${objectCounter}`,
       position: { x: placeAt?.x ?? 0, y: 3, z: placeAt?.z ?? 0 },

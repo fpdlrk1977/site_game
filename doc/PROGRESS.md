@@ -165,6 +165,15 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **애니메이션(`AnimationClipSection`)**: 면 프리셋 7개 → `PivotPicker` + "중심으로" 리셋 버튼. **핵심 재베이킹(`setPivot`)은 무변경**(회귀 저위험) — 정규화 코너(0~1) ↔ 애니 피벗 오프셋(`lerp(bbox.min,max,정규화)×scale`) 변환 헬퍼만 추가(`normToAnimPivot`/`animPivotToNorm`). 레거시 면-center 피벗은 코너로 안 떨어지면 하이라이트 안 되지만 데이터·동작은 보존(재선택 시 코너로 갱신).
 - ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "잘된다") — 애니 피벗 코너 큐브 통일 정상.**
 
+### 🧰 UX 배치 작업 (2026-07-20) — 툴바 아이콘·영어화·토러스·선택해제 버그·크로스헤어 — 브라우저 확인 대기
+> 사용자 6건 배치. tsc 클린 + dev 편집/대시보드 200. **브라우저 확인 대기.**
+- **① 툴바 아이콘 확대(`ViewportFloatingToolbar`)**: 주 아이콘 13/14→16, 메뉴 12→14, 셰브론 11→12.
+- **② 영어화**: **오브젝트 기본 이름**(`sceneStore` SHAPE_NAMES·content·PRESET_NAMES·LIGHT_NAMES·모터/복셀/돌출·회전체/클로너/그룹/복사 suffix → Box·Sphere·Motor·Voxel·Extrude·Cloner·Group·copy 등, **앞으로 생성분부터**) + **툴바 라벨/툴팁**(SHAPES·PRESET_ITEMS·MODE_BTNS·스냅·정렬·펜/복셀/프리셋 등). (CommandPalette는 한글 유지 — 요청 범위 밖.)
+- **③ 토러스(도넛) 프리미티브**: `PrimitiveShape`에 `torus` + `PrimitiveGeom.tubeRatio`(관 굵기). `createPrimitiveGeometry` TorusGeometry(외경 1·눕힘)·`primitiveGeomKey`·SHAPE_NAMES/DEFAULT_GEOM·툴바 SHAPES(Donut)·CommandPalette·GeometrySection(Tube thickness 슬라이더)·HierarchyPanel 아이콘(Donut)·InspectorPanel geometry 노출. 콜라이더=hull 근사(무변경).
+- **④ 선택 해제 버그 수정(`EditorCanvas` handlePointerUp)**: 확대 시 선택 오브젝트 화면 AABB가 커서, 빈 곳 클릭에 미세 드래그(≥6px)가 섞이면 작은 마퀴가 그 AABB에 걸쳐 재선택돼 해제 안 되던 문제 → **마퀴 사각형이 아주 작으면(가로·세로 <8px) 클릭으로 간주해 선택 해제**(selectObject(null)). 진짜 드래그 선택은 무영향.
+- **⑤ 크로스헤어(플레이 모드) — 시각만 우선(`ViewerClient`)**: 플레이+데스크톱에서 화면 중앙에 `+` 레티클(흰색+그림자). **미완(다음 단계)**: 중앙 조준을 클릭/호버 포인터로 사용 + 상호작용 대상 위에서 강조 → **뷰어 코어(ViewerObject 브랜치 objectId 태깅 + 중앙 레이캐스트 + handleObjectEvent 마우스 억제 게이트)** 손봐야 해 검증 필요. 시각은 안전(추가만). 결정: 플레이=중앙조준·둘러보기=마우스 유지, 대상 위 강조.
+- ~~**확인 필요(브라우저)**~~ **✅ 확인 완료(2026-07-20, 사용자 "잘된다") — 아이콘·영어화·토러스·선택해제·크로스헤어 시각 정상.** (⑤ 상호작용[중앙=포인터 클릭/호버+강조]은 미착수 — 다음 단계.)
+
 #### 🐛 버그픽스 (2026-07-20) — 빈 모터/그룹 선택 시 원점에 파란 박스 — 브라우저 확인 대기
 > 사용자 보고: "모터 배치하면 푸른색 박스가 화면 중간에 생긴다." 원인 규명 후 수정. tsc 클린.
 - **원인**: `ManipulationHandles`(코너/면 스케일 핸들 = `boxGeometry[1,1,1]`·파란 `#0d99ff`·depthTest off·renderOrder 1000)의 렌더 조건 `valid = obj && !locked && visible`이 **bbox 없는 오브젝트를 안 걸러냄**. 빈 모터(자식 없음→`localBBox=null`)는 valid=true라 핸들이 렌더되나, 위치 계산 `layoutHandles`가 null bbox에 조기 return → 핸들 14개가 위치 못 잡고 **월드 원점·크기1 기본값**에 겹쳐 1×1×1 파란 박스로 보임(화면 중앙). 기존 잠복 버그(모터=배치 직후 선택되는 빈 그룹이라 표면화).

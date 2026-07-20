@@ -202,7 +202,7 @@ export interface PhysicsSchema {
   restitution: number;
 }
 
-export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane' | 'frustum' | 'loft' | 'extrude' | 'lathe' | 'voxel';
+export type PrimitiveShape = 'box' | 'sphere' | 'cylinder' | 'plane' | 'frustum' | 'loft' | 'extrude' | 'lathe' | 'voxel' | 'torus';
 
 // 프리미티브 확장 지오메트리 파라미터(옵셔널=하위호환). 미설정이면 각진 기본 형태.
 export interface PrimitiveGeom {
@@ -212,6 +212,8 @@ export interface PrimitiveGeom {
   cornerSegments?: number;
   // frustum: 윗면 크기 배율(아랫면=1 기준). 0=뾰족(각뿔), 1=박스. 0~1.
   topScale?: number;
+  // torus: 튜브(도넛 관) 굵기 — 전체 반지름 대비 비율. 기본 0.28. 0.05~0.5.
+  tubeRatio?: number;
   // loft: 아래→위 각 단면의 크기 배율(0~1). 2개 이상. 각뿔대(frustum)를 N단면으로 일반화.
   sections?: number[];
   // extrude/lathe: 펜 툴로 그린 2D 프로파일 점들. extrude=닫힌 단면(돌출), lathe=반쪽 단면(회전체).

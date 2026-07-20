@@ -34,6 +34,7 @@ import {
   ArrowUpDown,
   RotateCw,
   Settings,
+  Donut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
@@ -43,27 +44,28 @@ import type { PrimitiveShape } from "@/types/scene";
 const SEP = <div className="w-px h-4 bg-border/60 shrink-0" />;
 
 const SHAPES: { shape: PrimitiveShape; label: string; icon: LucideIcon }[] = [
-  { shape: "box", label: "박스", icon: Box },
-  { shape: "sphere", label: "구체", icon: Circle },
-  { shape: "cylinder", label: "원기둥", icon: Cylinder },
-  { shape: "frustum", label: "각뿔대", icon: Cone },
-  { shape: "loft", label: "로프트", icon: Hexagon },
-  { shape: "plane", label: "평면", icon: Square },
+  { shape: "box", label: "Box", icon: Box },
+  { shape: "sphere", label: "Sphere", icon: Circle },
+  { shape: "cylinder", label: "Cylinder", icon: Cylinder },
+  { shape: "frustum", label: "Frustum", icon: Cone },
+  { shape: "loft", label: "Loft", icon: Hexagon },
+  { shape: "plane", label: "Plane", icon: Square },
+  { shape: "torus", label: "Torus", icon: Donut },
 ];
 
 const SNAP_STEPS = [0.25, 0.5, 1, 2];
 
 // 완성형 프리셋(게임 재료) — id는 objectPresets.ts와 매칭
 const PRESET_ITEMS: { id: string; label: string; icon: LucideIcon; node?: boolean; actuator?: boolean }[] = [
-  { id: "wheel", label: "바퀴 (굴러가는)", icon: Disc },
-  { id: "door", label: "문 (E로 열림)", icon: DoorClosed },
-  { id: "coin", label: "동전 (점수 +1)", icon: Coins },
-  { id: "robot_arm", label: "로봇팔 (다관절)", icon: Bot, node: true },
-  { id: "hinged_door", label: "여닫이문 (경첩)", icon: DoorOpen, node: true },
-  { id: "elevator", label: "엘리베이터 (오르내림)", icon: ArrowUpDown, node: true },
-  { id: "revolving_door", label: "회전문", icon: RotateCw, node: true },
-  { id: "gears", label: "기어 한 쌍", icon: Settings, node: true },
-  { id: "actuator", label: "모터 (연결해서 돌리기)", icon: Cog, actuator: true },
+  { id: "wheel", label: "Wheel (rolling)", icon: Disc },
+  { id: "door", label: "Door (E to open)", icon: DoorClosed },
+  { id: "coin", label: "Coin (+1 score)", icon: Coins },
+  { id: "robot_arm", label: "Robot Arm (multi-joint)", icon: Bot, node: true },
+  { id: "hinged_door", label: "Hinged Door", icon: DoorOpen, node: true },
+  { id: "elevator", label: "Elevator", icon: ArrowUpDown, node: true },
+  { id: "revolving_door", label: "Revolving Door", icon: RotateCw, node: true },
+  { id: "gears", label: "Gears", icon: Settings, node: true },
+  { id: "actuator", label: "Motor (connect & rotate)", icon: Cog, actuator: true },
 ];
 
 type Menu = "align" | "snap" | "bookmark" | "shapes" | "presets" | null;
@@ -112,9 +114,9 @@ export function ViewportFloatingToolbar() {
   }, [openMenu]);
 
   const MODE_BTNS = [
-    { mode: "translate" as const, icon: <Move size={13} />, title: "이동 (W)" },
-    { mode: "rotate" as const, icon: <RotateCcw size={13} />, title: "회전 (E)" },
-    { mode: "scale" as const, icon: <Maximize2 size={13} />, title: "스케일 (R)" },
+    { mode: "translate" as const, icon: <Move size={16} />, title: "Move (W)" },
+    { mode: "rotate" as const, icon: <RotateCcw size={16} />, title: "Rotate (E)" },
+    { mode: "scale" as const, icon: <Maximize2 size={16} />, title: "Scale (R)" },
   ];
 
   return (
@@ -139,12 +141,12 @@ export function ViewportFloatingToolbar() {
         </div>
 
         {/* 좌표계 */}
-        <Tooltip content={transformSpace === "world" ? "월드 → 로컬" : "로컬 → 월드"}>
+        <Tooltip content={transformSpace === "world" ? "World → Local" : "Local → World"}>
           <button
             onClick={() => setTransformSpace(transformSpace === "world" ? "local" : "world")}
             className="w-7 h-7 flex items-center justify-center rounded-xs text-muted hover:text-foreground hover:bg-background transition-all"
           >
-            {transformSpace === "world" ? <Globe size={13} /> : <Crosshair size={13} />}
+            {transformSpace === "world" ? <Globe size={16} /> : <Crosshair size={16} />}
           </button>
         </Tooltip>
 
@@ -152,15 +154,15 @@ export function ViewportFloatingToolbar() {
 
         {/* 스냅 — 드롭다운 (아이콘 + 화살표) */}
         <div className="relative">
-          <Tooltip content={snapEnabled ? `스냅 켜짐 (${snapTranslate})` : "스냅 꺼짐"}>
+          <Tooltip content={snapEnabled ? `Snap on (${snapTranslate})` : "Snap off"}>
             <button
               onClick={() => setOpenMenu(openMenu === "snap" ? null : "snap")}
               className={`h-7 pl-1.5 pr-1 rounded-xs flex items-center gap-0.5 transition-all ${
                 snapEnabled ? "bg-success text-white shadow-md shadow-success/30" : "text-muted hover:text-foreground hover:bg-background"
               }`}
             >
-              <Magnet size={13} />
-              <ChevronDown size={11} className={openMenu === "snap" ? "rotate-180 transition-transform" : "transition-transform"} />
+              <Magnet size={16} />
+              <ChevronDown size={12} className={openMenu === "snap" ? "rotate-180 transition-transform" : "transition-transform"} />
             </button>
           </Tooltip>
           {openMenu === "snap" && (
@@ -171,7 +173,7 @@ export function ViewportFloatingToolbar() {
                   snapEnabled ? "bg-success/15 text-success" : "text-muted hover:bg-background"
                 }`}
               >
-                <Magnet size={13} /> {snapEnabled ? "스냅 켜짐" : "스냅 꺼짐"}
+                <Magnet size={16} /> {snapEnabled ? "Snap on" : "Snap off"}
               </button>
               <div className="text-[10px] font-semibold text-muted uppercase tracking-wider px-1 mb-1">간격</div>
               <div className="grid grid-cols-4 gap-1">
@@ -194,7 +196,7 @@ export function ViewportFloatingToolbar() {
                   objectSnap ? "bg-primary/15 text-primary" : "text-muted hover:bg-background"
                 }`}
               >
-                <Magnet size={13} /> 오브젝트 스냅 {objectSnap ? "켜짐" : "꺼짐"}
+                <Magnet size={16} /> Object snap {objectSnap ? "on" : "off"}
               </button>
               <p className="text-[9px] text-muted/50 px-1 mt-1 leading-snug">이동 시 다른 오브젝트의 모서리·중심에 자석처럼 붙어요.</p>
             </div>
@@ -212,18 +214,18 @@ export function ViewportFloatingToolbar() {
                 onClick={() => beginPlacement({ kind: "shape", shape: selectedShape })}
                 className="w-7 h-7 rounded-l-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
               >
-                <selectedShapeDef.icon size={14} />
+                <selectedShapeDef.icon size={16} />
               </button>
             </Tooltip>
             {/* 화살표: 드롭다운 열기 (다른 드롭다운과 동일하게 우측) */}
             <button
               onClick={() => setOpenMenu(openMenu === "shapes" ? null : "shapes")}
-              title="도형 선택"
+              title="Shapes"
               className={`h-7 w-4 rounded-r-xs flex items-center justify-center transition-all ${
                 openMenu === "shapes" ? "bg-primary text-white" : "text-muted hover:text-foreground hover:bg-background"
               }`}
             >
-              <ChevronDown size={11} className={openMenu === "shapes" ? "rotate-180 transition-transform" : "transition-transform"} />
+              <ChevronDown size={12} className={openMenu === "shapes" ? "rotate-180 transition-transform" : "transition-transform"} />
             </button>
             {openMenu === "shapes" && (
               <div className="absolute top-full left-0 mt-2 bg-surface border border-border rounded-xs shadow-dropdown z-50 p-1 min-w-[130px]">
@@ -239,38 +241,38 @@ export function ViewportFloatingToolbar() {
                       shape === selectedShape ? "bg-primary/15 text-foreground" : "text-foreground hover:bg-background"
                     }`}
                   >
-                    <Icon size={14} className="text-muted" /> {label}
+                    <Icon size={16} className="text-muted" /> {label}
                   </button>
                 ))}
               </div>
             )}
           </div>
-          <Tooltip content="펜 툴 — 2D 그려서 3D 만들기 (돌출·회전체)">
+          <Tooltip content="Pen tool — draw 2D to make 3D (extrude/lathe)">
             <button
               onClick={() => setPenToolOpen(true)}
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-background transition-all"
             >
-              <PenTool size={14} />
+              <PenTool size={16} />
             </button>
           </Tooltip>
-          <Tooltip content="복셀 — 큐브를 쌓아 만들기 (도트 감성)">
+          <Tooltip content="Voxel — stack cubes to build">
             <button
               onClick={() => setVoxelToolOpen(true)}
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-primary hover:bg-background transition-all"
             >
-              <Boxes size={14} />
+              <Boxes size={16} />
             </button>
           </Tooltip>
           {/* 프리셋 — 완성형 게임 재료(바퀴/문/동전) */}
           <div className="relative flex items-center">
-            <Tooltip content="프리셋 — 완성형 게임 재료 (바퀴·문·동전)">
+            <Tooltip content="Presets — ready-made game parts (wheel/door/coin)">
               <button
                 onClick={() => setOpenMenu(openMenu === "presets" ? null : "presets")}
                 className={`w-7 h-7 rounded-xs flex items-center justify-center transition-all ${
                   openMenu === "presets" ? "bg-primary text-white" : "text-muted hover:text-primary hover:bg-background"
                 }`}
               >
-                <Sparkles size={14} />
+                <Sparkles size={16} />
               </button>
             </Tooltip>
             {openMenu === "presets" && (
@@ -285,7 +287,7 @@ export function ViewportFloatingToolbar() {
                     }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xs text-[11px] text-foreground hover:bg-background transition-colors"
                   >
-                    <Icon size={14} className="text-muted" /> {label}
+                    <Icon size={16} className="text-muted" /> {label}
                   </button>
                 ))}
               </div>
@@ -296,14 +298,14 @@ export function ViewportFloatingToolbar() {
         {SEP}
 
         {/* 와이어프레임 */}
-        <Tooltip content={wireframeMode ? "솔리드 모드" : "와이어프레임"}>
+        <Tooltip content={wireframeMode ? "Solid mode" : "Wireframe"}>
           <button
             onClick={toggleWireframe}
             className={`w-7 h-7 rounded-xs flex items-center justify-center transition-all ${
               wireframeMode ? "bg-cyan-600 text-white shadow-md shadow-cyan-500/20" : "text-muted hover:text-foreground hover:bg-background"
             }`}
           >
-            {wireframeMode ? <Layers size={13} /> : <Box size={13} />}
+            {wireframeMode ? <Layers size={16} /> : <Box size={16} />}
           </button>
         </Tooltip>
 
@@ -313,7 +315,7 @@ export function ViewportFloatingToolbar() {
             onClick={cycleGridPlane}
             className="h-7 pl-1.5 pr-1.5 rounded-xs flex items-center gap-1 text-muted hover:text-foreground hover:bg-background transition-all"
           >
-            <Grid3x3 size={13} />
+            <Grid3x3 size={16} />
             <span className="text-[9px] font-mono font-semibold">{gridPlane.toUpperCase()}</span>
           </button>
         </Tooltip>
@@ -321,20 +323,20 @@ export function ViewportFloatingToolbar() {
         {/* 이전/다음(Undo/Redo) 버튼 숨김 — 주석 처리 (단축키 Ctrl+Z / Ctrl+Y 는 유지)
         {SEP}
         <div className="flex items-center bg-background/50 rounded-xs p-0.5 gap-0.5">
-          <Tooltip content="실행 취소 (Ctrl+Z)">
+          <Tooltip content="Undo (Ctrl+Z)">
             <button
               onClick={undo}
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
             >
-              <Undo2 size={13} />
+              <Undo2 size={16} />
             </button>
           </Tooltip>
-          <Tooltip content="다시 실행 (Ctrl+Y)">
+          <Tooltip content="Redo (Ctrl+Y)">
             <button
               onClick={redo}
               className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
             >
-              <Redo2 size={13} />
+              <Redo2 size={16} />
             </button>
           </Tooltip>
         </div>
@@ -343,13 +345,13 @@ export function ViewportFloatingToolbar() {
         {/* 카메라 북마크 버튼 숨김 — 주석 처리
         {SEP}
         <div className="relative">
-          <Tooltip content="카메라 북마크">
+          <Tooltip content="Camera bookmarks">
             <button
               onClick={() => setOpenMenu(openMenu === 'bookmark' ? null : 'bookmark')}
               className="h-7 pl-1.5 pr-1 rounded-xs flex items-center gap-0.5 text-muted hover:text-foreground hover:bg-background transition-all"
             >
-              <Camera size={13} />
-              <ChevronDown size={11} className={openMenu === 'bookmark' ? 'rotate-180 transition-transform' : 'transition-transform'} />
+              <Camera size={16} />
+              <ChevronDown size={12} className={openMenu === 'bookmark' ? 'rotate-180 transition-transform' : 'transition-transform'} />
             </button>
           </Tooltip>
           {openMenu === 'bookmark' && (
@@ -367,14 +369,14 @@ export function ViewportFloatingToolbar() {
                           saved ? 'text-foreground hover:bg-primary hover:text-white' : 'text-muted/40 cursor-not-allowed'
                         }`}
                       >
-                        <Camera size={12} /> 뷰 {slot} {saved ? '' : '(비어 있음)'}
+                        <Camera size={14} /> 뷰 {slot} {saved ? '' : '(비어 있음)'}
                       </button>
                       <Tooltip content={saved ? '현재 뷰로 재저장' : '현재 뷰 저장'}>
                         <button
                           onClick={() => requestSaveBookmark(slot)}
                           className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all"
                         >
-                          <Save size={12} />
+                          <Save size={14} />
                         </button>
                       </Tooltip>
                     </div>
@@ -390,7 +392,7 @@ export function ViewportFloatingToolbar() {
 
         {/* 정렬 */}
         <div className="relative">
-          <Tooltip content={canAlign ? "정렬" : "2개 이상 선택"}>
+          <Tooltip content={canAlign ? "Align" : "Select 2+"}>
             <button
               onClick={() => setOpenMenu(openMenu === "align" ? null : "align")}
               disabled={!canAlign}
@@ -402,16 +404,16 @@ export function ViewportFloatingToolbar() {
                   : "text-muted/30 cursor-not-allowed"
               }`}
             >
-              <AlignCenter size={13} />
+              <AlignCenter size={16} />
             </button>
           </Tooltip>
           {openMenu === "align" && canAlign && (
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-surface border border-border rounded-xs shadow-dropdown z-50 p-2 min-w-[160px]">
               <div className="text-[10px] font-semibold text-muted uppercase tracking-wider px-1 mb-1.5">정렬</div>
               {[
-                { axis: "x" as const, label: "X", min: "좌", ctr: "중", max: "우" },
-                { axis: "y" as const, label: "Y", min: "하", ctr: "중", max: "상" },
-                { axis: "z" as const, label: "Z", min: "전", ctr: "중", max: "후" },
+                { axis: "x" as const, label: "X", min: "L", ctr: "C", max: "R" },
+                { axis: "y" as const, label: "Y", min: "Btm", ctr: "Mid", max: "Top" },
+                { axis: "z" as const, label: "Z", min: "Fr", ctr: "Mid", max: "Bk" },
               ].map(({ axis, label, min, ctr, max }) => (
                 <div key={axis} className="flex items-center gap-1.5 py-0.5">
                   <span className="text-[10px] font-mono text-muted w-4 shrink-0">{label}</span>

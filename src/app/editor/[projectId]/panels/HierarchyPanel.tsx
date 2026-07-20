@@ -35,6 +35,7 @@ import {
   Cog,
   Focus,
   Unlink,
+  Donut,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore, isDescendant } from "@/store/sceneStore";
@@ -53,6 +54,7 @@ const SHAPE_ICONS: Record<string, LucideIcon> = {
   extrude: PenTool,
   lathe: PenTool, // 펜툴로 만든 돌출/회전체
   voxel: Boxes, // 복셀(live 프리미티브)
+  torus: Donut,
 };
 
 function getIcon(obj: ObjectNodeSchema, isCopyRoot = false): LucideIcon {
