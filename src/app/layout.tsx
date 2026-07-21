@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
+import { LucideProvider } from "lucide-react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
@@ -46,7 +47,11 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>{children}</ThemeProvider>
+        {/* lucide 아이콘 전역 기본값 — 얇은 선(1). 개별 아이콘의 strokeWidth가 이 값을 덮어쓴다
+            (우선순위: 개별 > Provider > 라이브러리 기본 2). 색은 각 위치에서 관리(currentColor 상속). */}
+        <LucideProvider strokeWidth={1}>
+          <ThemeProvider>{children}</ThemeProvider>
+        </LucideProvider>
       </body>
     </html>
   );

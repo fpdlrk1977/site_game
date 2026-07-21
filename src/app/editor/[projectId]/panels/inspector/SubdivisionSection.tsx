@@ -2,6 +2,7 @@
 
 // Subdivision 섹션 — 표면 세분화(부드러운 유기적 곡면). 프리미티브 전용.
 // 헤더 스위치로 켜고(켜면 기본 레벨 1), 1/2/3 버튼으로 레벨 선택(슬라이더 대신 — 정수 단계라 버튼이 명확).
+import { Spline } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SectionHeader, GroupBox, Toggle } from './ui';
 import type { ObjectNodeSchema } from '@/types/scene';
@@ -14,7 +15,7 @@ export function SubdivisionSection({ obj }: { obj: ObjectNodeSchema }) {
   return (
         <GroupBox>
           <div className="relative">
-            <SectionHeader title="Subdivision" hint="Splits the surface into a smooth organic shape (like Blender's Subdivision Surface). Higher level = rounder but far more faces and heavier (max 3)." />
+            <SectionHeader title="Subdivision" icon={<Spline size={14} />} hint="Splits the surface into a smooth organic shape (like Blender's Subdivision Surface). Higher level = rounder but far more faces and heavier (max 3)." />
             <label className="flex items-center cursor-pointer absolute top-4.5 right-4">
               <Toggle value={enabled} onChange={(v) => setLevel(v ? 1 : 0)} />
             </label>

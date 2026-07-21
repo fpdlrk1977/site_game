@@ -60,6 +60,7 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
     <GroupBox>
       <SectionHeader
         title="Material"
+        icon={<Palette size={14} />}
         hint="Color, emissive, roughness and metalness. Applies to primitives (box, sphere, cylinder…) and text content."
         isOpen={open}
         onToggle={onToggle}

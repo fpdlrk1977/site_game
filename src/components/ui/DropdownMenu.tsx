@@ -9,7 +9,7 @@
 //   >{({ close }) => <>…항목들, 선택 시 close()…</>}</DropdownMenu>
 import { createPortal } from 'react-dom';
 import type { ReactNode, RefObject } from 'react';
-import { useDropdown } from '@/hooks/useDropdown';
+import { useDropdown, type DropdownPlacement } from '@/hooks/useDropdown';
 
 interface TriggerArgs<T extends HTMLElement> {
   open: boolean;
@@ -26,7 +26,8 @@ export function DropdownMenu<T extends HTMLElement = HTMLButtonElement>({
 }: {
   trigger: (args: TriggerArgs<T>) => ReactNode;
   children: ReactNode | ((args: { close: () => void }) => ReactNode);
-  placement?: 'bottom' | 'right';
+  /** useDropdown의 전체 배치 옵션을 그대로 노출(bottom-end = 트리거 우측 정렬 등). */
+  placement?: DropdownPlacement;
   /** 패널 폭/여백 등 화면별 스타일. 배경/테두리/그림자는 공통 기본값이 담당(중복 지정 불필요). */
   panelClassName?: string;
 }) {

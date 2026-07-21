@@ -3,7 +3,7 @@
 // Array / Cloner 섹션 — 선택 오브젝트를 N개 복제 배치(직선/격자/원형 + 회전 증분) 또는 라이브 클로너 생성.
 // 자체 로컬 상태(개수/간격/모드/반경/축/열·행/회전) 소유. 배치 로직은 lib/cloner의 공용 함수를 스토어가 재사용.
 import { useState } from "react";
-import { CircleDot, Grid2x2, Rows3 } from "lucide-react";
+import { CircleDot, Grid2x2, Rows3, Grid3x3 } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
 import { useToast } from "@/hooks/useToast";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -58,6 +58,7 @@ export function ArraySection({ obj, open, onToggle }: { obj: ObjectNodeSchema; o
     <GroupBox>
       <SectionHeader
         title="Array / Cloner"
+        icon={<Grid3x3 size={14} />}
         hint="Duplicate the selected object multiple times. Linear = evenly spaced (fences, stairs), Grid = rows × columns (floor tiles, seats), Radial = arranged in a circle. Rotation step twists each copy (spiral). Count includes the source; undo works. Make it a 'Live cloner' to change settings later in real time."
         isOpen={open}
         onToggle={onToggle}

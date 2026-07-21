@@ -1,6 +1,7 @@
 'use client';
 
 // Geometry 섹션 — 프리미티브 형태 조절(둥근 박스·각뿔대·로프트 단면).
+import { Shapes } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
 import type { ObjectNodeSchema } from '@/types/scene';
@@ -9,7 +10,7 @@ export function GeometrySection({ obj, open, onToggle }: { obj: ObjectNodeSchema
   const { updateObject, pushHistory } = useSceneStore();
   return (
           <GroupBox>
-            <SectionHeader title="Geometry" hint="Adjust primitive shape. Box = corner rounding, frustum = top size, loft = per-layer section size from bottom to top." isOpen={open} onToggle={onToggle} />
+            <SectionHeader title="Geometry" icon={<Shapes size={14} />} hint="Adjust primitive shape. Box = corner rounding, frustum = top size, loft = per-layer section size from bottom to top." isOpen={open} onToggle={onToggle} />
             {open && (
               <div className="px-3 pb-4 space-y-2">
                 {obj.primitiveShape === 'box' && (

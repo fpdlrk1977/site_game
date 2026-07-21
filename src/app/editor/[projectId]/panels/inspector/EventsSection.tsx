@@ -5,7 +5,7 @@
 // previewPopup 오버레이는 부모(aside relative 기준 positioning)에 남기고, 리스트 미리보기는 onPreview 콜백으로 위임.
 import { useState, useEffect } from "react";
 import { MathUtils } from "three";
-import { X, Pencil, Play, Music } from "lucide-react";
+import { X, Pencil, Play, Music, Zap } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
 import { useToast } from "@/hooks/useToast";
 import { createBrowserSupabase } from "@/lib/supabase";
@@ -1338,6 +1338,7 @@ export function EventsSection({
     <GroupBox>
       <SectionHeader
         title="Events"
+        icon={<Zap size={14} />}
         hint="트리거(클릭·호버·근접 E·영역 진입)에 따라 동작(팝업·URL·씬 이동·애니메이션·이동·사운드 등)을 실행해요. 다가가면 뜨는 '대화 말풍선'도 여기서 설정합니다."
         isOpen={open}
         onToggle={onToggle}

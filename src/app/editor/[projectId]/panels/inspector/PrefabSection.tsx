@@ -49,7 +49,7 @@ export function PrefabSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
 
           return (
             <GroupBox>
-              <SectionHeader title="Prefab" icon={<CirclePile size={12} />} hint="Group objects into a reusable master. Editing the master updates every instance (sync); changing a value on one instance detaches only that field (override)." isOpen={open} onToggle={onToggle} />
+              <SectionHeader title="Prefab" icon={<CirclePile size={14} />} hint="Group objects into a reusable master. Editing the master updates every instance (sync); changing a value on one instance detaches only that field (override)." isOpen={open} onToggle={onToggle} />
               {open && <div className="px-3 pb-4 space-y-2">
                 {!isInstance && canCreate && (
                   <>

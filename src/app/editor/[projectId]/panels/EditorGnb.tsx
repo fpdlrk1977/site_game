@@ -83,7 +83,7 @@ function SettingsMenu({ projectName }: { projectName: string }) {
         placement="right"
         panelClassName="w-48 py-1"
         trigger={({ open, toggle, ref }) => (
-          <RailButton buttonRef={ref} icon={<Settings size={16} />} label="Settings" active={open} onClick={toggle} />
+          <RailButton buttonRef={ref} icon={<Settings size={14} />} label="Settings" active={open} onClick={toggle} />
         )}
       >
         {({ close }) => (
@@ -142,7 +142,7 @@ function AccountMenu() {
       trigger={({ open, toggle, ref }) => (
         <RailButton
           buttonRef={ref}
-          icon={<UserRound size={16} />}
+          icon={<UserRound size={14} />}
           label="Account"
           active={open}
           onClick={() => { if (!open) loadEmail(); toggle(); }}
@@ -174,19 +174,19 @@ export function EditorGnb({ tab, panelOpen, onTabClick, projectName }: Props) {
   return (
     <div className="flex flex-col w-full h-full py-2 gap-1 shrink-0 select-none">
       <RailButton
-        icon={<Layers size={16} />}
+        icon={<Layers size={14} />}
         label="Object"
         active={panelOpen && tab === 'objects'}
         onClick={() => onTabClick('objects')}
       />
       <RailButton
-        icon={<Package size={16} />}
+        icon={<Package size={14} />}
         label="Assets"
         active={panelOpen && tab === 'assets'}
         onClick={() => onTabClick('assets')}
       />
       <RailButton
-        icon={<Cpu size={16} />}
+        icon={<Cpu size={14} />}
         label="Logic"
         active={panelOpen && tab === 'logic'}
         onClick={() => onTabClick('logic')}

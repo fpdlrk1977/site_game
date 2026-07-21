@@ -116,6 +116,7 @@ export function SceneLogicSection() {
       <div className="relative">
         <SectionHeader
           title="Game Logic"
+          icon={<Cpu size={14} />}
           hint="오브젝트에 매달리지 않은 씬 전역 규칙. '점수 3이면 게이트 열림' 같은 공유 규칙을 한 곳에 모읍니다. 트리거: 시작하면 / N초마다 / 변수 바뀌면."
         />
         <button

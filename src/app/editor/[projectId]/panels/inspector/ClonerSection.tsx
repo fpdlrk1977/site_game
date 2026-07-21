@@ -26,7 +26,7 @@ export function ClonerSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
           const onSpZ = (v: number) => setCfg({ offset: { ...cfg.offset, z: v, x: linkSp ? v : cfg.offset.x } });
           return (
             <GroupBox>
-              <SectionHeader title="Cloner (Live)" icon={<Grid2x2 size={12} />} hint="Non-destructive array — changing count/spacing/mode regenerates the clones live. Editing the single source updates every clone. Clones appear under the cloner group in the tree." isOpen={open} onToggle={onToggle} />
+              <SectionHeader title="Cloner (Live)" icon={<Grid2x2 size={14} />} hint="Non-destructive array — changing count/spacing/mode regenerates the clones live. Editing the single source updates every clone. Clones appear under the cloner group in the tree." isOpen={open} onToggle={onToggle} />
               {open && <div className="px-3 pb-4 space-y-2">
                 <div className="grid grid-cols-3 gap-1">
                   {(['linear', 'grid', 'radial'] as const).map((m) => (

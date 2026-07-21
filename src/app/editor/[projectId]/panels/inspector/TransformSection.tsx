@@ -4,7 +4,7 @@
 // setPos/setRot/setScl·바닥스냅 헬퍼를 컴포넌트 안에서 store+lib로 재구성(동작 무변경).
 import * as THREE from 'three';
 import { useState } from 'react';
-import { ArrowDownToLine } from 'lucide-react';
+import { ArrowDownToLine, Move3d } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useEditorPrefsStore, SIZE_UNIT_FACTOR, SIZE_UNITS } from '@/store/editorPrefsStore';
 import { worldBBox, localBBox } from '@/lib/objectBBox';
@@ -68,7 +68,7 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
   };
   return (
         <GroupBox>
-          <SectionHeader title="Transform" hint="Position, rotation and scale. Hold Shift while rotating with the gizmo to snap every 15°. GLB models auto-align to the floor when added; use 'Drop to floor' to re-align." isOpen={open} onToggle={onToggle} />
+          <SectionHeader title="Transform" icon={<Move3d size={14} />} hint="Position, rotation and scale. Hold Shift while rotating with the gizmo to snap every 15°. GLB models auto-align to the floor when added; use 'Drop to floor' to re-align." isOpen={open} onToggle={onToggle} />
           {open && (
             <div className="px-3 pb-4 space-y-1">
               {/* 기즈모 드래그 중 라이브 채널로 실시간 갱신(캔버스 리렌더 없이 이 서브트리만) */}

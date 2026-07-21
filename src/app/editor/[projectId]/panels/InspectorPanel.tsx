@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useRef, useLayoutEffect, type MutableRefObject } from 'react';
-import { Download, X, CirclePile, Package } from 'lucide-react';
+import { Download, X, CirclePile, Package, Clapperboard, Eye, EyeOff, Lock, Unlock, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu } from '@/components/ui/DropdownMenu';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { RichContent } from '@/components/ui/RichContent';
@@ -36,6 +38,40 @@ import { CHARACTER_PREVIEW_ID } from '@/app/editor/[projectId]/canvas/CharacterP
 
 
 
+// 인스펙터 헤더의 타입 라벨 — "이게 무슨 오브젝트인지"를 이름 아래 한 줄로.
+//   판정 순서 = 좁은 것부터(모터는 그룹이기도 하고, 클로너·프리팹도 그룹이므로 isGroup보다 먼저 봐야 한다).
+const SHAPE_LABEL: Record<string, string> = {
+  box: 'Box', sphere: 'Sphere', cylinder: 'Cylinder', plane: 'Plane', frustum: 'Frustum',
+  loft: 'Loft', extrude: 'Extrude', lathe: 'Lathe', voxel: 'Voxel', torus: 'Torus',
+};
+function objectTypeLabel(o: ObjectNodeSchema): string {
+  if (o.light) return { point: 'Point Light', spot: 'Spot Light', directional: 'Directional Light' }[o.light.type] ?? 'Light';
+  if (o.particle) return 'Particle';
+  if (o.isActuator) return 'Motor';
+  if (o.clonerConfig) return 'Cloner';
+  if (o.prefabId) return o.isGroup ? 'Prefab' : 'Prefab part';
+  if (o.content) return { text: 'Text', image: 'Image', video: 'Video' }[o.content.type] ?? 'Content';
+  if (o.assetId) return 'Model (GLB)';
+  if (o.isGroup) return 'Group';
+  if (o.primitiveShape) return SHAPE_LABEL[o.primitiveShape] ?? 'Primitive';
+  return 'Object';
+}
+// 뱃지 호버 설명 — "이게 뭔지"를 한 문장으로. 판정 순서는 objectTypeLabel과 동일해야 라벨과 설명이 어긋나지 않는다.
+function objectTypeHint(o: ObjectNodeSchema): string {
+  if (o.light) return '씬을 비추는 조명입니다. 색·강도·거리를 조절할 수 있고, spot/directional은 뷰포트에서 방향을 끌어 맞춥니다.';
+  if (o.particle) return '눈·불꽃 같은 분위기용 파티클입니다. 충돌하지 않는 장식 요소입니다.';
+  if (o.isActuator) return '모터(관절 부품)입니다. 연결된 자식이 이 모터의 원점(경첩)·축을 기준으로 움직입니다. ▶ 플레이에서 동작합니다.';
+  if (o.clonerConfig) return '클로너 그룹입니다. 소스 하나를 개수·간격 설정대로 실시간 복제하며, 소스를 고치면 복제본이 모두 따라갑니다.';
+  if (o.prefabId) return o.isGroup
+    ? '프리팹 인스턴스입니다. 원본을 고치면 모든 사본에 반영되고, 사본에서 바꾼 값만 원본을 벗어납니다(override).'
+    : '프리팹 인스턴스 안의 부품입니다. 원본의 같은 노드와 동기화됩니다.';
+  if (o.content) return '텍스트·이미지·영상 콘텐츠입니다. URL을 넣으면 이미지·YouTube 같은 리치 콘텐츠로 표시됩니다.';
+  if (o.assetId) return '가져온 3D 모델(GLB)입니다. 내장 애니메이션 클립이 있으면 Animation 섹션에서 고를 수 있습니다.';
+  if (o.isGroup) return '여러 오브젝트를 묶은 그룹입니다. 함께 이동·회전하고, 자식은 그룹 기준 좌표를 씁니다.';
+  if (o.primitiveShape) return '에디터에서 만든 기본 도형입니다. 크기·재질·물리를 직접 설정할 수 있습니다.';
+  return '씬에 배치된 오브젝트입니다.';
+}
+
 // ── 메인 ───────────────────────────────────────────────────────
 // 외부: selectedId를 key로 넘겨 오브젝트 전환 시 내부 상태 완전 초기화.
 //   단, 섹션 접힘 상태(collapsed)는 여기(remount 안 되는 부모)에 두어 오브젝트를 전환해도 유지한다
@@ -64,7 +100,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
   const scrollElRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { if (scrollElRef.current) scrollElRef.current.scrollTop = scrollTopRef.current; }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => { scrollTopRef.current = e.currentTarget.scrollTop; };
-  const { objects, assets, selectedId, selectedIds, projectId, environment, prefabs, updateObject, pushHistory, instantiatePrefab, deletePrefab, requestExport, mergeIntoAsset } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, projectId, environment, prefabs, updateObject, setObjectLocked, pushHistory, instantiatePrefab, deletePrefab, requestExport, mergeIntoAsset } = useSceneStore();
   const { addToast } = useToast();
   // 단일 오브젝트를 GLB로 구워 Models(에셋)에 등록 — Merge와 동일 파이프라인(단일 rootId).
   const [savingModel, setSavingModel] = useState(false);
@@ -128,7 +164,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
           )}
           {!isCharSelected && prefabs.length > 0 && (
             <GroupBox>
-              <SectionHeader title="Prefab Library" icon={<CirclePile size={12} />} hint="Master prefabs in this scene. 'Place' adds a new instance to the scene. Deleting removes only the definition; already-placed objects remain as independent objects." />
+              <SectionHeader title="Prefab Library" icon={<CirclePile size={14} />} hint="Master prefabs in this scene. 'Place' adds a new instance to the scene. Deleting removes only the definition; already-placed objects remain as independent objects." />
               <div className="px-3 pb-4 space-y-1.5">
                 {prefabs.map((p) => {
                   const count = new Set(objects.filter((o) => o.prefabId === p.id).map((o) => o.prefabInstanceId)).size;
@@ -211,37 +247,76 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
       </div>
 
       <div ref={scrollElRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
-        {/* 이름 + GLB 내보내기 */}
-        <div className="px-3 py-2 flex items-center gap-1.5">
-          <input
-            value={obj.name}
-            onChange={(e) => updateObject(obj.id, { name: e.target.value })}
-            onBlur={pushHistory}
-            className="flex-1 min-w-0 bg-surface border border-border rounded-xs px-2.5 py-1.5  text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium"
-          />
-          <button
-            onClick={() => { requestExport(selectedIds.length > 0 ? selectedIds : [obj.id], obj.name || 'object'); addToast('Exporting GLB', 'success'); }}
-            title="Export this object as a .glb file (download)"
-            className="shrink-0 h-[30px] px-2 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] transition-all inline-flex items-center gap-1"
-          >
-            <Download size={12} /> GLB
-          </button>
-        </div>
-
-        {/* 모델 에셋으로 저장 — 프리미티브(또는 프리미티브 그룹)를 GLB로 구워 Models 라이브러리에 등록.
-            GLB/콘텐츠/라이트/파티클은 제외(이미 에셋이거나 프리미티브 아님). */}
-        {!obj.assetId && !obj.content && !obj.light && !obj.particle && (
-          <div className="px-3 pt-2 pb-1">
-            <button
-              onClick={() => saveAsModel(obj.id, obj.name || '모델')}
-              disabled={savingModel}
-              title="이 오브젝트를 GLB 모델 에셋으로 저장 (Assets › Models에서 재사용)"
-              className="w-full py-1.5 rounded-xs bg-surface border border-border text-foreground hover:text-muted hover:bg-background text-[11px] transition-all inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Package size={13} /> {savingModel ? '모델로 굽는 중…' : '모델 에셋으로 저장'}
-            </button>
+        {/* 헤더 — 이름(읽기 전용)+타입 라벨 · 우측에 표시/잠금/더보기 아이콘 버튼.
+            이름 수정은 계층 트리(더블클릭·우클릭)에서 한다. 내보내기·모델 저장은 더보기 팝오버로 접었다. */}
+        <div className="px-3 py-2.5 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[14px] font-medium text-foreground truncate" title={obj.name}>{obj.name}</div>
+            {/* 타입 뱃지 — 이 오브젝트가 무엇인지(Box·Model·Motor…). 호버 시 한 문장 설명.
+                Tooltip이 트리거를 div로 감싸므로 inline-flex + w-fit으로 배경이 텍스트 폭에만 깔리게 한다. */}
+            <Tooltip content={objectTypeHint(obj)} wide className="mt-1 w-fit">
+              <span className="inline-flex px-1.5 py-0.5 rounded-xs bg-foreground/[0.04] text-[10px] text-muted/70 cursor-default">
+                {objectTypeLabel(obj)}
+              </span>
+            </Tooltip>
           </div>
-        )}
+          <div className="flex items-center gap-0 shrink-0">
+            <button
+              onClick={() => { updateObject(obj.id, { visible: !obj.visible }); pushHistory(); }}
+              title={obj.visible ? '숨기기' : '표시'}
+              className="w-6 h-6 rounded-xs flex items-center justify-center text-foreground hover:bg-background transition-colors"
+            >
+              {obj.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+            </button>
+            <button
+              onClick={() => { setObjectLocked(obj.id, !obj.locked); pushHistory(); }}
+              title={obj.locked ? '잠금 해제' : '잠금'}
+              className="w-6 h-6 rounded-xs flex items-center justify-center text-foreground hover:bg-background transition-colors"
+            >
+              {obj.locked ? <Lock size={14} /> : <Unlock size={14} />}
+            </button>
+            <DropdownMenu
+              placement="bottom-end"
+              panelClassName="w-max py-1"
+              trigger={({ toggle, ref }) => (
+                <button
+                  ref={ref}
+                  onClick={toggle}
+                  title="더보기"
+                  className="w-6 h-6 rounded-xs flex items-center justify-center text-foreground hover:bg-background transition-colors"
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              )}
+            >
+              {({ close }) => (
+                <>
+                  <button
+                    onClick={() => {
+                      requestExport(selectedIds.length > 0 ? selectedIds : [obj.id], obj.name || 'object');
+                      addToast('Exporting GLB', 'success');
+                      close();
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] text-foreground hover:bg-background transition-colors flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <Download size={13} className="text-muted" /> GLB로 내보내기
+                  </button>
+                  {/* 모델 에셋으로 저장 — 프리미티브(또는 프리미티브 그룹)만. GLB/콘텐츠/라이트/파티클은 제외
+                      (이미 에셋이거나 프리미티브가 아님). */}
+                  {!obj.assetId && !obj.content && !obj.light && !obj.particle && (
+                    <button
+                      onClick={() => { saveAsModel(obj.id, obj.name || '모델'); close(); }}
+                      disabled={savingModel}
+                      className="w-full text-left px-3 py-1.5 text-[11px] text-foreground hover:bg-background transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Package size={13} className="text-muted" /> {savingModel ? '모델로 굽는 중…' : '모델 에셋으로 저장'}
+                    </button>
+                  )}
+                </>
+              )}
+            </DropdownMenu>
+          </div>
+        </div>
 
         {/* Prefab — 원본 정의화 / 인스턴스 동기화 (조건 불충족 시 자체 null) */}
         <PrefabSection obj={obj} open={isOpen('prefab')} onToggle={() => toggleSection('prefab')} />
@@ -300,7 +375,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
           const glbUrl = animGlbUrl;
           return (
             <GroupBox>
-              <SectionHeader title="Animation" hint="Auto-loops one of the GLB's built-in animation clips on scene load, with no trigger (spinning fan, waving flag, idle character…). If a click/hover/area event animation fires, it takes over (viewer only)." isOpen={isOpen('animation')} onToggle={() => toggleSection('animation')} dot={!!obj.defaultClip} />
+              <SectionHeader title="Animation" icon={<Clapperboard size={14} />} hint="Auto-loops one of the GLB's built-in animation clips on scene load, with no trigger (spinning fan, waving flag, idle character…). If a click/hover/area event animation fires, it takes over (viewer only)." isOpen={isOpen('animation')} onToggle={() => toggleSection('animation')} dot={!!obj.defaultClip} />
               {isOpen('animation') && (
                 <div className="px-3 pb-4 space-y-1.5">
                   <span className="text-[10px] text-muted/50 block font-semibold tracking-wide">Default clip</span>

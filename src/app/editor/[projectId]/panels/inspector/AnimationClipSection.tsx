@@ -161,6 +161,7 @@ export function AnimationClipSection({ obj, open, onToggle }: { obj: ObjectNodeS
     <GroupBox>
       <SectionHeader
         title="Animation (keyframes)"
+        icon={<Film size={14} />}
         hint="오브젝트를 원하는 자세로 옮긴 뒤 '포즈 추가'로 키프레임 캡처 → 순서대로 재생되는 '녹화된 연출'입니다. 위치·회전·크기를 자유롭게 조합하고, 여러 오브젝트를 한 클립에 담아 함께 움직일 수 있어요(컷신·양문 등). ▶로 미리보고, 재생은 이벤트의 '애니 재생(play_clip)' 액션으로 겁니다. ↔ 문·피스톤처럼 한 축으로 여닫히거나 게임 상태(변수/이벤트)에 반응해야 하면 Actuator, 그냥 계속 둥둥/빙글이면 Motion을 쓰세요."
         isOpen={open}
         onToggle={onToggle}

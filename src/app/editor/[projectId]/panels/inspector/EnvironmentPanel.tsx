@@ -20,6 +20,17 @@ import {
   Palette,
   Image as ImageIcon,
   CirclePlus,
+  Camera,
+  Frame,
+  Cloud,
+  CloudFog,
+  SunMoon,
+  MousePointerClick,
+  MessageSquare,
+  PersonStanding,
+  Square,
+  Wand2,
+  StickyNote,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
@@ -295,6 +306,7 @@ export function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader
           title="Start View"
+          icon={<Camera size={14} />}
           hint="게시된 뷰어(둘러보기)에 방문자가 처음 들어왔을 때 보이는 카메라 위치·방향. 지정 안 하면 씬 전체가 담기게 자동 맞춤됩니다. 에디터에서 원하는 각도로 카메라를 맞춘 뒤 '현재 시점으로 저장'을 누르세요."
           isOpen={envOpen("startview")}
           onToggle={() => envToggle("startview")}
@@ -331,6 +343,7 @@ export function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader
           title="Frame"
+          icon={<Frame size={14} />}
           hint="게시된 뷰어의 고정 화면 비율. '자유'는 브라우저를 꽉 채우고, 비율을 정하면 그 틀로 레터박스(가운데 정렬 + 배경 여백)해요. 에디터엔 미반영 — 게시/공유 화면에 적용됩니다."
           isOpen={envOpen("frame")}
           onToggle={() => envToggle("frame")}
@@ -360,7 +373,7 @@ export function EnvironmentPanel() {
 
       {/* Sky */}
       <GroupBox>
-        <SectionHeader title="Sky" isOpen={envOpen("sky")} onToggle={() => envToggle("sky")} />
+        <SectionHeader title="Sky" icon={<Cloud size={14} />} isOpen={envOpen("sky")} onToggle={() => envToggle("sky")} />
         {envOpen("sky") && (
           <div className="px-3 pb-3 space-y-2">
             {/* 모드 탭 */}
@@ -461,6 +474,7 @@ export function EnvironmentPanel() {
         <div className="relative">
           <SectionHeader
             title="Ground"
+            icon={<Mountain size={14} />}
             hint="The floor plane. A preset, or a solid color / image texture. The floor is opaque, so if an object's bottom sinks below it, it gets hidden and looks cut off (auto floor-snap prevents this)."
           />
           <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
@@ -543,7 +557,7 @@ export function EnvironmentPanel() {
       <GroupBox>
         {/* Fog */}
         <div className="relative">
-          <SectionHeader title="Fog" />
+          <SectionHeader title="Fog" icon={<CloudFog size={14} />} />
           <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
             {/* <span className=" text-[11px] text-muted">Enable Fog</span> */}
             <Toggle
@@ -639,6 +653,7 @@ export function EnvironmentPanel() {
         <div className="relative">
           <SectionHeader
             title="Mood"
+            icon={<SunMoon size={14} />}
             hint="분위기 프리셋(조명·배경·노출 한 번에). 스위치를 켜면 기본 morning, 끄면 default(무드 해제). 켜진 상태에서 다른 무드도 고를 수 있어요."
           />
           {/* Mood on/off — ON=morning 적용, OFF=default(해제). Fog처럼 헤더 우측 스위치 */}
@@ -679,6 +694,7 @@ export function EnvironmentPanel() {
         <div className="relative">
         <SectionHeader
           title="Lights"
+          icon={<Sun size={14} />}
           hint="Scene-wide lighting. The switch toggles the sun (directional light + shadows); ambient fill stays on. Set the sun direction on the dial below, or grab the sun sphere in the viewport."
         />
         {/* 태양(방향광) on/off — 화살표(접기) 대신 헤더 스위치. 끄면 그림자·태양 기즈모도 꺼지고 ambient/IBL만. */}
@@ -801,6 +817,7 @@ export function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader
           title="Interaction"
+          icon={<MousePointerClick size={14} />}
           hint="Shows a floating hint ring above objects that have click/hover events, signaling they're interactive. Explore mode only; you can turn it off for a cleaner scene."
           isOpen={envOpen("interaction")}
           onToggle={() => envToggle("interaction")}
@@ -844,6 +861,7 @@ export function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader
           title="Popup defaults"
+          icon={<MessageSquare size={14} />}
           hint="Scene-wide default position, size and background for show_popup popups. Values set on an individual event take priority over these defaults."
           isOpen={envOpen("popup")}
           onToggle={() => envToggle("popup")}
@@ -896,6 +914,7 @@ export function EnvironmentPanel() {
         <div className="relative">
           <SectionHeader
             title="Player"
+            icon={<PersonStanding size={14} />}
             hint="플레이(걷기) 모드의 캐릭터·속도·점프. 스위치를 켜면 걷기(플레이) 모드, 끄면 둘러보기 전용 씬이 됩니다."
           />
           {/* 걷기(플레이) 모드 on/off — Fog처럼 헤더 우측 스위치 (텍스트 없이 스위치만) */}
@@ -1034,6 +1053,7 @@ export function EnvironmentPanel() {
         <div className="relative">
           <SectionHeader
             title="Boundary"
+            icon={<Square size={14} />}
             hint="플레이 이동 제한 영역. 스위치를 켜면 기본 3 크기의 정사각 경계가 생기고, 가로(X)·세로(Z)로 크기를 조절해요. 벽 스타일(단색·텍스처)로 방/전시장처럼 감쌀 수 있어요."
           />
           {/* 경계 on/off — 켜면 기본 3 정사각 경계, 끄면 경계 없음 (Fog처럼 헤더 우측 스위치) */}
@@ -1333,6 +1353,7 @@ export function EnvironmentPanel() {
       <GroupBox>
         <SectionHeader
           title="Post Processing"
+          icon={<Wand2 size={14} />}
           hint="화면 전체 필터. 프리셋 또는 개별 효과. 개별 효과(SSAO/블룸/비네트 등)를 하나라도 올리면 프리셋 대신 그 조합으로 렌더돼요. SSAO=구석 음영(묵직함)."
           isOpen={envOpen("post")}
           onToggle={() => envToggle("post")}
@@ -1399,7 +1420,7 @@ export function EnvironmentPanel() {
 
       {/* 씬 메모 */}
       <GroupBox>
-        <SectionHeader title="Memo" isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
+        <SectionHeader title="Memo" icon={<StickyNote size={14} />} isOpen={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
         {notesOpen && (
           <div className="px-3 pb-4">
             <textarea

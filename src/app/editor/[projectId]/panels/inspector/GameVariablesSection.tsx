@@ -3,7 +3,7 @@
 // 게임 변수(상태) 편집 섹션 — 점수·체력·상태 등. GAME_LOGIC.md 변수 로드맵.
 // EnvironmentPanel에서 추출(게임 컨트롤러 GNB Logic 탭과 공유). 스토어를 직접 읽는다.
 
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Variable } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { ColorPicker } from '@/components/ui/ColorPicker';
@@ -17,6 +17,7 @@ export function GameVariablesSection() {
       <div className="relative">
         <SectionHeader
           title="게임 변수"
+          icon={<Variable size={14} />}
           hint="점수·체력·아이템 보유 같은 게임 상태값. 이벤트의 '변수 변경' 액션으로 값을 바꾸고, 이벤트 '조건'으로 값에 따라 발동을 걸 수 있어요. '변수 변경 시' 트리거로 '점수 10이 되면 문 열기' 같은 반응형 규칙도 가능. HUD를 켜면 뷰어 화면에 값이 표시됩니다."
         />
         <button

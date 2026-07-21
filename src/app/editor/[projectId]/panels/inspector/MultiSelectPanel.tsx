@@ -3,7 +3,7 @@
 // 다중선택 패널 — 2개+ 오브젝트 선택 시 인스펙터. 일괄편집·거리·합치기(Merge)·Boolean·정렬.
 // InspectorPanel 분리 리팩터: isMultiSelect 반환 브랜치 + async 핸들러(handleMerge/handleBoolean)를 통째 이동.
 import { useState } from 'react';
-import { SlidersHorizontal, Combine, AlignCenter, Wand2, AlignHorizontalSpaceAround } from 'lucide-react';
+import { SlidersHorizontal, Combine, AlignCenter, Wand2, AlignHorizontalSpaceAround, Blend } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { ColorPicker } from '@/components/ui/ColorPicker';
@@ -95,7 +95,7 @@ export function MultiSelectPanel() {
           </div>
 
           {/* 일괄 편집 */}
-          <SectionHeader title="Batch edit" icon={<SlidersHorizontal size={12} />} />
+          <SectionHeader title="Batch edit" icon={<SlidersHorizontal size={14} />} />
           <div className="px-3 py-3 space-y-3">
             {allHaveMaterial && (
               <div>
@@ -129,7 +129,7 @@ export function MultiSelectPanel() {
           </div>
 
           {/* 합치기(Merge) — 여러 프리미티브를 하나의 GLB 객체로 */}
-          <SectionHeader title="Merge" icon={<Combine size={12} />} />
+          <SectionHeader title="Merge" icon={<Combine size={14} />} />
           <div className="px-3 py-3 space-y-2">
             <button
               onClick={() => handleMerge(selectedIds)}
@@ -144,7 +144,7 @@ export function MultiSelectPanel() {
           {/* Boolean — 정확히 2개 선택 시. base=먼저 선택, tool=나중 선택 */}
           {selectedIds.length === 2 && (
             <>
-              <SectionHeader title="Boolean" icon="◑" />
+              <SectionHeader title="Boolean" icon={<Blend size={14} />} />
               <div className="px-3 py-3 space-y-2">
                 <div className="grid grid-cols-3 gap-1">
                   <button onClick={() => handleBoolean(selectedIds[0], selectedIds[1], 'union')} disabled={merging}
@@ -162,7 +162,7 @@ export function MultiSelectPanel() {
           )}
 
           {/* 정렬 */}
-          <SectionHeader title="Align" icon={<AlignCenter size={12} />} />
+          <SectionHeader title="Align" icon={<AlignCenter size={14} />} />
           <div className="px-3 py-3 space-y-3">
             {(['x', 'y', 'z'] as const).map((axis) => (
               <div key={axis}>
@@ -183,7 +183,7 @@ export function MultiSelectPanel() {
           </div>
 
           {/* 정돈 & 간격 균등 (Tidy Up / Distribute) */}
-          <SectionHeader title="Arrange" icon={<AlignHorizontalSpaceAround size={12} />} />
+          <SectionHeader title="Arrange" icon={<AlignHorizontalSpaceAround size={14} />} />
           <div className="px-3 py-3 space-y-3">
             <button
               onClick={() => tidyUpSelected()}

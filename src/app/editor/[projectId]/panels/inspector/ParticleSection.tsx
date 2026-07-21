@@ -15,7 +15,7 @@ export function ParticleSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
   if (!obj.particle) return null;
   return (
           <GroupBox>
-            <SectionHeader title="Particle" hint="Particle presets like snow or fire. For atmosphere." isOpen={open} onToggle={onToggle} dot={!!obj.particle} />
+            <SectionHeader title="Particle" icon={<Sparkles size={14} />} hint="Particle presets like snow or fire. For atmosphere." isOpen={open} onToggle={onToggle} dot={!!obj.particle} />
             {open && <div className="px-3 pb-4 space-y-2">
               <div>
                 <span className="text-[10px] font-semibold text-muted/50 tracking-wide block mb-1">Preset</span>

@@ -3,6 +3,7 @@
 // Motion 섹션 — 앰비언트 애니메이션(둥실/회전/펄스/궤도/유동). 라이트 제외 오브젝트.
 // InspectorPanel 분리 리팩터: 자체 완결 섹션(obj + updateObject/pushHistory + 공용 프리미티브)만 이동.
 
+import { Wind } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
@@ -13,7 +14,7 @@ export function MotionSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; 
   const hasMotion = !!obj.motion;
   return (
           <GroupBox>
-          <SectionHeader title="Motion (ambient)" hint="Decorative movement that always loops in the viewer — no trigger needed. Float / Spin / Pulse / Orbit / Wander (roams freely within an area like a hot-air balloon). Visual-only by default; turn on 'With collider' for a real moving obstacle. ↔ For a mechanical joint that opens/closes on cue use Actuator; for a scripted keyframe sequence use Animation." isOpen={open} onToggle={onToggle} dot={hasMotion} />
+          <SectionHeader title="Motion (ambient)" icon={<Wind size={14} />} hint="Decorative movement that always loops in the viewer — no trigger needed. Float / Spin / Pulse / Orbit / Wander (roams freely within an area like a hot-air balloon). Visual-only by default; turn on 'With collider' for a real moving obstacle. ↔ For a mechanical joint that opens/closes on cue use Actuator; for a scripted keyframe sequence use Animation." isOpen={open} onToggle={onToggle} dot={hasMotion} />
           {open && <div className="px-3 pb-4 space-y-2">
             {(() => {
               const m = obj.motion;

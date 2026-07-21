@@ -398,9 +398,14 @@ export function SectionHeader({
     <div
       ref={rootRef}
       onClick={onToggle}
-      className={`flex items-center gap-2 px-3 py-3 text-[11px] font-semibold text-muted tracking-wide bg-surface/40 select-none ${collapsible ? "cursor-pointer hover:text-foreground transition-colors" : ""}`}
+      className={`flex items-center gap-2 px-3 py-3.5 text-[11px] font-semibold text-muted tracking-wide bg-surface/40 select-none ${collapsible ? "cursor-pointer hover:text-foreground transition-colors" : ""}`}
     >
-      {icon && <span className="opacity-60 flex items-center">{icon}</span>}
+      {/* 아이콘은 연한 회색 박스 안에 — 섹션 구분이 눈에 빨리 들어오게(라이트/다크 공통으로 은은하게). */}
+      {icon && (
+        <span className="flex items-center justify-center w-6 h-6 rounded-xs bg-foreground/[0.04] text-foreground shrink-0">
+          {icon}
+        </span>
+      )}
       <span className="flex-1 text-foreground flex items-center gap-1.5">
         {title}
         {hint && <InfoHint text={hint} />}

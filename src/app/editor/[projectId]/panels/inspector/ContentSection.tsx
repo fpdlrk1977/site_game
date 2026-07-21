@@ -3,6 +3,7 @@
 // Content 섹션 — 텍스트·이미지·영상 콘텐츠 오브젝트 설정.
 // InspectorPanel 분리 리팩터: 접힘 상태는 부모가 open/onToggle prop으로 내려준다.
 
+import { FileText } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
@@ -13,7 +14,7 @@ export function ContentSection({ obj, open, onToggle }: { obj: ObjectNodeSchema;
   if (!obj.content) return null;
   return (
           <GroupBox>
-            <SectionHeader title="Content" hint="Text, image and video content. Paste a URL to show rich content like images or YouTube." isOpen={open} onToggle={onToggle} />
+            <SectionHeader title="Content" icon={<FileText size={14} />} hint="Text, image and video content. Paste a URL to show rich content like images or YouTube." isOpen={open} onToggle={onToggle} />
             {open && <div className="px-3 pb-4 space-y-1">
               {obj.content.type === 'text' && (
                 <>

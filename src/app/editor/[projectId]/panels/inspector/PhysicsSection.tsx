@@ -3,6 +3,7 @@
 // Physics 섹션 — 플레이 모드 충돌(콜라이더/센서/질량/마찰/반발). 라이트·그룹 제외.
 // InspectorPanel 분리 리팩터: 접힘 상태는 부모가 open/onToggle prop으로 내려준다.
 
+import { Atom } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
@@ -14,7 +15,7 @@ export function PhysicsSection({ obj }: { obj: ObjectNodeSchema }) {
   return (
         <GroupBox>
           <div className="relative">
-          <SectionHeader title="Physics" hint="Collision in play mode. When on, the character bumps into it. Turn on Is Sensor to make it a pass-through invisible trigger zone used for area events." />
+          <SectionHeader title="Physics" icon={<Atom size={14} />} hint="Collision in play mode. When on, the character bumps into it. Turn on Is Sensor to make it a pass-through invisible trigger zone used for area events." />
           <label className="flex items-center justify-between cursor-pointer absolute top-4.5 right-4">
             <Toggle
               value={obj.physics.enabled}

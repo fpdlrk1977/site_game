@@ -3,7 +3,7 @@
 // HUD 위젯 편집 섹션 — 게임 변수를 텍스트/체력바/목숨으로 화면 표시. GAME_LOGIC.md Phase 2.
 // EnvironmentPanel에서 추출(게임 컨트롤러 GNB Logic 탭과 공유).
 
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Gauge } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { ColorPicker } from '@/components/ui/ColorPicker';
@@ -17,6 +17,7 @@ export function HudSection() {
       <div className="relative">
         <SectionHeader
           title="HUD (화면 표시)"
+          icon={<Gauge size={14} />}
           hint="게임 변수를 화면 구석에 텍스트·체력바·목숨 아이콘으로 표시합니다. 각 위젯을 변수에 연결하고 종류·위치·색을 정하세요. (변수의 '화면 HUD에 표시' 간단 텍스트와 별개로, 더 꾸민 위젯)"
         />
         <button

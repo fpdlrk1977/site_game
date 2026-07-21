@@ -206,6 +206,21 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
   - **선택 기준(사용자 안내용)**: 속성형 = 물체 하나가 통째로(문·서랍·시소), 경첩을 **모서리 이름으로 정확히** 지정, 계층 불변. 모터형 = 여러 부품을 한 축으로(회전문·기어·로봇팔), 경첩이 부품 **바깥**에도 가능. **속성형의 경첩은 자기 bbox 안(0~1)에 갇힘** — 이게 모터로 올려야 하는 유일한 구조적 이유.
   - **확인 필요(브라우저)**: 부품 선택 → Actuator 꺼짐 상태에 안내·모터 버튼 보임 · 스위치 ON→경첩 모서리 피커로 문 동작(▶ 플레이) · `모터로 바꾸기` → **부품 안 움직이고** 트리에 모터가 부모로 삽입·설정 유지 · 모터에서 `모터만 제거`로 원상복구 · 그룹 자식(새 몸통>날개)에서도 동일.
 
+#### 🎨 UI 다듬기 (2026-07-21) — 섹션 헤더 아이콘 + lucide 전역 stroke + 트리 텍스트 — ✅ 확인 완료
+> 사용자 요청 연속 처리. tsc 클린 + dev 컴파일. **✅ 확인 완료(사용자 "지금 좋아").**
+- **섹션 헤더 아이콘 전면 도입(`inspector/ui.tsx` `SectionHeader`)**: 아이콘을 **연한 회색 박스**(`w-6 h-6 rounded-xs bg-foreground/[0.04] text-foreground`) 안에 넣고 헤더 높이 `py-3`→`py-3.5`. **아이콘이 없던 25곳에 전부 추가** — Transform=Move3d·Material=Palette·Geometry=Shapes·Subdivision=Spline·Visibility=Eye·Physics=Atom·Motion=Wind·Actuator/모터=Cog·Animation(키프레임)=Film·Animation(GLB)=Clapperboard·Events=Zap·Content=FileText·Light=Lightbulb·Particle=Sparkles·Array=Grid3x3 / Env: StartView=Camera·Frame=Frame·Sky=Cloud·Ground=Mountain·Fog=CloudFog·Mood=SunMoon·Lights=Sun·Interaction=MousePointerClick·Popup=MessageSquare·Player=PersonStanding·Boundary=Square·Post=Wand2·Memo=StickyNote·게임변수=Variable·HUD=Gauge·GameLogic=Cpu. MultiSelectPanel의 Boolean만 문자 `◑`를 쓰고 있어 `Blend`로 통일.
+- **lucide 전역 stroke 1 (`app/layout.tsx`)**: `<LucideProvider strokeWidth={1}>`로 앱 전체 기본값. **패키지 재설치 불필요** — `lucide-react@1.22.0`에 Provider가 이미 있고(`dist/esm/context.mjs`, `'use client'` 포함이라 서버 컴포넌트 layout에서 바로 감쌀 수 있음), 우선순위는 **개별 prop > Provider > 기본값 2**.
+  - **`className`은 일부러 안 넘긴다**: Provider의 className은 `mergeClasses("lucide", contextClass, className)`로 **아이콘 SVG에 직접** 붙어서, 부모의 `text-muted` 등을 상속받던 곳(트리 아이콘의 선택/미선택 구분 등)을 전부 덮어쓴다. 색은 각 위치에서 관리.
+  - 아이콘 크기는 `icon={...}` prop 전부 **14**로 통일(44곳 — 인스펙터·Env·MultiSelect·InspectorPanel·EditorGnb 레일). lucide는 크기를 줄이면 stroke도 비례해 얇아지므로, 더 또렷하게 하려면 Provider에 `absoluteStrokeWidth` 추가(크기 무관 1px 고정).
+- **계층 트리(`HierarchyPanel`)**: 이름 `text-[12px] text-foreground/70` → **`text-[11px] text-foreground`**(선택 여부와 무관하게 또렷) · **아이콘은 선택 시에만 `text-foreground`**(미선택 `text-muted/60` 유지, 프리팹은 `var(--prefab)` 그대로) · **이름 편집 중엔 우측 액션 아이콘(표시/잠금) 미렌더**(`hidden` 대신 조건부 렌더 — DOM에 남으면 입력 포커스가 샌다) · **이름 변경 제약 해제**: 잠금·그룹 여부와 무관하게 항상 가능(더블클릭·우클릭 메뉴 둘 다). 잠금은 뷰포트 조작을 막는 것이지 이름까지 막을 이유가 없다.
+- **인스펙터 헤더 개편(`InspectorPanel`)**: 기존 `[이름 입력창][GLB 버튼]` + 아래 전체폭 '모델 에셋으로 저장' 버튼 → **`justify-between` 2단 헤더**로 재구성.
+  - 좌: **이름(읽기 전용 `text-[14px]`, truncate+title)** + 그 아래 **타입 뱃지**(`bg-foreground/[0.04]`, `inline-flex`+래퍼 `w-fit`이라 텍스트 폭에만 배경). 이름 수정은 트리(더블클릭·우클릭)로 일원화.
+  - 우: **아이콘 버튼 3개**(`w-6 h-6 text-foreground`) = 표시(Eye/EyeOff)·잠금(Lock/Unlock)·더보기(MoreHorizontal), `gap-0`.
+  - **더보기 = 팝오버**(공용 `DropdownMenu`, `placement="bottom-end"`(우측 정렬)·`w-max`+`whitespace-nowrap`(텍스트 폭)): `GLB로 내보내기` + `모델 에셋으로 저장`(프리미티브만).
+  - **신규 `objectTypeLabel`/`objectTypeHint`**: 뱃지 문구와 호버 툴팁(공용 `Tooltip` `wide`). **판정 순서는 좁은 것부터** — 모터·클로너·프리팹이 전부 그룹이기도 해서 `isGroup`보다 먼저 봐야 하고, **두 함수의 순서가 같아야** 라벨과 설명이 안 어긋난다.
+  - **`DropdownMenu.placement` 타입 확장**: `'bottom' | 'right'`로 좁혀져 있어 `bottom-end`를 못 넘기고 있었음 → `useDropdown`의 `DropdownPlacement`를 그대로 노출(7종 전부 사용 가능).
+- **`VisibilitySection` → `Render`로 개편**: 표시/잠금 토글이 헤더 아이콘과 중복 → **토글 제거**. 남는 게 프리미티브 렌더 옵션(Flat Shading·Double-sided·Cast/Receive Shadow)뿐이라 **프리미티브가 아니면 섹션 자체를 미렌더**(안 그러면 GLB·그룹·라이트에서 빈 섹션이 뜬다). 제목 `Visibility`→**`Render`**(4개 중 셰이딩은 1개뿐이고 나머지는 렌더 동작이라 'Shading'보다 포괄적·일반 사용자에게 익숙), 아이콘 `Eye`→**`Contrast`**(명암). **파일명·섹션 키는 `visibility` 유지** — 내부 식별자라 바꾸면 사용자 접힘 상태만 리셋된다.
+
 #### 🎯 피벗 피커 통일 (2026-07-20) — 애니메이션 피벗 = 오브젝트 앵커와 같은 코너 큐브 — 브라우저 확인 대기
 > 사용자 지적: "오브젝트 모서리(앵커) 선택을 애니메이션·모터엔 적용 안 함." 소신대로 진행(사용자 위임). tsc 클린 + dev 편집 라우트 200. **브라우저 확인 대기.**
 - **배경**: 피벗 고르는 UI가 3군데 제각각 — 오브젝트 앵커=`PivotPicker`(8코너 큐브) · 애니메이션=면 프리셋 버튼 7개(코너 없음) · 모터 경첩=3×3 평면 그리드.

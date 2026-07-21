@@ -217,7 +217,8 @@ function HierarchyItem({
           selectObject(obj.id);
           onOpenMenu(e.clientX, e.clientY);
         }}
-        onDoubleClick={() => !obj.locked && !obj.isGroup && setEditing(true)}
+        // 이름 변경은 잠금·그룹 여부와 무관하게 항상 가능(잠금은 뷰포트 조작을 막는 것이지 이름까지 막지 않는다).
+        onDoubleClick={() => setEditing(true)}
         className={`flex items-center px-1.5 h-7 rounded-xs cursor-pointer group transition-all text-xs gap-1 ${
           isSelected ? "bg-primary/10 text-foreground" : "text-foreground/70 hover:bg-background"
         } ${!obj.visible ? "opacity-40" : ""} ${obj.locked ? "text-muted" : ""} ${isDragging ? "opacity-30" : ""}`}
@@ -250,7 +251,7 @@ function HierarchyItem({
 
         {/* 오브젝트 아이콘 (프리팹은 --prefab 색) */}
         <span
-          className={`w-4 flex items-center justify-center shrink-0 ${obj.prefabId ? "" : "text-muted/60"}`}
+          className={`w-4 flex items-center justify-center shrink-0 ${obj.prefabId ? "" : isSelected ? "text-foreground" : "text-muted/60"}`}
           style={obj.prefabId ? { color: "var(--prefab)" } : undefined}
         >
           {(() => {
@@ -278,14 +279,15 @@ function HierarchyItem({
           />
         ) : (
           <span
-            className={`flex-1 truncate text-[12px] font-medium ${!obj.prefabId ? (isSelected ? "" : "text-foreground/70") : ""}`}
+            className={`flex-1 truncate text-[11px] font-medium ${!obj.prefabId ? "text-foreground" : ""}`}
             style={obj.prefabId ? { color: "var(--prefab)" } : undefined}
           >
             {obj.name}
           </span>
         )}
 
-        {/* 호버 시 액션 아이콘 (락은 잠긴 경우 항상 표시) */}
+        {/* 호버 시 액션 아이콘 (락은 잠긴 경우 항상 표시). 이름 편집 중엔 입력에 자리를 내주고 숨긴다. */}
+        {!editing && (
         <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={(e) => {
@@ -316,22 +318,22 @@ function HierarchyItem({
             {obj.locked ? <Lock size={13} /> : <Unlock size={13} />}
           </button>
         </div>
+        )}
       </div>
 
       {/* 컨텍스트 메뉴 — 공통 ContextMenu(위치·클램핑·바깥클릭/Esc 닫기). 백드롭 없이 다른 행 우클릭 시 자연 전환. */}
       {menuOpen && menuPos && (
         <ContextMenu x={menuPos.x} y={menuPos.y} onClose={onCloseMenu} className="w-44">
-          {!obj.isGroup && (
-            <button
-              onClick={() => {
-                onCloseMenu();
-                setEditing(true);
-              }}
-              className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
-            >
-              <Pencil size={13} className="text-muted" /> 이름 변경
-            </button>
-          )}
+          {/* 이름 변경은 그룹·잠금 포함 모든 오브젝트에서 가능(더블클릭과 동일 규칙). */}
+          <button
+            onClick={() => {
+              onCloseMenu();
+              setEditing(true);
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
+          >
+            <Pencil size={13} className="text-muted" /> 이름 변경
+          </button>
           {(obj.primitiveShape === "extrude" || obj.primitiveShape === "lathe") && (
             <button
               onClick={() => {
