@@ -23,7 +23,7 @@
     --accent: #0d99ff;
     --select: #0d99ff; /* 단일 선택/호버 가이드(파랑) */
     --select-multi: #ff7a0d; /* 다중 선택 묶음 가이드(주황) */
-    --prefab: #b40054; 
+    --prefab: #b40054;
     --success: #22c55e;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -40,10 +40,10 @@
     --foreground: #edebf4;
     --muted: #8e8b9e;
     --primary: #7c6cff;
-    --accent: #0092b8; 
-    --select: #008a25; 
+    --accent: #0092b8;
+    --select: #008a25;
     --select-multi: #ff7a0d; /* 다중 선택 묶음 가이드(주황) */
-    --prefab: #b40054; 
+    --prefab: #b40054;
     --glass: rgba(22, 20, 30, 0.82);
   }
 }
@@ -86,7 +86,7 @@
   --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.18), 0 20px 50px rgba(0, 0, 0, 0.28);
 
   /* Fonts */
-  --font-sans: "Inter", sans-serif;
+  --font-sans: var(--font-geist-sans), sans-serif;
   --font-mono: var(--font-geist-mono), monospace;
 }
 

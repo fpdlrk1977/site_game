@@ -18,6 +18,17 @@ const MIN_COL = '#ff7a0d'; // 닫힘(min)
 const MAX_COL = '#ffd24d'; // 열림(max)
 // 회전 커서 — 부채꼴 핸들 위/드래그 시. 원형 화살표(검정), 핫스팟 중앙, 폴백 grab.
 const ROTATE_CUR = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12a9 9 0 1 1-2.64-6.36'/><path d='M21 3v6h-6'/></svg>\") 11 11, grab";
+// 경첩 이동 커서 — 모터 경첩(원점) 드래그. 4방향 화살표, 폴백 move.
+const MOVE_CUR = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3'/></svg>\") 11 11, move";
+// 경첩 핸들은 연결된 부품 표면에 묻히지 않게 레이캐스트 최우선(거리 0 근처).
+//   경첩은 대개 부품 모서리/내부에 있어, 그냥 두면 앞을 가린 부품이 먼저 잡혀 드래그가 아예 안 걸린다.
+//   (ManipulationHandles가 코너 핸들에 쓰는 것과 동일한 수법.)
+function topRaycast(this: THREE.Mesh, raycaster: THREE.Raycaster, intersects: THREE.Intersection[]) {
+  if (this.visible === false) return; // 경첩 이동 모드가 아닐 땐 대상 아님
+  const start = intersects.length;
+  THREE.Mesh.prototype.raycast.call(this, raycaster, intersects);
+  for (let k = start; k < intersects.length; k++) intersects[k].distance = 1e-6;
+}
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 const FAN_SEG = 48; // 부채꼴 세그먼트 수
@@ -49,14 +60,18 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
   const obj = id && id !== CHARACTER_PREVIEW_ID ? objects.find((o) => o.id === id) : null;
   const act = obj?.actuator;
   const showHandles = !!act && act.kind === 'rotate';
+  // 경첩 이동 모드 — 이 모터가 대상일 때만 경첩이 드래그 가능(그 동안 이동 기즈모는 숨겨진다).
+  const pivotMotorId = useSceneStore((s) => s.pivotMotorId);
+  const pivotMoving = !!obj?.isActuator && pivotMotorId === id;
 
   const sphereRef = useRef<THREE.Mesh>(null);
   const lineRef = useRef<THREE.LineSegments>(null);
   const fanRef = useRef<THREE.Mesh>(null);
   const minRef = useRef<THREE.Mesh>(null);
   const maxRef = useRef<THREE.Mesh>(null);
+  const pivotHitRef = useRef<THREE.Mesh>(null); // 경첩 드래그 히트 영역(보이는 점보다 크게)
   // 드래그 상태 + 최신 월드 프레임(핸들 pointermove가 참조)
-  const dragRef = useRef<'min' | 'max' | null>(null);
+  const dragRef = useRef<'min' | 'max' | 'pivot' | null>(null);
   const hingeW = useRef(new THREE.Vector3());
   const axisW = useRef(new THREE.Vector3());
   const refW = useRef(new THREE.Vector3());
@@ -147,11 +162,55 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
     window.addEventListener('pointerup', up);
   };
 
+  // 경첩 드래그 — 카메라를 향한 평면에 포인터를 투영해 모터 원점만 옮긴다(부품은 스토어가 역보정해 제자리).
+  //   깊이(카메라 축 방향)는 이 평면 위에서 조절되지 않는다 → 시점을 돌려 다시 끌면 나머지 축이 잡힌다.
+  //   잡는 순간의 포인터-경첩 오프셋을 고정해 클릭 지점으로 튀지 않게 한다.
+  const startPivotDrag = (e: { stopPropagation: () => void }) => {
+    if (!id) return;
+    e.stopPropagation();
+    dragRef.current = 'pivot';
+    if (orbitRef?.current) orbitRef.current.enabled = false;
+    gl.domElement.style.cursor = MOVE_CUR;
+    const start = hingeW.current.clone();
+    let grabOff: THREE.Vector3 | null = null;
+    const move = (ev: PointerEvent) => {
+      if (dragRef.current !== 'pivot' || !id) return;
+      const rect = gl.domElement.getBoundingClientRect();
+      _ndc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+      ray.setFromCamera(_ndc, camera);
+      camera.getWorldDirection(_dv);
+      plane.setFromNormalAndCoplanarPoint(_dv, start);
+      if (!ray.ray.intersectPlane(plane, _hit)) return;
+      if (!grabOff) { grabOff = _hit.clone().sub(start); return; } // 첫 프레임: 오프셋만 잡음
+      _p.copy(_hit).sub(grabOff);
+      useSceneStore.getState().moveMotorPivot(id, { x: _p.x, y: _p.y, z: _p.z });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      dragRef.current = null;
+      gl.domElement.style.cursor = '';
+      if (orbitRef?.current) orbitRef.current.enabled = true;
+      useSceneStore.getState().pushHistory();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  // 안전장치 — 핸들에 hover한 채 경첩 모드가 끝나면(ESC·빈 곳 클릭·선택 변경) onPointerOut이 안 와서
+  //   orbit이 꺼진 채 남고 카메라가 먹통이 된다. 모드가 풀리면 무조건 복구.
+  useEffect(() => {
+    if (pivotMoving) return;
+    if (dragRef.current === 'pivot') dragRef.current = null;
+    if (orbitRef?.current) orbitRef.current.enabled = true;
+    gl.domElement.style.cursor = '';
+  }, [pivotMoving, orbitRef, gl]);
+
   useFrame(() => {
     const sp = sphereRef.current, ln = lineRef.current, fan = fanRef.current, edge = edgeLine;
     const minH = minRef.current, maxH = maxRef.current;
     if (!sp || !ln || !fan || !edge || !minH || !maxH) return;
-    const hideAll = () => { sp.visible = false; ln.visible = false; fan.visible = false; edge.visible = false; minH.visible = false; maxH.visible = false; };
+    const hideAll = () => { sp.visible = false; ln.visible = false; fan.visible = false; edge.visible = false; minH.visible = false; maxH.visible = false; if (pivotHitRef.current) pivotHitRef.current.visible = false; };
     if (!act || !id) { hideAll(); return; }
     const ref = refsMap.current.get(id);
     const lb = localBBox(objects, assets, id);
@@ -165,6 +224,7 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
     if (isMotor) _h.copy(_wp);
     else _h.copy(anchorLocalPoint(lb!, act.hinge ?? { x: 0.5, y: 0.5, z: 0.5 })).applyMatrix4(ref.matrixWorld);
     sp.position.copy(_h);
+    hingeW.current.copy(_h); // 경첩 드래그가 참조 — slide 관절에서도 최신이어야 하므로 rotate 분기 이전에 갱신
     // 축/부채꼴 반경(len) = 월드 bbox 최대 변의 60%(+여유). 빈 모터는 기본 반경. (핸들 크기 상한에도 씀)
     let len: number;
     if (haveBox) { _wbox.copy(lb!).applyMatrix4(ref.matrixWorld); _wbox.getSize(_p); len = Math.max(_p.x, _p.y, _p.z) * 0.6 + 0.2; }
@@ -177,7 +237,14 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
       Math.max(0.02, camera.position.distanceTo(_h) * 0.02 * (800 / Math.max(1, size.height)) * fovK),
       len * 0.16,
     );
-    sp.scale.setScalar(hScale);
+    // 경첩 이동 모드면 점을 키워(잡기 쉽게) + 히트 영역은 그보다 더 크게.
+    sp.scale.setScalar(pivotMoving ? hScale * 1.6 : hScale);
+    const pHit = pivotHitRef.current;
+    if (pHit) {
+      pHit.position.copy(_h);
+      pHit.scale.setScalar(hScale * 3);
+      pHit.visible = pivotMoving;
+    }
     // 축 방향(월드) — 오브젝트 회전 반영
     _axis.set(act.axis === 'x' ? 1 : 0, act.axis === 'y' ? 1 : 0, act.axis === 'z' ? 1 : 0).applyQuaternion(_wq).normalize();
     const arr = geo.attributes.position.array as Float32Array;
@@ -198,8 +265,7 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
     else if (act.axis === 'x') { if (_size.z > _size.y) refLocalZ = 1; else refLocalY = 1; }
     else { if (_size.y > _size.x) refLocalY = 1; else refLocalX = 1; }
     _ref.set(refLocalX, refLocalY, refLocalZ).applyQuaternion(_wq).normalize().multiplyScalar(len);
-    // 드래그 핸들러가 참조할 최신 월드 프레임 저장
-    hingeW.current.copy(_h);
+    // 드래그 핸들러가 참조할 최신 월드 프레임 저장(경첩은 위에서 이미 갱신)
     axisW.current.copy(_axis);
     refW.current.copy(_ref);
 
@@ -249,6 +315,27 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
       <lineSegments ref={lineRef} geometry={geo} renderOrder={1002} visible={false} frustumCulled={false} raycast={() => null}>
         <lineBasicMaterial color={ORANGE} depthTest={false} transparent opacity={0.9} />
       </lineSegments>
+      {/* 경첩 드래그 히트 영역 — 경첩 이동 모드에서만 핸들러가 붙는다(핸들러 없으면 R3F 레이캐스트 대상도 아님). */}
+      <mesh
+        ref={pivotHitRef} renderOrder={1004} visible={false} raycast={topRaycast}
+        onPointerDown={pivotMoving ? startPivotDrag : undefined}
+        onPointerOver={pivotMoving ? (e) => {
+          e.stopPropagation();
+          if (dragRef.current) return;
+          gl.domElement.style.cursor = MOVE_CUR;
+          // ★ orbit을 hover 시점에 미리 끈다 — R3F의 stopPropagation은 네이티브 OrbitControls 리스너를
+          //   막지 못해서, pointerdown에서 끄면 이미 시작된 카메라 조작이 새어나간다(ManipulationHandles 선례).
+          if (orbitRef?.current) orbitRef.current.enabled = false;
+        } : undefined}
+        onPointerOut={pivotMoving ? () => {
+          if (dragRef.current) return; // 드래그 중이면 up 핸들러가 복구
+          gl.domElement.style.cursor = '';
+          if (orbitRef?.current) orbitRef.current.enabled = true;
+        } : undefined}
+      >
+        <sphereGeometry args={[1, 12, 12]} />
+        <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
+      </mesh>
       {/* min/max 드래그 핸들 — 끌어서 각도 직접 조절(회전 커서). rotate 전용. */}
       <mesh
         ref={minRef} renderOrder={1003} visible={false}

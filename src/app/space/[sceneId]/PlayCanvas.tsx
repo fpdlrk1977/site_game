@@ -14,6 +14,10 @@ import { computeMotion, makeWanderState } from '@/lib/motion';
 import { computeActuator, computeDriveValue, makeDriveState, easeDrive } from '@/lib/actuator';
 import { anchorLocalPoint } from '@/lib/pivotMath';
 import { worldMatrix, localCenter, localBBox } from '@/lib/objectBBox';
+import {
+  classifyPlayObjects, isMovingColliderObj, isVisualOnlyMotionObj,
+  isActuatorVisualObj, isActuatorColliderObj, type PlayBucket,
+} from '@/lib/playRouting';
 import { ActuatorDriveContext } from './ActuatorDriveContext';
 
 const DEG2RAD = Math.PI / 180;
@@ -46,20 +50,8 @@ function PlaySceneLight({ object: o }: { object: ObjectNodeSchema }) {
   );
 }
 
-// 오브젝트별 콜라이더 거동 판정 — 루트/그룹자식 어디서든 동일하게 쓰는 순수 함수.
-// 위치가 움직이는 모션(float/spin/orbit/wander) + 콜라이더 동반 → kinematic 이동 장애물.
-const isMovingColliderObj = (o: ObjectNodeSchema) =>
-  o.motion?.collider === true && o.motion.type !== 'pulse' && !o.isGroup && !o.light;
-// 위치가 움직이는 모션인데 콜라이더 미동반 → 시각 전용(콜라이더 없음, 통과). pulse는 제자리라 제외(정적 콜라이더 유지).
-const isVisualOnlyMotionObj = (o: ObjectNodeSchema) =>
-  !!o.motion && o.motion.type !== 'pulse' && o.motion.collider !== true &&
-  !o.isGroup && !o.light && !o.physics.enabled;
-// 관절(액추에이터) 콜라이더 미동반 → 시각 전용(ViewerObject가 관절 구동). collider 동반은 5c. doc §6.
-const isActuatorVisualObj = (o: ObjectNodeSchema) =>
-  !!o.actuator && o.actuator.collider !== true && !o.isGroup && !o.light;
-// 관절 콜라이더 동반 → kinematic 강체를 관절로 구동(진짜 부딪히는 문/장애물). doc §6 5c.
-const isActuatorColliderObj = (o: ObjectNodeSchema) =>
-  !!o.actuator && o.actuator.collider === true && !o.isGroup && !o.light;
+// (오브젝트별 거동 판정은 전부 src/lib/playRouting.ts — 이 파일과 GroupWithCollision이 같은 소스를 쓴다.
+//  판정을 바꿀 땐 거기서 바꾸고 playRouting.test.ts로 상호배타/전수커버를 확인할 것.)
 
 type ColliderAssets = Parameters<typeof ViewerObject>[0]['assets'];
 type ColliderOnEvent = (obj: ObjectNodeSchema, trigger: EventSchema['trigger']) => void;
@@ -304,7 +296,10 @@ function GroupWithCollision({ object, assets, onEvent, allObjects }: {
           // 모터(액추에이터) 자식도 마찬가지 — 정적 GroupWithCollision로 두면 관절이 굳어 안 돈다.
           //   → ViewerObject가 서브트리를 구동(자식 회전). 이로써 평범한 그룹 안에 모터 여러 개를 넣은
           //   조립품(기어 한 쌍·쌍여닫이문 등)도 플레이 모드에서 동작한다. doc/PIVOT_MANIPULATION.md §6.
-          if (child.motion || child.isActuator) {
+          // 관절(콜라이더 동반) 그룹 자식 → 상위에서 ActuatorCollider(월드 기준 kinematic)로 렌더 → 여기선 스킵(이중 렌더 방지).
+          if (isActuatorColliderObj(child)) return null;
+          // 모션·모터·관절이 걸린 그룹 자식은 ViewerObject가 구동(정적 GroupWithCollision로 두면 굳는다).
+          if (child.motion || child.isActuator || child.actuator) {
             return <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />;
           }
           return (
@@ -328,8 +323,13 @@ function GroupWithCollision({ object, assets, onEvent, allObjects }: {
         }
         // 이동 콜라이더 자식 → 상위(PlayCanvas)에서 월드 kinematic으로 렌더하므로 여기선 스킵(이중 렌더 방지).
         if (isMovingColliderObj(child)) return null;
+        // 관절(콜라이더 동반) 자식도 동일 — 상위에서 ActuatorCollider(월드 기준 kinematic)로 렌더.
+        //   예전엔 이 분기가 없어 아래 정적 RigidBody로 떨어졌고, 관절이 시각적으로만 움직이고 실제로는 안 부딪혔다.
+        if (isActuatorColliderObj(child)) return null;
         // 움직이는 모션·콜라이더 미동반 자식 → 콜라이더 없이 시각만(통과 가능). 부모 group이 로컬 좌표 담당.
-        if (isVisualOnlyMotionObj(child)) {
+        //   관절(콜라이더 미동반)도 같다 — 예전엔 정적 RigidBody로 떨어져, 시각은 관절로 움직이는데
+        //   콜라이더는 원래 자리에 남는 '유령 콜라이더'가 됐다(루트 오브젝트는 이미 이렇게 처리 중).
+        if (isVisualOnlyMotionObj(child) || isActuatorVisualObj(child)) {
           return <ViewerObject key={child.id} object={child} assets={assets} onEvent={onEvent} allObjects={allObjects} />;
         }
         // 일반(정적/펄스) 오브젝트: RigidBody position이 부모 group 기준 로컬 좌표로 처리됨
@@ -396,8 +396,6 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
     .filter((o) => !o.parentId && o.visible && o.events?.some((e) => e.trigger === 'approach_enter' || e.trigger === 'approach_exit'))
     .map((o) => ({ id: o.id, x: o.position.x, y: o.position.y, z: o.position.z, range: effRange(o) }));
   // 런타임 통과(콜라이더 제거) 대상 — set_passable/toggle_collision. 시각은 유지하고 콜라이더만 뺀다(문 열림).
-  const isPassable = (o: ObjectNodeSchema) => !!passableIds?.has(o.id);
-  const isMoved = (o: ObjectNodeSchema) => !!movedIds?.has(o.id);
   // fixed 카메라 대상 오브젝트의 월드 위치(그 지점에서 캐릭터를 바라봄). 대상 없으면 null → third로 폴백.
   const cameraFixedTarget = useMemo(() => {
     if (cameraMode !== 'fixed' || !cameraFixedId) return null;
@@ -406,59 +404,28 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
     const pos = new THREE.Vector3().setFromMatrixPosition(m);
     return { x: pos.x, y: pos.y, z: pos.z };
   }, [cameraMode, cameraFixedId, allObjects]);
-  const rootObjects = allObjects.filter((o) => !o.parentId);
-  const lightObjects = rootObjects.filter((o) => o.light && o.visible);
-  // 그룹은 GroupWithCollision으로 처리: 자식 오브젝트 각각에 콜라이더 적용
-  // (그룹에 physics가 켜져 있어도 그룹 자체는 PhysicsObject로 렌더하지 않음 — 이중 렌더 방지)
-  const allGroups = rootObjects.filter((o) => o.isGroup && o.visible);
-  // 모션+콜라이더 켠 그룹 → 하나의 kinematic 강체로 묶어 이동(진짜 장애물). pulse·통과 대상 제외.
-  const isGroupMovingCollider = (o: ObjectNodeSchema) =>
-    !!o.motion && o.motion.collider === true && o.motion.type !== 'pulse';
-  const movingGroupColliders = allGroups.filter((o) => isGroupMovingCollider(o) && !isPassable(o));
-  // move_object로 옮겨지는(모션 없는) 그룹 → 하나의 kinematic 강체로 묶어 콜라이더까지 함께 이동(유령 콜라이더 방지).
-  //   모션 그룹은 위 movingGroupColliders/아래 movingGroups가 담당하므로 여기선 !motion만.
-  const movedGroups = allGroups.filter((o) => isMoved(o) && !o.motion && !isPassable(o));
-  // 모터형 액추에이터 그룹(콜라이더 동반) → 자식 서브트리를 하나의 kinematic 강체로 묶어 관절로 구동(진짜 부딪히는 문). doc §6.
-  const actuatorGroupColliders = allGroups.filter((o) => o.isActuator && o.actuator?.collider === true && !isPassable(o));
-  // 모션 없는 그룹 → 기존 정적 GroupWithCollision(자식별 콜라이더). 통과·이동(move_object)·모터 제외.
-  //   ★ 모터(isActuator)는 정적 콜라이더면 관절이 안 돌아 정적으로 굳으므로 제외 → 시각(ViewerObject)이 구동.
-  const groupObjects = allGroups.filter((o) => !o.motion && !isPassable(o) && !isMoved(o) && !o.isActuator);
-  // 나머지 그룹 → 시각 전용(장식/모터 시각구동). ViewerObject로 렌더해 애니메이션/관절 구동, 콜라이더 없음.
-  //   = 모션+콜라이더 미동반 그룹 + 통과 그룹 + 모터(콜라이더 미동반). 여집합으로 잡아 누락 방지.
-  const movingGroups = allGroups.filter((o) => !movingGroupColliders.includes(o) && !groupObjects.includes(o) && !movedGroups.includes(o) && !actuatorGroupColliders.includes(o));
-  // 조상 체인 정보 — 자식이 숨은 그룹 아래인지, 움직이는 그룹(하나의 강체로 이동) 아래인지.
-  //   움직이는 그룹의 자식은 그 그룹 강체에 실려 함께 이동하므로 개별 콜라이더 라우팅에서 제외한다.
-  const ancestorInfo = (o: ObjectNodeSchema) => {
-    let pid = o.parentId; let visible = true; let underMovingGroup = false;
-    while (pid) {
-      const p = allObjects.find((x) => x.id === pid);
-      if (!p) break;
-      if (!p.visible) visible = false;
-      if (p.isGroup && p.motion) underMovingGroup = true;
-      pid = p.parentId;
-    }
-    return { visible, underMovingGroup };
-  };
-  // 이동 콜라이더 오브젝트 — 루트뿐 아니라 정적 그룹의 자식까지 포함(월드 kinematic으로 처리).
-  //   움직이는 그룹 아래(강체에 실림)·숨은 조상 아래·통과 대상은 제외.
-  const movingColliderObjects = allObjects.filter((o) => {
-    if (!o.visible || !isMovingColliderObj(o) || isPassable(o)) return false;
-    const a = ancestorInfo(o);
-    return a.visible && !a.underMovingGroup;
-  });
-  // 위치가 움직이는 모션(float/spin/orbit/wander)인데 콜라이더 미동반 → 시각 전용(콜라이더 없음, 통과 가능).
-  //   (정적 콜라이더를 붙이면 시각은 떠다니는데 벽만 원래 자리에 남는 '유령 콜라이더' 버그가 됨)
-  //   루트만 여기서 렌더(중첩 자식은 GroupWithCollision이 처리). pulse는 제자리라 autoObjects에 남김.
-  const visualMotionObjects = rootObjects.filter((o) => o.visible && isVisualOnlyMotionObj(o) && !isPassable(o));
-  // 관절(콜라이더 미동반) 루트 — 시각 전용 ViewerObject(관절 구동). autoObjects에서 제외해 고정 콜라이더가 안 붙게.
-  const actuatorVisualObjects = rootObjects.filter((o) => o.visible && isActuatorVisualObj(o) && !isPassable(o));
-  // 관절(콜라이더 동반) 루트 — kinematic 강체를 관절로 구동(진짜 부딪히는 문). 5c.
-  const actuatorColliderObjects = rootObjects.filter((o) => o.visible && isActuatorColliderObj(o) && !isPassable(o));
-  // 통과(콜라이더 제거) 대상 루트 오브젝트 — 콜라이더 없이 시각만(모션 있으면 애니메이션도) 렌더. 문 열림.
-  const passableVisualObjects = rootObjects.filter((o) => o.visible && !o.light && !o.isGroup && isPassable(o));
-  // ⚠ 숨김(hide_object)·통과 오브젝트는 콜라이더에서 제외 — 예전엔 visible 무시로 '보이지 않는 벽'이 남았음.
-  const autoObjects = rootObjects.filter((o) => o.visible && !o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isVisualOnlyMotionObj(o) && !isActuatorVisualObj(o) && !isActuatorColliderObj(o) && !isPassable(o));
-  const physicsObjects = rootObjects.filter((o) => o.visible && o.physics.enabled && !o.light && !o.isGroup && !isMovingColliderObj(o) && !isActuatorColliderObj(o) && !isPassable(o));
+  // ── 렌더 라우팅 ────────────────────────────────────────────────
+  // 버킷 판정은 전부 순수 함수 `classifyPlayObjects`에 있다(src/lib/playRouting.ts).
+  //   여기 흩어진 filter 체인으로 두던 동안 같은 종류의 버그가 4번 났다(유령 콜라이더·이중 렌더·
+  //   중첩 모터 누락·그룹 관절 얼어붙음). 이제 상호배타/전수커버가 테스트로 고정된다
+  //   → `npx tsx src/lib/playRouting.test.ts`. **판정을 바꿀 땐 이 파일이 아니라 playRouting.ts를 고칠 것.**
+  const routing = useMemo(
+    () => classifyPlayObjects(allObjects, { passableIds, movedIds }),
+    [allObjects, passableIds, movedIds],
+  );
+  const inBucket = (b: PlayBucket) => allObjects.filter((o) => routing.get(o.id) === b);
+  const lightObjects = inBucket('light');
+  const movingGroupColliders = inBucket('group-moving-collider');
+  const movedGroups = inBucket('group-moved');
+  const groupObjects = inBucket('group-static');
+  const movingGroups = inBucket('group-visual');
+  const movingColliderObjects = inBucket('moving-collider');
+  const visualMotionObjects = inBucket('visual-motion');
+  const actuatorVisualObjects = inBucket('actuator-visual');
+  const actuatorColliderObjects = inBucket('actuator-collider');
+  const passableVisualObjects = inBucket('passable-visual');
+  const autoObjects = inBucket('auto');
+  const physicsObjects = inBucket('physics');
 
   const characterAsset = scene.environment.playerCharacterId
     ? assets.find((a) => a.id === scene.environment.playerCharacterId)
@@ -565,13 +532,9 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
         <ViewerObject key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 
-      {/* 관절(콜라이더 동반) — kinematic 강체를 관절로 구동(진짜 부딪히는 문/장애물). 5c. */}
+      {/* 관절(콜라이더 동반) — kinematic 강체를 관절로 구동(진짜 부딪히는 문/장애물). 5c.
+          오브젝트·모터·평범한 그룹 공통(그룹이면 서브트리가 하나의 hull 강체로 묶여 함께 움직인다). */}
       {actuatorColliderObjects.map((obj) => (
-        <ActuatorCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
-      ))}
-
-      {/* 모터형(콜라이더 동반) 그룹 — 연결된 부품 서브트리를 kinematic 강체로 묶어 관절 구동(진짜 부딪히는 모터). */}
-      {actuatorGroupColliders.map((obj) => (
         <ActuatorCollider key={obj.id} object={obj} assets={assets} onEvent={onObjectClick} allObjects={allObjects} />
       ))}
 

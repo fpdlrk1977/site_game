@@ -677,6 +677,7 @@ export function EditorCanvas() {
     setCameraBookmark,
     pendingPlacement,
     connectMotorId,
+    pivotMotorId,
     gridPlane,
   } = useSceneStore();
   // 기준 격자 평면 — 바닥(XZ)/벽(XY·YZ). 시각 참조용 회전만.
@@ -720,6 +721,19 @@ export function EditorCanvas() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [connectMotorId]);
+
+  // ESC로 모터 경첩 이동 모드 종료
+  useEffect(() => {
+    if (!pivotMotorId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        useSceneStore.getState().cancelPivotMove();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pivotMotorId]);
 
   useEffect(() => {
     if (!focusTarget || !orbitRef.current) return;
@@ -915,6 +929,8 @@ export function EditorCanvas() {
     }
     // 모터 3D 연결 모드: 마퀴/드래그 시작 안 함(오브젝트 onClick=연결·빈곳 onPointerMissed=종료가 처리)
     if (useSceneStore.getState().connectMotorId) { pointerDownOnObjectRef.current = false; return; }
+    // 경첩 이동 모드: 경첩 핸들 드래그가 마퀴로 새지 않게(핸들 밖 빈 곳 드래그도 마퀴 대신 무시)
+    if (useSceneStore.getState().pivotMotorId) { pointerDownOnObjectRef.current = false; return; }
     if (e.button !== 0) return;
     // 좌드래그는 회전 안 함(회전=Ctrl+우드래그로 통일). 기즈모/핸들 드래그 → 각자 처리(orbit는 그쪽이 관리).
     if (gizmoDraggingRef.current || handleDraggingRef.current) {
@@ -1098,6 +1114,12 @@ export function EditorCanvas() {
             // 모터 3D 연결 모드 중 빈 곳 클릭 → 연결 종료(선택 해제 대신)
             if (useSceneStore.getState().connectMotorId) {
               useSceneStore.getState().cancelConnect();
+              return;
+            }
+            // 경첩 이동 모드 중 빈 곳 클릭 → 모드 종료(선택 해제 대신).
+            //   선택만 풀고 모드를 남기면, 그 모터를 다시 고를 때 경첩 모드가 되살아나는 유령 상태가 된다.
+            if (useSceneStore.getState().pivotMotorId) {
+              useSceneStore.getState().cancelPivotMove();
               return;
             }
             if (useSceneStore.getState().pendingPlacement) return;
@@ -1287,6 +1309,16 @@ export function EditorCanvas() {
               <span>모터에 연결할 오브젝트를 클릭</span>
               <span className="opacity-70">·</span>
               <span className="opacity-90">빈 곳/ESC 종료</span>
+            </div>
+          </div>
+        )}
+
+        {pivotMotorId && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ff7a0d] text-white text-[11px] rounded-xs shadow-floating">
+              <span>주황 점(경첩)을 드래그 — 연결된 부품은 제자리</span>
+              <span className="opacity-70">·</span>
+              <span className="opacity-90">ESC 종료</span>
             </div>
           </div>
         )}

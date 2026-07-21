@@ -36,6 +36,7 @@ import {
   Focus,
   Unlink,
   Donut,
+  CircleMinus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useSceneStore, isDescendant } from "@/store/sceneStore";
@@ -132,6 +133,7 @@ function HierarchyItem({
     duplicateSelected,
     selectObject,
     ungroupSelected,
+    removeMotorKeepParts,
     openPenToolEdit,
     openVoxelEdit,
   } = useSceneStore();
@@ -376,8 +378,21 @@ function HierarchyItem({
               </button>
             </>
           )}
-          {/* 그룹 해제는 일반 그룹만 — 프리팹(원본/사본)은 그룹이 아니라 프리팹이므로 숨김(사본은 '프리팹 해제'로 링크 해제) */}
-          {obj.isGroup && !obj.prefabId && (
+          {/* 모터는 그룹 해제 대신 '모터만 제거' — 삭제는 연결된 부품까지 지우므로 되돌릴 비파괴 경로가 필요하다.
+              (모터도 isGroup이라 예전엔 '그룹 해제'가 뜨긴 했지만 ungroupSelected가 모터를 걸러 아무 일도 안 했다.) */}
+          {obj.isActuator && (
+            <button
+              onClick={() => {
+                removeMotorKeepParts(obj.id);
+                onCloseMenu();
+              }}
+              className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
+            >
+              <CircleMinus size={13} className="text-muted" /> 모터만 제거 (부품 유지)
+            </button>
+          )}
+          {/* 그룹 해제는 일반 그룹만 — 프리팹(원본/사본)·모터는 숨김(사본은 '프리팹 해제', 모터는 위 '모터만 제거') */}
+          {obj.isGroup && !obj.prefabId && !obj.isActuator && (
             <button
               onClick={() => {
                 ungroupSelected();

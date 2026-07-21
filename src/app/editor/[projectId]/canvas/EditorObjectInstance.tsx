@@ -420,6 +420,10 @@ function selectByClick(object: ObjectNodeSchema, shiftKey: boolean) {
     }
     return; // 일반 선택 스킵(모드 유지 — ESC/빈곳 클릭으로 종료)
   }
+  // 경첩 이동 모드 — 클릭으로 선택이 바뀌면 기즈모가 되살아나(선택 ≠ 모터) 드래그가 그 오브젝트를 움직여버린다.
+  //   드래그가 경첩 핸들을 빗나가 부품에 닿는 것만으로 선택이 넘어가므로, 모드 중엔 선택 변경 자체를 막는다.
+  //   (종료는 ESC 또는 인스펙터 버튼. 트리 선택은 selectObject 직접 호출이라 무영향.)
+  if (store.pivotMotorId) return;
   if (object.locked) { if (!shiftKey) { store.selectObject(null); store.setGroupScope(null); } return; }
 
   const scope = store.groupScope;
@@ -544,6 +548,8 @@ function MotorObjectInstance({ object }: Props) {
   const selectedId = useSceneStore((s) => s.selectedId);
   const children = useSceneStore(useShallow((s) => s.objects.filter((o) => o.parentId === object.id)));
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
+  // 이 모터의 경첩을 옮기는 중 — 기어 히트 구를 레이캐스트에서 빼 경첩 핸들을 가리지 않게 한다.
+  const pivotMoving = useSceneStore((s) => s.pivotMotorId === object.id);
 
   useLayoutEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
@@ -562,11 +568,13 @@ function MotorObjectInstance({ object }: Props) {
 
   return (
     <group ref={groupRef} onPointerDown={markObjectHit}>
-      {/* 클릭 히트 영역 — 아이콘보다 크게(잡기 쉽게) · 항상 최상단(depthTest off)이라 부품에 묻혀도 잡힘 */}
+      {/* 클릭 히트 영역 — 아이콘보다 크게(잡기 쉽게) · 항상 최상단(depthTest off)이라 부품에 묻혀도 잡힘.
+          단 경첩 이동 모드에선 핸들러를 떼 레이캐스트 대상에서 빠진다 — 이 구는 고정 반경(0.24)이라
+          화면을 확대하면 화면 크기 일정인 경첩 핸들보다 커져서, 안 떼면 기어가 경첩 드래그를 삼킨다. */}
       <mesh
         renderOrder={999}
-        onClick={(e) => { e.stopPropagation(); selectByClick(object, e.nativeEvent.shiftKey); }}
-        onDoubleClick={(e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
+        onClick={pivotMoving ? undefined : (e) => { e.stopPropagation(); selectByClick(object, e.nativeEvent.shiftKey); }}
+        onDoubleClick={pivotMoving ? undefined : (e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
       >
         <sphereGeometry args={[0.24, 12, 12]} />
         <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { MathUtils, Quaternion, Euler, Vector3, Matrix4 } from 'three';
-import { worldBBox } from '@/lib/objectBBox';
+import { worldBBox, localBBox } from '@/lib/objectBBox';
+import { anchorLocalPoint } from '@/lib/pivotMath';
 import { normalizeClipPivots } from '@/lib/animPivot';
 import { glbLocalBboxCache } from '@/lib/glbBboxCache';
 import { OBJECT_PRESETS, PRESET_SELF, NODE_PRESETS } from '@/lib/objectPresets';
@@ -172,6 +173,11 @@ interface SceneActions {
   connectMotorId: string | null;
   beginConnect: (motorId: string) => void;
   cancelConnect: () => void;
+  /** 모터 경첩 이동 모드 — 설정되면 이동 기즈모를 숨기고 경첩(주황 점) 드래그로 원점만 옮긴다(부품은 제자리).
+   *  기즈모가 경첩과 같은 자리에 떠서 포인터를 가져가므로, 모드로 격리해야 드래그가 안 뺏긴다. ESC=종료. */
+  pivotMotorId: string | null;
+  beginPivotMove: (motorId: string) => void;
+  cancelPivotMove: () => void;
   setSnap: (enabled: boolean, translate?: number, rotate?: number) => void;
   requestFocus: () => void;
   requestFocusAll: () => void;
@@ -206,6 +212,9 @@ interface SceneActions {
   moveObject: (draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   /** 월드 변환을 보존하며 새 부모로 재부모화(null=최상위). 모터 연결/해제 등에 사용. 단일 undo. */
   reparentObject: (objId: string, newParentId: string | null) => void;
+  /** 모터의 경첩(=원점)만 월드 좌표로 이동. 연결된 부품은 제자리 유지.
+   *  _prevSnapshot 지연커밋 → 드래그 중 실시간, 놓을 때 호출부의 pushHistory()가 undo 1회로 확정. */
+  moveMotorPivot: (motorId: string, world: { x: number; y: number; z: number }) => void;
   duplicateSelected: () => void;
   // 오브젝트 클립보드(Ctrl+C/V) — transient(저장 안 함, 세션 유지=씬 넘어 붙여넣기 가능). 붙여넣기는 항상 최상위(root).
   clipboard: { objects: ObjectNodeSchema[]; clips: AnimClip[] } | null;
@@ -215,6 +224,14 @@ interface SceneActions {
   arraySelected: (cfg: ClonerConfig) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
+  /** 모터만 없애고 연결된 부품은 살린다(월드 변환 보존 → 제자리). 삭제는 자손까지 지우므로 그 대안.
+   *  부품은 모터의 부모(중첩이면 조부모, 아니면 최상위)로 승격된다. 단일 undo. */
+  removeMotorKeepParts: (motorId: string) => void;
+  /** 이 부품의 **부모로 모터를 삽입**한다(부품 자리를 모터가 승계 → 몸통에 재부착 불필요).
+   *  모터 원점=경첩은 부품의 hinge 위치(속성형 설정이 있으면 그 점, 없으면 왼쪽 면 중앙)에 놓이고
+   *  회전은 부품 방향을 물려받아 축이 그대로 유지된다. 속성형 관절이 있었으면 그 설정을 모터로 옮긴다(=승격).
+   *  월드 변환 보존, 단일 undo. */
+  insertMotorForObject: (objId: string) => void;
   /** 선택 오브젝트를 '클로너 그룹'으로 감싼다(비파괴 배열). config 미지정 시 기본값. */
   makeCloner: (config?: ClonerConfig) => void;
   /** 클로너 설정 변경 → 복제본 실시간 재생성. _prevSnapshot 패턴(호출부 pushHistory로 커밋). */
@@ -542,31 +559,28 @@ export function isDescendant(objects: ObjectNodeSchema[], candidateId: string, r
 // 자식 월드 위치는 그대로 유지하고 로컬 좌표만 보정 → 기즈모/회전·크기 피벗이 항상 자식 중심에 온다.
 // 그룹 회전·크기는 유지하고 위치만 이동하므로 자식은 위치만 바뀐다(회전·크기 불변).
 // (groupSelected·MultiGizmo와 동일하게 '위치 평균'을 중심으로 사용)
-function recenterGroup(objects: ObjectNodeSchema[], groupId: string): ObjectNodeSchema[] {
+/** 그룹/모터의 **원점만** 월드 target으로 옮기고, 자식은 월드 변환을 유지하도록 로컬 위치를 역보정한다.
+ *  회전·스케일은 건드리지 않는다(원점 이동은 순수 평행이동이라 자식의 월드 회전/크기엔 영향 없음).
+ *  recenterGroup(자식 centroid로)과 모터 경첩 드래그(moveMotorPivot)가 이 계산을 공유. */
+function setGroupOriginWorld(objects: ObjectNodeSchema[], groupId: string, target: Vector3): ObjectNodeSchema[] {
   const group = objects.find((o) => o.id === groupId);
-  if (!group?.isGroup) return objects;
+  if (!group) return objects;
   const children = objects.filter((o) => o.parentId === groupId);
-  if (children.length === 0) return objects;
 
-  // 각 자식의 월드 위치 + centroid(월드)
+  // 자식의 현재 월드 위치 — 원점을 옮긴 뒤 이 값 그대로 되돌려 놓는다(= 부품은 제자리).
   const childWorldPos = new Map<string, Vector3>();
-  const centroid = new Vector3();
   for (const c of children) {
-    const wp = new Vector3().setFromMatrixPosition(computeWorldMatrix(objects, c.id));
-    childWorldPos.set(c.id, wp);
-    centroid.add(wp);
+    childWorldPos.set(c.id, new Vector3().setFromMatrixPosition(computeWorldMatrix(objects, c.id)));
   }
-  centroid.divideScalar(children.length);
 
-  // 그룹의 현재 회전·크기는 유지하고 원점만 centroid로 이동한 새 월드행렬의 역행렬
-  const gWorld = computeWorldMatrix(objects, groupId);
+  // 그룹의 현재 회전·크기는 유지하고 원점만 target으로 옮긴 새 월드행렬의 역행렬
   const gPos = new Vector3(), gQuat = new Quaternion(), gScale = new Vector3();
-  gWorld.decompose(gPos, gQuat, gScale);
-  const gWorldNewInv = new Matrix4().compose(centroid, gQuat, gScale).invert();
+  computeWorldMatrix(objects, groupId).decompose(gPos, gQuat, gScale);
+  const gWorldNewInv = new Matrix4().compose(target, gQuat, gScale).invert();
 
-  // 그룹의 새 로컬 위치(부모 기준) — centroid를 부모 공간으로 변환
+  // 그룹의 새 로컬 위치(부모 기준) — target을 부모 공간으로 변환
   const parentInv = group.parentId ? computeWorldMatrix(objects, group.parentId).invert() : new Matrix4();
-  const gLocalPos = centroid.clone().applyMatrix4(parentInv);
+  const gLocalPos = target.clone().applyMatrix4(parentInv);
 
   const patches = new Map<string, ObjectNodeSchema>();
   patches.set(groupId, { ...group, position: { x: gLocalPos.x, y: gLocalPos.y, z: gLocalPos.z } });
@@ -575,6 +589,18 @@ function recenterGroup(objects: ObjectNodeSchema[], groupId: string): ObjectNode
     patches.set(c.id, { ...c, position: { x: lp.x, y: lp.y, z: lp.z } });
   }
   return objects.map((o) => patches.get(o.id) ?? o);
+}
+
+/** 그룹 원점을 자식들의 centroid로 재중심. 모터는 원점=경첩이라 호출하지 않는다(moveObject에서 스킵). */
+function recenterGroup(objects: ObjectNodeSchema[], groupId: string): ObjectNodeSchema[] {
+  const group = objects.find((o) => o.id === groupId);
+  if (!group?.isGroup) return objects;
+  const children = objects.filter((o) => o.parentId === groupId);
+  if (children.length === 0) return objects;
+  const centroid = new Vector3();
+  for (const c of children) centroid.add(new Vector3().setFromMatrixPosition(computeWorldMatrix(objects, c.id)));
+  centroid.divideScalar(children.length);
+  return setGroupOriginWorld(objects, groupId, centroid);
 }
 
 export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
@@ -626,6 +652,7 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   cameraBookmarks: {},
   pendingPlacement: null,
   connectMotorId: null,
+  pivotMotorId: null,
   bookmarkSaveRequest: null,
   startViewSaveRequest: null,
   bookmarkRecallRequest: null,
@@ -663,9 +690,17 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
     }));
   },
 
-  selectObject: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+  // 선택이 대상 모터에서 벗어나면 경첩 이동 모드도 함께 종료 — 모드만 남으면 그 모터를 다시 고를 때
+  // 경첩 모드가 되살아나는 유령 상태가 된다(기즈모 숨김/핸들 표시가 선택과 묶여 있으므로).
+  selectObject: (id) => set((s) => ({
+    selectedId: id, selectedIds: id ? [id] : [],
+    pivotMotorId: s.pivotMotorId === id ? s.pivotMotorId : null,
+  })),
   setGroupScope: (id) => set({ groupScope: id }),
-  selectObjects: (ids) => set({ selectedIds: ids, selectedId: ids[ids.length - 1] ?? null }),
+  selectObjects: (ids) => set((s) => ({
+    selectedIds: ids, selectedId: ids[ids.length - 1] ?? null,
+    pivotMotorId: ids.length === 1 && ids[0] === s.pivotMotorId ? s.pivotMotorId : null,
+  })),
 
   toggleSelectObject: (id) => set((s) => {
     // 캐릭터 프리뷰(가상 오브젝트)는 실제 오브젝트 다중 선택에 섞이지 않도록 제외
@@ -946,8 +981,11 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
 
   beginPlacement: (p) => set({ pendingPlacement: p }),
   cancelPlacement: () => set({ pendingPlacement: null }),
-  beginConnect: (motorId) => set({ connectMotorId: motorId, pendingPlacement: null }),
+  beginConnect: (motorId) => set({ connectMotorId: motorId, pendingPlacement: null, pivotMotorId: null }),
   cancelConnect: () => set({ connectMotorId: null }),
+  // 경첩 이동 모드 — 배치/연결 모드와 상호 배타(동시에 켜지면 클릭 의미가 충돌).
+  beginPivotMove: (motorId) => set({ pivotMotorId: motorId, pendingPlacement: null, connectMotorId: null }),
+  cancelPivotMove: () => set({ pivotMotorId: null }),
   commitPlacement: (x, z) => {
     const p = get().pendingPlacement;
     if (!p) return;
@@ -1310,6 +1348,20 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       scale: { x: s.x, y: s.y, z: s.z },
     } : o);
     set({ objects: next, isModified: true, ...withHistory({ objects, environment }, past) });
+  },
+
+  // 모터 경첩(=원점)만 이동 — 연결된 부품은 월드 위치를 그대로 유지한다.
+  //   모터를 옮기면 자식이 따라오는 게 당연한 동작이라, 경첩을 관절 자리(예: 새의 어깨)로 보내려면
+  //   부품을 대신 옮겨야 했고 그 순간 몸통과의 위치 관계가 깨져 재부착 왕복이 생겼다. 이 액션이 그걸 없앤다.
+  moveMotorPivot: (motorId, world) => {
+    const { objects, environment, _prevSnapshot } = get();
+    const motor = objects.find((o) => o.id === motorId);
+    if (!motor?.isActuator) return; // 모터 전용(일반 그룹 원점은 recenterGroup이 관리)
+    set({
+      _prevSnapshot: _prevSnapshot ?? { objects, environment },
+      objects: setGroupOriginWorld(objects, motorId, new Vector3(world.x, world.y, world.z)),
+      isModified: true,
+    });
   },
 
   deleteSelected: () => {
@@ -1797,6 +1849,117 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
       objects: [...remaining, ...restoredChildren],
       selectedId: null,
       selectedIds: restoredChildren.map((c) => c.id),
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  // 모터만 제거하고 부품은 살린다 — 삭제(deleteSelected)는 자손까지 지우기 때문에,
+  // "잘못 붙였다"를 되돌리려면 작업물까지 날려야 했다. 그 공포를 없애는 비파괴 경로.
+  // ungroupSelected와 같은 행렬 기반 복원(회전+비균일 스케일에서도 안 어긋남)을 쓰되, 모터 전용.
+  removeMotorKeepParts: (motorId) => {
+    const { objects, environment, past } = get();
+    const motor = objects.find((o) => o.id === motorId);
+    if (!motor?.isActuator) return;
+
+    const newParentId = motor.parentId; // 중첩이면 조부모, 아니면 최상위(null)
+    const parentInv = newParentId ? computeWorldMatrix(objects, newParentId).invert() : new Matrix4();
+    const children = objects.filter((o) => o.parentId === motorId);
+    const p = new Vector3(), q = new Quaternion(), s = new Vector3();
+    const restored = new Map<string, ObjectNodeSchema>();
+    for (const c of children) {
+      const local = new Matrix4().multiplyMatrices(parentInv, computeWorldMatrix(objects, c.id));
+      local.decompose(p, q, s);
+      const e = new Euler().setFromQuaternion(q);
+      restored.set(c.id, {
+        ...c,
+        parentId: newParentId,
+        position: { x: p.x, y: p.y, z: p.z },
+        rotation: { x: e.x * RAD2DEG_M, y: e.y * RAD2DEG_M, z: e.z * RAD2DEG_M },
+        scale: { x: s.x, y: s.y, z: s.z },
+      });
+    }
+    // 모터만 빼고 나머지는 순서 그대로(트리에서 부품이 제자리에 남는다)
+    const next = objects.filter((o) => o.id !== motorId).map((o) => restored.get(o.id) ?? o);
+
+    set({
+      objects: next,
+      selectedId: null,
+      selectedIds: children.map((c) => c.id), // 풀려난 부품을 선택 상태로
+      // 모터가 사라졌으니 그 모터를 대상으로 하던 모드는 종료
+      connectMotorId: get().connectMotorId === motorId ? null : get().connectMotorId,
+      pivotMotorId: get().pivotMotorId === motorId ? null : get().pivotMotorId,
+      isModified: true,
+      ...withHistory({ objects, environment }, past),
+    });
+  },
+
+  // 부품의 부모로 모터를 삽입 — "부품에서 시작하는" 흐름의 핵심 연산.
+  //   모터를 씬에 놓고 부품을 끌어다 붙이는 기존 흐름은 부품이 원래 부모(몸통)에서 떨어져 나오므로
+  //   재부착 왕복이 생긴다. 여기선 **모터가 부품의 자리를 승계**(같은 부모·같은 월드 변환)하므로
+  //   몸통과의 관계가 유지된다. 속성형 관절이 이미 있으면 그 설정을 모터로 옮긴다(= 승격).
+  insertMotorForObject: (objId) => {
+    const { objects, assets, environment, past } = get();
+    const obj = objects.find((o) => o.id === objId);
+    if (!obj || obj.isActuator) return; // 이미 모터면 no-op
+
+    // 경첩(월드) — 속성형 hinge가 있으면 그 점, 없으면 왼쪽 면 중앙(문 경첩 기본, ActuatorSection과 동일).
+    const hinge = obj.actuator?.hinge ?? { x: 0, y: 0.5, z: 0.5 };
+    const lb = localBBox(objects, assets, objId);
+    const hingeLocal = lb && !lb.isEmpty() ? anchorLocalPoint(lb, hinge) : new Vector3(0, 0, 0);
+    const objWorld = computeWorldMatrix(objects, objId);
+    const hingeWorld = hingeLocal.clone().applyMatrix4(objWorld);
+
+    // 모터 월드 = 경첩 위치 + 부품의 방향(축이 부품 로컬축과 일치해야 기존 설정이 그대로 먹는다) + 스케일 1
+    //   (스케일까지 물려받으면 자식 로컬이 그만큼 나눠져 값이 헷갈린다 — 모터는 항상 단위 스케일.)
+    const oPos = new Vector3(), oQuat = new Quaternion(), oScl = new Vector3();
+    objWorld.decompose(oPos, oQuat, oScl);
+    const motorWorld = new Matrix4().compose(hingeWorld, oQuat, new Vector3(1, 1, 1));
+
+    // 모터의 부모 = 부품의 기존 부모(자리 승계) → 부모 공간 로컬로 변환
+    const parentInv = obj.parentId ? computeWorldMatrix(objects, obj.parentId).invert() : new Matrix4();
+    const mLocal = new Matrix4().multiplyMatrices(parentInv, motorWorld);
+    const mp = new Vector3(), mq = new Quaternion(), ms = new Vector3();
+    mLocal.decompose(mp, mq, ms);
+    const me = new Euler().setFromQuaternion(mq);
+
+    // 속성형 설정이 있으면 모터로 이관(hinge는 모터 원점이 대신하므로 뺀다). 없으면 기본 회전 관절.
+    const carried = obj.actuator;
+    const motorActuator = carried
+      ? (() => { const { hinge: _h, ...rest } = carried; return rest; })()
+      : { kind: 'rotate' as const, axis: 'y' as const, min: 0, max: 90, drive: 'oscillate' as const, speed: 1, loop: 'pingpong' as const, value: 0 };
+
+    objectCounter += 1;
+    const motor = makeBaseObject({
+      name: `Motor ${objectCounter}`,
+      isGroup: true,
+      isActuator: true,
+      parentId: obj.parentId,
+      position: { x: mp.x, y: mp.y, z: mp.z },
+      rotation: { x: me.x * RAD2DEG_M, y: me.y * RAD2DEG_M, z: me.z * RAD2DEG_M },
+      scale: { x: ms.x, y: ms.y, z: ms.z },
+      actuator: motorActuator,
+    });
+
+    // 부품을 모터 자식으로 — 월드 변환 보존
+    const childLocal = new Matrix4().multiplyMatrices(motorWorld.clone().invert(), objWorld);
+    const cp = new Vector3(), cq = new Quaternion(), cs = new Vector3();
+    childLocal.decompose(cp, cq, cs);
+    const ce = new Euler().setFromQuaternion(cq);
+
+    const next = objects.map((o) => o.id === objId ? {
+      ...o,
+      parentId: motor.id,
+      position: { x: cp.x, y: cp.y, z: cp.z },
+      rotation: { x: ce.x * RAD2DEG_M, y: ce.y * RAD2DEG_M, z: ce.z * RAD2DEG_M },
+      scale: { x: cs.x, y: cs.y, z: cs.z },
+      actuator: undefined, // 관절은 이제 모터가 담당(속성형·모터형 이중 적용 방지)
+    } : o);
+
+    set({
+      objects: [...next, motor],
+      selectedId: motor.id,
+      selectedIds: [motor.id], // 모터를 선택 상태로 → 바로 경첩/범위 조정 가능
       isModified: true,
       ...withHistory({ objects, environment }, past),
     });

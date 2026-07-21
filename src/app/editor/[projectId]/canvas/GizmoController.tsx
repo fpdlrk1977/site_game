@@ -185,7 +185,7 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
 
 function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate, objectSnap,
-    objects, assets, animClips, commitTransforms, updateEnvironment, pushHistory } = useSceneStore();
+    objects, assets, animClips, pivotMotorId, commitTransforms, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
   // 기즈모는 "형상 중심에 놓인 프록시"에 붙는다 → 위젯이 원점(하단)이 아니라 중심에 뜨고,
   // 프록시는 재부모화되지 않으므로 예전의 scene graph 에러도 없다. 조작은 오브젝트로 역매핑.
@@ -202,6 +202,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const valid = !!selectedId && (isCharPreview || (!!selectedObject && !selectedObject.locked && selectedObject.visible));
   const effectiveMode = isCharPreview ? 'translate' : transformMode;
   const skipYClamp = !isCharPreview && (selectedObject?.parentId != null);
+  const pivotMoving = !!pivotMotorId && pivotMotorId === selectedId; // 경첩 이동 모드 = 기즈모 숨김
 
   // 선택 오브젝트의 로컬 회전중심(cLocal) 갱신 — 기본은 형상 중심(프리미티브/캐릭터는 원점 0).
   //   단, 회전 모드 + 이 오브젝트를 rootId로 갖는 pivot(경첩) 클립이 있으면 → cLocal을 그 경첩 점으로.
@@ -313,7 +314,9 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   };
 
   // 스케일 모드는 코너 핸들(ManipulationHandles)이 담당 → 스케일 기즈모 숨김(중복 방지). 이동/회전은 기즈모 유지.
-  const showGizmo = isCharPreview || effectiveMode !== 'scale';
+  // 경첩 이동 모드 중엔 기즈모 전체를 숨긴다 — 기즈모 중심(XYZ 자유이동 핸들)이 경첩과 같은 자리라
+  // 그대로 두면 경첩 드래그를 기즈모가 가져간다(ActuatorGizmo의 경첩 핸들이 담당).
+  const showGizmo = (isCharPreview || effectiveMode !== 'scale') && !pivotMoving;
 
   return (
     <>

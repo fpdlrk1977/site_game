@@ -2,6 +2,7 @@
 
 // Actuator(관절) 섹션 — 경첩 기준 축 회전/직선 이동. motion과 배타. doc/PIVOT_MANIPULATION.md §6.
 //   5a: manual·oscillate 구동 + 시각(▶ 플레이/게시). variable·event 구동은 5b.
+import { Cog } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
 import { SelectBox } from '@/components/ui/SelectBox';
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from './ui';
@@ -18,6 +19,7 @@ const PLANE: Record<'x' | 'y' | 'z', { col: 'x' | 'y' | 'z'; row: 'x' | 'y' | 'z
 export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const { updateObject, pushHistory } = useSceneStore();
   const variables = useSceneStore((s) => s.variables);
+  const insertMotorForObject = useSceneStore((s) => s.insertMotorForObject);
   const act = obj.actuator;
   const motor = !!obj.isActuator; // 모터형: 항상 켜짐·경첩=원점(피커 없음)
   const setA = (patch: Partial<ActuatorConfig>) =>
@@ -57,6 +59,23 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
         <label className="flex items-center cursor-pointer absolute top-4.5 right-4">
           <Toggle value={!!act} onChange={enable} />
         </label>
+      )}
+      {/* 꺼짐 상태 안내 — 관절을 다는 두 갈래를 여기서 보여준다(예전엔 스위치만 있어 모터형만 눈에 띄었다). */}
+      {!motor && !act && (
+        <div className="px-3 pb-3 space-y-1.5">
+          <p className="text-[10px] text-muted/60">
+            스위치를 켜면 <b>이 부품 자체가</b> 경첩을 중심으로 움직입니다(문·서랍·날개). 경첩은 <b>모서리로 골라</b> 지정하므로 계층이 바뀌지 않습니다.
+          </p>
+          <button
+            onClick={() => insertMotorForObject(obj.id)}
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-xs border border-border/70 text-[10px] text-muted hover:text-foreground hover:border-primary transition-colors"
+          >
+            <Cog size={12} /> 모터로 달기 (여러 부품 묶기)
+          </button>
+          <p className="text-[9px] text-muted/50">
+            여러 부품을 <b>한 축으로 함께</b> 돌리거나(회전문·기어), 경첩이 이 부품 <b>바깥</b>에 있어야 할 때 씁니다.
+          </p>
+        </div>
       )}
       {(motor ? open : !!act) && (
         <div className="px-3 pb-4 space-y-2">
@@ -202,6 +221,22 @@ export function ActuatorSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
               <p className="text-[10px] text-muted/50">
                 에디터는 정적입니다. <b>▶ 플레이</b>로 실제 움직임을 확인하세요.{motor ? ' 연결(자식)된 오브젝트가 함께 돕니다.' : ' Motion과 함께 못 씁니다(관절 우선). '}<b>콜라이더 OFF</b>=통과(장식), <b>ON</b>=부딪히는 관절(hull/trimesh 근사·캐릭터 라이딩 미지원).
               </p>
+
+              {/* 승격 — 속성형은 자기 하나만·경첩이 자기 bbox 안에 갇힌다. 부품을 더 묶거나 경첩을
+                  바깥에 둬야 하면 모터로 올린다. 부품 자리를 모터가 승계하므로 위치·계층은 그대로. */}
+              {!motor && (
+                <div className="pt-1 border-t border-border/50">
+                  <button
+                    onClick={() => insertMotorForObject(obj.id)}
+                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-xs border border-border/70 text-[10px] text-muted hover:text-foreground hover:border-primary transition-colors"
+                  >
+                    <Cog size={12} /> 모터로 바꾸기 (여러 부품 묶기)
+                  </button>
+                  <p className="text-[9px] text-muted/50 pt-1">
+                    지금 설정을 그대로 가진 모터가 <b>이 부품의 부모로</b> 삽입됩니다(위치·계층 유지). 부품을 더 연결하거나 경첩을 부품 <b>바깥</b>에 둘 수 있게 됩니다. 되돌리려면 모터에서 <b>모터만 제거</b>.
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>
