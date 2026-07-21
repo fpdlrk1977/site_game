@@ -157,6 +157,11 @@ function spot(
   };
 }
 
+// ⚠ 템플릿은 `effects`(후처리)를 켜지 않는다 — 성능 때문.
+//   `PostProcessingEffects`는 effects가 하나도 없고 preset이 'none'이면 **EffectComposer를 아예 안 만든다**.
+//   하나라도 켜는 순간 에디터·뷰어 양쪽에 전체 화면 패스가 붙고, 에디터 캔버스는 `preserveDrawingBuffer: true`와
+//   겹쳐 더 나빠진다(특히 Bloom의 mipmapBlur는 다단계 다운/업샘플). 분위기는 조명·emissive로 만들고,
+//   후처리는 사용자가 Environment ▸ Post Processing에서 직접 켜도록 남겨 둔다.
 const base = (): Omit<ProjectSceneSchema, 'projectId' | 'sceneId' | 'objects'> => ({
   version: 1,
   assets: [],
@@ -202,7 +207,6 @@ export const SCENE_TEMPLATES: SceneTemplate[] = [
         },
         toneMappingExposure: 1.05,
         contactShadows: false,
-        effects: { bloom: 0.35, vignette: 0.28, contrast: 0.06 },
         disableWalk: false, // 걸어 들어가 볼 수 있는 공간
         startView: { position: { x: 6.2, y: 3.1, z: 10.5 }, target: { x: -0.6, y: 1.15, z: -3.5 }, fov: 38 },
       },
@@ -279,7 +283,6 @@ export const SCENE_TEMPLATES: SceneTemplate[] = [
         },
         toneMappingExposure: 1,
         contactShadows: false,
-        effects: { vignette: 0.14 },
         disableWalk: false,
         startView: { position: { x: 5.4, y: 2.6, z: 11 }, target: { x: -1, y: 1.6, z: -2 }, fov: 42 },
       },
@@ -353,7 +356,6 @@ export const SCENE_TEMPLATES: SceneTemplate[] = [
         toneMappingExposure: 1,
         fog: { enabled: true, color: '#dbe6f0', near: 30, far: 120, mode: 'exp', density: 0.012 },
         contactShadows: false,
-        effects: { bloom: 0.2, vignette: 0.18 },
         disableWalk: false,
         startView: { position: { x: 9, y: 4.2, z: 15 }, target: { x: -1, y: 1.2, z: -2 }, fov: 45 },
       },
@@ -424,7 +426,6 @@ export const SCENE_TEMPLATES: SceneTemplate[] = [
         },
         toneMappingExposure: 1.05,
         contactShadows: false,
-        effects: { bloom: 0.3, vignette: 0.3, saturation: 0.08 },
         disableWalk: false,
         startView: { position: { x: 4.6, y: 2.3, z: 7.4 }, target: { x: -0.8, y: 1.1, z: -1.5 }, fov: 44 },
       },

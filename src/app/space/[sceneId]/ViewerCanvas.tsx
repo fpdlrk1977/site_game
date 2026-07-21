@@ -385,6 +385,8 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
     <Canvas
       shadows="percentage"
       camera={{ position: [5, 4, 8], fov: 60 }}
+      // dpr 상한 — 기본값(devicePixelRatio 무제한)이면 고배율 화면에서 픽셀 수가 4~6배로 튄다.
+      dpr={[1, 2]}
       gl={{ toneMapping: THREE.LinearToneMapping }}
       events={eventsFactory}
       style={{ width: '100%', height: '100%', cursor: (centerPointer && !movementLocked) ? 'none' : undefined }}

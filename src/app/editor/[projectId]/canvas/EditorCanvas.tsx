@@ -679,6 +679,7 @@ export function EditorCanvas() {
     connectMotorId,
     pivotMotorId,
     gridPlane,
+    editorPlaying,
   } = useSceneStore();
   // 기준 격자 평면 — 바닥(XZ)/벽(XY·YZ). 시각 참조용 회전만.
   const gridRot: [number, number, number] = gridPlane === 'xy' ? [Math.PI / 2, 0, 0] : gridPlane === 'yz' ? [0, 0, Math.PI / 2] : [0, 0, 0];
@@ -1104,6 +1105,12 @@ export function EditorCanvas() {
           id="editor-canvas"
           shadows="percentage"
           camera={{ position: [9, 7, 13], fov: 60 }}
+          // dpr 상한 — 기본값은 devicePixelRatio 무제한이라 배율 200%면 픽셀을 4배, 250%면 6배 넘게 그린다.
+          //   2로 캡하면 고배율 화면에서 렌더 부하가 급감하고 체감 화질 차이는 거의 없다.
+          dpr={[1, 2]}
+          // ▶ 플레이 중엔 이 캔버스가 불투명 오버레이에 완전히 가려진다(카메라 보존 위해 언마운트는 안 함).
+          //   그런데도 매 프레임 그림자·후처리를 계산하고 있었다 → 렌더 루프만 정지시킨다.
+          frameloop={editorPlaying ? 'never' : 'always'}
           gl={{ preserveDrawingBuffer: true, toneMapping: THREE.LinearToneMapping }}
           onPointerMissed={() => {
             // 배치 직후엔 새로 생성·선택된 오브젝트를 해제하지 않도록 1회 무시
