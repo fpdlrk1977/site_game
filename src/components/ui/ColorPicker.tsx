@@ -170,7 +170,10 @@ export function ColorPicker({
     dragRef.current = null;
     setDragging(false);
   };
-  // Esc 닫기 (바깥클릭은 안 닫힘)
+  // Esc + 바깥 클릭으로 닫기.
+  //   패널 안(panelRef)과 트리거(triggerRef) 클릭은 제외한다 — 트리거를 빼면 "닫혔다가 곧바로 다시 열림"이 된다.
+  //   드래그 중(SV 사각형·Hue·정지점·헤더 이동)에 포인터가 패널 밖으로 나가는 건 정상이므로,
+  //   pointerdown이 패널 안에서 시작했으면 무시한다.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -179,8 +182,20 @@ export function ColorPicker({
         close();
       }
     };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (panelRef.current?.contains(t)) return;
+      if (triggerRef.current?.contains(t)) return;
+      close();
+    };
     window.addEventListener("keydown", onKey, { capture: true });
-    return () => window.removeEventListener("keydown", onKey, { capture: true });
+    // capture 단계 — 3D 캔버스처럼 자체적으로 이벤트를 소비하는 영역에서도 확실히 받는다.
+    window.addEventListener("pointerdown", onDown, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKey, { capture: true });
+      window.removeEventListener("pointerdown", onDown, { capture: true });
+    };
   }, [open, close]);
   // 언마운트 시 이 필드가 active면 팝업 닫기(오브젝트 전환 등으로 트리거가 사라질 때)
   useEffect(

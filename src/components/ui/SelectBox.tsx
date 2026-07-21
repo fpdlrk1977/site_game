@@ -29,7 +29,7 @@ interface Props {
   placement?: DropdownPlacement;
 }
 
-const DEFAULT_TRIGGER_CLASS = "bg-surface border border-border/60 rounded-xs px-2 py-[5px] text-xs dark:bg-sidebar!";
+const DEFAULT_TRIGGER_CLASS = "bg-surface border border-border/80 rounded-xs px-2 py-[5px] text-xs dark:bg-sidebar!";
 const ICON_WRAPPER_CLASS =
   "shrink-0 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-cover";
 

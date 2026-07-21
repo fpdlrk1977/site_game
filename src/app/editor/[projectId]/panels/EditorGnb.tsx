@@ -95,10 +95,10 @@ function SettingsMenu({ projectName }: { projectName: string }) {
             </button>
             <div className="border-t border-border my-1" />
             <button onClick={() => { close(); openShare(); }} className={MENU_ITEM_CLASS}>
-              <Share2 size={13} className="text-muted" /> Share / Embed
+              <Share2 size={13} className="text-foreground" /> Share / Embed
             </button>
             <button onClick={() => { close(); openDomain(); }} className={MENU_ITEM_CLASS}>
-              <Globe size={13} className="text-muted" /> Custom domain
+              <Globe size={13} className="text-foreground" /> Custom domain
             </button>
           </>
         )}
@@ -156,7 +156,7 @@ function AccountMenu() {
             <p className="text-xs text-foreground truncate">{email ?? '...'}</p>
           </div>
           <Link href="/account" className={MENU_ITEM_CLASS} onClick={close}>
-            <SlidersHorizontal size={13} className="text-muted" /> Account settings
+            <SlidersHorizontal size={13} className="text-foreground" /> Account settings
           </Link>
           <form action="/api/auth/signout" method="POST">
             <button type="submit" className={`${MENU_ITEM_CLASS} text-danger hover:bg-danger/10`}>

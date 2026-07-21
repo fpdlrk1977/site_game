@@ -273,16 +273,18 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
   }
 
   // ── Floating layout (Figma/Spline) — 캔버스 풀블리드 + 유리 패널이 그 위에 뜬다 ──
-  // 패널 배치 상수(px): 가장자리 여백 12, 상단바 높이 44, 레일 48, 좌패널 240, 인스펙터 288.
+  // 패널 배치 상수(px): 가장자리 여백 12, 상단바 높이 44, 레일 48, 좌패널 240, 인스펙터 240.
+  //   ※ leftW/inspW는 실제 패널의 Tailwind 폭(w-60)과 반드시 같아야 한다 — 어긋나면 뷰포트 오버레이
+  //     (플로팅 툴바·기즈모·상태바)가 패널 밑으로 들어가거나 뜬다.
   const railW = 48,
     leftW = 240,
-    inspW = 288,
+    inspW = 240,
     edge = 12,
     gap = 8;
   const panelTop = edge + 44 + gap; // 상단바 아래 = 64
   const leftPanelX = edge + railW + gap; // 좌패널 시작 x = 68
   const overlayLeft = leftOpen ? leftPanelX + leftW + gap : leftPanelX; // 자유 캔버스 좌측 경계
-  const overlayRight = edge + inspW + gap; // 자유 캔버스 우측 경계 = 308
+  const overlayRight = edge + inspW + gap; // 자유 캔버스 우측 경계 = 260
   const panelShell = "rounded-sm bg-surface border border-border overflow-hidden";
   // 하단 타임라인이 열리면 사이드 패널/오버레이 바닥을 그만큼 올린다(전체폭 바닥 패널 공간 확보).
   const TIMELINE_H = 172;
@@ -312,7 +314,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
 
       {/* Floating top bar */}
       <div className={`absolute top-3 left-3 right-3 h-11 z-40 ${panelShell}`}>
-        <ViewportToolbar projectName={projectName} />
+        <ViewportToolbar />
       </div>
 
       {/* Floating GNB rail */}
@@ -323,7 +325,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       {/* Floating left panel (Objects / Assets) */}
       {leftOpen && (
         <div className={`absolute w-60 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom, left: leftPanelX }}>
-          <LeftPanel tab={gnbTab} />
+          <LeftPanel tab={gnbTab} projectName={projectName} onTabChange={setGnbTab} />
         </div>
       )}
 
@@ -338,7 +340,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       </button>
 
       {/* Floating inspector */}
-      <div className={`absolute right-3 w-72 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
+      <div className={`absolute right-3 w-60 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
         <InspectorPanel />
       </div>
 

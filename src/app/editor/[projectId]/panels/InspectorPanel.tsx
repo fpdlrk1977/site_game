@@ -170,7 +170,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
                   const count = new Set(objects.filter((o) => o.prefabId === p.id).map((o) => o.prefabInstanceId)).size;
                   return (
                     <div key={p.id} className="flex items-center gap-1.5 bg-background border border-border rounded-xs px-2 py-1.5">
-                      <span className="text-[11px] text-foreground font-medium flex-1 truncate flex items-center gap-1.5" title={p.name}><CirclePile size={12} className="shrink-0 text-muted" /> {p.name}</span>
+                      <span className="text-[11px] text-foreground font-medium flex-1 truncate flex items-center gap-1.5" title={p.name}><CirclePile size={12} className="shrink-0 text-foreground" /> {p.name}</span>
                       <span className="text-[10px] text-muted shrink-0">{count}</span>
                       <button
                         onClick={() => { instantiatePrefab(p.id); addToast(`'${p.name}' placed`, 'success'); }}
@@ -299,7 +299,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
                     }}
                     className="w-full text-left px-3 py-1.5 text-[11px] text-foreground hover:bg-background transition-colors flex items-center gap-2 whitespace-nowrap"
                   >
-                    <Download size={13} className="text-muted" /> GLB로 내보내기
+                    <Download size={13} className="text-foreground" /> GLB로 내보내기
                   </button>
                   {/* 모델 에셋으로 저장 — 프리미티브(또는 프리미티브 그룹)만. GLB/콘텐츠/라이트/파티클은 제외
                       (이미 에셋이거나 프리미티브가 아님). */}
@@ -309,7 +309,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
                       disabled={savingModel}
                       className="w-full text-left px-3 py-1.5 text-[11px] text-foreground hover:bg-background transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Package size={13} className="text-muted" /> {savingModel ? '모델로 굽는 중…' : '모델 에셋으로 저장'}
+                      <Package size={13} className="text-foreground" /> {savingModel ? '모델로 굽는 중…' : '모델 에셋으로 저장'}
                     </button>
                   )}
                 </>

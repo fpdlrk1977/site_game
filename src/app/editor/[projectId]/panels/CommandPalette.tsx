@@ -123,7 +123,7 @@ export function CommandPalette({ onClose }: Props) {
       >
         {/* 검색 입력 */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-          <CommandIcon size={16} className="text-muted shrink-0" />
+          <CommandIcon size={16} className="text-foreground shrink-0" />
           <input
             ref={inputRef}
             value={query}

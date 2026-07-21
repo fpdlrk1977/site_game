@@ -7,7 +7,7 @@ import { Tooltip } from './Tooltip';
 export function InfoHint({ text, className }: { text: string; className?: string }) {
   return (
     <Tooltip content={text} wide className={`inline-flex items-center ${className ?? ''}`}>
-      <Info size={12} strokeWidth={2} className="text-muted/40 hover:text-primary transition-colors cursor-help" />
+      <Info size={12} className="text-foreground hover:text-primary transition-colors cursor-help" />
     </Tooltip>
   );
 }

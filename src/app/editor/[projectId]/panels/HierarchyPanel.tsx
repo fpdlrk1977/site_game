@@ -279,7 +279,7 @@ function HierarchyItem({
           />
         ) : (
           <span
-            className={`flex-1 truncate text-[11px] font-medium ${!obj.prefabId ? "text-foreground" : ""}`}
+            className={`flex-1 truncate text-[11px] ${!obj.prefabId ? "text-foreground" : ""}`}
             style={obj.prefabId ? { color: "var(--prefab)" } : undefined}
           >
             {obj.name}
@@ -332,7 +332,7 @@ function HierarchyItem({
             }}
             className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
           >
-            <Pencil size={13} className="text-muted" /> 이름 변경
+            <Pencil size={13} className="text-foreground" /> 이름 변경
           </button>
           {(obj.primitiveShape === "extrude" || obj.primitiveShape === "lathe") && (
             <button
@@ -342,7 +342,7 @@ function HierarchyItem({
               }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
-              <PenTool size={13} className="text-muted" /> 펜툴로 수정
+              <PenTool size={13} className="text-foreground" /> 펜툴로 수정
             </button>
           )}
           {obj.primitiveShape === "voxel" && (
@@ -353,7 +353,7 @@ function HierarchyItem({
               }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
-              <Boxes size={13} className="text-muted" /> 복셀 수정
+              <Boxes size={13} className="text-foreground" /> 복셀 수정
             </button>
           )}
           {isPrefabRoot && !isMasterRoot && (
@@ -376,7 +376,7 @@ function HierarchyItem({
                 title="프리팹 링크를 끊어 일반 그룹으로 전환합니다(색상도 기본색). 원본과 다른 사본은 영향 없음"
                 className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
               >
-                <Unlink size={13} className="text-muted" /> 프리팹 해제
+                <Unlink size={13} className="text-foreground" /> 프리팹 해제
               </button>
             </>
           )}
@@ -390,7 +390,7 @@ function HierarchyItem({
               }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
-              <CircleMinus size={13} className="text-muted" /> 모터만 제거 (부품 유지)
+              <CircleMinus size={13} className="text-foreground" /> 모터만 제거 (부품 유지)
             </button>
           )}
           {/* 그룹 해제는 일반 그룹만 — 프리팹(원본/사본)·모터는 숨김(사본은 '프리팹 해제', 모터는 위 '모터만 제거') */}
@@ -402,7 +402,7 @@ function HierarchyItem({
               }}
               className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
             >
-              <Ungroup size={13} className="text-muted" /> 그룹 해제
+              <Ungroup size={13} className="text-foreground" /> 그룹 해제
               <span className="ml-auto text-muted/60 text-[10px]">⌃⇧G</span>
             </button>
           )}
@@ -413,7 +413,7 @@ function HierarchyItem({
             }}
             className="w-full text-left px-3 py-1.5 text-xs text-foreground hover:bg-background transition-colors flex items-center gap-2"
           >
-            <Copy size={13} className="text-muted" /> 복제
+            <Copy size={13} className="text-foreground" /> 복제
             <span className="ml-auto text-muted/60 text-[10px]">⌃D</span>
           </button>
           <div className="border-t border-border my-1" />

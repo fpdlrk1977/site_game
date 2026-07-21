@@ -707,7 +707,7 @@ function AudioRow({ asset, onDelete, deleting }: { asset: AssetRefSchema; onDele
       >
         {playing ? <Square size={11} /> : <Play size={11} />}
       </button>
-      <span className="flex-1 text-[11px] text-foreground truncate flex items-center gap-1.5" title={asset.name}><Music size={12} className="shrink-0 text-muted" /> {asset.name}</span>
+      <span className="flex-1 text-[11px] text-foreground truncate flex items-center gap-1.5" title={asset.name}><Music size={12} className="shrink-0 text-foreground" /> {asset.name}</span>
       <button
         onClick={onDelete}
         disabled={deleting}

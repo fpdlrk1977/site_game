@@ -695,16 +695,15 @@ export function EnvironmentPanel() {
         <SectionHeader
           title="Lights"
           icon={<Sun size={14} />}
-          hint="Scene-wide lighting. The switch toggles the sun (directional light + shadows); ambient fill stays on. Set the sun direction on the dial below, or grab the sun sphere in the viewport."
+          hint="Scene-wide lighting — ambient fill, the sun (directional light + shadows), exposure and contact shadows. The sun has its own switch inside; ambient and exposure stay available with the sun off."
+          isOpen={envOpen("lights")}
+          onToggle={() => envToggle("lights")}
         />
-        {/* 태양(방향광) on/off — 화살표(접기) 대신 헤더 스위치. 끄면 그림자·태양 기즈모도 꺼지고 ambient/IBL만. */}
-        <label className="flex items-center cursor-pointer absolute top-4.5 right-4" title="Sun on/off">
-          <Toggle value={env.lights.sunEnabled !== false} onChange={(v) => { updateEnvironment({ lights: { ...env.lights, sunEnabled: v } }); pushHistory(); }} />
-        </label>
-        {(
+        {envOpen("lights") && (
           <div className="px-3 space-y-1 pb-4">
+            {/* 환경광 — 태양과 무관한 전역 채움광. 태양을 꺼도 씬이 보이게 하는 광원이라 항상 노출한다. */}
             <div className="flex gap-2">
-              <div>
+              <div className="flex-1 min-w-0">
                 <LabeledNum
                   label="Ambient"
                   value={env.lights.ambientIntensity}
@@ -716,42 +715,6 @@ export function EnvironmentPanel() {
                   dragStep={0.02}
                 />
               </div>
-              {env.lights.sunEnabled !== false && (
-                <div>
-                  <LabeledNum
-                    label="Sun"
-                    value={env.lights.directionalIntensity}
-                    onChange={(v) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: v } })}
-                    onCommit={pushHistory}
-                    min={0}
-                    max={5}
-                    precision={1}
-                    dragStep={0.05}
-                  />
-                </div>
-              )}
-            </div>
-            {env.lights.sunEnabled !== false && (
-              <div className="pt-1">
-                <SunDial
-                  position={env.lights.directionalPosition}
-                  onChange={(pos) => updateEnvironment({ lights: { ...env.lights, directionalPosition: pos } })}
-                  onCommit={pushHistory}
-                />
-              </div>
-            )}
-            {/* 라이트 색(warm/cool) — 태양·환경광 색조. 미설정=흰색. 노을은 따뜻하게, 밤은 차갑게 등 무드 연출. */}
-            <div className="flex gap-2 pt-1">
-              {env.lights.sunEnabled !== false && (
-                <div className="flex-1 min-w-0">
-                  <span className="text-[10px] text-muted/70 dark:text-muted">Sun Color</span>
-                  <ColorPicker
-                    value={env.lights.directionalColor ?? "#ffffff"}
-                    onChange={(hex) => updateEnvironment({ lights: { ...env.lights, directionalColor: hex } })}
-                    onCommit={pushHistory}
-                  />
-                </div>
-              )}
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] text-muted/70 dark:text-muted">Ambient Color</span>
                 <ColorPicker
@@ -761,8 +724,71 @@ export function EnvironmentPanel() {
                 />
               </div>
             </div>
+            {/* ── Sun 하위 그룹 ──────────────────────────────────
+                태양은 Lights의 일부일 뿐이라 **헤더 스위치가 아니라 여기서** 켜고 끈다.
+                (헤더 스위치는 이 프로젝트에서 'Physics·Subdivision처럼 섹션 전체 on/off'를 뜻하는데,
+                 Lights는 태양을 꺼도 환경광·노출이 살아 있어야 해서 그 규칙과 맞지 않는다.) */}
+            <div className="pt-2 mt-1 border-t border-border/60">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-[10px] font-semibold text-foreground tracking-wide">Sun</span>
+                <Toggle
+                  value={env.lights.sunEnabled !== false}
+                  onChange={(v) => { updateEnvironment({ lights: { ...env.lights, sunEnabled: v } }); pushHistory(); }}
+                />
+              </label>
+              {env.lights.sunEnabled !== false && (
+                <div className="space-y-1 pt-1.5">
+                  <div className="flex gap-2">
+                    <div className="flex-1 min-w-0">
+                      <LabeledNum
+                        label="Intensity"
+                        value={env.lights.directionalIntensity}
+                        onChange={(v) => updateEnvironment({ lights: { ...env.lights, directionalIntensity: v } })}
+                        onCommit={pushHistory}
+                        min={0}
+                        max={5}
+                        precision={1}
+                        dragStep={0.05}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[10px] text-muted/70 dark:text-muted">Color</span>
+                      <ColorPicker
+                        value={env.lights.directionalColor ?? "#ffffff"}
+                        onChange={(hex) => updateEnvironment({ lights: { ...env.lights, directionalColor: hex } })}
+                        onCommit={pushHistory}
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-1">
+                    <SunDial
+                      position={env.lights.directionalPosition}
+                      onChange={(pos) => updateEnvironment({ lights: { ...env.lights, directionalPosition: pos } })}
+                      onCommit={pushHistory}
+                    />
+                  </div>
+                  {/* 그림자 농도 — 태양 그림자 진하기(shadow.intensity). 1=진함·0.5=옅음·0=없음. */}
+                  <div className="pt-1">
+                    <div className="flex items-center gap-1 mb-1/2">
+                      <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Shadow Density</span>
+                      <InfoHint text="Darkness of the sun's cast shadows. 1 = dark, 0.5 = soft/faint, 0 = no shadow. Per-object shadows are on/off only; this controls the whole scene." />
+                    </div>
+                    <RangeSlider
+                      value={env.lights.shadowIntensity ?? 1}
+                      onChange={(v) => updateEnvironment({ lights: { ...env.lights, shadowIntensity: v } })}
+                      onCommit={pushHistory}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      showValue
+                      precision={2}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
             {/* 노출(Exposure) — 씬 전체 밝기. 1=기본. 안내는 아이콘 툴팁으로. */}
-            <div className="pt-1">
+            <div className="pt-2 mt-1 border-t border-border/60">
               <div className="flex items-center gap-1 mb-1/2">
                 <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Exposure</span>
                 <InfoHint text="Overall scene brightness. Uses Linear tone mapping so colors render as set. If some areas blow out to white, lower the exposure." />
@@ -778,27 +804,9 @@ export function EnvironmentPanel() {
                 precision={2}
               />
             </div>
-            {/* 그림자 농도 — 태양(directionalLight) 그림자 진하기(shadow.intensity). 1=진함·0.5=옅음·0=없음. */}
-            {env.lights.sunEnabled !== false && (
-              <div className="pt-1">
-                <div className="flex items-center gap-1 mb-1/2">
-                  <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Shadow Density</span>
-                  <InfoHint text="Darkness of the sun's cast shadows. 1 = dark, 0.5 = soft/faint, 0 = no shadow. Per-object shadows are on/off only; this controls the whole scene." />
-                </div>
-                <RangeSlider
-                  value={env.lights.shadowIntensity ?? 1}
-                  onChange={(v) => updateEnvironment({ lights: { ...env.lights, shadowIntensity: v } })}
-                  onCommit={pushHistory}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  showValue
-                  precision={2}
-                />
-              </div>
-            )}
-            {/* 접지 그림자 — 오브젝트가 바닥에 붙은 느낌. 기본 꺼짐, 켜서 확인 */}
-            <label className="flex items-center justify-between cursor-pointer pt-2">
+            {/* 접지 그림자 — 오브젝트가 바닥에 붙은 느낌. 태양 그림자맵과 별개(drei ContactShadows)라
+                태양을 꺼도 쓸 수 있으므로 Sun 그룹 밖에 둔다. 기본 꺼짐. */}
+            <label className="flex items-center justify-between cursor-pointer pt-2 mt-1 border-t border-border/60">
               <span className="text-[10px] text-muted/70 dark:text-muted">Contact Shadows</span>
               <Toggle
                 value={env.contactShadows === true}
@@ -1219,7 +1227,7 @@ export function EnvironmentPanel() {
                                     disabled={bwUploading}
                                     className="w-full h-full flex flex-col items-center justify-center text-[10px] text-foreground hover:text-muted hover:bg-background bg-muted/5 dark:bg-muted/10 transition-colors disabled:opacity-50"
                                   >
-                                    <CirclePlus size={14} className="text-muted/50" />
+                                    <CirclePlus size={14} className="text-foreground" />
                                     <span>{label}</span>
                                   </button>
                                 )}

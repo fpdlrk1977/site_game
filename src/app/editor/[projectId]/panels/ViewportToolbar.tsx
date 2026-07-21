@@ -1,23 +1,17 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Save, History, ExternalLink, Hexagon, Play } from 'lucide-react';
+import { Save, History, ExternalLink, Hexagon, Play } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { persistCurrentScene } from '@/lib/saveScene';
-import { SceneSwitcher } from './SceneSwitcher';
 import { VersionHistoryModal } from './VersionHistoryModal';
 
-interface Props {
-  projectName: string;
-}
-
-
-export function ViewportToolbar({ projectName }: Props) {
+// 프로젝트명은 좌측 패널 타이틀 바로 옮겼다(2026-07-21) → 여기선 더 이상 받지 않는다.
+export function ViewportToolbar() {
   const { isModified, projectId, sceneId, setEditorPlaying } = useSceneStore();
   const { addToast } = useToast();
   const [showHistory, setShowHistory] = useState(false);
@@ -119,16 +113,9 @@ export function ViewportToolbar({ projectName }: Props) {
     <>
       <header className="flex items-center gap-2 px-3 h-full select-none">
 
-        {/* 왼쪽: 네비게이션 + 프로젝트/씬 */}
-        <Tooltip content="Back to dashboard">
-          <Link
-            href="/dashboard"
-            className="w-7 h-7 flex items-center justify-center text-muted hover:text-foreground hover:bg-background rounded-xs transition-all shrink-0"
-          >
-            <ArrowLeft size={15} />
-          </Link>
-        </Tooltip>
-
+        {/* 왼쪽: 브랜드 + 저장 상태.
+            ← 뒤로가기와 프로젝트명·씬 전환(SceneSwitcher)은 좌측 패널로 옮겼다(2026-07-21).
+            나가는 길은 좌측 패널 ☰ > 'Back to file'. */}
         <div className="flex items-center gap-1.5 shrink-0">
           <div className="w-5 h-5 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-primary/30">
             <Hexagon size={12} />
@@ -139,9 +126,6 @@ export function ViewportToolbar({ projectName }: Props) {
         <div className="w-px h-4 bg-border shrink-0" />
 
         <div className="flex items-center gap-1.5 min-w-0 shrink">
-          <span className="text-sm font-medium text-foreground truncate max-w-[90px] hidden lg:block">{projectName}</span>
-          <span className="text-muted text-xs hidden lg:block">—</span>
-          <SceneSwitcher />
           {isModified && (
             <Tooltip content="Unsaved changes">
               <span className="w-1.5 h-1.5 rounded-full bg-warning shrink-0 animate-pulse" />

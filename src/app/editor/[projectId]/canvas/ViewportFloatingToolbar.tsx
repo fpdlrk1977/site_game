@@ -243,7 +243,7 @@ export function ViewportFloatingToolbar() {
                       shape === selectedShape ? "bg-primary/15 text-foreground" : "text-foreground hover:bg-background"
                     }`}
                   >
-                    <Icon size={16} className="text-muted" /> {label}
+                    <Icon size={16} className="text-foreground" /> {label}
                   </button>
                 ))}
               </div>
@@ -289,7 +289,7 @@ export function ViewportFloatingToolbar() {
                     }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xs text-[11px] text-foreground hover:bg-background transition-colors"
                   >
-                    <Icon size={16} className="text-muted" /> {label}
+                    <Icon size={16} className="text-foreground" /> {label}
                   </button>
                 ))}
               </div>
