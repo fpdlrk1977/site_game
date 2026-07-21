@@ -365,13 +365,15 @@ interface Props {
   focusPoint?: { x: number; y: number; z: number; radius: number } | null;
   /** 캐릭터 이동 잠금 — 팝업·포커스 등 상호작용 진행 중 */
   movementLocked?: boolean;
+  /** Esc로 포인터 락 해제 시 true — 커서/크로스헤어 복귀용(ViewerClient가 처리) */
+  onPointerFree?: (v: boolean) => void;
   /** 카메라 모드 (구역별/토글) */
   cameraMode?: 'third' | 'first' | 'topdown' | 'fixed';
   /** fixed 카메라 대상 오브젝트 id — 그 위치에서 캐릭터를 바라봄 */
   cameraFixedId?: string | null;
 }
 
-export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, movedIds, focusPoint, movementLocked, cameraMode, cameraFixedId }: Props) {
+export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, onInteractPromptChange, passableIds, movedIds, focusPoint, movementLocked, onPointerFree, cameraMode, cameraFixedId }: Props) {
   const playerRef = useRef<RapierRigidBody>(null);
   const assets = scene.assets ?? [];
 
@@ -597,6 +599,7 @@ export function PlayCanvas({ scene, azimuthRef, onObjectClick, mobileInputRef, o
         }}
         focusPoint={focusPoint}
         movementLocked={movementLocked}
+        onPointerFree={onPointerFree}
         cameraMode={cameraFixedTarget || cameraMode !== 'fixed' ? cameraMode : 'third'}
         fixedTarget={cameraFixedTarget}
       />

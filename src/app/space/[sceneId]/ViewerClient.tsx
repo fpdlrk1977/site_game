@@ -116,6 +116,9 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 플레이 모드에서 캐릭터가 근접한 interact 대상 (E 프롬프트 표시용). 탐색 모드에선 항상 null.
   const [interactTarget, setInteractTarget] = useState<{ id: string; name: string } | null>(null);
   const [crosshairHot, setCrosshairHot] = useState(false); // 중앙 조준점이 상호작용 대상 위 → 레티클 강조
+  // 포인터 해제 — 드래그 중 Esc로 포인터 락을 풀면 커서를 돌려준다(브라우저 안내 "Esc를 눌러 커서 표시"와 동작 일치).
+  //   해제 중엔 크로스헤어를 숨기고 조준 기준도 마우스 위치로 되돌린다. 캔버스를 다시 클릭하면 복귀.
+  const [pointerFree, setPointerFree] = useState(false);
   const [cameraMode, setCameraMode] = useState<'third' | 'first' | 'topdown' | 'fixed'>('third'); // 카메라 모드(구역별/토글)
   const [cameraFixedId, setCameraFixedId] = useState<string | null>(null); // fixed 모드 대상 오브젝트
   // E키를 누를 때마다 증가 — 대화 열기/다음 문장(DialogueAdvanceContext로 3D 트리에 전달)
@@ -171,6 +174,24 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [interactionLock]);
+  // Esc로 조준(크로스헤어) 모드 해제 → 커서 복귀. 브라우저 포인터 락 안내("Esc를 눌러 커서 표시")와 동작 일치.
+  //   ※ 포인터 락이 걸린 동안엔 브라우저가 Esc를 가로채 keydown이 안 올 수 있다 → 그 경우는
+  //     PlayModeController의 pointerlockchange 경로가 처리한다(두 경로가 서로를 보완).
+  //   상호작용 중(팝업/포커스)엔 위 핸들러가 Esc를 먼저 쓰므로 여기선 빠진다(팝업 닫기가 우선).
+  useEffect(() => {
+    // (터치 기기는 Esc 키가 없어 조건에서 뺐다 — isTouch는 아래에서 선언된다.)
+    if (!playMode || interactionLock || pointerFree) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Escape') return;
+      setPointerFree(true);
+      if (document.pointerLockElement) document.exitPointerLock?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [playMode, interactionLock, pointerFree]);
+  // 모드를 벗어나면 조준 모드 상태 초기화(플레이로 다시 들어올 때 커서가 풀린 채 시작하지 않게).
+  useEffect(() => { if (!playMode) setPointerFree(false); }, [playMode]);
+
   // animate_object 액션용 런타임 클립 요청 (objectId → {name, t})
   const [clipRequests, setClipRequests] = useState<Record<string, { name: string; t: number }>>({});
 
@@ -766,7 +787,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   // 고정 화면 비율(frameAspect) — 설정 시 캔버스를 그 비율로 레터박스(가운데 정렬 + 배경 여백).
   const frameAspect = scene.environment.frameAspect && scene.environment.frameAspect > 0 ? scene.environment.frameAspect : null;
   const viewerCanvasEl = (
-    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} centerPointer={playMode && !isTouch} cameraMode={playMode ? cameraMode : 'third'} cameraFixedId={cameraFixedId} />
+    <ViewerCanvas scene={effectiveScene} playMode={playMode} onObjectClick={handleObjectEvent} mobileInputRef={mobileInputRef} focusRequest={focusRequest} clipRequests={clipRequests} actuatorDrive={actuatorDrive} onInteractPromptChange={(obj) => setInteractTarget(obj ? { id: obj.id, name: obj.name } : null)} interactHighlightId={interactTarget?.id ?? null} dialogueNonce={dialogueNonce} passableIds={passableIds} movedIds={movedIds} playFocusId={playFocus?.id ?? null} movementLocked={interactionLock} centerPointer={playMode && !isTouch && !pointerFree} onPointerFree={setPointerFree} cameraMode={playMode ? cameraMode : 'third'} cameraFixedId={cameraFixedId} />
   );
 
   return (
@@ -894,7 +915,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
         </button>
       )}
 
-      {playMode && !isTouch && !interactionLock && (
+      {playMode && !isTouch && !interactionLock && !pointerFree && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
           {/* 대상 조준 시 강조 = 커지고 노란 링. 평소 = 작은 흰 십자. */}
           <div

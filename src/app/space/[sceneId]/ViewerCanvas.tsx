@@ -255,6 +255,8 @@ interface Props {
   movementLocked?: boolean;
   /** 중앙 조준(crosshair) 포인터 — true면 hover/click 레이캐스트를 마우스가 아니라 화면 중앙에서(플레이 데스크톱). */
   centerPointer?: boolean;
+  /** Esc로 포인터 락 해제 시 true, 캔버스 재클릭 시 false — 커서/크로스헤어 복귀용 */
+  onPointerFree?: (v: boolean) => void;
   /** 카메라 모드 (플레이) — 구역별/토글 */
   cameraMode?: 'third' | 'first' | 'topdown' | 'fixed';
   /** fixed 카메라 대상 오브젝트 id */
@@ -317,7 +319,7 @@ function InitialFit({ objects, orbitRef, startView }: {
   return null;
 }
 
-export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked, centerPointer, cameraMode, cameraFixedId }: Props) {
+export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, focusRequest, clipRequests, actuatorDrive, onInteractPromptChange, interactHighlightId, dialogueNonce, passableIds, movedIds, playFocusId, movementLocked, centerPointer, onPointerFree, cameraMode, cameraFixedId }: Props) {
   const { environment, objects } = scene;
   // 둘러보기 카메라 제한 — 고정 기본값 + 저장된 시작 뷰가 잘리지 않도록 보정. lib/cameraLimits.ts 참고.
   const exploreLim = cameraLimits(environment).effective;
@@ -525,7 +527,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
       {/* ── 플레이 모드 ── */}
       {playMode && (
         <Suspense fallback={null}>
-          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} movedIds={movedIds} focusPoint={playFocusPoint} movementLocked={movementLocked} cameraMode={cameraMode} cameraFixedId={cameraFixedId} />
+          <PlayCanvas scene={scene} azimuthRef={azimuthRef} onObjectClick={onObjectClick} mobileInputRef={mobileInputRef} onInteractPromptChange={onInteractPromptChange} passableIds={passableIds} movedIds={movedIds} focusPoint={playFocusPoint} movementLocked={movementLocked} onPointerFree={onPointerFree} cameraMode={cameraMode} cameraFixedId={cameraFixedId} />
         </Suspense>
       )}
 

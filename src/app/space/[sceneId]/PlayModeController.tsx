@@ -142,6 +142,8 @@ interface Props {
   focusPoint?: { x: number; y: number; z: number; radius: number } | null;
   /** true면 캐릭터 이동(WASD/모바일/점프) 잠금 — 팝업·포커스 등 상호작용 진행 중 */
   movementLocked?: boolean;
+  /** Esc로 포인터 락 해제 시 true, 캔버스 재클릭 시 false — 커서/크로스헤어 복귀를 뷰어가 처리 */
+  onPointerFree?: (v: boolean) => void;
   /** 카메라 모드 — third(3인칭 팔로우)·first(1인칭)·topdown(위에서)·fixed(고정 지점). 구역별 전환/토글용. */
   cameraMode?: 'third' | 'first' | 'topdown' | 'fixed';
   /** fixed 모드일 때 카메라가 놓일 월드 지점(그 위치에서 캐릭터를 바라봄). */
@@ -169,6 +171,7 @@ export function PlayModeController({
   onApproachExit,
   focusPoint,
   movementLocked = false,
+  onPointerFree,
   cameraMode = 'third',
   fixedTarget = null,
 }: Props) {
@@ -183,7 +186,10 @@ export function PlayModeController({
   // 드래그/터치 회전 핸들러(1회 등록)가 최신 잠금 상태를 읽도록 ref로 보관
   const lockedRef = useRef(movementLocked);
   lockedRef.current = movementLocked;
-  const { camera } = useThree();
+  // 1회 등록되는 포인터 핸들러가 최신 콜백을 읽도록 ref로 보관(effect 의존성에 넣으면 재등록된다).
+  const onPointerFreeRef = useRef(onPointerFree);
+  onPointerFreeRef.current = onPointerFree;
+  const { camera, gl } = useThree();
   const { world, rapier } = useRapier();
   const elevationRef = useRef(0.45);
   const cameraDistanceRef = useRef(8);
@@ -275,18 +281,54 @@ export function PlayModeController({
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   }, []);
 
-  // 마우스 드래그 카메라 회전
+  // 마우스 드래그 카메라 회전.
+  //   ★ 화면 끝 문제: clientX/Y는 커서가 화면 가장자리에 닿으면 더 이상 안 변한다 → 계속 끌어도 dx=0이라
+  //     회전이 멈춘다(오른쪽으로 쭉 돌리면 어느 순간 안 도는 증상). Pointer Lock을 걸면 커서가 화면에
+  //     갇히지 않고 movementX/Y로 무한히 델타가 들어온다.
+  //   락이 거부되는 환경(권한·브라우저)에서는 기존 clientX 방식으로 자동 폴백한다.
   useEffect(() => {
-    const onDown = (e: MouseEvent) => { if (lockedRef.current) return; isDragging.current = true; lastMouseRef.current = { x: e.clientX, y: e.clientY }; };
-    const onMove = (e: MouseEvent) => {
-      if (lockedRef.current || !isDragging.current) return;
-      const dx = e.clientX - lastMouseRef.current.x;
-      const dy = e.clientY - lastMouseRef.current.y;
+    const canvas = gl.domElement;
+    const locked = () => document.pointerLockElement === canvas;
+    const onDown = (e: MouseEvent) => {
+      if (lockedRef.current) return;
+      // ★ 3D 캔버스에서 시작한 드래그만 카메라 회전. UI(편집으로·시점 전환 버튼·팝업 등) 클릭은 건드리지 않는다.
+      //   이 가드가 없으면 버튼을 눌러도 포인터 락이 걸려 **클릭이 삼켜진다**(락 중엔 커서가 캔버스에 갇힘).
+      if (e.target !== canvas) return;
+      onPointerFreeRef.current?.(false); // 캔버스 클릭 = 조준 모드 복귀
+      isDragging.current = true;
       lastMouseRef.current = { x: e.clientX, y: e.clientY };
+      // 사용자 제스처(mousedown) 안에서 요청해야 허용된다. 실패해도 무시(폴백 경로로 동작).
+      if (!locked()) canvas.requestPointerLock?.();
+    };
+    const onMove = (e: MouseEvent) => {
+      if (lockedRef.current) return;
+      // 포인터 락 중엔 버튼을 떼도 계속 돌 수 있으므로 isDragging을 함께 본다.
+      if (!isDragging.current) return;
+      let dx: number, dy: number;
+      if (locked()) {
+        dx = e.movementX;
+        dy = e.movementY;
+      } else {
+        dx = e.clientX - lastMouseRef.current.x;
+        dy = e.clientY - lastMouseRef.current.y;
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+      }
       azimuthRef.current -= dx * 0.006;
       elevationRef.current = Math.max(0.1, Math.min(1.3, elevationRef.current + dy * 0.006));
     };
-    const onUp = () => { isDragging.current = false; };
+    const onUp = () => {
+      isDragging.current = false;
+      if (locked()) document.exitPointerLock?.();
+    };
+    // Esc 등으로 락이 풀리면 드래그도 끝난 것으로 처리(버튼을 뗀 이벤트가 안 올 수 있다).
+    const onLockChange = () => {
+      if (locked()) return;
+      // 마우스업으로 우리가 푼 경우엔 isDragging이 이미 false다. 아직 true면 **Esc로 사용자가 푼 것** →
+      // 브라우저 안내("Esc를 눌러 커서 표시")대로 커서를 돌려준다(크로스헤어 해제·마우스 조준 복귀).
+      if (isDragging.current) onPointerFreeRef.current?.(true);
+      isDragging.current = false;
+    };
+    document.addEventListener('pointerlockchange', onLockChange);
     const onTouchStart = (e: TouchEvent) => {
       if (lockedRef.current) return;
       if (e.touches.length === 1) lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -312,8 +354,11 @@ export function PlayModeController({
       window.removeEventListener('mouseup', onUp);
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('pointerlockchange', onLockChange);
+      // 플레이 모드를 벗어날 때 락이 남아 있으면 커서가 갇힌다.
+      if (document.pointerLockElement === canvas) document.exitPointerLock?.();
     };
-  }, [azimuthRef]);
+  }, [azimuthRef, gl]);
 
   useFrame((_state, delta) => {
     const rb = playerRef.current;
