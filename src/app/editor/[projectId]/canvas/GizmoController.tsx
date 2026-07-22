@@ -108,20 +108,9 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
               for (const id of selectedIds) {
                 const ref = refsMap.current.get(id);
                 const start = dragStartPositions.current.get(id);
-                const obj = objs.find((o) => o.id === id);
-                const skipClamp = obj?.parentId != null;
                 if (ref && start) {
-                  let newY: number;
-                  if (skipClamp) {
-                    newY = start.y + dy;
-                  } else if (obj?.isGroup) {
-                    const kids = objs.filter(o => o.parentId === id && !o.isGroup && !o.assetId && !o.content && !o.particle && !o.light);
-                    const minY = kids.reduce((m, c) => Math.max(m, (c.scale?.y ?? 1) * 0.5 - (c.position?.y ?? 0)), 0);
-                    newY = Math.max(minY, start.y + dy);
-                  } else {
-                    newY = Math.max(0, start.y + dy);
-                  }
-                  ref.position.set(start.x + dx, newY, start.z + dz);
+                  // 바닥(y=0) 침범 클램프 제거(사용자 요청) — 바닥 아래로도 이동 가능. '바닥에 놓기' 스냅은 유지.
+                  ref.position.set(start.x + dx, start.y + dy, start.z + dz);
                 }
               }
             } else if (transformMode === 'rotate') {
@@ -159,21 +148,10 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
             for (const id of selectedIds) {
               const ref = refsMap.current.get(id);
               if (!ref) continue;
-              const obj = objs.find((o) => o.id === id);
-              const skipClamp = obj?.parentId != null;
-              let finalY = ref.position.y;
-              if (!skipClamp) {
-                if (obj?.isGroup) {
-                  const kids = objs.filter(o => o.parentId === id && !o.isGroup && !o.assetId && !o.content && !o.particle && !o.light);
-                  const minY = kids.reduce((m, c) => Math.max(m, (c.scale?.y ?? 1) * 0.5 - (c.position?.y ?? 0)), 0);
-                  finalY = Math.max(minY, ref.position.y);
-                } else {
-                  finalY = Math.max(0, ref.position.y);
-                }
-              }
+              // 바닥(y=0) 침범 클램프 제거(사용자 요청) — 위치 그대로 커밋. '바닥에 놓기' 스냅은 유지.
               updates.push({
                 id,
-                position: { x: ref.position.x, y: finalY, z: ref.position.z },
+                position: { x: ref.position.x, y: ref.position.y, z: ref.position.z },
                 rotation: { x: ref.rotation.x * RAD2DEG, y: ref.rotation.y * RAD2DEG, z: ref.rotation.z * RAD2DEG },
                 scale: { x: ref.scale.x, y: ref.scale.y, z: ref.scale.z },
               });
@@ -280,9 +258,8 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
       mWorld.premultiply(new THREE.Matrix4().copy(parent.matrixWorld).invert());
     }
     mWorld.decompose(_lp, _lq, _ls);
-    if (effectiveMode === 'translate' && !skipYClamp && !isCharPreview) {
-      _lp.y = Math.max(floorMinYRef.current, _lp.y); // bbox 밑면 바닥 클램프(루트 기준)
-    }
+    // 바닥(y=0) 침범 방지 클램프 제거(2026-07-22, 사용자 요청) — 오브젝트가 바닥 아래로도 이동 가능.
+    //   '바닥에 놓기'(floorSnapObject) 스냅은 그대로 유지된다(별개 기능).
     target.position.copy(_lp);
     target.quaternion.copy(_lq);
     target.scale.copy(_ls);
@@ -313,7 +290,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
       }
       if (best !== null) target!.position[axis] += best;
     });
-    if (!skipYClamp) target!.position.y = Math.max(floorMinYRef.current, target!.position.y);
+    // 바닥 침범 클램프 제거(사용자 요청) — 스냅만 적용, y 재클램프 안 함.
   };
 
   // 스케일 모드는 코너 핸들(ManipulationHandles)이 담당 → 스케일 기즈모 숨김(중복 방지). 이동/회전은 기즈모 유지.

@@ -21,10 +21,9 @@ export function TransformSection({ obj, open, onToggle }: { obj: ObjectNodeSchem
   const setSizeUnit = useEditorPrefsStore((s) => s.setSizeUnit);
   const uf = SIZE_UNIT_FACTOR[sizeUnit]; // m→표시단위 배율 (m=1, cm=100, mm=1000)
   const sizeDp = sizeUnit === 'm' ? 3 : sizeUnit === 'cm' ? 1 : 0; // 표시 소수 자리
-  // 그룹 자식의 position은 부모 기준 로컬 좌표라 음수 y가 정상 — 최상위 오브젝트만 바닥(y=0) 클램프
-  // (GizmoController의 skipYClamp와 동일한 규칙)
+  // 바닥(y=0) 침범 클램프 제거(2026-07-22, 사용자 요청) — y도 자유 입력(음수 허용). '바닥에 놓기'는 유지.
   const setPos = (axis: 'x' | 'y' | 'z', v: number) =>
-    updateObject(obj.id, { position: { ...obj.position, [axis]: axis === 'y' && !obj.parentId ? Math.max(0, v) : v } });
+    updateObject(obj.id, { position: { ...obj.position, [axis]: v } });
   const setRot = (axis: 'x' | 'y' | 'z', v: number) =>
     updateObject(obj.id, { rotation: { ...obj.rotation, [axis]: v } });
   // 스케일 — 앵커(pivot) 설정 시 그 점이 고정되도록 position 동반 보정(하단 앵커=바닥 고정 성장). 미설정=중심(현재 동작).
