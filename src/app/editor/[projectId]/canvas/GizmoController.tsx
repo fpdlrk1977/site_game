@@ -97,6 +97,9 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
             }
           }}
           onChange={() => {
+            // 드래그 중일 때만 적용 — 마우스를 놓은 뒤 syncPivot이 pivotEl을 리셋하며 튀는 stray onChange가
+            // dragStart 기준으로 refs를 시작 스케일/위치로 되돌려 커밋을 덮어쓰던 버그 방지(다중선택 revert).
+            if (!gizmoDraggingRef.current) return;
             if (transformMode === 'translate') {
               const dx = pivotEl.position.x - dragStartPivot.current.x;
               const dy = pivotEl.position.y - dragStartPivot.current.y;

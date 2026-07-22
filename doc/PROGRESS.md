@@ -140,6 +140,42 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 - **UI(`MapSlot`)**: 활성 시 상단에 패턴 프리셋 버튼 6개(→ `onPick('pattern:id')`) + 기존 TexturePicker(업로드/에셋). 전 맵 슬롯(normal/roughness/metalness/ao/displacement) 공용.
 - **확인 필요(브라우저)**: 맵 토글→패턴 버튼 클릭→즉시 적용(미리보기 구로 확인). Normal 슬롯=요철·Roughness=부분광택·AO=틈새그늘·Displacement(+Subdivision)=정점 밀림.
 
+### 🌍 무한 바닥(Infinite ground) (2026-07-22) — 브라우저 확인 대기
+> 사용자: fly.pieter.com 같은 광활한 맵 원함. **UI 먼저 결정**(AskUserQuestion) → **Environment ▸ Ground에 토글 하나**("Infinite ground") + 시야 거리 자동. 무작정 안 만들고 배치·조작 방식 합의 후 구현. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **방식**: 카메라 추종(follow) 대신 **아주 큰 정적 평면(20000) + far plane 8000**. 가장자리(10000)가 far plane 밖이라 **절대 안 보임 + 걸어서 도달 불가 = 사실상 무한**. follow 시 텍스처 swim/프리셋별 타일(REPEAT 48/32/40/22) 정렬 문제를 회피(더 단순·튼튼).
+- **스키마**: `EnvSchema.ground.infinite?: boolean`(옵셔널).
+- **`GroundPlane` 재작성**: `infinite`면 size 1000→20000, `FarPlane`(useThree camera.far→8000, 언마운트 복원) 렌더. 프리셋 텍스처는 **클론+repeat×20**(타일 밀도 유지·캐시 오염 방지, dispose 정리). URL 텍스처 repeat×20. 물/단색도 크기 반영.
+- **배선**: `ViewerCanvas`·`EditorCanvas` GroundPlane에 `infinite={env.ground.infinite}`. UI: EnvironmentPanel Ground 섹션에 "Infinite ground" 토글 + "안개와 함께 쓰면 광활" 안내.
+- **확인 필요(브라우저)**: 토글 켜기 → 바닥이 끝없이 이어짐·먼 오브젝트 안 잘림 · Fog 켜면 지평선 페이드 · 끄면 원복(far plane 복원) · 게시 뷰어.
+- **미구현(후속·별도)**: 절차적 지형(청크)·LOD·비행 컨트롤러 — three로 가능하나 각각 별 작업(엔진 기능화 필요).
+
+#### 🐛 다중선택 스케일 revert 버그픽스 (2026-07-22) — ✅ 확인 완료
+> 사용자 보고: 여러 오브젝트 선택→Scale 기즈모로 크기 조절→다른 곳 클릭하면 **이전 크기로 되돌아감**. 진단 로그로 확정 — onMouseUp `commitTransforms`는 정상(새 스케일로 커밋·스토어 반영 OK)인데, **마우스를 놓은 뒤 `syncPivot`(useFrame)이 `pivotEl.scale`을 1로 리셋하며 TransformControls의 stray `onChange`가 한 번 더 발동** → scale 브랜치가 `dragStartScales`(시작값) 기준으로 refs를 시작 스케일로 되돌려 커밋 결과를 시각적으로 덮어씀. → **`MultiGizmo` onChange 최상단에 `if (!gizmoDraggingRef.current) return;` 가드**(드래그 중일 때만 적용). SingleGizmo는 proxy 방식이라 자가교정돼 무영향. tsc 클린. **✅ 확인 완료(사용자 "이제 된다").**
+
+#### 🧭 상단바 해체 → 좌/우 패널로 재배치 (2026-07-22) — ✅ 확인 완료
+> 사용자 요청: 상단바 내용을 좌/우 패널로 옮기고 상단바는 hidden. tsc 클린 + dev 편집 200. **✅ 확인 완료(사용자, 5개 항목 전부 정상).**
+- **Version history → 좌측 ☰ 메뉴**(`LeftPanel`): 기존 'Back to file' 아래에 'Version history' 항목 추가 + `VersionHistoryModal`(showHistory state·createPortal).
+- **Save/Play/Preview → 우측 패널 상단**(신규 `InspectorActionBar.tsx`): 아이콘만 + 영문 툴팁(Save (Ctrl+S)·Play (test in-editor)·Preview (open published view)). `EditorClient` 인스펙터 컨테이너를 flex-col로 바꿔 `<InspectorActionBar/>` + `<InspectorPanel/>`. Environment 위에 항상 노출.
+- **저장 로직 추출**(신규 `useEditorSave.ts`): ViewportToolbar의 handleSave(낙관적잠금+버전스냅샷+썸네일)를 훅으로 추출 → InspectorActionBar가 사용. `id="save-btn"`을 액션바로 이동(Ctrl+S가 보이는 버튼 클릭). ViewportToolbar의 중복 id 제거.
+- **Park3D 브랜드/로고 → 좌측 패널**: `LeftPanel` 타이틀바를 2행으로(브랜드+☰ / 프로젝트명). Hexagon 로고 그라데이션.
+- **상단바 hidden**(`EditorClient`): `<div className="hidden ...">`로 감싸 hidden 처리(삭제 아님·나중에 살릴 수 있게 유지). `ViewportToolbar` 컴포넌트/파일 유지.
+- **패널 높이 조정**: `panelTop`을 `edge+44+gap`(64) → `edge`(12)로 → 레일·좌패널·인스펙터가 위 가장자리까지 확장.
+- **확인 필요(브라우저)**: ①좌측 ☰ > Version history 열림 ②우측 상단 Save/Play/Preview 아이콘+툴팁·동작(Ctrl+S 저장) ③Park3D 브랜드가 좌측 프로젝트명 위 ④상단바 안 보임·패널이 위까지 참 ⑤플로팅 툴바/기즈모 위치 안 겹침.
+
+#### 🧭 2차 — Settings/Account → ☰ 통합 · GNB 레일 삭제 · Logic 팝업화 (2026-07-22) — ✅ 확인 완료
+> 사용자 요청 3건. tsc 클린 + dev 편집 200. **✅ 확인 완료(사용자 "잘된다").**
+> **🔜 후속 예정(사용자 지시)**: **Logic 팝업의 UI/콘텐츠 보강** — 현재는 기존 LogicPanel 섹션(GameVariables/SceneLogic/Hud)을 드래그 팝업에 그대로 담은 상태. 팝업에 맞는 레이아웃·콘텐츠 다듬기 필요(폭/스크롤/섹션 구성 등). 나중에 진행.
+- **Settings/Account → 좌측 ☰ 메뉴**(`LeftPanel`): 일반적 사용자 메뉴 형태 — **이메일(Signed in as) 제일 위** → Back to file · Version history → **Settings** 소제목(Dark/Light mode·Share/Embed·Custom domain) → **Account** 소제목(Account settings·Sign out). ShareModal/CustomDomainModal·theme·email 로직을 EditorGnb에서 LeftPanel로 이관. 소제목=`text-[9px] uppercase` 회색.
+- **좌측 GNB 레일 삭제**: `EditorClient`에서 레일 div·`EditorGnb` 렌더·`handleGnbTabClick` 제거. `EditorGnb.tsx`는 **GnbTab 타입만 남긴 파일로 축소**(컴포넌트 삭제). 레이아웃 `railW` 제거 → `leftPanelX = edge`(좌패널이 왼쪽 가장자리부터), 좌패널 높이/폭 확장. Objects/Assets는 좌패널 가로 탭이 담당.
+- **Logic → Environment 타이틀 버튼 + 드래그 팝업**(신규 `LogicPopup.tsx`): Inspector의 Environment 헤더 우측에 `Cpu` 버튼(`data-logic-trigger`) → `setLogicOpen(true)`. LogicPopup = `createPortal` 고정 위치 + **드래그 헤더 이동** + **바깥클릭/Esc 닫기**(트리거 버튼 제외 → 재오픈 방지). 내용=GameVariables/SceneLogic/Hud 섹션(기존 LogicPanel과 동일). 스토어 `logicOpen`/`setLogicOpen` 추가. (구 `LogicPanel.tsx`는 미사용 — 잔존.)
+- **확인 필요(브라우저)**: ①☰ 메뉴에 이메일 위·Settings/Account 소제목·다크모드/Share/도메인/로그아웃 동작 ②좌측 레일 사라지고 좌패널이 왼쪽 끝부터 ③Environment 타이틀 우측 Logic 버튼 → 팝업 열림·드래그 이동·바깥클릭/Esc 닫기·변수/규칙/HUD 편집.
+
+#### 🔧 모터 표식 화면 고정 크기 (2026-07-22) — 브라우저 확인 대기
+> 사용자: 오브젝트를 작게 만들고 모터를 달면 모터(기어 아이콘)가 오브젝트보다 커서 덮어버림. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **원인**: `MotorObjectInstance`의 dot(히트구 0.24·기어 0.15/0.19·선택링 0.32)이 **고정 월드 크기** → 작은 오브젝트를 덮음(줌해도 함께 커져 항상 덮음).
+- **수정**: dot 표식을 `iconRef` 그룹으로 묶고 **useFrame으로 화면 고정 픽셀 크기** 적용(ManipulationHandles와 동일 거리·화각(fovK)·뷰포트(vpk) 보정). `s = dist*0.022*vpk*fovK`, `iconRef.scale = (s/0.15)/부모월드스케일`. → 줌인 시 오브젝트는 커지고 기어는 작은 마커로 남아 안 덮음. 라벨(Html)은 그룹 밖(무영향).
+- **확인 필요(브라우저)**: 작은 오브젝트+모터 → 줌인 시 기어가 오브젝트 안 덮음·마커 일정 크기·클릭/선택 정상.
+
 ### ✅ 재질 고도화 로드맵 실행분 완료 (2026-07-22)
 > Phase 1(파라미터)·2(픽커)·3(Fresnel·Toon·Matcap)·4(normal/rough/metal/AO/displacement 맵 + 2K 상한) 전부 구현. tsc 클린 + dev 편집 200. **브라우저 종합 확인 대기.** 미착수 잔여 = 픽커 알파(보류)·AO uv2 정밀화(현재 uv0 공유로 동작).
 

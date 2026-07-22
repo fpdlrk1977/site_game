@@ -547,6 +547,20 @@ export function EnvironmentPanel() {
                       />
                     </div>
                   )}
+                  {/* 무한 바닥 — 아주 큰 정적 평면 + 시야 거리 확대(카메라 far plane). 걸어서 도달 불가 = 사실상 무한. */}
+                  <label className="flex items-center justify-between gap-2 pt-1 cursor-pointer">
+                    <span className="text-[11px] text-foreground">Infinite ground</span>
+                    <Toggle
+                      value={env.ground?.infinite ?? false}
+                      onChange={(v) => {
+                        updateEnvironment({ ground: { ...env.ground!, infinite: v } });
+                        pushHistory();
+                      }}
+                    />
+                  </label>
+                  <p className="text-[10px] text-muted/60 leading-snug">
+                    Huge floor + extended view distance so it never ends. Pair with Fog for a vast horizon.
+                  </p>
                 </>
               );
             })()}

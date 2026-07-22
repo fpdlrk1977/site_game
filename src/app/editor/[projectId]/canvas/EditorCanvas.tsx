@@ -1242,6 +1242,7 @@ export function EditorCanvas() {
               color={environment.ground.color}
               textureUrl={environment.ground.textureUrl}
               positionY={-0.002}
+              infinite={environment.ground.infinite}
             />
           )}
 

@@ -6,9 +6,11 @@ import { ChevronLeft, ChevronRight, Monitor, Square } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
 import { buildSceneData } from "@/lib/saveScene";
 import { ViewportToolbar } from "./panels/ViewportToolbar";
-import { EditorGnb, type GnbTab } from "./panels/EditorGnb";
+import { type GnbTab } from "./panels/EditorGnb";
 import { LeftPanel } from "./panels/LeftPanel";
 import { InspectorPanel } from "./panels/InspectorPanel";
+import { InspectorActionBar } from "./panels/InspectorActionBar";
+import { LogicPopup } from "./panels/LogicPopup";
 import { TimelinePanel } from "./panels/TimelinePanel";
 import { EditorEmptyState } from "./panels/EditorEmptyState";
 import { EditorOnboarding } from "./EditorOnboarding";
@@ -89,16 +91,6 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
   const [leftOpen, setLeftOpen] = useState(true);
   const [gnbTab, setGnbTab] = useState<GnbTab>("objects");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-
-  // GNB 탭 클릭: 같은 탭을 다시 누르면 패널 접기/펼치기, 다른 탭이면 전환 + 펼치기
-  const handleGnbTabClick = (tab: GnbTab) => {
-    if (tab === gnbTab && leftOpen) {
-      setLeftOpen(false);
-    } else {
-      setGnbTab(tab);
-      setLeftOpen(true);
-    }
-  };
 
   // 씬 로드 — sceneId가 같으면 재로드하지 않음 (initialScene prop 재생성 시 재로드 방지)
   // sceneId가 바뀌면(App Router가 param만 바꿔 컴포넌트를 재사용하는 씬 전환) 새 씬을 로드
@@ -276,16 +268,18 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
   // 패널 배치 상수(px): 가장자리 여백 12, 상단바 높이 44, 레일 48, 좌패널 240, 인스펙터 240.
   //   ※ leftW/inspW는 실제 패널의 Tailwind 폭(w-60)과 반드시 같아야 한다 — 어긋나면 뷰포트 오버레이
   //     (플로팅 툴바·기즈모·상태바)가 패널 밑으로 들어가거나 뜬다.
-  const railW = 48,
-    leftW = 240,
+  const leftW = 240,
     inspW = 240,
     edge = 12,
     gap = 8;
-  const panelTop = edge + 44 + gap; // 상단바 아래 = 64
-  const leftPanelX = edge + railW + gap; // 좌패널 시작 x = 68
+  // 상단바(ViewportToolbar) hidden + 좌측 GNB 레일 삭제(2026-07-22) → 패널을 위·좌 가장자리까지.
+  //   브랜드/프로젝트명·Objects/Assets 탭·Settings/Account는 좌측 패널, Save/Play/Preview는 우측 상단,
+  //   Logic은 Environment 타이틀의 버튼(드래그 팝업)으로 이동.
+  const panelTop = edge;
+  const leftPanelX = edge; // 레일 삭제 → 좌패널이 왼쪽 가장자리에서 시작
   const overlayLeft = leftOpen ? leftPanelX + leftW + gap : leftPanelX; // 자유 캔버스 좌측 경계
   const overlayRight = edge + inspW + gap; // 자유 캔버스 우측 경계 = 260
-  const panelShell = "rounded-sm bg-surface border border-border overflow-hidden";
+  const panelShell = "rounded-xs bg-surface border border-border overflow-hidden";
   // 하단 타임라인이 열리면 사이드 패널/오버레이 바닥을 그만큼 올린다(전체폭 바닥 패널 공간 확보).
   const TIMELINE_H = 172;
   const bottomInset = timelineOpen ? TIMELINE_H + gap : 0;
@@ -312,15 +306,12 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
         {/* <ViewportStatusBar /> */}
       </div>
 
-      {/* Floating top bar */}
-      <div className={`absolute top-3 left-3 right-3 h-11 z-40 ${panelShell}`}>
+      {/* Floating top bar — hidden 처리(2026-07-22, 나중에 살릴 수 있게 유지). 내용은 좌/우 패널로 이동. */}
+      <div className={`hidden absolute top-3 left-3 right-3 h-11 z-40 ${panelShell}`}>
         <ViewportToolbar />
       </div>
 
-      {/* Floating GNB rail */}
-      <div className={`absolute left-3 w-12 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
-        <EditorGnb tab={gnbTab} panelOpen={leftOpen} onTabClick={handleGnbTabClick} projectName={projectName} />
-      </div>
+      {/* GNB 레일 삭제(2026-07-22) — Objects/Assets 탭은 좌패널 내부, Logic은 Environment 팝업으로 이동. */}
 
       {/* Floating left panel (Objects / Assets) */}
       {leftOpen && (
@@ -339,9 +330,12 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
         {leftOpen ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
       </button>
 
-      {/* Floating inspector */}
-      <div className={`absolute right-3 w-60 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
-        <InspectorPanel />
+      {/* Floating inspector — 상단 액션바(Save/Play/Preview) + Inspector 본문 */}
+      <div className={`absolute right-3 w-60 z-30 flex flex-col ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
+        <InspectorActionBar />
+        <div className="flex-1 min-h-0">
+          <InspectorPanel />
+        </div>
       </div>
 
       {/* Floating bottom timeline (advanced mode) — 전체폭 바닥 패널 */}
@@ -371,6 +365,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       <PenToolModal />
       <VoxelToolModal />
       <BoundaryShapeModal />
+      <LogicPopup />
     </div>
   );
 }

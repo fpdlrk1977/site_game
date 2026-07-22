@@ -253,7 +253,10 @@ export function ActuatorGizmo({ orbitRef }: { orbitRef?: React.RefObject<OrbitCo
     _p.copy(_h).addScaledVector(_axis, len);
     arr[3] = _p.x; arr[4] = _p.y; arr[5] = _p.z;
     geo.attributes.position.needsUpdate = true;
-    sp.visible = true; ln.visible = true;
+    // 경첩(주황 구): 모터는 원점=기어 위치라 중복 + 파란 선택 기어를 가려 숨긴다(경첩 이동 모드에선 드래그 위해 표시).
+    //   속성형 관절은 경첩이 부품 모서리에 있어 위치 표시가 필요하므로 항상 표시.
+    sp.visible = !isMotor || pivotMoving;
+    ln.visible = true;
 
     // slide는 부채꼴/핸들 없음(축 선만)
     if (act.kind !== 'rotate') { fan.visible = false; edge.visible = false; minH.visible = false; maxH.visible = false; return; }

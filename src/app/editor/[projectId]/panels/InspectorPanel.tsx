@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useLayoutEffect, type MutableRefObject } from 'react';
-import { Download, X, CirclePile, Package, Clapperboard, Eye, EyeOff, Lock, Unlock, MoreHorizontal } from 'lucide-react';
+import { Download, X, CirclePile, Package, Clapperboard, Eye, EyeOff, Lock, Unlock, MoreHorizontal, Cpu } from 'lucide-react';
 import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
@@ -144,6 +144,17 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
           <span className=" text-[11px] font-semibold text-foreground tracking-wide flex-1">
             {isCharSelected ? 'Player Character' : 'Environment'}
           </span>
+          {!isCharSelected && (
+            <Tooltip content="Game Logic (variables · rules · HUD)">
+              <button
+                data-logic-trigger
+                onClick={() => useSceneStore.getState().setLogicOpen(true)}
+                className="w-6 h-6 shrink-0 rounded-xs flex items-center justify-center text-foreground hover:bg-background transition-colors"
+              >
+                <Cpu size={14} />
+              </button>
+            </Tooltip>
+          )}
         </div>
         {isCharSelected && (
           <div className="px-3 py-2 bg-primary/5 border-b border-border shrink-0">

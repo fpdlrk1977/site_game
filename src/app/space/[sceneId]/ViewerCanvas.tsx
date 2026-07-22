@@ -493,6 +493,7 @@ export function ViewerCanvas({ scene, playMode, onObjectClick, mobileInputRef, f
           color={environment.ground.color}
           textureUrl={environment.ground?.textureUrl}
           positionY={playMode ? 0 : -0.002}
+          infinite={environment.ground?.infinite}
         />
       )}
 

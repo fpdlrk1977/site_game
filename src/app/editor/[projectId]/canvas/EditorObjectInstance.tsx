@@ -2,12 +2,13 @@
 
 import { useRef, useLayoutEffect, useMemo, useEffect, useState, Suspense } from 'react';
 import * as THREE from 'three';
-import { useThree, type ThreeEvent } from '@react-three/fiber';
+import { useThree, useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Text3D, Center, Line, Billboard, Html } from '@react-three/drei';
 import { createPrimitiveGeometry, createRoundedBoxDims, primitiveGeomKey, profileSig } from '@/lib/primitiveGeometry';
 import { voxelSig, voxelSkinsSig } from '@/lib/voxelGeometry';
 import { useVoxelSkinMaterials } from '@/components/three/useVoxelSkinMaterials';
 import { primLocalBboxCache } from '@/lib/primBboxCache';
+import { worldBBox } from '@/lib/objectBBox';
 import { effectiveMaterial } from '@/lib/effectiveMaterial';
 import { useShallow } from 'zustand/react/shallow';
 import { useSceneStore } from '@/store/sceneStore';
@@ -515,41 +516,75 @@ function GroupObjectInstance({ object }: Props) {
 }
 
 const MOTOR_COLOR = '#ff7a0d';
-// 모터 아이콘 = 톱니바퀴(기어) 실루엣. 사다리꼴 이빨 8개 + 가운데 구멍. 한 번만 생성해 전 모터가 공유.
-//   빌보드로 항상 카메라를 향하게 렌더 → 어느 각도서도 '기계 부품(모터)'으로 읽힌다.
-const MOTOR_GEAR_GEO = (() => {
-  const teeth = 8, rTip = 1.0, rRoot = 0.72, rHole = 0.38, depth = 0.4;
-  const shape = new THREE.Shape();
+const _iconWP = new THREE.Vector3(); // 모터 표식 화면고정 스케일 계산용 스크래치
+const _iconWS = new THREE.Vector3();
+const _iconSz = new THREE.Vector3(); // 연결 부품 bbox 크기용
+// 모터 아이콘 = 톱니바퀴(기어) 실루엣을 '라인(외곽선)'으로. 사다리꼴 이빨 8개 + 가운데 구멍.
+//   빌보드로 항상 카메라를 향함. 선택 시 색을 선택 가이드색(파랑)으로 바꿔 표시(별도 선택 링 없음).
+type Pt = [number, number, number];
+const MOTOR_GEAR_OUTLINE: Pt[] = (() => {
+  const teeth = 8, rTip = 1.0, rRoot = 0.72;
   const step = (Math.PI * 2) / teeth;
   const fr = [0, 0.28, 0.36, 0.64, 0.72];       // 이빨 한 칸 내 프로파일(바닥→상승→이빨상단→하강)
   const rr = [rRoot, rRoot, rTip, rTip, rRoot];
-  let first = true;
+  const pts: Pt[] = [];
   for (let i = 0; i < teeth; i++) {
     for (let k = 0; k < fr.length; k++) {
       const ang = (i + fr[k]) * step;
-      const x = Math.cos(ang) * rr[k], y = Math.sin(ang) * rr[k];
-      if (first) { shape.moveTo(x, y); first = false; } else shape.lineTo(x, y);
+      pts.push([Math.cos(ang) * rr[k], Math.sin(ang) * rr[k], 0]);
     }
   }
-  shape.closePath();
-  const hole = new THREE.Path();
-  hole.absarc(0, 0, rHole, 0, Math.PI * 2, true);
-  shape.holes.push(hole);
-  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 6 });
-  geo.center();
-  return geo;
+  pts.push(pts[0]); // 닫기
+  return pts;
+})();
+const MOTOR_GEAR_HOLE: Pt[] = (() => {
+  const rHole = 0.38, seg = 28;
+  const pts: Pt[] = [];
+  for (let i = 0; i <= seg; i++) { const a = (i / seg) * Math.PI * 2; pts.push([Math.cos(a) * rHole, Math.sin(a) * rHole, 0]); }
+  return pts;
 })();
 // 모터형 액추에이터 — 메쉬 없는 그룹. 원점에 클릭 가능한 dot을 그려 비어 있어도 찾고/선택할 수 있게 한다.
 // 연결된 자식(재부모화된 오브젝트)은 그룹처럼 중첩 렌더. 실제 구동은 ▶ 플레이/뷰어(에디터는 정적).
 function MotorObjectInstance({ object }: Props) {
   const groupRef = useRef<THREE.Group>(null);
+  const iconRef = useRef<THREE.Group>(null); // 모터 dot 표식 — 화면 고정 크기(작은 오브젝트를 안 덮게)
   const refsMap = useObjectRefs();
+  const camera = useThree((s) => s.camera);
+  const viewportH = useThree((s) => s.size.height);
   const selectedIds = useSceneStore((s) => s.selectedIds);
   const selectedId = useSceneStore((s) => s.selectedId);
   const children = useSceneStore(useShallow((s) => s.objects.filter((o) => o.parentId === object.id)));
   const isSelected = selectedIds.length > 0 ? selectedIds.includes(object.id) : selectedId === object.id;
   // 이 모터의 경첩을 옮기는 중 — 기어 히트 구를 레이캐스트에서 빼 경첩 핸들을 가리지 않게 한다.
   const pivotMoving = useSceneStore((s) => s.pivotMotorId === object.id);
+
+  // 연결된 부품의 월드 최대변 — 이보다 기어가 커지지 않게 상한(작은 오브젝트를 안 덮게). 부품 없으면 0(상한 없음).
+  const partMaxWorld = useMemo(() => {
+    const { objects, assets } = useSceneStore.getState();
+    let max = 0;
+    for (const c of children) {
+      const bb = worldBBox(objects, assets, c.id);
+      if (bb && !bb.isEmpty()) { bb.getSize(_iconSz); max = Math.max(max, _iconSz.x, _iconSz.y, _iconSz.z); }
+    }
+    return max;
+  }, [children]);
+
+  // 모터 표식 크기 = min(화면 고정, 부품 최대변×0.35). 화면 고정으로 줌 무관 마커, 상한으로 작은 부품을 안 덮음.
+  useFrame(() => {
+    const g = groupRef.current, ic = iconRef.current;
+    if (!g || !ic) return;
+    g.getWorldPosition(_iconWP);
+    g.getWorldScale(_iconWS);
+    const dist = camera.position.distanceTo(_iconWP);
+    const persp = camera as THREE.PerspectiveCamera;
+    const vpk = 800 / Math.max(1, viewportH);
+    const fovK = persp.isPerspectiveCamera ? Math.tan((persp.fov * Math.PI) / 360) / Math.tan(Math.PI / 6) : 1;
+    const screenS = dist * 0.016 * vpk * fovK;        // 화면 고정 기어 월드 크기
+    const cap = partMaxWorld > 0 ? partMaxWorld * 0.35 : Infinity; // 부품 최대변의 35% 상한
+    const s = Math.min(screenS, cap);
+    const parentScale = Math.max(1e-4, (_iconWS.x + _iconWS.y + _iconWS.z) / 3);
+    ic.scale.setScalar((s / 0.15) / parentScale);
+  });
 
   useLayoutEffect(() => {
     if (groupRef.current) refsMap.current.set(object.id, groupRef.current);
@@ -568,32 +603,27 @@ function MotorObjectInstance({ object }: Props) {
 
   return (
     <group ref={groupRef} onPointerDown={markObjectHit}>
-      {/* 클릭 히트 영역 — 아이콘보다 크게(잡기 쉽게) · 항상 최상단(depthTest off)이라 부품에 묻혀도 잡힘.
-          단 경첩 이동 모드에선 핸들러를 떼 레이캐스트 대상에서 빠진다 — 이 구는 고정 반경(0.24)이라
-          화면을 확대하면 화면 크기 일정인 경첩 핸들보다 커져서, 안 떼면 기어가 경첩 드래그를 삼킨다. */}
-      <mesh
-        renderOrder={999}
-        onClick={pivotMoving ? undefined : (e) => { e.stopPropagation(); selectByClick(object, e.nativeEvent.shiftKey); }}
-        onDoubleClick={pivotMoving ? undefined : (e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
-      >
-        <sphereGeometry args={[0.24, 12, 12]} />
-        <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
-      </mesh>
-      {/* 모터 아이콘 = 기어(빌보드로 항상 카메라를 향함) · 부품에 묻혀도 찾도록 항상 최상단 */}
-      <Billboard>
-        <mesh geometry={MOTOR_GEAR_GEO} scale={0.15} raycast={() => null} renderOrder={1000}>
-          <meshBasicMaterial color={MOTOR_COLOR} depthTest={false} />
+      {/* 모터 표식(히트 구 + 기어 + 선택 링) — 화면 고정 크기(useFrame). 작은 오브젝트를 덮지 않게. */}
+      <group ref={iconRef}>
+        {/* 클릭 히트 영역 — 아이콘보다 크게(잡기 쉽게) · 항상 최상단(depthTest off)이라 부품에 묻혀도 잡힘.
+            단 경첩 이동 모드에선 핸들러를 떼 레이캐스트 대상에서 빠진다. */}
+        <mesh
+          renderOrder={999}
+          onClick={pivotMoving ? undefined : (e) => { e.stopPropagation(); selectByClick(object, e.nativeEvent.shiftKey); }}
+          onDoubleClick={pivotMoving ? undefined : (e) => { e.stopPropagation(); selectExact(object, e.nativeEvent.shiftKey); }}
+        >
+          <sphereGeometry args={[0.24, 12, 12]} />
+          <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
         </mesh>
-        <mesh geometry={MOTOR_GEAR_GEO} scale={0.19} raycast={() => null} renderOrder={999}>
-          <meshBasicMaterial color={MOTOR_COLOR} transparent opacity={0.16} depthTest={false} depthWrite={false} />
-        </mesh>
-      </Billboard>
-      {isSelected && (
-        <mesh raycast={() => null} renderOrder={1000}>
-          <sphereGeometry args={[0.32, 10, 10]} />
-          <meshBasicMaterial color="#0D99FF" wireframe depthTest={false} />
-        </mesh>
-      )}
+        {/* 모터 아이콘 = 기어 라인(빌보드로 항상 카메라를 향함) · 부품에 묻혀도 찾도록 항상 최상단.
+            선택하면 선택 가이드색(#0D99FF)으로 바뀜 → 별도 선택 링 불필요. */}
+        <Billboard>
+          <group scale={0.15}>
+            <Line points={MOTOR_GEAR_OUTLINE} color={isSelected ? '#0D99FF' : MOTOR_COLOR} lineWidth={2} depthTest={false} renderOrder={1000} raycast={() => null} />
+            <Line points={MOTOR_GEAR_HOLE} color={isSelected ? '#0D99FF' : MOTOR_COLOR} lineWidth={2} depthTest={false} renderOrder={1000} raycast={() => null} />
+          </group>
+        </Billboard>
+      </group>
       {/* 빌보드 라벨 — 선택 시에만(여러 모터일 때 화면 지저분 방지). 한글이라 DOM(Html)로 렌더. */}
       {isSelected && (
         <Html center position={[0, 0.34, 0]} zIndexRange={[80, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>

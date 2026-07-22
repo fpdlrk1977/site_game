@@ -15,7 +15,7 @@ export interface EnvSchema {
   //      예전엔 <Environment background />로 HDRI 사진을 배경에 깔아 "사진 붙인 느낌 + 지평선 하드컷"이 났다.
   sky: { type: 'color' | 'hdr' | 'sky' | 'gradient'; value: string; value2?: string };
   hdrPreset?: HdrPreset;
-  ground?: { enabled: boolean; color: string; preset?: GroundPreset; textureUrl?: string };
+  ground?: { enabled: boolean; color: string; preset?: GroundPreset; textureUrl?: string; infinite?: boolean };
   boundary?: number;  // 경계 X 반경(중심→벽). >0이면 이동 제한(콜라이더) 항상 존재. 원형이면 이 값이 반지름.
   boundaryZ?: number; // 경계 Z 반경. 미설정 시 boundary와 같음(정사각) — 직사각 지원. 원형에선 무시.
   boundaryShape?: 'rect' | 'circle' | 'polygon'; // 경계 모양. rect=사각·circle=원형·polygon=자유 다각형.

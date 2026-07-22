@@ -154,7 +154,6 @@ export function ViewportToolbar() {
 
         <Tooltip content={isModified ? 'Save (Ctrl+S)' : 'No changes'}>
           <button
-            id="save-btn"
             onClick={handleSave}
             disabled={!isModified || saving}
             className={`flex items-center gap-1.5 px-3 h-7 rounded-xs text-xs font-semibold transition-all shrink-0 ${
