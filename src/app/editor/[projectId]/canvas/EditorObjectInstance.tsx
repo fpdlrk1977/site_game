@@ -855,18 +855,44 @@ export function EditorObjectInstance({ object }: Props) {
             metalness={metalness}
             wireframe={wireframeMode}
             emissive={emissive}
-            emissiveIntensity={emissive !== '#000000' ? 1 : 0}
+            emissiveIntensity={mat?.emissiveIntensity ?? (emissive !== '#000000' ? 1 : 0)}
             textureUrl={mat?.textureUrl}
             repeat={mat?.textureRepeat}
             flatShading={rdFlat}
             side={rdSide}
+            opacity={mat?.opacity}
+            envMapIntensity={mat?.envMapIntensity}
             clearcoat={mat?.clearcoat}
+            clearcoatRoughness={mat?.clearcoatRoughness}
             sheen={mat?.sheen}
+            sheenColor={mat?.sheenColor}
+            sheenRoughness={mat?.sheenRoughness}
+            iridescence={mat?.iridescence}
+            iridescenceIOR={mat?.iridescenceIOR}
+            anisotropy={mat?.anisotropy}
             transmission={mat?.transmission}
             ior={mat?.ior}
+            thickness={mat?.thickness}
+            attenuationColor={mat?.attenuationColor}
+            attenuationDistance={mat?.attenuationDistance}
+            fresnelColor={mat?.fresnelColor}
+            fresnelIntensity={mat?.fresnelIntensity}
+            fresnelPower={mat?.fresnelPower}
+            shading={mat?.shading}
+            toonSteps={mat?.toonSteps}
+            matcapPreset={mat?.matcapPreset}
+            matcapUrl={mat?.matcapUrl}
             vertexColors={object.primitiveShape === 'voxel' && !mat?.textureUrl}
             textureMapping={mat?.textureMapping}
             triplanarScale={mat?.triplanarScale}
+            normalUrl={mat?.normalUrl}
+            normalScale={mat?.normalScale}
+            roughnessUrl={mat?.roughnessUrl}
+            metalnessUrl={mat?.metalnessUrl}
+            aoUrl={mat?.aoUrl}
+            aoIntensity={mat?.aoIntensity}
+            displacementUrl={mat?.displacementUrl}
+            displacementScale={mat?.displacementScale}
             wrapMin={wrapBounds.min}
             wrapSize={wrapBounds.size}
             gradient={mat?.gradient}

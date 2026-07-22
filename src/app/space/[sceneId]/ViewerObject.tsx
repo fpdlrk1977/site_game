@@ -933,18 +933,44 @@ export function ViewerObject({
         roughness={roughness}
         metalness={metalness}
         emissive={emissiveOn ? color : emissive}
-        emissiveIntensity={emissiveOn ? 0.3 : emissive !== "#000000" ? 1 : 0}
+        emissiveIntensity={emissiveOn ? 0.3 : (object.material?.emissiveIntensity ?? (emissive !== "#000000" ? 1 : 0))}
         textureUrl={object.material?.textureUrl}
         repeat={object.material?.textureRepeat}
         flatShading={rdFlat}
         side={rdSide}
+        opacity={object.material?.opacity}
+        envMapIntensity={object.material?.envMapIntensity}
         clearcoat={object.material?.clearcoat}
+        clearcoatRoughness={object.material?.clearcoatRoughness}
         sheen={object.material?.sheen}
+        sheenColor={object.material?.sheenColor}
+        sheenRoughness={object.material?.sheenRoughness}
+        iridescence={object.material?.iridescence}
+        iridescenceIOR={object.material?.iridescenceIOR}
+        anisotropy={object.material?.anisotropy}
         transmission={object.material?.transmission}
         ior={object.material?.ior}
+        thickness={object.material?.thickness}
+        attenuationColor={object.material?.attenuationColor}
+        attenuationDistance={object.material?.attenuationDistance}
+        fresnelColor={object.material?.fresnelColor}
+        fresnelIntensity={object.material?.fresnelIntensity}
+        fresnelPower={object.material?.fresnelPower}
+        shading={object.material?.shading}
+        toonSteps={object.material?.toonSteps}
+        matcapPreset={object.material?.matcapPreset}
+        matcapUrl={object.material?.matcapUrl}
         vertexColors={object.primitiveShape === 'voxel' && !object.material?.textureUrl}
         textureMapping={object.material?.textureMapping}
         triplanarScale={object.material?.triplanarScale}
+        normalUrl={object.material?.normalUrl}
+        normalScale={object.material?.normalScale}
+        roughnessUrl={object.material?.roughnessUrl}
+        metalnessUrl={object.material?.metalnessUrl}
+        aoUrl={object.material?.aoUrl}
+        aoIntensity={object.material?.aoIntensity}
+        displacementUrl={object.material?.displacementUrl}
+        displacementScale={object.material?.displacementScale}
         wrapMin={wrapBounds.min}
         wrapSize={wrapBounds.size}
         gradient={object.material?.gradient}

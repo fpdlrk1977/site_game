@@ -8,19 +8,31 @@ import { create } from 'zustand';
 interface ColorPickerStore {
   activeFieldId: string | null;
   panelPos: { x: number; y: number };
+  /** 최근 사용한 색(세션 유지, 최신순·중복 제거·최대 12) */
+  recent: string[];
   /** 새로 열기 — activeFieldId + 위치 지정 */
   openAt: (fieldId: string, pos: { x: number; y: number }) => void;
   /** 열린 상태에서 다른 필드로 전환 — 위치 유지, 대상만 교체 */
   switchTo: (fieldId: string) => void;
   close: () => void;
   setPanelPos: (pos: { x: number; y: number }) => void;
+  pushRecent: (hex: string) => void;
 }
+
+const RECENT_MAX = 12;
 
 export const useColorPickerStore = create<ColorPickerStore>((set) => ({
   activeFieldId: null,
   panelPos: { x: 0, y: 0 },
+  recent: [],
   openAt: (fieldId, pos) => set({ activeFieldId: fieldId, panelPos: pos }),
   switchTo: (fieldId) => set({ activeFieldId: fieldId }),
   close: () => set({ activeFieldId: null }),
   setPanelPos: (pos) => set({ panelPos: pos }),
+  pushRecent: (hex) =>
+    set((s) => {
+      const h = hex.toLowerCase();
+      const next = [h, ...s.recent.filter((c) => c.toLowerCase() !== h)].slice(0, RECENT_MAX);
+      return { recent: next };
+    }),
 }));

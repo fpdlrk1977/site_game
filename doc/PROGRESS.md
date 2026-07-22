@@ -51,6 +51,100 @@ npm run dev   # http://localhost:3000 (루트는 /login 리다이렉트)
 
 ---
 
+## 🎨 진행 중 (2026-07-22) — 재질/컬러픽커 고도화 로드맵 (Spline/Figma 대비 격차 해소)
+> 사용자: "재질 만들 때 너무 단순. Spline·Figma는 더 고도화돼 있다." 분석 후 **큰/중간 격차 전부 순차 진행** 합의(사용자: "일단 진행하고 실제 화면에서 성능 보고 뺄건 빼고 수정/보완"). 우선순위 = **Phase 1(파라미터) → 3(셰이딩) → 2(픽커) → 4(맵)**, 6(레이어)·7(GLB)은 별도 판단. 전부 옵셔널 필드라 하위호환 보존. 성능 원칙: opt-in 주입(안 쓰면 비용 0)·텍스처 상한·유리/레이어 캡.
+> 로드맵 문서(`MATERIAL_UPGRADE.md`)는 사용자가 반려(문서 대신 바로 구현) — 설계 요지는 이 블록에 로그로 남김.
+
+### Phase 1 (2026-07-22) — 재질 파라미터 확장 (🟢 배관, 저위험) — 브라우저 확인 대기
+> MeshPhysicalMaterial이 이미 지원하는 파라미터를 스키마·배선·UI로 노출. **새 셰이더 없음**(prop 직결)이라 성능/회귀 위험 낮음. tsc 클린 + dev 편집 라우트 200 컴파일. **브라우저 확인 대기.**
+- **스키마(`MaterialOverride`, 전부 옵셔널)**: `opacity`(<1=반투명 transparent)·`emissiveIntensity`(발광 세기, 미설정=현재 로직)·`envMapIntensity`(환경 반사 강도)·`clearcoatRoughness`·`sheenColor`·`sheenRoughness`·`iridescence`·`iridescenceIOR`·`anisotropy`·`thickness`(투과 두께, 기존 1 하드코딩 해제)·`attenuationColor`(유리 틴트)·`attenuationDistance`.
+- **렌더(`PrimitiveMaterial`)**: props 추가 + 배선. `hasPhysical` 판정에 iridescence·anisotropy 포함(physical 전용). opacity<1→transparent. **함정 처리**: 틴트 색만 지정하고 거리 미설정 시 Infinity라 틴트가 안 보임 → 틴트 색 있으면 거리 기본을 유한값(1)으로 보정. sheenColor/clearcoatRoughness 하드코딩(base/0.1) 해제해 override 존중.
+- **배선**: `EditorObjectInstance`·`ViewerObject` 호출부 12필드 전달. emissiveIntensity는 `mat?.emissiveIntensity ?? (기존 로직)`으로 하위호환. 재질 에셋 경로도 `effectiveMaterial`이 MaterialOverride 통째 반환이라 자동 흐름.
+- **UI(`MaterialSection`)**: 거칠기/금속성 아래 **Opacity·Emissive intensity** 행 + "Physical material (advanced)" 블록 확장(Reflection(env)·Anisotropy·Clearcoat+거칠기·Sheen+거칠기+색·Iridescence+IOR·Transmission+IOR+두께+유리 틴트/거리). **조건부 노출**(값 올릴 때만 하위 컨트롤 등장 — reveal on use).
+- **버그픽스(2026-07-22)**: Opacity가 에디터에서 안 먹던 문제 — Three는 재질을 **불투명→반투명 처음 전환 시 재컴파일 필요**한데 material `key`에 transparent가 없어 in-place 갱신되며 안 켜짐 → **key에 `${transparent?'tr':'op'}` 추가**(텍스처/flatShading 전환과 동일 재마운트 패턴). **✅ Opacity 반투명 확인(사용자).**
+- **확인 필요(브라우저, 미확인)**: ②Emissive intensity(발광색 준 뒤) ③Reflection(env)(금속성↑ 후) ④Iridescence ⑤Anisotropy ⑥Clearcoat ⑦Sheen ⑧유리+틴트 · 게시 뷰어 일치 · undo. (opacity 배선이 맞았으니 동일 경로라 저위험.)
+
+### Phase 3 part 1 (2026-07-22) — Fresnel/Rim(가장자리 발광) — 브라우저 확인 대기
+> 스타일라이즈드 셰이딩 첫 조각. **가장 깨끗하고 효과 큰 additive 주입**(standard·physical 공통, 안 켜면 비용 0). Toon/Matcap은 재질 클래스가 갈려 리스크 커 후속. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **스키마(`MaterialOverride`)**: `fresnelColor?`(기본 흰색)·`fresnelIntensity?`(0=끔)·`fresnelPower?`(가장자리 집중도, 기본 3). 옵셔널.
+- **렌더(`PrimitiveMaterial`)**: `onBeforeCompile`에 uniform(uFresColor/uFresIntensity/uFresPower) + 정점 varying(뷰공간 위치 `vFresView`·법선 `vFresNrm`=normalMatrix*normal) + 프래그먼트 `#include <emissivemap_fragment>`에 rim 주입(`pow(1-clamp(dot(N,V)),power)`를 `totalEmissiveRadiance`에 additive → 라이팅 무관 발광). `customShader`/`triKey`에 fresActive 포함(켜고 끌 때만 재마운트). 그라데이션/triplanar와 공존(같은 onBeforeCompile, 독립 replace).
+- **배선**: `EditorObjectInstance`·`ViewerObject`에 fresnel 3필드.
+- **UI(`MaterialSection`)**: Physical 블록 아래 "Rim glow (Fresnel)" — intensity + (켜면) width(power)·color. reveal on use.
+- **확인 필요(브라우저)**: Rim intensity 올리면 박스 가장자리 발광 · width로 테두리 두께 · 색 변경 · 다른 재질(유리·금속)과 조합 · 게시 뷰어 · 성능. (HMR "changed size" 경고는 하드 리프레시로 사라짐 — 실버그 아님.)
+
+### Phase 3 part 2 (2026-07-22) — Toon/Cel(카툰 셰이딩) — 브라우저 확인 대기
+> `MeshToonMaterial`(별도 재질 클래스). **`shading==='toon'`일 때만 분기**라 기존 standard/physical 오브젝트엔 무영향(격리·회귀 저위험). tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **스키마(`MaterialOverride`)**: `shading?: 'standard'|'toon'`(미설정=standard) + `toonSteps?`(음영 단계, 기본 3·2~6). 옵셔널.
+- **렌더(`PrimitiveMaterial`)**: `buildToonGradient(n)`=N단계 계단 gradientMap(DataTexture·RedFormat·NearestFilter → 딱딱한 밴딩). `isToon`이면 `hasPhysical`보다 먼저 `<meshToonMaterial>` 반환(color/map/normalMap/emissive/gradientMap/opacity). roughness/metalness/physical은 무시(카툰). **gradient·triplanar·fresnel 주입은 표준 셰이더 청크(color/map/emissivemap_fragment) 공유라 toon에도 그대로 동작**. key에 shading·transparent 포함.
+- **배선**: `EditorObjectInstance`·`ViewerObject`에 shading·toonSteps.
+- **UI(`MaterialSection`)**: 최상단 "Shading" 드롭다운(Standard/Toon) + toon일 때 Steps + "toon은 roughness/metalness/reflection 무시, color/emissive/texture/gradient/rim은 적용" 안내.
+- **확인 필요(브라우저)**: Shading=Toon → 박스가 단계 음영(카툰) · Steps 2~6로 밴딩 수 · 색/발광/Rim glow 병용 · standard로 되돌리면 원복 · 게시 뷰어.
+- **미구현(후속)**: Matcap — 별도 재질 클래스 + **내장 matcap 프리셋 이미지 필요**(없으면 저가치)라 보류.
+
+### Phase 4 core (2026-07-22) — Normal map(법선 맵·요철) — 브라우저 확인 대기
+> 평평한 프리미티브를 진짜 재질감(벽돌·천·요철)으로. 기존 텍스처 업로드/픽커 재사용. Standard·Physical·Toon 전부 적용. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **스키마(`MaterialOverride`)**: `normalUrl?`·`normalScale?`(요철 강도, 기본 1·0~2). 옵셔널.
+- **렌더(`PrimitiveMaterial`)**: 2번째 텍스처 로더(normalTex) — **노멀맵은 방향 데이터라 `NoColorSpace`**(sRGB 변환 금지). RepeatWrapping·albedo와 타일 공유. 세 재질 분기 전부 `normalMap`+`normalScale`(Vector2). key에 normal 유무(`nm`) 포함(USE_NORMALMAP define 토글=재마운트).
+- **배선**: `EditorObjectInstance`·`ViewerObject`에 normalUrl·normalScale.
+- **UI(`MaterialSection`)**: 텍스처 블록 아래 "Normal map (bump)" 토글 + TexturePicker(업로드/재사용) + Bump strength. 별도 업로드 핸들러(`handleNormalUpload`→normalUrl). textures 라이브러리 공유(albedo와 같은 'texture' 타입).
+- **확인 필요(브라우저)**: 파란톤 노멀맵 업로드/선택 → 박스 표면 요철(빛 각도 따라) · Bump strength 0~3 · Toon/유리와 병용 · 게시 뷰어 · VRAM(맵 많을 때).
+- **미구현(후속 Phase 4)**: roughness/metalness/AO/displacement/alpha map · 텍스처 2K 업로드 상한.
+
+### Phase 4 나머지 + 2K 상한 (2026-07-22) — Roughness/Metalness 맵 + MapSlot 리팩터 + 텍스처 다운스케일 — 브라우저 확인 대기
+> normal 맵 파이프라인 확장. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **스키마**: `roughnessUrl?`·`metalnessUrl?`(흑백 데이터 맵, roughness/metalness 스칼라에 곱해짐). standard·physical만(toon 제외).
+- **렌더(`PrimitiveMaterial`)**: 재사용 로더 훅 `useDataMap(url, rx, ry)`(NoColorSpace·RepeatWrapping·타일 공유) → roughnessTex·metalnessTex. standard·physical 분기에 `roughnessMap`/`metalnessMap` + key에 `rm`/`mm`. (기존 albedo/normal 로더는 안 건드림 — 안전.)
+- **★ 2K 다운스케일(`uploadImageTexture`)**: 신규 `downscaleImage(file)` — 최대 변 2048 초과 시 canvas로 축소(PNG 무손실 유지·그 외 JPEG 0.92). **VRAM/대역폭 상한**(성능). 이미 작으면 원본 그대로. **신규 업로드만 적용**(기존 에셋 무영향). ground/boundary 등 모든 이미지 텍스처 공유 경로라 함께 적용.
+- **UI(`MaterialSection`)**: 반복되던 맵 블록을 **재사용 `MapSlot` 컴포넌트**(토글+TexturePicker+업로드)로 추출 → normal(+strength)·roughness·metalness 3개를 깔끔하게. normal 인라인 핸들러/상태 제거(MapSlot이 업로드 자체 처리). roughness/metalness는 toon일 때 숨김.
+- **확인 필요(브라우저)**: 거칠기/금속 맵 업로드→부분 광택/금속 · 큰 이미지 업로드 시 2K로 줄어드는지 · normal과 병용.
+
+### Phase 2 (2026-07-22) — 컬러픽커 개선(최근 색·씬 내 색·복사) — 브라우저 확인 대기
+> 알파 채널은 재질 opacity(Phase 1)와 중복+전역 리플이라 보류. 자체완결·저위험 3종만. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **최근 색(Recent)**: `colorPickerStore`에 `recent[]`(세션 유지·최신순·중복제거·최대 12) + `pushRecent`. ColorPicker `commit`에서 solid 색만 기록. 팝업에 Recent 스와치 행.
+- **씬 내 색(In this scene)**: 팝업 열 때 1회 계산(비반응 — `useSceneStore.getState().objects`의 material.color 수집·중복제거·최대 16). 드래그 중 리렌더 없음.
+- **복사**: 현재 hex를 클립보드로(Copy 버튼, 스포이드 옆).
+- **확인 필요(브라우저)**: 색 바꾸면 Recent에 쌓임 · In this scene에 씬 색 표시 · 복사 · 클릭 적용.
+
+### Phase 3 part 3 (2026-07-22) — Matcap(절차적 프리셋 5종) — 브라우저 확인 대기
+> 셰이딩 모드 마지막(Standard/Toon/Matcap 완성). **외부 이미지 없이 절차적 생성** — 픽셀마다 구 법선+조명 모델(확산/Blinn 스페큘러/프레넬/금속 반사 그라데이션)로 '진짜 라이팅된 구' 이미지를 구움. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **신규 `lib/matcap.ts`**: `getMatcapTexture(preset)`(프리셋별 캐시·1회 생성) + `MATCAP_PRESETS`. 프리셋 5종 = **Studio(중립 글로시)·Chrome(거울금속)·Gold(금)·Clay(무광 점토)·Pearl(무지개빛)**. 256² CanvasTexture, sRGB. 원반 밖은 가장자리로 투영해 이음새 제거.
+- **스키마(`MaterialOverride`)**: `shading`에 `'matcap'` 추가 + `matcapPreset?`(studio/chrome/gold/clay/pearl).
+- **렌더(`PrimitiveMaterial`)**: `isMatcap`이면 `<meshMatcapMaterial matcap=프리셋텍스처 map=albedo color=틴트 normalMap opacity>`. **customShader 미적용**(matcap 프래그먼트는 emissive 청크가 없어 fresnel/gradient 주입 불가 → 별도 룩). key에 프리셋 포함.
+- **배선**: `EditorObjectInstance`·`ViewerObject`에 matcapPreset. UI: Shading 드롭다운에 Matcap + 프리셋 버튼 5개 + 안내(color가 matcap을 틴트·roughness/metal/gradient/rim 무시·normal은 적용). roughness/metal 맵 슬롯은 standard일 때만 노출로 좁힘.
+- **확인 필요(브라우저)**: Shading=Matcap → Chrome/Gold 등 프리셋별 스튜디오 룩(라이트 없이도) · color를 흰색으로 두면 순수 프리셋 · normal map 병용 · 게시 뷰어.
+
+### Phase 4 마무리 (2026-07-22) — AO/Displacement 맵 + Matcap 커스텀 업로드 — 브라우저 확인 대기
+> Phase 4 맵 세트 완성 + matcap 커스텀. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **스키마(`MaterialOverride`)**: `aoUrl?`·`aoIntensity?`(기본 1)·`displacementUrl?`·`displacementScale?`(기본 0.1) + `matcapUrl?`(커스텀 matcap, 있으면 프리셋 무시).
+- **렌더(`PrimitiveMaterial`)**: `useDataMap`에 **`tex.channel = 0`** 추가 → **aoMap이 uv1 대신 프리미티브 기본 uv 사용**(핵심 — 안 하면 프리미티브에서 AO 안 보임). aoTex·dispTex 로드. standard·physical·toon 분기에 `aoMap`/`aoMapIntensity`/`displacementMap`/`displacementScale`(맵 없으면 0) + key에 `mapKey2`(ao/dp 유무). matcap 커스텀 = SRGB 로더(`matcapCustom`) → `matcapCustom ?? getMatcapTexture(preset)`.
+- **배선**: 두 호출부에 6필드. UI(`MaterialSection`): AO/Displacement MapSlot(matcap 제외 — 조명 기반만) + AO intensity/Height 자식 컨트롤. Matcap 섹션에 "Custom matcap (overrides preset)" MapSlot.
+- **확인 필요(브라우저)**: AO 맵→틈새 그늘 · Displacement→**Subdivision 올린 상태**에서 정점 밀림(박스는 세분 필요) · matcap 커스텀 업로드→프리셋 대신 적용 · 게시 뷰어.
+- **한계**: displacement는 지오 세분 없으면 박스 8정점만 이동(거의 안 보임 — UI 안내함). AO는 조명의 간접광에만 영향(미묘할 수 있음).
+- **다음(후속·미착수)**: 픽커 알파(보류) · alpha/opacity map(선택).
+
+#### 🐛 Reflection(env) 제거 (2026-07-22, 사용자 검증 중 발견)
+> 사용자: Reflection(env) 슬라이더가 아무 반응 없음(0으로 내려도 반사 안 사라짐). **three 소스에서 원인 확정** — `WebGLRenderer.js:2694`: 재질에 자체 envMap이 없고 `scene.environment`로 반사할 때(=우리 구조) three가 `envMapIntensity` uniform을 **`scene.environmentIntensity`로 덮어써 `material.envMapIntensity`를 무시**한다. → per-material 반사 강도 조절 불가(구조적). **UI 슬라이더 제거**(죽은 컨트롤). 반사 강도는 Metalness/Roughness/HDR로 조절. 스키마 `envMapIntensity`·PrimitiveMaterial 배선은 무해하게 잔존(three가 덮어써 inert). Anisotropy·나머지 물리 파라미터는 정상(사용자 Anisotropy 확인).
+> - **후속 후보(미착수)**: 금속이 기본 환경에서 검게 보이는 문제 — 원인은 `DefaultEnvironment`의 `scene.environmentIntensity=0.25`(그림자 진하게 하려 낮춤)라 금속 반사도 죽음. per-material `envMap=scene.environment` 할당하면 slider도 살고 금속도 밝아지나(→2694 우회), **기존 씬 금속 룩이 밝아지는 하위호환 변경**이라 보류. 필요 시 opt-in.
+
+#### 🔮 재질 미리보기(Material Preview) (2026-07-22) — 브라우저 확인 대기
+> 사용자 피드백: "재질 보려면 씬 태양 각도를 매번 맞춰야 해서 엄청 힘들다"(Toon은 직접광 필요·IBL 무시라 씬 조명 안 맞으면 새까맣게 보임). → **씬 조명과 분리된 고정 스튜디오 미리보기 구**를 인스펙터 Material 섹션 최상단에 추가. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **신규 `panels/inspector/MaterialPreview.tsx`**: 별도 `<Canvas>`(h-28) 안에 회전하는 구 + **고정 조명**(ambient 0.35·directional 2.6/0.7·`DefaultEnvironment intensity=1`) + 배경 #26262e. **실제 렌더의 `PrimitiveMaterial`을 그대로** 사용 → Toon/Matcap/유리/Fresnel/맵/그라데이션 정확히 일치. 구 bbox(반경1)로 wrapMin/Size 전달. LinearToneMapping(앱과 일치).
+- **배선**: `MaterialSection` 본문 최상단에 `{obj.primitiveShape && !isVoxel && <MaterialPreview mat={matRef ? matRef.material : obj.material}/>}`. 섹션 펼침 시에만 렌더(접으면 언마운트) + 선택 오브젝트별 remount.
+- **효과**: 씬 태양 각도 안 맞춰도 재질 자체를 바로 판단. 특히 Toon(직접광 필요)·금속/유리(반사 필요)가 미리보기에선 항상 제대로 보임.
+- **확인 필요(브라우저)**: Material 섹션 상단 미리보기 구에 색/거칠기/금속/Toon/Matcap/유리/Fresnel/맵 변화가 실시간 반영 · 회전 · 성능(작은 캔버스 상시 렌더).
+
+#### 🎨 내장 흑백 패턴 텍스처 프리셋 (2026-07-22) — 브라우저 확인 대기
+> 사용자: 맵(roughness/normal/AO/displacement) 테스트에 흑백 이미지가 매번 필요해 불편. → **절차적 패턴 프리셋 6종**을 내장해 이미지 없이 즉시 사용. tsc 클린 + dev 편집 200. **브라우저 확인 대기.**
+- **신규 `lib/patternTextures.ts`**: 6종(Checker/Dots/Noise/Brick/Stripes/Cells) + `heightAt(id,u,v)` 높이 필드. `makePatternTexture(id, 'gray'|'normal')` — gray=흑백, **normal=높이 기울기(sobel)로 노멀맵 변환**. 캔버스는 캐시(`id:mode`), 텍스처는 사용처마다 새로(repeat 독립). **URL 스킴 `pattern:<id>`** 로 material.*Url에 저장 → **에셋/스토리지·scene JSON 비대화 없음**.
+- **로더(`PrimitiveMaterial`)**: `useDataMap`·normal 로더가 `isPatternUrl`이면 `makePatternTexture`로 즉시 생성(gray/normal 슬롯별 mode). 일반 URL은 기존 TextureLoader.
+- **UI(`MapSlot`)**: 활성 시 상단에 패턴 프리셋 버튼 6개(→ `onPick('pattern:id')`) + 기존 TexturePicker(업로드/에셋). 전 맵 슬롯(normal/roughness/metalness/ao/displacement) 공용.
+- **확인 필요(브라우저)**: 맵 토글→패턴 버튼 클릭→즉시 적용(미리보기 구로 확인). Normal 슬롯=요철·Roughness=부분광택·AO=틈새그늘·Displacement(+Subdivision)=정점 밀림.
+
+### ✅ 재질 고도화 로드맵 실행분 완료 (2026-07-22)
+> Phase 1(파라미터)·2(픽커)·3(Fresnel·Toon·Matcap)·4(normal/rough/metal/AO/displacement 맵 + 2K 상한) 전부 구현. tsc 클린 + dev 편집 200. **브라우저 종합 확인 대기.** 미착수 잔여 = 픽커 알파(보류)·AO uv2 정밀화(현재 uv0 공유로 동작).
+
+---
+
 ## 🦾 진행 중 (2026-07-17) — 액추에이터(관절) Phase 5a: 시각 저작 (기준 `doc/PIVOT_MANIPULATION.md §6`) — 브라우저 확인 대기
 
 > 결정 확정(사용자): **①A 경첩 전용 필드 · ②A set_actuator+변수(5b) · ③A 5a부터 확인**. 앵커 근간(Phase 1~3) 위에 관절을 얹음. tsc 클린 + **수학 테스트 10/10**. **✅ ▶ 플레이 동작 확인 완료(사용자, oscillate 문 여닫힘).** speed 최대 5→10(Actuator·Motion).

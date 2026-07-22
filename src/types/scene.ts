@@ -317,11 +317,43 @@ export interface MaterialOverride {
   textureMapping?: 'face' | 'wrap' | 'pattern';
   // pattern 모드 스케일 — 로컬 유닛당 반복 수. 미설정=1. 클수록 무늬가 작아지고 촘촘해짐.
   triplanarScale?: number;
-  // 물리 재질(MeshPhysicalMaterial) — 하나라도 >0이면 프리미티브가 physical 재질로 렌더. 전부 0/미설정이면 standard.
-  clearcoat?: number;     // 0~1 투명 코팅 광택(자동차 도장·니스)
-  sheen?: number;         // 0~1 천/벨벳 가장자리 광택
-  transmission?: number;  // 0~1 투과(유리·물). 투명해짐
-  ior?: number;           // 굴절률(transmission용, 기본 1.5)
+  // 법선 맵(Normal map) — 표면 요철(벽돌·천·금속 결)을 빛으로 표현. 이미지는 파란 톤의 노멀맵. textureRepeat 공유.
+  normalUrl?: string;
+  normalScale?: number;        // 요철 강도(기본 1, 0~2). 0=평평, 2=강함.
+  // PBR 맵(흑백 데이터). roughness/metalness 스칼라에 곱해짐. textureRepeat 공유. standard·physical만.
+  roughnessUrl?: string;       // 거칠기 맵(밝음=거침)
+  metalnessUrl?: string;       // 금속 맵(밝음=금속)
+  aoUrl?: string;              // AO(앰비언트 오클루전) 맵 — 틈새 그늘. standard·physical·toon.
+  aoIntensity?: number;        // AO 강도(기본 1)
+  displacementUrl?: string;    // 변위 맵 — 정점을 밀어 실제 요철(지오 세분 필요). standard·physical·toon.
+  displacementScale?: number;  // 변위 강도(기본 0.1)
+  // 표준 재질 공통 추가 파라미터(전부 옵셔널·미설정=현재 동작). standard·physical 양쪽 적용.
+  opacity?: number;            // 0~1 (기본 1). <1이면 반투명(transparent) 렌더.
+  emissiveIntensity?: number;  // 발광 세기(미설정=발광색 있으면 1, 없으면 0).
+  envMapIntensity?: number;    // 환경(IBL) 반사 강도(기본 1). 낮추면 매트, 높이면 반짝임.
+  // 물리 재질(MeshPhysicalMaterial) — 하나라도 유효하면 프리미티브가 physical 재질로 렌더. 전부 0/미설정이면 standard.
+  clearcoat?: number;          // 0~1 투명 코팅 광택(자동차 도장·니스)
+  clearcoatRoughness?: number; // 코팅 거칠기(기본 0.1)
+  sheen?: number;              // 0~1 천/벨벳 가장자리 광택
+  sheenColor?: string;         // 광택 색(미설정=베이스 색)
+  sheenRoughness?: number;     // 광택 거칠기(기본 1)
+  iridescence?: number;        // 0~1 무지개빛(비눗방울·기름막)
+  iridescenceIOR?: number;     // 무지개빛 굴절률(기본 1.3)
+  anisotropy?: number;         // 0~1 이방성 반사(브러시 금속·헤어라인)
+  transmission?: number;       // 0~1 투과(유리·물). 투명해짐
+  ior?: number;                // 굴절률(transmission용, 기본 1.5)
+  thickness?: number;          // 투과 두께(기본 1, transmission용). 두꺼울수록 굴절·감쇠 강함
+  attenuationColor?: string;   // 투과 감쇠 색(유리 틴트 — 두께 지날수록 이 색으로)
+  attenuationDistance?: number;// 투과 감쇠 거리(작을수록 색이 진해짐)
+  // 스타일라이즈드 — 가장자리 발광(Fresnel/Rim). intensity>0이면 셰이더 주입(standard·physical·toon 공통·additive). 안 켜면 비용 0.
+  fresnelColor?: string;       // 가장자리 발광 색(기본 흰색)
+  fresnelIntensity?: number;   // 0~ (기본 0=끔). 발광처럼 더해짐(라이팅 무관)
+  fresnelPower?: number;       // 가장자리 집중도(기본 3, 클수록 얇은 테두리)
+  // 셰이딩 종류 — 미설정/‘standard’=기존 PBR. ‘toon’=카툰(MeshToonMaterial). ‘matcap’=매트캡(라이팅 무관 스타일, MeshMatcapMaterial). shading!=standard일 때만 분기.
+  shading?: 'standard' | 'toon' | 'matcap';
+  toonSteps?: number;          // toon 음영 단계 수(기본 3, 2~6)
+  matcapPreset?: 'studio' | 'chrome' | 'gold' | 'clay' | 'pearl'; // matcap 내장 프리셋(절차적 생성, lib/matcap.ts)
+  matcapUrl?: string;          // 커스텀 matcap 이미지(있으면 프리셋 무시)
 }
 
 export interface ObjectNodeSchema {

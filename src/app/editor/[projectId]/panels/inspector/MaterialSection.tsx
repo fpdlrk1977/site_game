@@ -13,7 +13,102 @@ import { ColorPicker } from "@/components/ui/ColorPicker";
 import { SelectBox } from "@/components/ui/SelectBox";
 import { InlineEditName } from "@/components/ui/InlineEditName";
 import { SectionHeader, GroupBox, LabeledNum, Toggle } from "./ui";
+import { MATCAP_PRESETS } from "@/lib/matcap";
+import { PATTERN_PRESETS, PATTERN_PREFIX } from "@/lib/patternTextures";
+import { MaterialPreview } from "./MaterialPreview";
 import type { ObjectNodeSchema } from "@/types/scene";
+
+// 재사용 맵 슬롯 — 토글 + 썸네일 픽커(업로드/재사용). normal/roughness/metalness 공용. onPick=재질에 쓰기+커밋.
+function MapSlot({
+  label,
+  hint,
+  url,
+  textures,
+  projectId,
+  onPick,
+  addAsset,
+  addToast,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  url: string | undefined;
+  textures: { id: string; name: string; url: string }[];
+  projectId: string | null | undefined;
+  onPick: (url: string | undefined) => void;
+  addAsset: (a: Awaited<ReturnType<typeof uploadImageTexture>>) => void;
+  addToast: (msg: string, kind?: "error" | "success" | "info") => void;
+  children?: React.ReactNode;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const active = open || !!url;
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !projectId) return;
+    if (file.size > 8 * 1024 * 1024) {
+      addToast("Image is too large. Max 8MB.", "error");
+      return;
+    }
+    setUploading(true);
+    try {
+      const asset = await uploadImageTexture(file, projectId);
+      addAsset(asset);
+      onPick(asset.dracoUrl);
+    } catch (err) {
+      addToast(`${label} upload failed`, "error");
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <div className="pt-2 border-t border-border/50 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">{label}</span>
+        <Toggle
+          value={active}
+          onChange={(on) => {
+            setOpen(on);
+            if (!on) onPick(undefined);
+          }}
+        />
+      </div>
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleUpload} />
+      {active && (
+        <>
+          {/* 내장 패턴 프리셋 — 이미지 없이 바로 테스트 */}
+          <div className="flex flex-wrap gap-1">
+            {PATTERN_PRESETS.map((p) => {
+              const on = url === `${PATTERN_PREFIX}${p.id}`;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onPick(`${PATTERN_PREFIX}${p.id}`)}
+                  className={`px-1.5 py-0.5 rounded-xs text-[9px] border transition-colors ${on ? "bg-primary text-white border-primary" : "bg-background text-muted border-border hover:text-foreground"}`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          <TexturePicker
+            value={url && url.startsWith(PATTERN_PREFIX) ? "" : (url ?? "")}
+            textures={textures}
+            onChange={(u) => onPick(u || undefined)}
+            onUpload={() => inputRef.current?.click()}
+            uploading={uploading}
+          />
+          {url && children}
+          {hint && <p className="text-[10px] text-muted/60 leading-snug">{hint}</p>}
+        </>
+      )}
+    </div>
+  );
+}
 
 export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema; open: boolean; onToggle: () => void }) {
   const {
@@ -70,6 +165,8 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
           const matRef = obj.materialId ? (materialAssets.find((m) => m.id === obj.materialId) ?? null) : null;
           return (
             <div className="px-3 pb-4 space-y-2">
+              {/* 재질 미리보기 — 씬 조명과 무관한 고정 스튜디오 구. 프리미티브(복셀 제외)만. */}
+              {obj.primitiveShape && !isVoxel && <MaterialPreview mat={matRef ? matRef.material : obj.material} />}
               {matRef && (
                 <div className="rounded-xs bg-primary/10 border border-primary/30 p-2 space-y-1.5">
                   <div className="flex items-center gap-1.5 text-[11px] text-primary">
@@ -96,6 +193,95 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
               )}
               {!matRef && (
                 <>
+                  {/* 셰이딩 종류 — Standard(PBR) / Toon(카툰). 프리미티브만. */}
+                  {obj.primitiveShape && !obj.content && !isVoxel && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Shading</span>
+                      <div className="flex items-center gap-2">
+                        {(obj.material?.shading ?? "standard") === "toon" && (
+                          <LabeledNum
+                            label="Steps"
+                            value={obj.material?.toonSteps ?? 3}
+                            onChange={(v) => updateObject(obj.id, { material: { ...obj.material, toonSteps: Math.round(v) } })}
+                            onCommit={pushHistory}
+                            min={2}
+                            max={6}
+                            precision={0}
+                            dragStep={1}
+                          />
+                        )}
+                        <SelectBox
+                          value={obj.material?.shading ?? "standard"}
+                          onChange={(v) => {
+                            updateObject(obj.id, {
+                              material: {
+                                ...obj.material,
+                                shading: v === "standard" ? undefined : (v as "toon" | "matcap"),
+                                // matcap 처음 켤 때 기본 프리셋
+                                ...(v === "matcap" && !obj.material?.matcapPreset ? { matcapPreset: "studio" as const } : {}),
+                              },
+                            });
+                            pushHistory();
+                          }}
+                          options={[
+                            { value: "standard", label: "Standard (PBR)" },
+                            { value: "toon", label: "Toon (카툰)" },
+                            { value: "matcap", label: "Matcap" },
+                          ]}
+                          fullWidth={false}
+                          gray
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {/* Matcap 프리셋 선택 */}
+                  {obj.material?.shading === "matcap" && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {MATCAP_PRESETS.map((mp) => {
+                        const on = (obj.material?.matcapPreset ?? "studio") === mp.id;
+                        return (
+                          <button
+                            key={mp.id}
+                            type="button"
+                            onClick={() => {
+                              updateObject(obj.id, { material: { ...obj.material, matcapPreset: mp.id } });
+                              pushHistory();
+                            }}
+                            className={`px-2 py-1 rounded-xs text-[10px] border transition-colors ${on ? "bg-primary text-white border-primary" : "bg-background text-muted border-border hover:text-foreground"}`}
+                          >
+                            {mp.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Matcap 커스텀 업로드 — 있으면 프리셋 무시 */}
+                  {obj.material?.shading === "matcap" && (
+                    <MapSlot
+                      label="Custom matcap (overrides preset)"
+                      hint="Upload a matcap sphere image to use instead of the presets."
+                      url={obj.material?.matcapUrl}
+                      textures={assets.filter((a) => a.type === "texture").map((a) => ({ id: a.id, name: a.name, url: a.dracoUrl }))}
+                      projectId={projectId}
+                      addAsset={addAsset}
+                      addToast={addToast}
+                      onPick={(url) => {
+                        updateObject(obj.id, { material: { ...obj.material, matcapUrl: url } });
+                        pushHistory();
+                      }}
+                    />
+                  )}
+                  {(obj.material?.shading ?? "standard") === "toon" && (
+                    <p className="text-[10px] text-muted/60 leading-snug">
+                      Toon = flat cel shading. Roughness/Metalness/Reflection/Physical are ignored; Color, Emissive, Texture, Gradient and Rim glow still apply.
+                    </p>
+                  )}
+                  {obj.material?.shading === "matcap" && (
+                    <p className="text-[10px] text-muted/60 leading-snug">
+                      Matcap = baked studio look (lighting-independent). Color tints the matcap (set white for the pure preset). Roughness/Metalness/Gradient/Rim are ignored; Normal map still applies.
+                    </p>
+                  )}
+
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Color</span>
@@ -175,10 +361,55 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                     </div>
                   </div>
 
-                  {/* 물리 재질(MeshPhysicalMaterial) — 클리어코트/시인/투과. 하나라도 올리면 physical 재질로 렌더(프리미티브만) */}
+                  {/* 일반 추가 파라미터 — 불투명도(반투명)·발광 세기. standard·physical 공통. */}
+                  <div className="flex gap-2">
+                    <div>
+                      <LabeledNum
+                        label="Opacity"
+                        value={obj.material?.opacity ?? 1}
+                        onChange={(v) => updateObject(obj.id, { material: { ...obj.material, opacity: v } })}
+                        onCommit={pushHistory}
+                        min={0}
+                        max={1}
+                        precision={2}
+                        dragStep={0.02}
+                      />
+                    </div>
+                    <div>
+                      <LabeledNum
+                        label="Emissive intensity"
+                        value={obj.material?.emissiveIntensity ?? (obj.material?.emissive && obj.material.emissive !== "#000000" ? 1 : 0)}
+                        onChange={(v) => updateObject(obj.id, { material: { ...obj.material, emissiveIntensity: v } })}
+                        onCommit={pushHistory}
+                        min={0}
+                        max={8}
+                        precision={2}
+                        dragStep={0.05}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 물리 재질(MeshPhysicalMaterial) — 클리어코트/시인/투과/무지개빛/이방성. 하나라도 올리면 physical 재질로 렌더(프리미티브만) */}
                   {obj.primitiveShape && !obj.content && (
                     <div className="pt-2 border-t border-border/50 space-y-1.5">
                       <span className="text-[10px] text-foreground tracking-wide block">Physical material (advanced)</span>
+
+                      {/* Anisotropy(이방성 반사) — 브러시 금속/헤어라인. (Reflection(env)=envMapIntensity는 씬 환경 반사에선
+                          three가 scene.environmentIntensity로 덮어써 무시하므로 제거 — 반사 강도는 Metalness/Roughness/HDR로 조절) */}
+                      <div className="flex gap-2 pt-1">
+                        <LabeledNum
+                          label="Anisotropy"
+                          value={obj.material?.anisotropy ?? 0}
+                          onChange={(v) => updateObject(obj.id, { material: { ...obj.material, anisotropy: v } })}
+                          onCommit={pushHistory}
+                          min={0}
+                          max={1}
+                          precision={2}
+                          dragStep={0.02}
+                        />
+                      </div>
+
+                      {/* 클리어코트(코팅 광택) + 코팅 거칠기 */}
                       <div className="flex gap-2 pt-1">
                         <LabeledNum
                           label="Clearcoat"
@@ -190,6 +421,22 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                           precision={2}
                           dragStep={0.02}
                         />
+                        {(obj.material?.clearcoat ?? 0) > 0 && (
+                          <LabeledNum
+                            label="Coat rough"
+                            value={obj.material?.clearcoatRoughness ?? 0.1}
+                            onChange={(v) => updateObject(obj.id, { material: { ...obj.material, clearcoatRoughness: v } })}
+                            onCommit={pushHistory}
+                            min={0}
+                            max={1}
+                            precision={2}
+                            dragStep={0.02}
+                          />
+                        )}
+                      </div>
+
+                      {/* 시인(천/벨벳 광택) + 거칠기 + 색 */}
+                      <div className="flex gap-2 pt-1 items-end">
                         <LabeledNum
                           label="Sheen"
                           value={obj.material?.sheen ?? 0}
@@ -200,6 +447,60 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                           precision={2}
                           dragStep={0.02}
                         />
+                        {(obj.material?.sheen ?? 0) > 0 && (
+                          <>
+                            <LabeledNum
+                              label="Sheen rough"
+                              value={obj.material?.sheenRoughness ?? 1}
+                              onChange={(v) => updateObject(obj.id, { material: { ...obj.material, sheenRoughness: v } })}
+                              onCommit={pushHistory}
+                              min={0}
+                              max={1}
+                              precision={2}
+                              dragStep={0.02}
+                            />
+                            <div className="shrink-0">
+                              <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Sheen color</span>
+                              <ColorPicker
+                                value={obj.material?.sheenColor ?? obj.material?.color ?? "#ffffff"}
+                                onChange={(hex) => updateObject(obj.id, { material: { ...obj.material, sheenColor: hex } })}
+                                onCommit={pushHistory}
+                                showHex={false}
+                                title="Sheen color"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* 무지개빛(비눗방울·기름막) + 굴절률 */}
+                      <div className="flex gap-2 pt-1">
+                        <LabeledNum
+                          label="Iridescence"
+                          value={obj.material?.iridescence ?? 0}
+                          onChange={(v) => updateObject(obj.id, { material: { ...obj.material, iridescence: v } })}
+                          onCommit={pushHistory}
+                          min={0}
+                          max={1}
+                          precision={2}
+                          dragStep={0.02}
+                        />
+                        {(obj.material?.iridescence ?? 0) > 0 && (
+                          <LabeledNum
+                            label="Irid. IOR"
+                            value={obj.material?.iridescenceIOR ?? 1.3}
+                            onChange={(v) => updateObject(obj.id, { material: { ...obj.material, iridescenceIOR: v } })}
+                            onCommit={pushHistory}
+                            min={1}
+                            max={2.4}
+                            precision={2}
+                            dragStep={0.02}
+                          />
+                        )}
+                      </div>
+
+                      {/* 투과(유리) + IOR + 두께 + 감쇠(틴트) */}
+                      <div className="flex gap-2 pt-1">
                         <LabeledNum
                           label="Transmission"
                           value={obj.material?.transmission ?? 0}
@@ -211,20 +512,102 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                           dragStep={0.02}
                         />
                         {(obj.material?.transmission ?? 0) > 0 && (
+                          <>
+                            <LabeledNum
+                              label="IOR"
+                              value={obj.material?.ior ?? 1.5}
+                              onChange={(v) => updateObject(obj.id, { material: { ...obj.material, ior: v } })}
+                              onCommit={pushHistory}
+                              min={1}
+                              max={2.4}
+                              precision={2}
+                              dragStep={0.02}
+                            />
+                            <LabeledNum
+                              label="Thickness"
+                              value={obj.material?.thickness ?? 1}
+                              onChange={(v) => updateObject(obj.id, { material: { ...obj.material, thickness: v } })}
+                              onCommit={pushHistory}
+                              min={0}
+                              max={10}
+                              precision={2}
+                              dragStep={0.05}
+                            />
+                          </>
+                        )}
+                      </div>
+                      {(obj.material?.transmission ?? 0) > 0 && (
+                        <div className="flex gap-2 pt-1 items-end">
+                          <div className="shrink-0">
+                            <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Glass tint</span>
+                            <ColorPicker
+                              value={obj.material?.attenuationColor ?? "#ffffff"}
+                              onChange={(hex) => updateObject(obj.id, { material: { ...obj.material, attenuationColor: hex } })}
+                              onCommit={pushHistory}
+                              showHex={false}
+                              title="Glass tint (attenuation color)"
+                            />
+                          </div>
                           <LabeledNum
-                            label="IOR"
-                            value={obj.material?.ior ?? 1.5}
-                            onChange={(v) => updateObject(obj.id, { material: { ...obj.material, ior: v } })}
+                            label="Tint dist"
+                            value={obj.material?.attenuationDistance ?? 1}
+                            onChange={(v) => updateObject(obj.id, { material: { ...obj.material, attenuationDistance: v <= 0 ? 0.01 : v } })}
                             onCommit={pushHistory}
-                            min={1}
-                            max={2.4}
+                            min={0.01}
+                            max={20}
                             precision={2}
-                            dragStep={0.02}
+                            dragStep={0.1}
                           />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-muted/70 dark:text-muted">
+                        Raise Transmission for glass. Iridescence = soap-bubble sheen, Anisotropy = brushed metal. All at 0 → standard material.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 스타일라이즈드 — 가장자리 발광(Fresnel/Rim). 켜면 셰이더 주입, 끄면(0) 비용 0 */}
+                  {obj.primitiveShape && !obj.content && (
+                    <div className="pt-2 border-t border-border/50 space-y-1.5">
+                      <span className="text-[10px] text-foreground tracking-wide block">Rim glow (Fresnel)</span>
+                      <div className="flex gap-2 pt-1 items-end">
+                        <LabeledNum
+                          label="Rim intensity"
+                          value={obj.material?.fresnelIntensity ?? 0}
+                          onChange={(v) => updateObject(obj.id, { material: { ...obj.material, fresnelIntensity: v } })}
+                          onCommit={pushHistory}
+                          min={0}
+                          max={5}
+                          precision={2}
+                          dragStep={0.05}
+                        />
+                        {(obj.material?.fresnelIntensity ?? 0) > 0 && (
+                          <>
+                            <LabeledNum
+                              label="Rim width"
+                              value={obj.material?.fresnelPower ?? 3}
+                              onChange={(v) => updateObject(obj.id, { material: { ...obj.material, fresnelPower: v } })}
+                              onCommit={pushHistory}
+                              min={0.2}
+                              max={8}
+                              precision={2}
+                              dragStep={0.1}
+                            />
+                            <div className="shrink-0">
+                              <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Rim color</span>
+                              <ColorPicker
+                                value={obj.material?.fresnelColor ?? "#ffffff"}
+                                onChange={(hex) => updateObject(obj.id, { material: { ...obj.material, fresnelColor: hex } })}
+                                onCommit={pushHistory}
+                                showHex={false}
+                                title="Rim glow color"
+                              />
+                            </div>
+                          </>
                         )}
                       </div>
                       <p className="text-[10px] text-muted/70 dark:text-muted">
-                        Raise Transmission to make it glass-like transparent. With all three at 0 it uses the standard material.
+                        Glowing edge (view angle). Higher width = thinner edge. Great for sci-fi/holograms.
                       </p>
                     </div>
                   )}
@@ -390,6 +773,111 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                         </div>
                       );
                     })()}
+
+                  {/* PBR 맵(normal/roughness/metalness) — 표면 디테일. 프리미티브만. 타일링은 color 텍스처와 공유. */}
+                  {obj.primitiveShape && !obj.content && (() => {
+                    const texList = assets.filter((a) => a.type === "texture").map((a) => ({ id: a.id, name: a.name, url: a.dracoUrl }));
+                    const pick = (patch: Partial<NonNullable<ObjectNodeSchema["material"]>>) => {
+                      updateObject(obj.id, { material: { ...obj.material, ...patch } });
+                      pushHistory();
+                    };
+                    return (
+                      <>
+                        <MapSlot
+                          label="Normal map (bump)"
+                          hint="Use a blue-toned normal map. Shares tiling with the color texture."
+                          url={obj.material?.normalUrl}
+                          textures={texList}
+                          projectId={projectId}
+                          addAsset={addAsset}
+                          addToast={addToast}
+                          onPick={(url) => pick({ normalUrl: url, ...(url ? {} : { normalScale: undefined }) })}
+                        >
+                          <LabeledNum
+                            label="Bump strength"
+                            value={obj.material?.normalScale ?? 1}
+                            onChange={(v) => updateObject(obj.id, { material: { ...obj.material, normalScale: v } })}
+                            onCommit={pushHistory}
+                            min={0}
+                            max={3}
+                            precision={2}
+                            dragStep={0.05}
+                          />
+                        </MapSlot>
+                        {(obj.material?.shading ?? "standard") === "standard" && (
+                          <>
+                            <MapSlot
+                              label="Roughness map"
+                              hint="Grayscale — bright = rougher. Multiplies the Roughness value."
+                              url={obj.material?.roughnessUrl}
+                              textures={texList}
+                              projectId={projectId}
+                              addAsset={addAsset}
+                              addToast={addToast}
+                              onPick={(url) => pick({ roughnessUrl: url })}
+                            />
+                            <MapSlot
+                              label="Metalness map"
+                              hint="Grayscale — bright = metallic. Multiplies the Metalness value."
+                              url={obj.material?.metalnessUrl}
+                              textures={texList}
+                              projectId={projectId}
+                              addAsset={addAsset}
+                              addToast={addToast}
+                              onPick={(url) => pick({ metalnessUrl: url })}
+                            />
+                          </>
+                        )}
+                        {/* AO / Displacement — 조명 기반 셰이딩(matcap 제외) */}
+                        {obj.material?.shading !== "matcap" && (
+                          <>
+                            <MapSlot
+                              label="AO map (crevice shade)"
+                              hint="Grayscale — dark = shadowed crevices."
+                              url={obj.material?.aoUrl}
+                              textures={texList}
+                              projectId={projectId}
+                              addAsset={addAsset}
+                              addToast={addToast}
+                              onPick={(url) => pick({ aoUrl: url, ...(url ? {} : { aoIntensity: undefined }) })}
+                            >
+                              <LabeledNum
+                                label="AO intensity"
+                                value={obj.material?.aoIntensity ?? 1}
+                                onChange={(v) => updateObject(obj.id, { material: { ...obj.material, aoIntensity: v } })}
+                                onCommit={pushHistory}
+                                min={0}
+                                max={2}
+                                precision={2}
+                                dragStep={0.05}
+                              />
+                            </MapSlot>
+                            <MapSlot
+                              label="Displacement map (height)"
+                              hint="Pushes vertices — needs geometry detail (raise Subdivision to see it on boxes)."
+                              url={obj.material?.displacementUrl}
+                              textures={texList}
+                              projectId={projectId}
+                              addAsset={addAsset}
+                              addToast={addToast}
+                              onPick={(url) => pick({ displacementUrl: url, ...(url ? {} : { displacementScale: undefined }) })}
+                            >
+                              <LabeledNum
+                                label="Height"
+                                value={obj.material?.displacementScale ?? 0.1}
+                                onChange={(v) => updateObject(obj.id, { material: { ...obj.material, displacementScale: v } })}
+                                onCommit={pushHistory}
+                                min={0}
+                                max={2}
+                                precision={2}
+                                dragStep={0.02}
+                              />
+                            </MapSlot>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </>
               )}
               {!matRef && (

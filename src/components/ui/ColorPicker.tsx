@@ -8,9 +8,9 @@
 // 드롭인 사용:
 //   <ColorPicker value={hex} onChange={(hex) => update(hex)} onCommit={pushHistory} />
 //   (그라데이션) + allowGradient gradient={mat.gradient} onGradientChange={(g)=>update({gradient:g})}
-import { useEffect, useRef, useState, useCallback, useId } from "react";
+import { useEffect, useRef, useState, useCallback, useId, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Pipette, Plus, ChevronDown, Trash2, X } from "lucide-react";
+import { Pipette, Plus, ChevronDown, Trash2, X, Copy } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
 import { useColorPickerStore } from "@/store/colorPickerStore";
 import { normalizeHex, hexToHsv, hsvToHex, hexToRgb, rgbToHex, hexToHsl, hslToHex, type HSV } from "@/lib/color";
@@ -208,6 +208,8 @@ export function ColorPicker({
   const colorAssets = useSceneStore((s) => s.colorAssets);
   const addColorAsset = useSceneStore((s) => s.addColorAsset);
   const removeColorAsset = useSceneStore((s) => s.removeColorAsset);
+  const recent = useColorPickerStore((s) => s.recent);
+  const pushRecent = useColorPickerStore((s) => s.pushRecent);
 
   const gradMode = !!(allowGradient && gradient && gradient.stops.length >= 1);
   const stops = gradient?.stops ?? [];
@@ -242,8 +244,20 @@ export function ColorPicker({
   }, [srcColor]);
 
   const commit = useCallback(() => {
+    if (!gradMode) pushRecent(hsvToHex(hsv.h, hsv.s, hsv.v)); // solid 색만 최근 목록에 기록
     onCommit?.();
-  }, [onCommit]);
+  }, [onCommit, gradMode, hsv.h, hsv.s, hsv.v, pushRecent]);
+
+  // 씬 내 사용 색(Document colors) — 팝업 열 때 1회 계산(비반응 — 드래그 중 리렌더 방지).
+  const docColors = useMemo(() => {
+    if (!open) return [] as string[];
+    const set = new Set<string>();
+    for (const o of useSceneStore.getState().objects) {
+      const c = o.material?.color;
+      if (c) set.add(normalizeHex(c) ?? c);
+    }
+    return [...set].slice(0, 16);
+  }, [open]);
 
   // 색 반영 — solid면 onChange, gradient면 선택 정지점 색 갱신.
   const applyColor = useCallback(
@@ -753,6 +767,14 @@ export function ColorPicker({
                   )}
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard?.writeText(curHex).catch(() => {}); }}
+                  title="Copy hex"
+                  className="w-[26px] h-[26px] shrink-0 flex items-center justify-center rounded-xs bg-background border border-border text-muted hover:text-foreground transition-colors"
+                >
+                  <Copy size={12} />
+                </button>
                 {hasEyeDropper && (
                   <button
                     type="button"
@@ -764,6 +786,44 @@ export function ColorPicker({
                   </button>
                 )}
               </div>
+
+              {/* 최근 사용 색 */}
+              {palette && recent.length > 0 && (
+                <div className="mt-2.5 pt-2.5 border-t border-border">
+                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1.5">Recent</span>
+                  <div className="grid grid-cols-8 gap-1">
+                    {recent.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setFromHex(c, true)}
+                        title={c}
+                        className="aspect-square rounded-xs border border-border hover:ring-1 hover:ring-primary transition-all"
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 씬 내 사용 색 */}
+              {palette && docColors.length > 0 && (
+                <div className="mt-2.5 pt-2.5 border-t border-border">
+                  <span className="text-[10px] font-semibold text-muted tracking-wide block mb-1.5">In this scene</span>
+                  <div className="grid grid-cols-8 gap-1">
+                    {docColors.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setFromHex(c, true)}
+                        title={c}
+                        className="aspect-square rounded-xs border border-border hover:ring-1 hover:ring-primary transition-all"
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 저장 팔레트 */}
               {palette && (
