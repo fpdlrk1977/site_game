@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, Suspense, useEffect, useMemo, useContext } from "react";
-import { useGLTF, useAnimations, Text3D, Center, Html, Outlines } from "@react-three/drei";
+import { useGLTF, useAnimations, Text3D, Center, Html, Outlines, Edges } from "@react-three/drei";
 import { SkeletonUtils } from "three-stdlib";
 import * as THREE from "three";
 import { useLoader, useFrame } from "@react-three/fiber";
@@ -976,6 +976,10 @@ export function ViewerObject({
         gradient={object.material?.gradient}
       />
       )}
+      {/* 재질 외곽선(2D/만화 느낌) */}
+      {object.material?.outline && <Outlines thickness={object.material.outlineWidth ?? 4} color={object.material.outlineColor ?? '#000000'} />}
+      {/* 엣지(폴리곤) 라인 오버레이 */}
+      {object.material?.edges && <Edges threshold={1} color={object.material.edgesColor ?? '#000000'} lineWidth={object.material.edgesWidth ?? 1.5} />}
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );

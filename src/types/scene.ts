@@ -349,6 +349,14 @@ export interface MaterialOverride {
   fresnelColor?: string;       // 가장자리 발광 색(기본 흰색)
   fresnelIntensity?: number;   // 0~ (기본 0=끔). 발광처럼 더해짐(라이팅 무관)
   fresnelPower?: number;       // 가장자리 집중도(기본 3, 클수록 얇은 테두리)
+  // 외곽선(2D/만화 느낌) — 오브젝트 둘레에 라인. Toon 셰이딩과 함께 쓰면 셀셰이딩(애니) 룩. 프리미티브 전용.
+  outline?: boolean;
+  outlineColor?: string;       // 기본 검정
+  outlineWidth?: number;       // 화면 픽셀 두께(기본 4)
+  // 엣지(폴리곤) 라인 오버레이 — 표면 위에 폴리곤 모서리를 라인으로. 프리미티브 전용.
+  edges?: boolean;
+  edgesColor?: string;         // 기본 검정
+  edgesWidth?: number;         // 화면 픽셀 두께(기본 1.5)
   // 셰이딩 종류 — 미설정/‘standard’=기존 PBR. ‘toon’=카툰(MeshToonMaterial). ‘matcap’=매트캡(라이팅 무관 스타일, MeshMatcapMaterial). shading!=standard일 때만 분기.
   shading?: 'standard' | 'toon' | 'matcap';
   toonSteps?: number;          // toon 음영 단계 수(기본 3, 2~6)

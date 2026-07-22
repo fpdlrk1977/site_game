@@ -282,6 +282,80 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                     </p>
                   )}
 
+                  {/* 외곽선(2D/만화) — Toon과 함께 쓰면 셀셰이딩. 프리미티브만. */}
+                  {obj.primitiveShape && !obj.content && !isVoxel && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Outline (2D)</span>
+                      <div className="flex items-center gap-2">
+                        {obj.material?.outline && (
+                          <>
+                            <LabeledNum
+                              label="Width"
+                              value={obj.material?.outlineWidth ?? 4}
+                              onChange={(v) => updateObject(obj.id, { material: { ...obj.material, outlineWidth: v } })}
+                              onCommit={pushHistory}
+                              min={0.5}
+                              max={20}
+                              precision={1}
+                              dragStep={0.5}
+                            />
+                            <ColorPicker
+                              value={obj.material?.outlineColor ?? "#000000"}
+                              onChange={(hex) => updateObject(obj.id, { material: { ...obj.material, outlineColor: hex } })}
+                              onCommit={pushHistory}
+                              showHex={false}
+                              title="Outline color"
+                            />
+                          </>
+                        )}
+                        <Toggle
+                          value={obj.material?.outline ?? false}
+                          onChange={(on) => {
+                            updateObject(obj.id, { material: { ...obj.material, outline: on || undefined } });
+                            pushHistory();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 엣지(폴리곤) 라인 오버레이 — 표면 위 폴리곤 모서리 라인. */}
+                  {obj.primitiveShape && !obj.content && !isVoxel && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide">Edges (polygon)</span>
+                      <div className="flex items-center gap-2">
+                        {obj.material?.edges && (
+                          <>
+                            <LabeledNum
+                              label="Width"
+                              value={obj.material?.edgesWidth ?? 1.5}
+                              onChange={(v) => updateObject(obj.id, { material: { ...obj.material, edgesWidth: v } })}
+                              onCommit={pushHistory}
+                              min={0.5}
+                              max={10}
+                              precision={1}
+                              dragStep={0.5}
+                            />
+                            <ColorPicker
+                              value={obj.material?.edgesColor ?? "#000000"}
+                              onChange={(hex) => updateObject(obj.id, { material: { ...obj.material, edgesColor: hex } })}
+                              onCommit={pushHistory}
+                              showHex={false}
+                              title="Edge color"
+                            />
+                          </>
+                        )}
+                        <Toggle
+                          value={obj.material?.edges ?? false}
+                          onChange={(on) => {
+                            updateObject(obj.id, { material: { ...obj.material, edges: on || undefined } });
+                            pushHistory();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <span className="text-[10px] text-muted/70 dark:text-muted tracking-wide block mb-1">Color</span>

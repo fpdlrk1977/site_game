@@ -5,6 +5,7 @@
 // 씬과 완전히 분리된 별도 Canvas라 회귀 위험이 없다(조명은 여기 내부 고정).
 import { useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
+import { Outlines, Edges } from "@react-three/drei";
 import * as THREE from "three";
 import { PrimitiveMaterial } from "@/components/three/PrimitiveMaterial";
 import { DefaultEnvironment } from "@/components/three/DefaultEnvironment";
@@ -67,6 +68,8 @@ function PreviewSphere({ mat }: { mat?: MaterialOverride }) {
         wrapMin={WRAP_MIN}
         wrapSize={WRAP_SIZE}
       />
+      {mat?.outline && <Outlines thickness={mat.outlineWidth ?? 4} color={mat.outlineColor ?? '#000000'} />}
+      {mat?.edges && <Edges threshold={1} color={mat.edgesColor ?? '#000000'} lineWidth={mat.edgesWidth ?? 1.5} />}
     </mesh>
   );
 }
