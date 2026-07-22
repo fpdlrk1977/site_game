@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react';
 import { TransformControls } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useSceneStore } from '@/store/sceneStore';
@@ -23,7 +23,8 @@ const _lp = new THREE.Vector3();
 const _lq = new THREE.Quaternion();
 const _ls = new THREE.Vector3();
 const _snapBox = new THREE.Box3();
-const OBJECT_SNAP_THRESHOLD = 0.2; // 월드 거리(m) — 이 안쪽이면 다른 오브젝트 모서리/중심에 흡착
+const _snapSize = new THREE.Vector3(); // 스냅 자석 범위 계산용(오브젝트 크기)
+const OBJECT_SNAP_THRESHOLD = 0.05; // 자석 범위 절대 최소(m) — 실제 범위는 카메라 거리에 비례(화면상 일정)
 
 interface Props {
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
@@ -168,6 +169,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate, objectSnap,
     objects, assets, animClips, pivotMotorId, commitTransforms, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
+  const camera = useThree((s) => s.camera);
   // 기즈모는 "형상 중심에 놓인 프록시"에 붙는다 → 위젯이 원점(하단)이 아니라 중심에 뜨고,
   // 프록시는 재부모화되지 않으므로 예전의 scene graph 에러도 없다. 조작은 오브젝트로 역매핑.
   const proxyRef = useRef<THREE.Object3D | null>(null);
@@ -277,10 +279,15 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
     if (!lb || lb.isEmpty() || snapTargetsRef.current.length === 0) return;
     target!.updateWorldMatrix(true, false);
     _snapBox.copy(lb).applyMatrix4(target!.matrixWorld); // 후보 위치의 월드 bbox
+    // 자석 범위 = 카메라 거리에 비례(화면상 일정) — 줌 무관하게 흡착감이 같고,
+    //   확대(줌인) 시 월드 범위가 작아져 스냅 순간 큰 점프로 화면이 튀는 문제를 막는다.
+    //   고정 월드값이면: 축소=약함, 확대=과도한 점프 → 카메라 거리 비례가 자연스럽다.
+    _snapBox.getCenter(_snapSize);
+    const snapDist = Math.max(OBJECT_SNAP_THRESHOLD, camera.position.distanceTo(_snapSize) * 0.06);
     (['x', 'y', 'z'] as const).forEach((axis) => {
       const feats = [_snapBox.min[axis], (_snapBox.min[axis] + _snapBox.max[axis]) / 2, _snapBox.max[axis]];
       let best: number | null = null;
-      let bestDist = OBJECT_SNAP_THRESHOLD;
+      let bestDist = snapDist;
       for (const tb of snapTargetsRef.current) {
         const tf = [tb.min[axis], (tb.min[axis] + tb.max[axis]) / 2, tb.max[axis]];
         for (const f of feats) for (const t of tf) {

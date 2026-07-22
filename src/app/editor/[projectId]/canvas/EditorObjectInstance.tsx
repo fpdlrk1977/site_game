@@ -928,10 +928,11 @@ export function EditorObjectInstance({ object }: Props) {
             gradient={mat?.gradient}
           />
           )}
-          {/* 재질 외곽선(2D/만화 느낌) — 화면 픽셀 두께로 일정. Toon과 함께 쓰면 셀셰이딩. */}
-          {mat?.outline && <Outlines thickness={mat.outlineWidth ?? 4} color={mat.outlineColor ?? '#000000'} />}
+          {/* 재질 외곽선(2D/만화 느낌) — 화면 픽셀 두께로 일정. Toon과 함께 쓰면 셀셰이딩.
+              transparent+renderOrder로 반투명 표면 '뒤'가 아니라 '위'에 불투명하게 그림(표면 opacity에 안 흐려짐). */}
+          {mat?.outline && <Outlines thickness={mat.outlineWidth ?? 4} color={mat.outlineColor ?? '#000000'} transparent renderOrder={5} />}
           {/* 엣지(폴리곤) 라인 오버레이 — 표면 위 폴리곤 모서리. threshold 낮게 → 폴리곤 구조가 보임. */}
-          {mat?.edges && <Edges threshold={1} color={mat.edgesColor ?? '#000000'} lineWidth={mat.edgesWidth ?? 1.5} />}
+          {mat?.edges && <Edges threshold={mat.edgesThreshold ?? 1} color={mat.edgesColor ?? '#000000'} lineWidth={mat.edgesWidth ?? 1.5} transparent depthWrite={false} renderOrder={6} />}
         </mesh>
       )}
       {/* per-type 외곽선은 호버·다중선택에만(실선). 단일 선택은 월드 공용 SelectionOutline(점선)이 담당 → 중복 방지. */}

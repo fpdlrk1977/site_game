@@ -68,8 +68,8 @@ function PreviewSphere({ mat }: { mat?: MaterialOverride }) {
         wrapMin={WRAP_MIN}
         wrapSize={WRAP_SIZE}
       />
-      {mat?.outline && <Outlines thickness={mat.outlineWidth ?? 4} color={mat.outlineColor ?? '#000000'} />}
-      {mat?.edges && <Edges threshold={1} color={mat.edgesColor ?? '#000000'} lineWidth={mat.edgesWidth ?? 1.5} />}
+      {mat?.outline && <Outlines thickness={mat.outlineWidth ?? 4} color={mat.outlineColor ?? '#000000'} transparent renderOrder={5} />}
+      {mat?.edges && <Edges threshold={mat.edgesThreshold ?? 1} color={mat.edgesColor ?? '#000000'} lineWidth={mat.edgesWidth ?? 1.5} transparent depthWrite={false} renderOrder={6} />}
     </mesh>
   );
 }

@@ -357,6 +357,7 @@ export interface MaterialOverride {
   edges?: boolean;
   edgesColor?: string;         // 기본 검정
   edgesWidth?: number;         // 화면 픽셀 두께(기본 1.5)
+  edgesThreshold?: number;     // 각도 임계값(°). 낮을수록 폴리곤이 더 많이 보임(기본 1). 높이면 날카로운 모서리만.
   // 셰이딩 종류 — 미설정/‘standard’=기존 PBR. ‘toon’=카툰(MeshToonMaterial). ‘matcap’=매트캡(라이팅 무관 스타일, MeshMatcapMaterial). shading!=standard일 때만 분기.
   shading?: 'standard' | 'toon' | 'matcap';
   toonSteps?: number;          // toon 음영 단계 수(기본 3, 2~6)

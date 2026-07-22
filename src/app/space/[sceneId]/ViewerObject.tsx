@@ -976,10 +976,10 @@ export function ViewerObject({
         gradient={object.material?.gradient}
       />
       )}
-      {/* 재질 외곽선(2D/만화 느낌) */}
-      {object.material?.outline && <Outlines thickness={object.material.outlineWidth ?? 4} color={object.material.outlineColor ?? '#000000'} />}
+      {/* 재질 외곽선(2D/만화 느낌) — 반투명 표면 opacity에 안 흐려지게 위에 불투명하게 그림 */}
+      {object.material?.outline && <Outlines thickness={object.material.outlineWidth ?? 4} color={object.material.outlineColor ?? '#000000'} transparent renderOrder={5} />}
       {/* 엣지(폴리곤) 라인 오버레이 */}
-      {object.material?.edges && <Edges threshold={1} color={object.material.edgesColor ?? '#000000'} lineWidth={object.material.edgesWidth ?? 1.5} />}
+      {object.material?.edges && <Edges threshold={object.material.edgesThreshold ?? 1} color={object.material.edgesColor ?? '#000000'} lineWidth={object.material.edgesWidth ?? 1.5} transparent depthWrite={false} renderOrder={6} />}
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}
     </mesh>
   );

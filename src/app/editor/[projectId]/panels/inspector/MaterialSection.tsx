@@ -327,6 +327,16 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                         {obj.material?.edges && (
                           <>
                             <LabeledNum
+                              label="Angle"
+                              value={obj.material?.edgesThreshold ?? 1}
+                              onChange={(v) => updateObject(obj.id, { material: { ...obj.material, edgesThreshold: v } })}
+                              onCommit={pushHistory}
+                              min={0}
+                              max={90}
+                              precision={0}
+                              dragStep={1}
+                            />
+                            <LabeledNum
                               label="Width"
                               value={obj.material?.edgesWidth ?? 1.5}
                               onChange={(v) => updateObject(obj.id, { material: { ...obj.material, edgesWidth: v } })}
