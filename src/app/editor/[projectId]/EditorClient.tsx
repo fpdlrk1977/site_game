@@ -315,7 +315,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
 
       {/* Floating left panel (Objects / Assets) */}
       {leftOpen && (
-        <div className={`absolute w-60 z-30 ${panelShell}`} style={{ top: panelTop, bottom: panelBottom, left: leftPanelX }}>
+        <div className={`absolute w-60 z-30 shadow-[0_1px_5px_rgba(0,0,0,0.15)] ${panelShell}`} style={{ top: panelTop, bottom: panelBottom, left: leftPanelX }}>
           <LeftPanel tab={gnbTab} projectName={projectName} onTabChange={setGnbTab} />
         </div>
       )}
@@ -331,7 +331,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       </button>
 
       {/* Floating inspector — 상단 액션바(Save/Play/Preview) + Inspector 본문 */}
-      <div className={`absolute right-3 w-60 z-30 flex flex-col ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
+      <div className={`absolute right-3 w-60 z-30 flex flex-col shadow-[0_1px_5px_rgba(0,0,0,0.15)] ${panelShell}`} style={{ top: panelTop, bottom: panelBottom }}>
         <InspectorActionBar />
         <div className="flex-1 min-h-0">
           <InspectorPanel />

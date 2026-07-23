@@ -584,7 +584,7 @@ export function HierarchyPanel({ noWrapper = false }: { noWrapper?: boolean }) {
           placeholder="검색..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-background border border-border rounded-xs px-2.5 py-1 text-xs text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
+          className="w-full h-7 bg-muted/5 dark:bg-muted/10 border border-border rounded-xs px-2.5 text-xs text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
         />
       </div>
       <div className="flex-1 overflow-y-auto p-1.5">

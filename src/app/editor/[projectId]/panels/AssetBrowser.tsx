@@ -398,7 +398,7 @@ export function AssetBrowser() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="에셋 검색..."
-              className="w-full bg-surface border border-border rounded-xs px-2.5 py-1 mb-2 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
+              className="w-full h-7 bg-muted/5 dark:bg-muted/10 border border-border rounded-xs px-2.5 mb-2 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
             <input ref={modelInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleModelFile} />
             <div className="grid grid-cols-3 gap-2">

@@ -32,7 +32,7 @@ export function LeftPanel({
   projectName: string;
   onTabChange: (tab: GnbTab) => void;
 }) {
-  const { objects, projectId, sceneId } = useSceneStore();
+  const { projectId, sceneId } = useSceneStore();
   const { theme, toggleTheme } = useThemeStore();
   const [showHistory, setShowHistory] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -143,13 +143,10 @@ export function LeftPanel({
             key={id}
             onClick={() => onTabChange(id)}
             className={`flex-1 px-3 py-1.5 rounded-xs text-[12px] font-medium transition-colors ${
-              tab === id ? 'bg-foreground/[0.06] text-foreground' : 'text-muted hover:text-foreground'
+              tab === id ? 'bg-muted/5 dark:bg-muted/10 text-foreground' : 'text-muted hover:text-foreground'
             }`}
           >
             {label}
-            {id === 'objects' && tab === id && (
-              <span className="ml-1 text-[9px] text-muted/60 font-normal">{objects.length}</span>
-            )}
           </button>
         ))}
       </div>

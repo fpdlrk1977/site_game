@@ -193,6 +193,7 @@ export function ManipulationHandles({ orbitRef, handleDraggingRef }: Props) {
     if (!ref || !cur || !lb || lb.isEmpty()) return;
     draggingRef.current = true;
     handleDraggingRef.current = true;
+    useLiveTransformStore.getState().setDragging(true); // 드래그 중 호버 가이드 억제
     setHot(idx);
     // Alt = 중심 기준(앵커 무시 → 양쪽 대칭 성장). 앵커/축이 바뀌므로 시작 시 캡처.
     const altCenter = !!e.altKey;
@@ -250,6 +251,7 @@ export function ManipulationHandles({ orbitRef, handleDraggingRef }: Props) {
     const up = () => {
       draggingRef.current = false;
       handleDraggingRef.current = false;
+      useLiveTransformStore.getState().setDragging(false);
       dragIdxRef.current = null;
       setHot(null);
       setAltActive(false);
@@ -291,11 +293,15 @@ export function ManipulationHandles({ orbitRef, handleDraggingRef }: Props) {
             onPointerDown={(e) => startDrag(i, e)}
             onPointerOver={(e) => {
               e.stopPropagation();
+              // 기즈모 등 다른 드래그가 진행 중이면 핸들 hover를 무시(orbit·hot 상태를 건드리지 않음).
+              if (useLiveTransformStore.getState().dragging) return;
               gl.domElement.style.cursor = cursorForHandle(i);
               if (!draggingRef.current) { setHot(i); if (orbitRef.current) orbitRef.current.enabled = false; }
             }}
             onPointerOut={() => {
-              if (draggingRef.current) return;
+              // 어떤 드래그든(핸들 자신 or 기즈모) 진행 중이면 orbit을 다시 켜지 않는다 —
+              // 기즈모로 오브젝트를 옮기다 포인터가 핸들을 스쳐 벗어나면 카메라가 "휙" 돌던 버그.
+              if (draggingRef.current || useLiveTransformStore.getState().dragging) return;
               gl.domElement.style.cursor = '';
               setHot(null);
               if (orbitRef.current) orbitRef.current.enabled = true;

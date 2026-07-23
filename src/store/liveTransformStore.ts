@@ -10,6 +10,10 @@ export interface LiveTransform {
 interface LiveTransformState {
   live: LiveTransform | null;
   setLive: (t: LiveTransform | null) => void;
+  // 직접 조작(기즈모/핸들) 드래그가 진행 중인지 — 드래그 중 다른 오브젝트 호버 가이드라인 억제용.
+  //  (비반응 read 용도: 이벤트 핸들러에서 getState().dragging 으로 읽어 setHovered를 건너뛴다.)
+  dragging: boolean;
+  setDragging: (v: boolean) => void;
 }
 
 // ── 라이브 트랜스폼 채널 ────────────────────────────────────────────────
@@ -22,4 +26,6 @@ interface LiveTransformState {
 export const useLiveTransformStore = create<LiveTransformState>((set) => ({
   live: null,
   setLive: (t) => set({ live: t }),
+  dragging: false,
+  setDragging: (v) => set({ dragging: v }),
 }));

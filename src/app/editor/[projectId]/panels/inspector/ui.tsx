@@ -424,7 +424,7 @@ export function Toggle({ value, onChange }: { value: boolean; onChange: (v: bool
       className={`relative w-7.5 h-1 rounded-full transition-colors cursor-pointer shrink-0 ${value ? "bg-primary/30" : "bg-border"}`}
     >
       <div
-        className={`absolute -top-6/4 w-4 h-4 rounded-full bg-background dark:bg-foreground shadow border border-border/70 transition-all ${value ? "left-4  bg-primary border-primary dark:bg-primary" : "left-0"}`}
+        className={`absolute -top-6/5 w-3.5 h-3.5 rounded-full bg-gray-400 shadow border border-border/70 transition-all ${value ? "left-4  bg-primary border-primary dark:bg-primary" : "left-0"}`}
       />
     </div>
   );

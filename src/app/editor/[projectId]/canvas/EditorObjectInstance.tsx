@@ -654,7 +654,8 @@ export function EditorObjectInstance({ object }: Props) {
   const isSingleSel = selectedIds.length === 1 ? selectedIds[0] === object.id : selectedIds.length === 0 && selectedId === object.id;
   const [hovered, setHovered] = useState(false);
   // 잠긴 오브젝트는 선택뿐 아니라 호버 하이라이트도 뜨지 않도록 hovered=true를 무시한다
-  const handlePointerOver = (e: { stopPropagation: () => void }) => { e.stopPropagation(); if (!object.locked) setHovered(true); };
+  // 기즈모/핸들 드래그 중엔 다른 오브젝트에 마우스가 지나가도 호버 가이드라인을 띄우지 않는다.
+  const handlePointerOver = (e: { stopPropagation: () => void }) => { e.stopPropagation(); if (!object.locked && !useLiveTransformStore.getState().dragging) setHovered(true); };
   const handlePointerOut = (e: { stopPropagation: () => void }) => { e.stopPropagation(); setHovered(false); };
 
   // useLayoutEffect: 커밋 중 동기 등록 → 재부모화(언마운트→리마운트) 시 기즈모가
@@ -860,7 +861,7 @@ export function EditorObjectInstance({ object }: Props) {
             hovered={hovered}
             onClick={(shiftKey) => handleClick(shiftKey)}
             onDoubleClick={(shiftKey) => selectExact(object, shiftKey)}
-            onHoverChange={(h) => setHovered(h && !object.locked)}
+            onHoverChange={(h) => setHovered(h && !object.locked && !useLiveTransformStore.getState().dragging)}
             wireframe={wireframeMode}
             colliderGuide={object.physics.enabled ? (object.physics.isSensor ? 'sensor' : 'solid') : undefined}
           />

@@ -264,7 +264,7 @@ export function ScenesSection() {
                 key={scene.id}
                 onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, sceneId: scene.id }); }}
                 className={`group flex items-center h-7 px-1.5 mx-1.5 rounded-xs transition-colors ${
-                  isCurrent ? 'bg-foreground/[0.06]' : 'hover:bg-background'
+                  isCurrent ? 'bg-muted/5 dark:bg-muted/10' : 'hover:bg-background'
                 }`}
               >
                 {/* 현재 씬 표시는 체크 아이콘 대신 텍스트 강조 + 행 하이라이트로 — 메인 씬(집)과 헷갈리지 않게. */}

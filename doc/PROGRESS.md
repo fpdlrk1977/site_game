@@ -1569,6 +1569,13 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
       - **TC-D(거리)**: 가까이/멀리 한도 변경 → 바닥 링 2개와 띠 두께가 변함 + 라벨 수치 갱신.
   - **C2 남은 범위(CAMERA.md §8 기준)**: **투영 전환(원근/직교)** · **near/far 클리핑** · **follow(3인칭) 세부**(거리·높이·어깨오프셋). ※노출은 기존 `toneMappingExposure`로 이미 있음. ※에디터 T/F/S near-ortho는 에디터 전용이라 뷰어 투영 설정과 별개.
 
+### 🛠️ 에디터 조작 버그 3종 + 좌패널 UX (2026-07-23) — ✅ 사용자 확인 완료
+> 사용자 보고 3건을 근본원인까지 파고들어 수정. tsc 클린 + dev 편집 라우트 200. **✅ 셋 다 브라우저 확인 완료(사용자: "스냅도 된다"·"추가시 기즈모 잘된다"·호버 정상).**
+- **🔴 스냅 "카메라 휙~" — 진짜 원인은 snapDist 아님(오진 정정)**: 큰 오브젝트를 다른 오브젝트에 스냅시키며 지나칠 때 카메라가 휙 돌던 버그. **1차 오진**=카메라 거리 비례 `snapDist`(당시 실험코드)라 보고 고정 0.2m로 되돌렸으나 **증상 그대로**였음 → snapDist 무관 확정. **진짜 원인**=`ManipulationHandles`의 코너/면 핸들(스케일용, **항상 표시**)의 `onPointerOut`이 **자기 핸들 드래그(`draggingRef`)만 확인하고 기즈모 드래그는 무시** → 기즈모로 오브젝트를 옮기다 포인터가 (화면에 퍼진) 핸들을 스쳐 벗어나면 `orbit.enabled=true`로 **카메라가 다시 켜져 회전**. 큰 오브젝트만인 이유=핸들이 화면에 넓게 퍼져 포인터가 지날 확률↑. **수정**=핸들 `onPointerOver/Out`을 `useLiveTransformStore.getState().dragging`로 가드(어떤 드래그든 진행 중이면 orbit 안 건드림). snapDist는 고정 0.2m 유지(예측 가능·점프 상한).
+- **드래그 중 호버 가이드라인 억제**: 기즈모/핸들 드래그 중 다른 오브젝트에 마우스가 가면 호버 가이드가 뜨던 것 → `liveTransformStore`에 **`dragging` 플래그** 신설(SingleGizmo·MultiGizmo·ManipulationHandles 드래그 시작/종료에서 on/off), `EditorObjectInstance`의 호버 핸들러 2곳(프리미티브·GLB `onHoverChange`)이 드래그 중이면 `setHovered` 스킵. (이 플래그를 스냅 "휙" 가드도 공유.)
+- **오브젝트 추가 시 기즈모 즉시 표시**: 추가하면 자동 선택은 되나 기즈모가 안 뜨고 **한 번 더 클릭해야** 뜨던 버그. 원인=새 오브젝트의 3D ref는 인스턴스 마운트 **다음 프레임**에 `refsMap`(순수 Map)에 등록되는데 Map은 리렌더를 안 유발 → render 시점 `target=undefined`라 기즈모 null. **수정**=`SingleGizmo`의 useFrame이 **ref 유무 변화를 감지해 등록 프레임에 딱 한 번 강제 리렌더**(`useReducer` bump). 등록=즉시 표시·제거=즉시 숨김, steady state선 bump 안 함(무한루프 없음).
+- **좌패널 UX 다듬기**: 좌/우 패널 그림자 `shadow-[0_1px_5px_rgba(0,0,0,0.15)]`(좁고 옅게) · 활성 색 통일 `bg-muted/5 dark:bg-muted/10`(Objects/Assets **탭 버튼**·Scenes 활성 씬·검색박스 — 단 **objects 트리 선택 항목은 강조색 `bg-primary/10` 유지**, 사용자 요청) · Objects 탭 우측 객수 숫자 제거 · objects/assets 검색박스 높이 `h-7`.
+
 ## 알려진 제약/한계
 
 - **액추에이터/무빙 콜라이더 "미는" 미지원 (2026-07-20 확인, 보류)**: 움직이는 콜라이더(actuator/moving = kinematicPosition)가 **가만히 선 캐릭터를 밀지 못하고 관통**한다. 원인 = Rapier `KinematicCharacterController.computeColliderMovement`가 **캐릭터 자신의 `desired` 이동에 대해서만** 충돌 해결(움직이는 콜라이더가 나를 미는 건 미계산). 증상: W로 밀 땐 캐릭터 전진이 막혀 밀리는 듯 보이나, **밀리는 중 W를 놓으면 물체가 통과**. 해결하려면 무빙 플랫폼 "pusher" 로직(접촉 시 콜라이더 변위를 캐릭터 `desired`에 합산) 필요 — 회귀 위험으로 **보류**. 다시 문제되면 그때 구현. (`PlayModeController.tsx:359`, `PlayCanvas.tsx` ActuatorCollider/MovingCollider)

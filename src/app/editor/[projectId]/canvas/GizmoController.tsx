@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useReducer } from 'react';
 import { TransformControls } from '@react-three/drei';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useSceneStore } from '@/store/sceneStore';
@@ -23,8 +23,7 @@ const _lp = new THREE.Vector3();
 const _lq = new THREE.Quaternion();
 const _ls = new THREE.Vector3();
 const _snapBox = new THREE.Box3();
-const _snapSize = new THREE.Vector3(); // 스냅 자석 범위 계산용(오브젝트 크기)
-const OBJECT_SNAP_THRESHOLD = 0.05; // 자석 범위 절대 최소(m) — 실제 범위는 카메라 거리에 비례(화면상 일정)
+const OBJECT_SNAP_THRESHOLD = 0.2; // 월드 거리(m) — 이 안쪽이면 다른 오브젝트 모서리/중심에 흡착(고정값=예측 가능·점프 상한)
 
 interface Props {
   orbitRef: React.RefObject<OrbitControlsImpl | null>;
@@ -79,6 +78,7 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
           scaleSnap={snapEnabled ? 0.1 : null}
           onMouseDown={() => {
             gizmoDraggingRef.current = true;
+            useLiveTransformStore.getState().setDragging(true); // 드래그 중 호버 가이드 억제
             if (orbitRef.current) orbitRef.current.enabled = false;
             // 이전 드래그에서 pivotEl에 누적된 rotation/scale 초기화
             // 초기화하지 않으면 두 번째 rotate/scale 시 변환이 중첩 적용돼 좌표가 깨짐
@@ -141,6 +141,7 @@ function MultiGizmo({ orbitRef, gizmoDraggingRef }: Props) {
           }}
           onMouseUp={() => {
             gizmoDraggingRef.current = false;
+            useLiveTransformStore.getState().setDragging(false);
             if (orbitRef.current) orbitRef.current.enabled = true;
             const { objects: objs } = useSceneStore.getState();
             // 모든 대상의 최종 트랜스폼을 모아 원자적으로 1회 커밋(undo 기준 오염 없음).
@@ -169,7 +170,6 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const { selectedId, transformMode, transformSpace, snapEnabled, snapTranslate, snapRotate, objectSnap,
     objects, assets, animClips, pivotMotorId, commitTransforms, updateEnvironment, pushHistory } = useSceneStore();
   const refsMap = useObjectRefs();
-  const camera = useThree((s) => s.camera);
   // 기즈모는 "형상 중심에 놓인 프록시"에 붙는다 → 위젯이 원점(하단)이 아니라 중심에 뜨고,
   // 프록시는 재부모화되지 않으므로 예전의 scene graph 에러도 없다. 조작은 오브젝트로 역매핑.
   const proxyRef = useRef<THREE.Object3D | null>(null);
@@ -177,6 +177,11 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   const cLocalRef = useRef(new THREE.Vector3()); // 선택 오브젝트의 로컬 형상 중심
   const floorMinYRef = useRef(0);
   const snapTargetsRef = useRef<THREE.Box3[]>([]); // 오브젝트 스냅 대상(다른 루트 오브젝트 월드 bbox, 드래그 시작 시 스냅샷)
+
+  // 새로 추가/선택된 오브젝트의 3D ref는 그 인스턴스가 마운트된 '다음 프레임'에 refsMap에 등록된다.
+  // refsMap은 Map(ref)이라 등록돼도 리렌더가 안 나 → 기즈모가 안 뜨고, 한 번 더 클릭해야 뜨던 버그.
+  // 아래 useFrame이 ref 유무 변화를 감지해 딱 한 번 강제 리렌더한다(등록=즉시 표시·제거=즉시 숨김).
+  const [, bumpGizmo] = useReducer((x: number) => x + 1, 0);
 
   const isCharPreview = selectedId === CHARACTER_PREVIEW_ID;
   const selectedObject = isCharPreview ? null : objects.find((o) => o.id === selectedId);
@@ -237,6 +242,9 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
   // 드래그 중이 아니면 프록시를 오브젝트(형상 중심/회전/스케일)에 매 프레임 동기화
   useFrame(() => {
     const proxy = proxyRef.current!;
+    // ref 유무가 render 시점(target)과 달라졌으면(마운트 등록/언마운트) 한 번 리렌더 → 기즈모 즉시 반영.
+    const liveTarget = selectedId ? refsMap.current.get(selectedId) : undefined;
+    if (!!liveTarget !== !!target) { bumpGizmo(); return; }
     if (gizmoDraggingRef.current || !valid || !target || !target.parent) return;
     target.updateWorldMatrix(true, false);
     target.matrixWorld.decompose(_p, _q, _s);
@@ -279,11 +287,10 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
     if (!lb || lb.isEmpty() || snapTargetsRef.current.length === 0) return;
     target!.updateWorldMatrix(true, false);
     _snapBox.copy(lb).applyMatrix4(target!.matrixWorld); // 후보 위치의 월드 bbox
-    // 자석 범위 = 카메라 거리에 비례(화면상 일정) — 줌 무관하게 흡착감이 같고,
-    //   확대(줌인) 시 월드 범위가 작아져 스냅 순간 큰 점프로 화면이 튀는 문제를 막는다.
-    //   고정 월드값이면: 축소=약함, 확대=과도한 점프 → 카메라 거리 비례가 자연스럽다.
-    _snapBox.getCenter(_snapSize);
-    const snapDist = Math.max(OBJECT_SNAP_THRESHOLD, camera.position.distanceTo(_snapSize) * 0.06);
+    // 자석 범위 = 고정 월드값. (카메라 거리 비례 방식은 폐기: 큰 오브젝트를 멀리서 편집할 때
+    //   snapDist가 커져 지나치는 순간 최대 snapDist만큼 오브젝트가 순간이동 → "화면이 휙" 튀는 버그.)
+    //   고정값이면 프레임당 점프가 최대 0.2m로 상한이 걸려 예측 가능하다.
+    const snapDist = OBJECT_SNAP_THRESHOLD;
     (['x', 'y', 'z'] as const).forEach((axis) => {
       const feats = [_snapBox.min[axis], (_snapBox.min[axis] + _snapBox.max[axis]) / 2, _snapBox.max[axis]];
       let best: number | null = null;
@@ -318,6 +325,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
         scaleSnap={snapEnabled ? 0.1 : null}
         onMouseDown={() => {
           gizmoDraggingRef.current = true;
+          useLiveTransformStore.getState().setDragging(true); // 드래그 중 호버 가이드 억제
           if (orbitRef.current) orbitRef.current.enabled = false;
           if (effectiveMode === 'translate' && !skipYClamp && !isCharPreview) {
             const st = useSceneStore.getState();
@@ -355,6 +363,7 @@ function SingleGizmo({ orbitRef, gizmoDraggingRef }: Props) {
           gizmoDraggingRef.current = false;
           if (orbitRef.current) orbitRef.current.enabled = true;
           useLiveTransformStore.getState().setLive(null); // 확정값은 아래 commitTransforms가 메인 스토어에 반영
+          useLiveTransformStore.getState().setDragging(false);
           const pos = target.position, rot = target.rotation, scl = target.scale;
           if (isCharPreview) {
             updateEnvironment({ playerStartPosition: { x: pos.x, y: Math.max(0, pos.y), z: pos.z } });
