@@ -353,6 +353,8 @@ export interface MaterialOverride {
   outline?: boolean;
   outlineColor?: string;       // 기본 검정
   outlineWidth?: number;       // 화면 픽셀 두께(기본 4)
+  outlineMode?: 'silhouette' | 'full'; // 외곽(실루엣만) / 전체(+보이는 안쪽 하드 모서리). 미설정=실루엣.
+  outlineThreshold?: number;   // 전체 모드 각도 임계값(°). 낮을수록 모서리가 많이 보임(기본 1). 높이면 날카로운 모서리만(매끈한 면은 실루엣만).
   // 엣지(폴리곤) 라인 오버레이 — 표면 위에 폴리곤 모서리를 라인으로. 프리미티브 전용.
   edges?: boolean;
   edgesColor?: string;         // 기본 검정

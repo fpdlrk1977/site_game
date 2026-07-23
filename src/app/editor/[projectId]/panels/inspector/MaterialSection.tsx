@@ -318,6 +318,42 @@ export function MaterialSection({ obj, open, onToggle }: { obj: ObjectNodeSchema
                       </div>
                     </div>
                   )}
+                  {/* 외곽선 모드 — 외곽(실루엣만) / 전체(+보이는 안쪽 모서리). 전체면 각도(임계값)로 얼마나 그릴지 조절. */}
+                  {obj.material?.outline && (
+                    <div className="flex items-center justify-between gap-2 pl-2">
+                      <span className="text-[10px] text-muted/60 tracking-wide">모서리</span>
+                      <div className="flex items-center gap-2">
+                        {obj.material?.outlineMode === 'full' && (
+                          <LabeledNum
+                            label="각도"
+                            value={obj.material?.outlineThreshold ?? 1}
+                            onChange={(v) => updateObject(obj.id, { material: { ...obj.material, outlineThreshold: v } })}
+                            onCommit={pushHistory}
+                            min={1}
+                            max={80}
+                            precision={0}
+                            dragStep={1}
+                          />
+                        )}
+                        <div className="flex items-center gap-0.5 bg-background/50 rounded-xs p-0.5">
+                          {([['silhouette', '외곽'], ['full', '전체']] as const).map(([m, label]) => (
+                            <button
+                              key={m}
+                              onClick={() => {
+                                updateObject(obj.id, { material: { ...obj.material, outlineMode: m === 'silhouette' ? undefined : m } });
+                                pushHistory();
+                              }}
+                              className={`px-2 py-0.5 rounded-xs text-[10px] transition-colors ${
+                                (obj.material?.outlineMode ?? 'silhouette') === m ? 'bg-primary text-white' : 'text-muted hover:text-foreground'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* 엣지(폴리곤) 라인 오버레이 — 표면 위 폴리곤 모서리 라인. */}
                   {obj.primitiveShape && !obj.content && !isVoxel && (

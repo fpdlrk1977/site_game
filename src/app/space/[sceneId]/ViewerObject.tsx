@@ -2,6 +2,7 @@
 
 import { useState, useRef, Suspense, useEffect, useMemo, useContext } from "react";
 import { useGLTF, useAnimations, Text3D, Center, Html, Outlines, Edges } from "@react-three/drei";
+import { OutlineEdges } from "@/components/three/OutlineEdges";
 import { SkeletonUtils } from "three-stdlib";
 import * as THREE from "three";
 import { useLoader, useFrame } from "@react-three/fiber";
@@ -978,6 +979,10 @@ export function ViewerObject({
       )}
       {/* 재질 외곽선(2D/만화 느낌) — 반투명 표면 opacity에 안 흐려지게 위에 불투명하게 그림 */}
       {object.material?.outline && <Outlines thickness={object.material.outlineWidth ?? 4} color={object.material.outlineColor ?? '#000000'} transparent renderOrder={5} />}
+      {/* 외곽선 '전체' 모드 — 실루엣 + 보이는 안쪽 모서리(각도로 조절). 에디터와 동일. */}
+      {object.material?.outline && object.material?.outlineMode === 'full' && primGeom && (
+        <OutlineEdges geometry={primGeom} color={object.material.outlineColor ?? '#000000'} lineWidth={object.material.outlineWidth ?? 4} threshold={object.material.outlineThreshold ?? 1} />
+      )}
       {/* 엣지(폴리곤) 라인 오버레이 */}
       {object.material?.edges && <Edges threshold={object.material.edgesThreshold ?? 1} color={object.material.edgesColor ?? '#000000'} lineWidth={object.material.edgesWidth ?? 1.5} transparent depthWrite={false} renderOrder={6} />}
       {outlineOn && <Outlines thickness={2} color="#22d3ee" />}

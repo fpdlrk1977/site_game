@@ -17,6 +17,7 @@ import { useObjectRefs } from './ObjectRefsContext';
 import { GlbObject } from './GlbObject';
 import { ParticleEmitter } from '@/components/three/ParticleEmitter';
 import { PrimitiveMaterial } from '@/components/three/PrimitiveMaterial';
+import { OutlineEdges } from '@/components/three/OutlineEdges';
 import { pointerDownOnObjectRef } from './boxSelectState';
 import type { ObjectNodeSchema, LightType } from '@/types/scene';
 
@@ -932,6 +933,11 @@ export function EditorObjectInstance({ object }: Props) {
           {/* 재질 외곽선(2D/만화 느낌) — 화면 픽셀 두께로 일정. Toon과 함께 쓰면 셀셰이딩.
               transparent+renderOrder로 반투명 표면 '뒤'가 아니라 '위'에 불투명하게 그림(표면 opacity에 안 흐려짐). */}
           {mat?.outline && <Outlines thickness={mat.outlineWidth ?? 4} color={mat.outlineColor ?? '#000000'} transparent renderOrder={5} />}
+          {/* 외곽선 '전체' 모드 — 실루엣에 더해 '보이는 안쪽 모서리'(각진 박스의 Y 등)를 함께. 뒤 모서리는 가림.
+              각도(outlineThreshold)로 얼마나 그릴지 조절: 낮으면 많이, 높이면 날카로운 모서리만. */}
+          {mat?.outline && mat?.outlineMode === 'full' && (
+            <OutlineEdges geometry={primGeom} color={mat.outlineColor ?? '#000000'} lineWidth={mat.outlineWidth ?? 4} threshold={mat.outlineThreshold ?? 1} />
+          )}
           {/* 엣지(폴리곤) 라인 오버레이 — 표면 위 폴리곤 모서리. threshold 낮게 → 폴리곤 구조가 보임. */}
           {mat?.edges && <Edges threshold={mat.edgesThreshold ?? 1} color={mat.edgesColor ?? '#000000'} lineWidth={mat.edgesWidth ?? 1.5} transparent depthWrite={false} renderOrder={6} />}
         </mesh>

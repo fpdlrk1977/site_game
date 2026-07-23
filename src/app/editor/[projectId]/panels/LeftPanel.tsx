@@ -137,12 +137,12 @@ export function LeftPanel({
       </div>
 
       {/* 탭 — Objects / Assets (활성 = 연회색 pill) */}
-      <div className="flex items-center gap-1 px-2 pb-1.5 shrink-0 border-b border-border">
+      <div className="flex items-center gap-1 px-2 pb-1.5 shrink-0 border-b border-border/50">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => onTabChange(id)}
-            className={`flex-1 px-3 py-1.5 rounded-xs text-[12px] font-medium transition-colors ${
+            className={`flex-1 px-3 py-1.5 rounded-xs text-[11px] font-medium transition-colors ${
               tab === id ? 'bg-muted/5 dark:bg-muted/10 text-foreground' : 'text-muted hover:text-foreground'
             }`}
           >
