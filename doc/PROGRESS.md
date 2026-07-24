@@ -1576,6 +1576,19 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - **오브젝트 추가 시 기즈모 즉시 표시**: 추가하면 자동 선택은 되나 기즈모가 안 뜨고 **한 번 더 클릭해야** 뜨던 버그. 원인=새 오브젝트의 3D ref는 인스턴스 마운트 **다음 프레임**에 `refsMap`(순수 Map)에 등록되는데 Map은 리렌더를 안 유발 → render 시점 `target=undefined`라 기즈모 null. **수정**=`SingleGizmo`의 useFrame이 **ref 유무 변화를 감지해 등록 프레임에 딱 한 번 강제 리렌더**(`useReducer` bump). 등록=즉시 표시·제거=즉시 숨김, steady state선 bump 안 함(무한루프 없음).
 - **좌패널 UX 다듬기**: 좌/우 패널 그림자 `shadow-[0_1px_5px_rgba(0,0,0,0.15)]`(좁고 옅게) · 활성 색 통일 `bg-muted/5 dark:bg-muted/10`(Objects/Assets **탭 버튼**·Scenes 활성 씬·검색박스 — 단 **objects 트리 선택 항목은 강조색 `bg-primary/10` 유지**, 사용자 요청) · Objects 탭 우측 객수 숫자 제거 · objects/assets 검색박스 높이 `h-7`.
 
+### 🔐 인증/라우팅 UX 3종 — 회원가입 페이지 분리 · 공통 Loading/Skeleton · 로그아웃 뒤로가기 가드 (2026-07-24) — ✅ 사용자 확인 완료
+> 사용자 요청 3건. tsc 클린 + dev 라우트 200(`/login`·`/signup`·`/signup/complete`) + 미인증 `/dashboard`→307 `/login`. **✅ 회원가입 2단 레이아웃·로그인 후 뒤로가기 차단 사용자 확인 완료.**
+- **① 회원가입 페이지 분리 + 완료 페이지**: 기존 `/login`은 `isSignUp` 토글로 **폼만** 바뀌던 것 → **별도 라우트로 분리**.
+  - 신규 공용 `components/ui/AuthShell.tsx`(`AuthShell`+`AuthField`+`AuthSubmit`+`AuthMessage`) — 로고/배경/카드 틀 공유([[feedback_extract_reusable_shared_components]]).
+  - `login/page.tsx` = 로그인 전용(토글 제거) + 하단 `<Link href="/signup">`.
+  - **신규 `signup/page.tsx`** = 로그인과 **확실히 다른 2단 스플릿 레이아웃**(사용자 결정) — 좌: 그라데이션 서비스 소개 배너(헤드라인+혜택 3종), 우: 가입 폼. lg 미만은 배너 숨기고 폼 아래 혜택 체크리스트(반응형). 비밀번호 6자 검증.
+  - **신규 `signup/complete/page.tsx`**(서버 컴포넌트, `searchParams.status`로 분기) — **세션 유무 자동 분기**(사용자 선택): 가입 시 `data.session` 있으면(이메일 인증 OFF) `?status=active`→"가입 완료 🎉 + 대시보드 시작하기"(setUser+로그인 상태), 없으면(인증 ON) `?status=pending`→"가입 완료 + 로그인하기". **⚠️ 즉시 가입(인증 없이)은 Supabase 대시보드 Authentication▸Email▸"Confirm email" OFF 필요**(코드로 못 바꿈, 현재 코드가 설정을 자동 감지).
+- **② 공통 Loading + Skeleton**: 신규 `components/ui/Skeleton.tsx`(`Skeleton`(animate-pulse 블록)·`Spinner`·`FullPageLoader`). 라우트 `loading.tsx` 3개 — `app/loading.tsx`(전역 스피너)·`dashboard/loading.tsx`(헤더+카드 그리드 골격)·`editor/[projectId]/loading.tsx`(좌/우 플로팅 패널 골격+중앙 스피너).
+- **③ 로그아웃 뒤로가기 가드(bfcache) — 양방향**: 신규 `components/ui/BfcacheGuard.tsx`(`pageshow.persisted`=bfcache 복원 시 `location.reload()` → 서버 라운드트립 유발). `proxy.ts` 확장:
+  - 보호 경로(`/dashboard`·`/editor`) 미인증→`/login`(기존) + **인증 페이지(`/login`·`/signup`, 정확 일치) 인증됨→`/dashboard`**(신규 — 로그인 후 뒤로가기로 로그인/회원가입 안 보이게). `/signup/complete`는 정확 일치 제외라 통과.
+  - 보호경로+인증페이지 응답에 `Cache-Control: no-store`(단 Next가 동적 페이지에 `no-cache`로 덮어써 헤더만으론 불완전 → **BfcacheGuard가 핵심 방어**). 가드는 login·signup·dashboard·editor 4곳 마운트.
+  - **한계**: bfcache 복원분을 가드가 새로고침하는 구조라 **아주 짧은 깜빡임** 가능(로그인 화면 잠깐 스침→대시보드). 깜빡임 제거(클라 세션 선확인)는 요청 시 후속.
+
 ## 알려진 제약/한계
 
 - **액추에이터/무빙 콜라이더 "미는" 미지원 (2026-07-20 확인, 보류)**: 움직이는 콜라이더(actuator/moving = kinematicPosition)가 **가만히 선 캐릭터를 밀지 못하고 관통**한다. 원인 = Rapier `KinematicCharacterController.computeColliderMovement`가 **캐릭터 자신의 `desired` 이동에 대해서만** 충돌 해결(움직이는 콜라이더가 나를 미는 건 미계산). 증상: W로 밀 땐 캐릭터 전진이 막혀 밀리는 듯 보이나, **밀리는 중 W를 놓으면 물체가 통과**. 해결하려면 무빙 플랫폼 "pusher" 로직(접촉 시 콜라이더 변위를 캐릭터 `desired`에 합산) 필요 — 회귀 위험으로 **보류**. 다시 문제되면 그때 구현. (`PlayModeController.tsx:359`, `PlayCanvas.tsx` ActuatorCollider/MovingCollider)
