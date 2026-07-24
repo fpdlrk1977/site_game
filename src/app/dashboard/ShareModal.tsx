@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { X, AlertTriangle, Sparkles, Link2, Image as ImageIcon } from 'lucide-react';
 import QRCode from 'qrcode';
 import { usePlan } from '@/hooks/usePlan';
@@ -143,9 +144,12 @@ export function ShareModal({ projectName, sceneId, isPublished, onClose }: Props
                       나의 3D 공간을 어디든 삽입하세요.
                     </p>
                   </div>
-                  <button className="w-full py-2 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all">
+                  <Link
+                    href="/pricing"
+                    className="block w-full py-2 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all"
+                  >
                     Pro로 업그레이드
-                  </button>
+                  </Link>
                 </div>
               ) : (
                 <>

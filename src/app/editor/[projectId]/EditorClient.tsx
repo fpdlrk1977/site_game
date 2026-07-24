@@ -8,6 +8,9 @@ import { buildSceneData } from "@/lib/saveScene";
 import { ViewportToolbar } from "./panels/ViewportToolbar";
 import { type GnbTab } from "./panels/EditorGnb";
 import { LeftPanel } from "./panels/LeftPanel";
+import { CollabAvatars } from "./panels/CollabAvatars";
+import { useCollab } from "@/hooks/useCollab";
+import { useUserStore } from "@/store/userStore";
 import { InspectorPanel } from "./panels/InspectorPanel";
 import { InspectorActionBar } from "./panels/InspectorActionBar";
 import { LogicPopup } from "./panels/LogicPopup";
@@ -87,6 +90,11 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     const data = buildSceneData();
     return { ...data, environment: { ...data.environment, defaultMode: "play" as const } };
   }, [editorPlaying]);
+  // 실시간 협업 세션(M1: Presence) — 같은 씬 편집자의 아바타·선택·잠금 공유.
+  const collabUserId = useUserStore((s) => s.userId);
+  const collabEmail = useUserStore((s) => s.email);
+  useCollab(initialScene.sceneId, collabUserId, collabEmail);
+
   const [isMobile, setIsMobile] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [gnbTab, setGnbTab] = useState<GnbTab>("objects");
@@ -294,6 +302,9 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
 
       {/* 빈 씬 코칭 — 오브젝트 0개일 때만 (자체적으로 숨김) */}
       <EditorEmptyState />
+
+      {/* 실시간 협업 — 접속자 아바타(협업 중일 때만 노출) */}
+      <CollabAvatars />
 
       {/* Viewport overlays — 떠있는 패널과 겹치지 않도록 '자유 캔버스' 사각형에 가둔다.
           자식 오버레이의 기존 top-3/right-3/bottom-3 좌표는 이 컨테이너 기준으로 그대로 동작. */}

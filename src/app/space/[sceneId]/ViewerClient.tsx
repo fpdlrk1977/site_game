@@ -11,6 +11,7 @@ import { Heart, Star, Circle, RotateCcw } from 'lucide-react';
 import * as THREE from 'three';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3, GameVariable } from '@/types/scene';
 import { sampleClip, type ClipSample } from '@/lib/animSample';
+import { nextSceneHref } from '@/lib/sceneNav';
 
 // 애니 클립 키프레임 보간(경첩 원호 포함)은 공용 lib로 추출 — 뷰어/에디터 미리보기 공유(ANIMATION.md).
 
@@ -622,10 +623,9 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
           onBridge({ type: 'park3d:popup', sceneId: scene.sceneId, objectId: obj.id, objectName: obj.name, value: ev.value });
         }
       } else if (ev.action === 'go_to_scene' && ev.value) {
-        // 현재 경로의 씬 id를 대상 id로 치환해 이동 → /space·/embed·커스텀도메인 모두 대응.
-        // (경로에 현재 씬 id가 없으면 독립 URL 기준으로 폴백)
-        const path = window.location.pathname;
-        const target = path.includes(scene.sceneId) ? path.replace(scene.sceneId, ev.value) : `/space/${ev.value}`;
+        // 서빙 컨텍스트(플랫폼/임베드/커스텀 도메인)에 맞는 경로로 이동.
+        // 커스텀 도메인은 /s/{sceneId} 스킴(proxy.ts와 짝) — nextSceneHref가 처리.
+        const target = nextSceneHref(window.location.pathname, scene.sceneId, ev.value);
         window.location.href = target + window.location.search;
       } else if (ev.action === 'show_object' && ev.value) {
         setVisOverride((v) => ({ ...v, [ev.value]: true }));

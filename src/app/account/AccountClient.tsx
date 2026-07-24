@@ -199,9 +199,12 @@ export function AccountClient({ email, displayName, planTier }: Props) {
               <span className="text-sm text-muted">현재 플랜</span>
             </div>
             {planTier === 'free' && (
-              <button className="text-xs px-3 py-1.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all">
+              <Link
+                href="/pricing"
+                className="text-xs px-3 py-1.5 rounded-xs bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold hover:from-violet-500 hover:to-cyan-500 transition-all"
+              >
                 업그레이드
-              </button>
+              </Link>
             )}
           </div>
         </section>

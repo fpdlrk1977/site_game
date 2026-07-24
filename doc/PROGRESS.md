@@ -1589,6 +1589,63 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
   - 보호경로+인증페이지 응답에 `Cache-Control: no-store`(단 Next가 동적 페이지에 `no-cache`로 덮어써 헤더만으론 불완전 → **BfcacheGuard가 핵심 방어**). 가드는 login·signup·dashboard·editor 4곳 마운트.
   - **한계**: bfcache 복원분을 가드가 새로고침하는 구조라 **아주 짧은 깜빡임** 가능(로그인 화면 잠깐 스침→대시보드). 깜빡임 제거(클라 세션 선확인)는 요청 시 후속.
 
+### 💳 결제/플랜 화면 (Pricing UI, 로직 제외) (2026-07-24) — 브라우저 확인 대기
+> 로드맵 미완료 항목 우선순위 진행의 **1번**. 사용자 메모 "화면구성까지만, 실제 결제 로직은 추후". 감사 결과 게이팅 인프라(`PLAN_GATES`/`usePlan`/`PlanGate`)는 있는데 **`/pricing` 페이지가 없어 업그레이드 버튼이 전부 죽은 링크(404)**였음 → 그 갭을 채움. tsc 클린 + `/pricing` 200(비로그인/로그인). **브라우저 확인 대기.**
+- **원칙**: **가짜 결제 폼 금지** — 카드/결제정보 입력 없음. 업그레이드 CTA는 "결제 연동 준비 중" 안내 모달로 귀결(정직). 실제 Stripe는 범위 밖.
+- **신규 `app/pricing/pricingData.ts`**: 표시 데이터. 기능/한도 값은 **`lib/planGates.ts`의 `PLAN_GATES`에서 파생**(`gateValue()` — num/storage/bool 포맷) → 게이트 바꾸면 가격표 자동 일치. `TIER_META`(Free/Pro/Business 이름·태그라인·**플레이스홀더 가격**(Free ₩0·Pro ₩9,900/월 가안·Business 문의)·CTA·그라데이션). 가격 확정 시 `TIER_META`만 수정.
+- **신규 `app/pricing/page.tsx`**(서버): 공개 페이지. 로그인 시 `createSupabaseServer`+`users_plan`로 현재 플랜 조회 → "현재 플랜" 표시(비로그인은 표시 안 함). 미니 헤더(로고→`/` · 대시보드/로그인) + 히어로 + `<PricingCards>` + "결제 준비 중" 안내.
+- **신규 `app/pricing/PricingCards.tsx`**(client): 3-tier 카드(Pro `ring-2 ring-primary`+"추천"+살짝 띄움) + 카드별 기능 목록(FEATURE_ROWS 순회, bool=✓/—·수치=" · 값") + 하단 **기능 비교표**(전체 매트릭스, `overflow-x-auto`). CTA: 현재플랜=disabled「현재 이용 중」·Free=`/dashboard`(로그인)or`/signup`·Pro/Business=업그레이드 모달 오픈.
+- **신규 `app/pricing/UpgradeNotice.tsx`**(client): 업그레이드 안내 모달(선택 플랜명 + "결제 연동 준비 중, 곧 제공" + 확인). Esc/바깥클릭 닫기. **결제정보 필드 없음**.
+- **죽은 진입점 3곳 `/pricing` 연결**: `AccountClient.tsx`(업그레이드 버튼)·`CustomDomainModal.tsx`·`ShareModal.tsx`("Pro로 업그레이드")를 `<Link href="/pricing">`로. `PlanGate.tsx`의 `UpgradeBanner`는 이미 `href="/pricing"`이라 페이지 생성만으로 자동 정상화(무수정).
+- **확인 필요(브라우저)**: `/pricing` 카드/비교표 렌더·Pro 추천 강조·반응형(모바일 카드 스택)·다크/라이트 · 로그인 시 현재 플랜 배지 · account·도메인/공유 모달·게이트 배너의 업그레이드 클릭→`/pricing` 이동 · 업그레이드 CTA→"준비 중" 모달(결제 폼 없음).
+- **범위 밖(추후)**: 실제 Stripe checkout/webhook/구독, 플랜 변경 서버액션(`users_plan` 갱신), 영수증. **로드맵 다음**: ②커스텀 도메인 다중 씬 이동 ③에셋 폴더/태그 ④emit_event E2E(사용자 검증).
+- **참고**: dev에서 `.next\dev\server\next-font-manifest.js` **EPERM rename 경합**(Turbopack+Windows)으로 첫 컴파일 시 간헐 500 — 워밍업 후 200. 코드 무관·환경 이슈([[troubleshoot-next-worker-crash]]).
+
+### 🌐 커스텀 도메인 다중 씬 이동 (2026-07-24) — 실배포 확인 대기(로컬 검증 완료분 있음)
+> 로드맵 미완료 우선순위 **2번**. 기존엔 `proxy.ts`가 커스텀 도메인의 **모든 경로를 `default_scene_id`로 rewrite** → `go_to_scene`으로 다른 씬에 못 감(항상 기본 씬). tsc 클린 + 순수함수 테스트 6/6 + 정상 라우트 200. **실 커스텀 도메인 rewrite는 실배포에서만 최종 확인 가능**(로컬은 non-localhost 호스트+DB custom_domain 행 필요).
+- **URL 스킴 도입**(커스텀 도메인): `/` = 기본 씬 · **`/s/{sceneId}` = 해당 씬**. 플랫폼(`/space/{id}`)·임베드(`/embed/{id}`)는 기존 스킴 유지.
+- **신규 순수함수 `lib/sceneNav.ts` `nextSceneHref(pathname, current, target)`**: 서빙 컨텍스트별 목적지 경로 계산 — `/space/`·`/embed/`면 경로 속 씬 id 치환, 그 외(커스텀 도메인)는 `/s/{target}`. `lib/sceneNav.test.ts` **6/6**(플랫폼/임베드/커스텀 루트/커스텀 /s/·폴백).
+- **`ViewerClient` go_to_scene**: 인라인 경로 치환 → `nextSceneHref(window.location.pathname, scene.sceneId, ev.value)` 사용(+search 보존). 플랫폼/임베드 동작 **무변경**(테스트로 확인), 커스텀 도메인만 `/s/{id}`로.
+- **`proxy.ts` 커스텀 도메인 블록 재작성**: 프로젝트를 `id,default_scene_id`로 조회 → 경로가 `/s/{sceneId}`면 **그 씬이 이 프로젝트 소속인지 2차 검증**(`scenes?id=eq&project_id=eq`) 후 rewrite, 소속 아니면/그 외 경로면 **기본 씬으로 폴백**(외부 씬 서빙 방지). `req.nextUrl.clone()`로 rewrite해 **search 보존**. `Array.isArray` 가드(잘못된 uuid→PostgREST 400 객체 방어). 미등록 도메인은 통과(무변경).
+- **동작**: 커스텀 도메인 진입=기본 씬(`/` transparent rewrite) → go_to_scene→`/s/{next}`→proxy 검증 후 해당 씬. 씬 페이지(`space/page.tsx`)의 published/owner 검증은 그대로 적용(비공개는 비소유자에게 notFound).
+- **검증(로컬)**: 순수함수 6/6·tsc·정상 라우트 200·미등록 도메인(Host 스푸핑) 통과(크래시 없음, `/s/x`는 라우트 없어 404). **실배포 확인 필요**: 등록 도메인에서 `/`=기본 씬·`/s/{id}`=해당 씬·go_to_scene 이동·외부 씬 id 폴백. (참고: dev의 `next-font-manifest.js` EPERM 간헐 500은 환경 이슈.)
+- **로드맵 다음**: ③에셋 폴더/태그 ④emit_event E2E(사용자 검증).
+
+### 🏷️ 에셋 태그 (정리/필터) (2026-07-24) — 브라우저 확인 대기
+> 로드맵 미완료 우선순위 **3번**("에셋 폴더/태그"). 폴더(계층 트리)보다 **태그**를 먼저 — 더 유연하고 저위험(필터 하나로 폴더식 그룹핑도 커버). 에셋은 **씬 단위 `AssetRefSchema`**(scene_data)라 태그도 거기 저장(기존 모델과 정합·마이그레이션 없음). tsc 클린 + 편집 라우트 `✓ Compiled`. **브라우저 확인 대기.**
+- **스키마**: `AssetRefSchema.tags?: string[]`(옵셔널·하위호환). `normalizeSceneData`가 assets를 통과시켜 자동 보존, saveScene도 scene_data.assets 그대로 → **별도 저장/로드 코드 불필요**.
+- **스토어(`sceneStore`)**: `setAssetTags(id, tags)` — 공백/중복 제거, 빈 배열이면 태그 필드 제거, `isModified: true`.
+- **AssetBrowser(`AssetBrowser.tsx`)**:
+  - **태그 필터 바 `TagBar`**(신규): 현재 탭 에셋의 전체 태그 칩(#태그) + "전체". 클릭=그 태그로 필터, 재클릭=해제. `activeTag` state, **탭 전환 시 초기화**. models 탭은 이름 검색과 AND 결합.
+  - **카드별 태그 편집**: `AssetCard`에 `onSetTags` prop + 좌상단 **Tag 버튼**(공용 `DropdownMenu` 팝오버, 태그 있으면 개수 뱃지+상시 표시·없으면 호버 시). 팝오버 내용 `TagEditor`(신규): 현재 태그 칩(✕ 제거) + 입력(Enter 추가).
+  - `allTagsOf(list)` 헬퍼(중복제거·정렬).
+- **적용 범위**: **models·character 탭**(공유 `AssetCard`). **audio·textures 탭은 별도 카드 마크업이라 미적용(후속)** — 필요 시 동일 패턴 확장. content/particle/lights/materials/hdr는 업로드 에셋이 아니라 프리셋이라 태그 무관.
+- **확인 필요(브라우저)**: 모델/캐릭터 카드 좌상단 Tag 버튼→태그 추가/제거 · 태그 붙은 카드에 개수 뱃지·상시 표시 · 상단 #태그 칩으로 필터·"전체" 해제 · 이름 검색과 병행(models) · 탭 전환 시 필터 초기화 · 저장(Ctrl+S) 후 재로드 유지.
+- **미구현(후속)**: 폴더(계층 그룹) · audio/textures 탭 태그 · 프로젝트 전역 태그(현재 씬 단위) · 다중 태그 AND 필터.
+- **로드맵 다음**: ④emit_event 실 iframe E2E(코드 완료·사용자 게시 씬 검증) · 이후 대형(협업/마켓/AI 등) 또는 성능.
+
+### 🤝 실시간 협업 (Multi-user Editing) — 전체 CRDT 목표, 마일스톤 진행 (2026-07-24)
+> 로드맵 대형 항목 `FEAT-COLLAB-01`(AC ①커서·선택 ②CRDT 충돌해결 ③편집중 잠금 ④아바타). 사용자 선택 = **전체 CRDT**. 로드맵도 "10일+ 별도 설계"로 본 대공사라 **검증 가능한 마일스톤(M1~M5)으로** 쌓는다. 계획서 = `~/.claude/plans/sequential-napping-crystal.md`. **협업은 opt-in**(채널 연결 시에만) — 꺼지면 에디터는 지금과 100% 동일(기존 편집/저장 무손상).
+> **스택**: `yjs`13.6+`y-protocols`(설치 완료) + **Supabase Realtime**(내장, 새 서버·유료·마이그레이션 없음). M1은 Presence만 사용(Yjs는 M2+ 문서용).
+
+#### ✅ M1 — Presence/Awareness (AC①부분·③·④) (2026-07-24) — 멀티탭 브라우저 확인 대기
+> 순수 오버레이(문서 변이 동기화 없음) → 저위험. tsc 클린 + 편집 라우트 `✓ Compiled`. **멀티탭 확인 대기.**
+- **신규 `store/collabStore.ts`**: 협업 상태(transient) — `connected`·`selfKey`·`peers[]`(원격 참가자: key/userId/name/color/selectedIds/editingId). `peerColor(seed)`(유저별 안정 색 10종)·`shortName(email)`.
+- **신규 `hooks/useCollab.ts`**: 세션 lifecycle. `createBrowserSupabase().channel('scene:'+sceneId, {presence:{key}})` — presence sync/join/leave → `setPeers`. 로컬 `selectedIds`(스토어 구독)·`editingId`(liveTransformStore `dragging`+`live.id` 구독) 변경 시 `channel.track`. 언마운트 시 untrack/removeChannel/reset. sceneId·userId 없으면 no-op.
+- **신규 `panels/CollabAvatars.tsx`**: 접속자 아바타 클러스터(top-center, 협업 중일 때만). 나+원격 유저색 원.
+- **신규 `canvas/RemoteSelections.tsx`**: 원격 유저 선택 오브젝트를 **그 유저 색 외곽선(월드 코너 직접 계산, SelectionOutline 방식 재사용) + 이름표(drei Html)**, `editingId` 일치 시 **잠금 아이콘**. 프리미티브·GLB·그룹 공통.
+- **배선(주입만)**: `EditorClient`가 `useCollab(sceneId, userId, email)` + `<CollabAvatars/>`. `EditorCanvas`가 `<SelectionOutline/>` 옆 `<RemoteSelections/>`.
+- **확인 필요(멀티탭 브라우저)**: 로그인 상태로 두 창에서 같은 `/editor/{id}` 열기 → ①양쪽 아바타 ②한쪽 선택→다른 쪽에 색 외곽선+이름 ③드래그 중 잠금 배지. **전제: Supabase 프로젝트 Realtime 활성화**(기본 on, 아니면 조용히 참가자 0 — 크래시 없음).
+#### ✅ M2~M5 — CRDT 문서 co-edit + 지속성 + 하드닝 (2026-07-24) — 멀티탭 브라우저 확인 대기
+> M1 위에 실제 동시편집 엔진을 얹음. **전부 tsc 클린 + 편집 라우트 `✓ Compiled`. 멀티탭 실동작 확인 대기(사용자, 확인 배칭).** 협업 opt-in — 비협업 시 스토어/저장 무영향.
+- **M2 문서 모델 `lib/collab/yjsSceneDoc.ts`**: Y.Doc = `objects`(Y.Map<id,objJSON> — **오브젝트 단위 머지**: 서로 다른 오브젝트 동시편집=충돌 없음, 같은 오브젝트=오브젝트 단위 last-writer) + `order`(Y.Array<id>, 계층 순서) + `meta`(environment/assets/prefabs/materialAssets/colorAssets/variables/hudElements/sceneEvents/animClips를 통값 JSON=배열 단위 LWW). `LOCAL_ORIGIN`·seed/read 헬퍼.
+- **M2 바인딩 `lib/collab/collabBinding.ts`**: 스토어↔문서 양방향. 로컬 편집→문서 diff(스토어 불변 업데이트라 **참조 비교로 변경분만** write; order/meta도 변경 시만) `LOCAL_ORIGIN` 트랜잭션. 원격 변경(origin≠LOCAL)→`useSceneStore.setState`로 반영, **`applyingRemote` 가드로 에코 차단**. `start()` 이후에만 로컬→문서(핸드셰이크 전 조기쓰기 방지). setState는 objects/meta만 교체 → **선택·히스토리·카메라 무손상**.
+- **M3 전송 `lib/collab/YjsSupabaseProvider.ts`**: 로컬 doc update→Supabase broadcast(`y-update`, base64 청크), 수신→`applyUpdate(origin=REMOTE_ORIGIN)`(재방송 안 함). **초기 핸드셰이크**: 참가 시 state vector로 `y-sync-request` → 내용 있는 피어가 `y-sync-state`(diff) 응답. `useCollab`가 doc/binding/provider를 presence 채널에 통합. **시더 선출**: 700ms 후 문서 비었고 selfKey 최소면 seedFromStore(동시 콜드조인 중복 방지), 아니면 상태 대기.
+- **M4 지속성(`useCollab`)**: doc 변경 시 3s 디바운스 → **리더(selfKey 최소) 1명만** `persistCurrentScene()` 저장(version 잠금 경합 회피). 충돌 시 최신 version만 `markSaved`로 맞춤(내용은 CRDT로 동일).
+- **M5 하드닝**: **드래그 중 원격 반영 지연**(내가 기즈모/핸들 조작 중이면 원격 objects 교체를 150ms 미뤄 조작 안 튀게, `collabBinding.flushRemote`) + 세션 정리(doc.destroy·off·removeChannel).
+- **확인 필요(멀티탭)**: 두 창 같은 `/editor/{id}` → 한쪽에서 박스 추가/이동/삭제·색·환경 변경이 **다른 쪽 실시간 반영**·동시 편집 수렴(충돌 없이) · 새로고침 후 유지(리더 저장) · 드래그 중 상대 편집에도 내 조작 안 튐.
+- **알려진 한계(정직·후속)**: ①**협업 undo는 스토어 command 히스토리 그대로** — 내 undo가 원격 변경까지 되돌릴 수 있음(진짜 per-user undo=`Y.UndoManager` 통합은 위험해 **보류**). ②같은 오브젝트 동시편집=오브젝트 단위 LWW(필드 단위 머지 아님). ③order/meta는 배열 단위 LWW(동시 재정렬/환경 동시수정은 한쪽 우선). ④**Pro 게이팅 미적용**(개발/테스트 위해 개방 — 마지막에 `PlanGate`로 제한 예정). ⑤대형 씬 초기 sync가 Supabase broadcast 메시지 상한(256KB) 초과 시 청크 필요(미구현). ⑥**전제: Supabase Realtime 활성화**. ⑦프로덕션 스케일/다중 사용자 부하는 실배포 검증 필요.
+
 ## 알려진 제약/한계
 
 - **액추에이터/무빙 콜라이더 "미는" 미지원 (2026-07-20 확인, 보류)**: 움직이는 콜라이더(actuator/moving = kinematicPosition)가 **가만히 선 캐릭터를 밀지 못하고 관통**한다. 원인 = Rapier `KinematicCharacterController.computeColliderMovement`가 **캐릭터 자신의 `desired` 이동에 대해서만** 충돌 해결(움직이는 콜라이더가 나를 미는 건 미계산). 증상: W로 밀 땐 캐릭터 전진이 막혀 밀리는 듯 보이나, **밀리는 중 W를 놓으면 물체가 통과**. 해결하려면 무빙 플랫폼 "pusher" 로직(접촉 시 콜라이더 변위를 캐릭터 `desired`에 합산) 필요 — 회귀 위험으로 **보류**. 다시 문제되면 그때 구현. (`PlayModeController.tsx:359`, `PlayCanvas.tsx` ActuatorCollider/MovingCollider)

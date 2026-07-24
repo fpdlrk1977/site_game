@@ -534,6 +534,7 @@ export interface AssetRefSchema {
   name: string;
   type?: 'model' | 'character' | 'audio' | 'texture';
   thumbnailUrl?: string;
+  tags?: string[]; // 정리용 태그(에셋 브라우저 필터). 미설정 = 태그 없음(하위호환)
 }
 
 export interface ProjectSceneSchema {

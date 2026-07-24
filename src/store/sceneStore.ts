@@ -162,6 +162,8 @@ interface SceneActions {
   /** 펜 툴 재편집 — 기존 돌출/회전체 오브젝트의 프로파일/두께를 갱신(형태 교체) */
   updateProfileObject: (id: string, shape: 'extrude' | 'lathe', profile: { x: number; y: number }[], extrudeDepth: number, closed: boolean, profileRaw?: { x: number; y: number }[], smooth?: boolean) => void;
   addAsset: (asset: AssetRefSchema) => void;
+  /** 에셋 정리 태그 갱신(중복/공백 제거, 빈 배열이면 태그 제거). scene_data에 저장됨. */
+  setAssetTags: (id: string, tags: string[]) => void;
   addAssetObject: (asset: AssetRefSchema, placeAt?: PlaceXZ, extra?: Partial<ObjectNodeSchema>) => void;
   addContentObject: (type: ContentType, placeAt?: PlaceXZ) => void;
   addParticleObject: (preset: ParticlePreset, placeAt?: PlaceXZ) => void;
@@ -1062,6 +1064,16 @@ export const useSceneStore = create<SceneState & SceneActions>((set, get) => ({
   removeAsset: (id) => {
     const { assets } = get();
     set({ assets: assets.filter((a) => a.id !== id), isModified: true });
+  },
+
+  setAssetTags: (id, tags) => {
+    const clean = Array.from(new Set(tags.map((t) => t.trim()).filter(Boolean)));
+    set({
+      assets: get().assets.map((a) =>
+        a.id === id ? { ...a, tags: clean.length ? clean : undefined } : a,
+      ),
+      isModified: true,
+    });
   },
 
   removeObjectsByAsset: (assetId) => {

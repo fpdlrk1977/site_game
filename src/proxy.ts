@@ -15,13 +15,39 @@ export async function proxy(req: NextRequest) {
   // 커스텀 도메인 처리
   if (!host.includes('localhost') && !host.includes(PLATFORM_DOMAIN)) {
     if (!VALID_HOST_RE.test(host)) return res;
-    const apiRes = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/projects?custom_domain=eq.${encodeURIComponent(host)}&select=default_scene_id`,
-      { headers: { apikey: process.env.SUPABASE_SERVICE_KEY! }, signal: AbortSignal.timeout(3000) }
+
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const apikey = process.env.SUPABASE_SERVICE_KEY!;
+
+    // 이 도메인을 소유한 프로젝트
+    const projRes = await fetch(
+      `${base}/rest/v1/projects?custom_domain=eq.${encodeURIComponent(host)}&select=id,default_scene_id`,
+      { headers: { apikey }, signal: AbortSignal.timeout(3000) }
     );
-    const [project] = await apiRes.json();
+    const projJson = await projRes.json();
+    const project = Array.isArray(projJson) ? projJson[0] : null;
+
     if (project?.default_scene_id) {
-      return NextResponse.rewrite(new URL(`/space/${project.default_scene_id}`, req.url));
+      // 경로 스킴: /s/{sceneId} → 해당 씬, 그 외(루트 등)는 기본 씬.
+      // (다중 씬 이동: go_to_scene이 커스텀 도메인에서 /s/{id}로 이동 — sceneNav.ts와 짝)
+      const segs = pathname.split('/').filter(Boolean);
+      let sceneId = project.default_scene_id as string;
+
+      if (segs[0] === 's' && segs[1]) {
+        // 요청 씬이 이 프로젝트 소속인지 검증 (아니면 기본 씬으로 폴백 — 외부 씬 서빙 방지)
+        const chkRes = await fetch(
+          `${base}/rest/v1/scenes?id=eq.${encodeURIComponent(segs[1])}&project_id=eq.${encodeURIComponent(project.id)}&select=id`,
+          { headers: { apikey }, signal: AbortSignal.timeout(3000) }
+        );
+        const chkJson = await chkRes.json();
+        const row = Array.isArray(chkJson) ? chkJson[0] : null;
+        if (row?.id) sceneId = segs[1];
+      }
+
+      // rewrite (search 파라미터 보존)
+      const url = req.nextUrl.clone();
+      url.pathname = `/space/${sceneId}`;
+      return NextResponse.rewrite(url);
     }
   }
 

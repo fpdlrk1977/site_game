@@ -10,6 +10,7 @@ import { EditorObjectInstance } from "./EditorObjectInstance";
 import { GizmoController } from "./GizmoController";
 import { ManipulationHandles } from "./ManipulationHandles";
 import { SelectionOutline } from "./SelectionOutline";
+import { RemoteSelections } from "./RemoteSelections";
 import { SelectionGroundGuide } from "./SelectionGroundGuide";
 import { ActuatorGizmo } from "./ActuatorGizmo";
 import { ObjectRefsContext, useObjectRefs } from "./ObjectRefsContext";
@@ -1271,6 +1272,7 @@ export function EditorCanvas() {
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
           <ManipulationHandles orbitRef={orbitRef} handleDraggingRef={handleDraggingRef} />
           <SelectionOutline />
+          <RemoteSelections />
           <SelectionGroundGuide />
           <ActuatorGizmo orbitRef={orbitRef} />
 

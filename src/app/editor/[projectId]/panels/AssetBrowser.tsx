@@ -9,6 +9,7 @@ import { tryEmbedTextures } from '@/lib/glbEmbed';
 import { uploadGlbBlob, uploadAudioFile, uploadImageTexture } from '@/lib/uploadAsset';
 import { AssetPreviewPopup } from './AssetPreviewPopup';
 import { SelectBox } from '@/components/ui/SelectBox';
+import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { RangeSlider } from '@/components/ui/RangeSlider';
 import { InlineEditName } from '@/components/ui/InlineEditName';
@@ -17,7 +18,7 @@ import {
   Package, PersonStanding, Music, Play, Square, X, Check, Plus, Type, Image as ImageIcon, Video,
   Flame, Wind, Sparkles, Snowflake, Lightbulb, Flashlight, Sun,
   Ban, Sunset, Sunrise, Moon, TreePine, Trees, Building2, Factory, Sofa, Landmark,
-  SlidersHorizontal,
+  SlidersHorizontal, Tag,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -103,11 +104,13 @@ const LIGHT_ITEMS: { type: LightType; label: string; icon: LucideIcon }[] = [
 
 export function AssetBrowser() {
   const { projectId, assets, environment, addAsset, beginPlacement, removeAsset, removeObjectsByAsset, updateEnvironment, updateObject, pushHistory,
+    setAssetTags,
     materialAssets, assignMaterialAsset, updateMaterialAsset, renameMaterialAsset, removeMaterialAsset,
     colorAssets, addColorAsset, removeColorAsset } = useSceneStore();
   const [expandedMat, setExpandedMat] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('models');
   const [search, setSearch] = useState('');
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { addToast } = useToast();
@@ -371,9 +374,13 @@ export function AssetBrowser() {
   const characterAssets = assets.filter((a) => a.type === 'character');
   const audioAssets = assets.filter((a) => a.type === 'audio');
   const textureAssets = assets.filter((a) => a.type === 'texture');
-  const filteredModels = search.trim()
-    ? modelAssets.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
-    : modelAssets;
+
+  // 태그 필터 — 현재 탭 에셋 목록에서 활성 태그로 걸러낸다(+모델은 이름 검색도).
+  const byTag = (a: AssetRefSchema) => !activeTag || (a.tags ?? []).includes(activeTag);
+  const filteredModels = modelAssets
+    .filter(byTag)
+    .filter((a) => !search.trim() || a.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredCharacters = characterAssets.filter(byTag);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -381,7 +388,7 @@ export function AssetBrowser() {
       <div className="px-2 pt-2 shrink-0">
         <SelectBox
           value={tab}
-          onChange={(v) => setTab(v as Tab)}
+          onChange={(v) => { setTab(v as Tab); setActiveTag(null); }}
           options={TABS.map((t) => ({
             value: t.id,
             label: t.wip ? `${t.label} (준비 중)` : t.label,
@@ -400,6 +407,7 @@ export function AssetBrowser() {
               placeholder="에셋 검색..."
               className="w-full h-7 bg-muted/5 dark:bg-muted/10 border border-border rounded-xs px-2.5 mb-2 text-[11px] text-foreground placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
+            <TagBar tags={allTagsOf(modelAssets)} active={activeTag} onPick={setActiveTag} />
             <input ref={modelInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleModelFile} />
             <div className="grid grid-cols-3 gap-2">
               <UploadButton
@@ -411,6 +419,7 @@ export function AssetBrowser() {
                 <AssetCard key={asset.id} asset={asset} icon={Package}
                   onAdd={() => beginPlacement({ kind: 'asset', asset })}
                   onDelete={() => deleteAsset(asset)}
+                  onSetTags={(tags) => setAssetTags(asset.id, tags)}
                   deleting={deletingId === asset.id}
                 />
               ))}
@@ -425,6 +434,7 @@ export function AssetBrowser() {
 
         {tab === 'character' && (
           <>
+            <TagBar tags={allTagsOf(characterAssets)} active={activeTag} onPick={setActiveTag} />
             <input ref={characterInputRef} type="file" accept=".glb,image/*" multiple className="hidden" onChange={handleCharacterFile} />
             <div className="grid grid-cols-3 gap-2">
               <UploadButton
@@ -433,9 +443,10 @@ export function AssetBrowser() {
                 label="캐릭터"
                 title="glb 선택 시 텍스처 이미지 파일도 함께(Ctrl/Cmd로 다중 선택) 고르면 자동으로 파일에 포함됩니다"
               />
-              {characterAssets.map((asset) => (
+              {filteredCharacters.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} icon={PersonStanding}
                   onDelete={() => deleteAsset(asset)}
+                  onSetTags={(tags) => setAssetTags(asset.id, tags)}
                   deleting={deletingId === asset.id}
                 />
               ))}
@@ -753,11 +764,79 @@ function TextureCard({ asset, onApply, onDelete, deleting }: {
   );
 }
 
-function AssetCard({ asset, icon: Icon, onAdd, onDelete, deleting }: {
+/** 목록에서 쓰인 모든 태그(중복 제거·정렬) */
+function allTagsOf(list: AssetRefSchema[]): string[] {
+  const s = new Set<string>();
+  list.forEach((a) => (a.tags ?? []).forEach((t) => s.add(t)));
+  return Array.from(s).sort((a, b) => a.localeCompare(b));
+}
+
+/** 태그 필터 칩 바 — 태그가 없으면 렌더 안 함 */
+function TagBar({ tags, active, onPick }: {
+  tags: string[];
+  active: string | null;
+  onPick: (t: string | null) => void;
+}) {
+  if (tags.length === 0) return null;
+  const chip = (on: boolean) =>
+    `text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+      on
+        ? 'bg-primary text-white border-primary'
+        : 'bg-muted/5 dark:bg-muted/10 text-muted border-border hover:text-foreground'
+    }`;
+  return (
+    <div className="flex flex-wrap gap-1 mb-2">
+      <button onClick={() => onPick(null)} className={chip(active === null)}>전체</button>
+      {tags.map((t) => (
+        <button key={t} onClick={() => onPick(active === t ? null : t)} className={chip(active === t)}>
+          #{t}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** 에셋 카드 태그 편집 팝오버 내용 — 현재 태그(제거) + 추가 입력 */
+function TagEditor({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
+  const [input, setInput] = useState('');
+  const add = () => {
+    const t = input.trim();
+    if (t && !tags.includes(t)) onChange([...tags, t]);
+    setInput('');
+  };
+  return (
+    <div className="p-2 space-y-1.5 w-44" onClick={(e) => e.stopPropagation()}>
+      <div className="flex flex-wrap gap-1 min-h-[18px]">
+        {tags.length === 0 && <span className="text-[10px] text-muted">태그 없음</span>}
+        {tags.map((t) => (
+          <span key={t} className="inline-flex items-center gap-0.5 text-[10px] pl-1.5 pr-1 py-0.5 rounded-full bg-muted/10 text-foreground">
+            {t}
+            <button onClick={() => onChange(tags.filter((x) => x !== t))} className="text-muted hover:text-danger" title="제거">
+              <X size={9} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          placeholder="태그 추가"
+          className="flex-1 h-6 bg-background border border-border rounded-xs px-1.5 text-[10px] text-foreground placeholder-muted focus:outline-none focus:border-primary"
+        />
+        <button onClick={add} className="h-6 px-2 rounded-xs bg-primary text-white text-[10px] font-medium">추가</button>
+      </div>
+    </div>
+  );
+}
+
+function AssetCard({ asset, icon: Icon, onAdd, onDelete, onSetTags, deleting }: {
   asset: AssetRefSchema;
   icon: LucideIcon;
   onAdd?: () => void;
   onDelete?: () => void;
+  onSetTags?: (tags: string[]) => void;
   deleting?: boolean;
 }) {
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
@@ -802,11 +881,37 @@ function AssetCard({ asset, icon: Icon, onAdd, onDelete, deleting }: {
       {onDelete && !confirmDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
-          className="absolute top-1 right-1 w-5 h-5 rounded-sm bg-background/80 text-muted hover:bg-danger hover:text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center"
+          className="absolute top-1 right-1 w-5 h-5 rounded-sm bg-background/80 text-muted hover:bg-danger hover:text-white opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center z-10"
           title="삭제"
         >
           <X size={11} />
         </button>
+      )}
+
+      {/* 태그 버튼 (좌상단) — 태그 있으면 항상 표시, 없으면 호버 시 */}
+      {onSetTags && !confirmDelete && (
+        <DropdownMenu
+          placement="bottom-start"
+          trigger={({ open, toggle, ref }) => (
+            <button
+              ref={ref}
+              onClick={(e) => { e.stopPropagation(); toggle(); }}
+              className={`absolute top-1 left-1 h-5 rounded-sm bg-background/80 flex items-center justify-center gap-0.5 px-1 transition-all z-10 ${
+                (asset.tags?.length ?? 0) > 0
+                  ? 'text-primary opacity-100'
+                  : `text-muted hover:text-foreground ${open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`
+              }`}
+              title={asset.tags?.length ? `태그: ${asset.tags.join(', ')}` : '태그 추가'}
+            >
+              <Tag size={11} />
+              {(asset.tags?.length ?? 0) > 0 && (
+                <span className="text-[9px] font-semibold leading-none">{asset.tags!.length}</span>
+              )}
+            </button>
+          )}
+        >
+          {() => <TagEditor tags={asset.tags ?? []} onChange={onSetTags} />}
+        </DropdownMenu>
       )}
 
       {/* 삭제 확인 */}
