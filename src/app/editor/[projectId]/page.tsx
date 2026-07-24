@@ -4,6 +4,7 @@ import { normalizeSceneData } from '@/types/scene';
 import type { PlanTier } from '@/store/userStore';
 import { EditorClient } from './EditorClient';
 import { UserInitializer } from '@/components/ui/UserInitializer';
+import { BfcacheGuard } from '@/components/ui/BfcacheGuard';
 
 interface Props {
   params: Promise<{ projectId: string }>;
@@ -50,6 +51,7 @@ export default async function EditorPage({ params }: Props) {
   return (
     <>
       <UserInitializer userId={user.id} email={user.email ?? ''} planTier={planTier} />
+      <BfcacheGuard />
       <EditorClient
         projectName={project.name}
         initialScene={initialScene}

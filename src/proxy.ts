@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ?? 'localhost:3000';
 const PROTECTED_PATHS = ['/dashboard', '/editor'];
+// 인증된 사용자가 오면 안 되는 페이지 (정확히 일치 — 하위 /signup/complete는 제외).
+const AUTH_PATHS = ['/login', '/signup'];
 const VALID_HOST_RE = /^[a-zA-Z0-9.-]+(:\d{1,5})?$/;
 
 export async function proxy(req: NextRequest) {
@@ -46,6 +48,21 @@ export async function proxy(req: NextRequest) {
   const isProtected = PROTECTED_PATHS.some((p) => pathname.startsWith(p));
   if (isProtected && !user) {
     return NextResponse.redirect(new URL('/login', req.url));
+  }
+
+  // 인증된 사용자가 로그인/회원가입 페이지에 오면 대시보드로.
+  // (로그인 후 뒤로가기로 로그인·회원가입 화면이 다시 보이지 않게)
+  const isAuthPage = AUTH_PATHS.includes(pathname);
+  if (isAuthPage && user) {
+    return NextResponse.redirect(new URL('/dashboard', req.url));
+  }
+
+  // bfcache(뒤로가기 캐시) 방지 — no-store면 브라우저가 페이지를 캐시하지 않아
+  // 뒤로가기 시 서버로 재요청 → 위 리다이렉트가 동작한다.
+  //  · 보호 경로: 로그아웃 후 뒤로가기로 대시보드가 복원되는 것을 막음
+  //  · 인증 페이지: 로그인 후 뒤로가기로 로그인/회원가입이 복원되는 것을 막음
+  if (isProtected || isAuthPage) {
+    res.headers.set('Cache-Control', 'no-store, must-revalidate');
   }
 
   return res;

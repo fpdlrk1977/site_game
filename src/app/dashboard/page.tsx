@@ -6,6 +6,7 @@ import { ProjectCard } from './ProjectCard';
 import { NewProjectButton } from './NewProjectButton';
 import { NewProjectCard } from './NewProjectCard';
 import { UserInitializer } from '@/components/ui/UserInitializer';
+import { BfcacheGuard } from '@/components/ui/BfcacheGuard';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { createProject } from './actions';
 import type { PlanTier } from '@/store/userStore';
@@ -53,6 +54,7 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <UserInitializer userId={user.id} email={user.email ?? ''} planTier={planTier} />
+      <BfcacheGuard />
       {/* 배경 장식 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />

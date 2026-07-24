@@ -82,7 +82,7 @@ export function LeftPanel({
                 title="메뉴"
                 className="w-6 h-6 shrink-0 rounded-xs flex items-center justify-center text-foreground hover:bg-background transition-colors"
               >
-                <Menu size={20} />
+                <Menu size={16} />
               </button>
             )}
           >

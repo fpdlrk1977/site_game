@@ -1,19 +1,19 @@
-'use client';
+"use client";
 
 // Scenes 섹션 — 좌측 패널 상단의 씬 목록(전환·추가·삭제·메인 씬 지정).
 //   2026-07-21: 상단 바의 드롭다운(SceneSwitcher)을 여기로 **옮기면서** 인라인 목록으로 바꿨다.
 //   드롭다운 시절의 키보드 순환 탐색(useListNav)은 인라인 목록엔 맞지 않아 뺐다.
 
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Plus, House, ChevronDown, ChevronRight, Copy, Pencil } from 'lucide-react';
-import { useSceneStore } from '@/store/sceneStore';
-import { usePlan } from '@/hooks/usePlan';
-import { createBrowserSupabase } from '@/lib/supabase';
-import { normalizeSceneData } from '@/types/scene';
-import { SCENE_TEMPLATES } from '@/lib/sceneTemplates';
-import { ContextMenu } from '@/components/ui/ContextMenu';
-import { setMainScene } from '../actions';
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { X, Plus, House, ChevronDown, ChevronRight, Copy, Pencil } from "lucide-react";
+import { useSceneStore } from "@/store/sceneStore";
+import { usePlan } from "@/hooks/usePlan";
+import { createBrowserSupabase } from "@/lib/supabase";
+import { normalizeSceneData } from "@/types/scene";
+import { SCENE_TEMPLATES } from "@/lib/sceneTemplates";
+import { ContextMenu } from "@/components/ui/ContextMenu";
+import { setMainScene } from "../actions";
 
 interface SceneItem {
   id: string;
@@ -21,15 +21,9 @@ interface SceneItem {
 }
 
 // ── 템플릿 선택 모달 ──────────────────────────────────────
-function TemplatePickerModal({
-  onSelect,
-  onClose,
-}: {
-  onSelect: (templateId: string, name: string) => void;
-  onClose: () => void;
-}) {
-  const [selected, setSelected] = useState('empty');
-  const [name, setName] = useState('새 씬');
+function TemplatePickerModal({ onSelect, onClose }: { onSelect: (templateId: string, name: string) => void; onClose: () => void }) {
+  const [selected, setSelected] = useState("empty");
+  const [name, setName] = useState("새 씬");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -37,7 +31,9 @@ function TemplatePickerModal({
       <div className="relative bg-surface border border-border rounded-sm w-full max-w-lg shadow-modal overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-bold text-foreground">씬 템플릿 선택</h3>
-          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors"><X size={16} /></button>
+          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors">
+            <X size={16} />
+          </button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -48,9 +44,7 @@ function TemplatePickerModal({
                 key={t.id}
                 onClick={() => setSelected(t.id)}
                 className={`p-3 rounded-xs border text-left transition-all ${
-                  selected === t.id
-                    ? 'border-primary bg-primary/10'
-                    : 'border-border hover:border-border/60 bg-background/50'
+                  selected === t.id ? "border-primary bg-primary/10" : "border-border hover:border-border/60 bg-background/50"
                 }`}
               >
                 <div className="text-2xl mb-1.5">{t.emoji}</div>
@@ -62,14 +56,12 @@ function TemplatePickerModal({
 
           {/* 씬 이름 */}
           <div>
-            <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1.5">
-              씬 이름
-            </label>
+            <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1.5">씬 이름</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && name.trim() && onSelect(selected, name.trim())}
+              onKeyDown={(e) => e.key === "Enter" && name.trim() && onSelect(selected, name.trim())}
               className="w-full bg-background border border-border rounded-xs px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="씬 이름..."
               autoFocus
@@ -78,10 +70,7 @@ function TemplatePickerModal({
         </div>
 
         <div className="px-5 pb-4 flex gap-2 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xs text-sm text-muted hover:bg-background transition-colors"
-          >
+          <button onClick={onClose} className="px-4 py-2 rounded-xs text-sm text-muted hover:bg-background transition-colors">
             취소
           </button>
           <button
@@ -114,27 +103,31 @@ export function ScenesSection() {
   useEffect(() => {
     if (!projectId) return;
     const supabase = createBrowserSupabase();
-    supabase.from('scenes').select('id, name').eq('project_id', projectId).order('created_at')
+    supabase
+      .from("scenes")
+      .select("id, name")
+      .eq("project_id", projectId)
+      .order("created_at")
       .then(({ data }) => setScenes(data ?? []));
-    supabase.from('projects').select('default_scene_id').eq('id', projectId).single()
+    supabase
+      .from("projects")
+      .select("default_scene_id")
+      .eq("id", projectId)
+      .single()
       .then(({ data }) => setMainSceneId((data?.default_scene_id as string | null) ?? null));
   }, [projectId]);
 
   const switchScene = async (targetId: string) => {
     if (targetId === sceneId) return;
-    if (isModified && !confirm('저장하지 않은 변경사항이 있습니다. 전환하면 사라집니다.')) return;
+    if (isModified && !confirm("저장하지 않은 변경사항이 있습니다. 전환하면 사라집니다.")) return;
     setBusy(true);
     try {
       const supabase = createBrowserSupabase();
-      const { data } = await supabase
-        .from('scenes')
-        .select('id, scene_data, project_id, version')
-        .eq('id', targetId)
-        .single();
+      const { data } = await supabase.from("scenes").select("id, scene_data, project_id, version").eq("id", targetId).single();
       if (data && projectId) {
         loadScene(
           normalizeSceneData((data.scene_data as Record<string, unknown>) ?? {}, projectId, data.id),
-          typeof data.version === 'number' ? data.version : 1,
+          typeof data.version === "number" ? data.version : 1,
         );
       }
     } finally {
@@ -143,8 +136,8 @@ export function ScenesSection() {
   };
 
   const handleAddScene = () => {
-    if (!can('multiScene')) {
-      alert('다중 씬은 Pro 플랜 이상에서 사용 가능합니다.');
+    if (!can("multiScene")) {
+      alert("다중 씬은 Pro 플랜 이상에서 사용 가능합니다.");
       return;
     }
     setShowTemplatePicker(true);
@@ -160,7 +153,7 @@ export function ScenesSection() {
       const supabase = createBrowserSupabase();
       const newId = crypto.randomUUID();
       const sceneData = template.build(projectId, newId);
-      await supabase.from('scenes').insert({
+      await supabase.from("scenes").insert({
         id: newId,
         project_id: projectId,
         name: sceneName,
@@ -174,9 +167,12 @@ export function ScenesSection() {
   };
 
   const deleteScene = async (targetId: string, name: string) => {
-    if (scenes.length <= 1) { alert('마지막 씬은 삭제할 수 없습니다.'); return; }
+    if (scenes.length <= 1) {
+      alert("마지막 씬은 삭제할 수 없습니다.");
+      return;
+    }
     if (!confirm(`"${name}" 씬을 삭제할까요? 복구할 수 없습니다.`)) return;
-    await createBrowserSupabase().from('scenes').delete().eq('id', targetId);
+    await createBrowserSupabase().from("scenes").delete().eq("id", targetId);
     const remaining = scenes.filter((s) => s.id !== targetId);
     setScenes(remaining);
     if (targetId === sceneId) await switchScene(remaining[0].id);
@@ -189,7 +185,7 @@ export function ScenesSection() {
     const cur = scenes.find((s) => s.id === targetId);
     if (!next || !cur || next === cur.name) return;
     setScenes((prev) => prev.map((s) => (s.id === targetId ? { ...s, name: next } : s)));
-    await createBrowserSupabase().from('scenes').update({ name: next }).eq('id', targetId);
+    await createBrowserSupabase().from("scenes").update({ name: next }).eq("id", targetId);
   };
 
   // 씬 복사 — scene_data를 통째로 복제해 새 씬으로. 복사본은 원본 바로 뒤에 놓고 전환하지 않는다
@@ -197,14 +193,17 @@ export function ScenesSection() {
   //   scene_data 안의 sceneId만 새 id로 바꾼다. projectId는 그대로(같은 프로젝트 내 복사).
   const duplicateScene = async (targetId: string, name: string) => {
     if (!projectId) return;
-    if (!can('multiScene')) { alert('다중 씬은 Pro 플랜 이상에서 사용 가능합니다.'); return; }
+    if (!can("multiScene")) {
+      alert("다중 씬은 Pro 플랜 이상에서 사용 가능합니다.");
+      return;
+    }
     setBusy(true);
     try {
       const supabase = createBrowserSupabase();
-      const { data } = await supabase.from('scenes').select('scene_data').eq('id', targetId).single();
+      const { data } = await supabase.from("scenes").select("scene_data").eq("id", targetId).single();
       const newId = crypto.randomUUID();
       const src = (data?.scene_data as Record<string, unknown>) ?? {};
-      await supabase.from('scenes').insert({
+      await supabase.from("scenes").insert({
         id: newId,
         project_id: projectId,
         name: `${name} 복사본`,
@@ -230,12 +229,12 @@ export function ScenesSection() {
     const res = await setMainScene(projectId, targetId);
     if (!res.ok) {
       setMainSceneId(prev);
-      alert(res.error ?? '메인 씬 지정에 실패했습니다.');
+      alert(res.error ?? "메인 씬 지정에 실패했습니다.");
     }
   };
 
   return (
-    <div className="shrink-0 border-b border-border/50 pt-1 pb-2">
+    <div className="shrink-0 border-b border-border/50">
       <div className="flex items-center px-3 py-1.5">
         <button
           onClick={() => setOpen((v) => !v)}
@@ -250,21 +249,24 @@ export function ScenesSection() {
           title="새 씬 추가"
           className="ml-auto w-6 h-6 rounded-xs flex items-center justify-center text-foreground hover:bg-background transition-colors disabled:opacity-40"
         >
-          <Plus size={20} />
+          <Plus size={16} />
         </button>
       </div>
 
       {open && (
-        <div className="pb-1">
+        <div className="pb-2">
           {scenes.map((scene) => {
             const isCurrent = scene.id === sceneId;
             const isMain = scene.id === mainSceneId;
             return (
               <div
                 key={scene.id}
-                onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, sceneId: scene.id }); }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ x: e.clientX, y: e.clientY, sceneId: scene.id });
+                }}
                 className={`group flex items-center h-7 px-1.5 mx-1.5 rounded-xs transition-colors ${
-                  isCurrent ? 'bg-muted/5 dark:bg-muted/10' : 'hover:bg-background/50'
+                  isCurrent ? "bg-muted/5 dark:bg-muted/10" : "hover:bg-background/50"
                 }`}
               >
                 {/* 현재 씬 표시는 체크 아이콘 대신 텍스트 강조 + 행 하이라이트로 — 메인 씬(집)과 헷갈리지 않게. */}
@@ -275,8 +277,8 @@ export function ScenesSection() {
                     onFocus={(e) => e.currentTarget.select()}
                     onBlur={(e) => renameScene(scene.id, e.currentTarget.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') renameScene(scene.id, e.currentTarget.value);
-                      if (e.key === 'Escape') setRenamingId(null);
+                      if (e.key === "Enter") renameScene(scene.id, e.currentTarget.value);
+                      if (e.key === "Escape") setRenamingId(null);
                     }}
                     className="flex-1 min-w-0 bg-background border border-border rounded-xs px-1.5 py-0 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   />
@@ -286,9 +288,7 @@ export function ScenesSection() {
                     disabled={busy}
                     className="flex items-center flex-1 min-w-0 text-left px-1 disabled:opacity-50"
                   >
-                    <span className={`truncate text-[11px] ${isCurrent ? 'text-foreground font-medium' : 'text-foreground/70'}`}>
-                      {scene.name}
-                    </span>
+                    <span className={`truncate text-[11px] ${isCurrent ? "text-foreground font-medium" : "text-foreground/70"}`}>{scene.name}</span>
                   </button>
                 )}
                 {/* 메인 씬 표식 — 지정된 씬에만 상시 표시(지정/해제는 우클릭 메뉴에서).
@@ -301,55 +301,72 @@ export function ScenesSection() {
               </div>
             );
           })}
-          {!can('multiScene') && (
-            <p className="px-3 pt-1 text-[9px] text-muted/50">다중 씬은 Pro 플랜부터</p>
-          )}
+          {!can("multiScene") && <p className="px-3 pt-1 text-[9px] text-muted/50">다중 씬은 Pro 플랜부터</p>}
         </div>
       )}
 
       {/* 우클릭 메뉴 — 메인씬 지정 / 복사 / 이름 변경 / 삭제.
           씬이 하나뿐이면 '메인씬 지정'(이미 메인일 수밖에 없음)과 '삭제'(마지막 씬)는 숨긴다. */}
-      {menu && (() => {
-        const target = scenes.find((s) => s.id === menu.sceneId);
-        if (!target) return null;
-        const only = scenes.length <= 1;
-        const close = () => setMenu(null);
-        const item = 'w-full text-left px-3 py-1.5 text-[11px] text-foreground hover:bg-background transition-colors flex items-center gap-2 whitespace-nowrap';
-        return (
-          <ContextMenu x={menu.x} y={menu.y} onClose={close} className="w-max">
-            {!only && target.id !== mainSceneId && (
-              <button onClick={() => { makeMain(target.id); close(); }} className={item}>
-                <House size={13} className="text-foreground" /> 메인 씬으로 지정
-              </button>
-            )}
-            <button onClick={() => { duplicateScene(target.id, target.name); close(); }} className={item}>
-              <Copy size={13} className="text-foreground" /> 복사
-            </button>
-            <button onClick={() => { setRenamingId(target.id); close(); }} className={item}>
-              <Pencil size={13} className="text-foreground" /> 이름 변경
-            </button>
-            {!only && (
-              <>
-                <div className="border-t border-border my-1" />
+      {menu &&
+        (() => {
+          const target = scenes.find((s) => s.id === menu.sceneId);
+          if (!target) return null;
+          const only = scenes.length <= 1;
+          const close = () => setMenu(null);
+          const item =
+            "w-full text-left px-3 py-1.5 text-[11px] text-foreground hover:bg-background transition-colors flex items-center gap-2 whitespace-nowrap";
+          return (
+            <ContextMenu x={menu.x} y={menu.y} onClose={close} className="w-max">
+              {!only && target.id !== mainSceneId && (
                 <button
-                  onClick={() => { deleteScene(target.id, target.name); close(); }}
-                  className={`${item} hover:text-red-500`}
+                  onClick={() => {
+                    makeMain(target.id);
+                    close();
+                  }}
+                  className={item}
                 >
-                  <X size={13} /> 삭제
+                  <House size={13} className="text-foreground" /> 메인 씬으로 지정
                 </button>
-              </>
-            )}
-          </ContextMenu>
-        );
-      })()}
+              )}
+              <button
+                onClick={() => {
+                  duplicateScene(target.id, target.name);
+                  close();
+                }}
+                className={item}
+              >
+                <Copy size={13} className="text-foreground" /> 복사
+              </button>
+              <button
+                onClick={() => {
+                  setRenamingId(target.id);
+                  close();
+                }}
+                className={item}
+              >
+                <Pencil size={13} className="text-foreground" /> 이름 변경
+              </button>
+              {!only && (
+                <>
+                  <div className="border-t border-border my-1" />
+                  <button
+                    onClick={() => {
+                      deleteScene(target.id, target.name);
+                      close();
+                    }}
+                    className={`${item} hover:text-red-500`}
+                  >
+                    <X size={13} /> 삭제
+                  </button>
+                </>
+              )}
+            </ContextMenu>
+          );
+        })()}
 
-      {showTemplatePicker && typeof document !== 'undefined' && createPortal(
-        <TemplatePickerModal
-          onSelect={createFromTemplate}
-          onClose={() => setShowTemplatePicker(false)}
-        />,
-        document.body,
-      )}
+      {showTemplatePicker &&
+        typeof document !== "undefined" &&
+        createPortal(<TemplatePickerModal onSelect={createFromTemplate} onClose={() => setShowTemplatePicker(false)} />, document.body)}
     </div>
   );
 }
