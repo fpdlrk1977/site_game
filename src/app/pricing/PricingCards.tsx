@@ -6,123 +6,85 @@ import type { PlanTier } from '@/store/userStore';
 import { TIERS, TIER_META, FEATURE_ROWS, gateValue } from './pricingData';
 import { UpgradeNotice } from './UpgradeNotice';
 
-/** ✓ / — 표시 (bool 값) */
+const GRAD = 'linear-gradient(120deg,#6a4dff,#39d0ea)';
+
 function BoolMark({ on }: { on: boolean }) {
-  return on ? (
-    <Check size={16} className="text-primary mx-auto" strokeWidth={2.2} />
-  ) : (
-    <Minus size={16} className="text-muted/40 mx-auto" />
-  );
+  return on
+    ? <Check size={16} className="text-[#4ade80] mx-auto" strokeWidth={2.2} />
+    : <Minus size={16} className="text-muted/40 mx-auto" />;
 }
 
-export function PricingCards({
-  currentTier,
-  loggedIn,
-}: {
-  currentTier: PlanTier | null;
-  loggedIn: boolean;
-}) {
+export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier | null; loggedIn: boolean }) {
   const [upgradeTier, setUpgradeTier] = useState<PlanTier | null>(null);
+  const [yearly, setYearly] = useState(true);
 
   return (
     <>
+      {/* 연/월 토글 */}
+      <div className="flex justify-center mb-9">
+        <div className="inline-flex bg-surface border border-border rounded-xs p-1 gap-0.5">
+          {([['연간', true], ['월간', false]] as const).map(([label, y]) => (
+            <button key={label} onClick={() => setYearly(y)}
+              className={`text-sm font-semibold px-4 py-2 rounded-[9px] transition-colors ${yearly === y ? 'text-white' : 'text-muted hover:text-foreground'}`}
+              style={yearly === y ? { background: GRAD } : {}}>
+              {label}
+              {y && <span className="ml-1.5 text-[.66rem] px-1.5 py-0.5 rounded-full font-bold" style={{ background: 'rgba(74,222,128,.16)', color: '#4ade80' }}>-20%</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 가격 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
+      <div className="grid md:grid-cols-3 gap-[18px] max-w-5xl mx-auto items-start">
         {TIERS.map((tier) => {
           const meta = TIER_META[tier];
           const isCurrent = currentTier === tier;
           const highlight = !!meta.recommended;
+          const amount = tier === 'pro' ? (yearly ? meta.priceYearly : meta.priceMonthly) ?? meta.price : meta.price;
+          const billed = tier === 'pro' ? (yearly ? meta.billedYearly : meta.billedMonthly) : meta.priceNote;
 
           return (
-            <div
-              key={tier}
-              className={`relative flex flex-col rounded-2xl border bg-surface p-6 ${
-                highlight
-                  ? 'border-transparent ring-2 ring-primary shadow-modal md:-translate-y-2'
-                  : 'border-border'
-              }`}
-            >
+            <div key={tier}
+              className={`relative flex flex-col rounded-2xl border bg-surface p-7 ${highlight ? 'border-transparent md:-translate-y-2' : 'border-border'}`}
+              style={{ boxShadow: highlight ? '0 0 0 2px #6a4dff, var(--shadow-float)' : 'var(--shadow-card)' }}>
               {highlight && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-bold px-3 py-1 rounded-full bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-500/25">
-                  추천
-                </span>
+                <span className="absolute -top-3 left-6 text-white text-[.68rem] font-bold px-3 py-1 rounded-full" style={{ background: GRAD }}>가장 인기</span>
               )}
 
-              <div className="mb-5">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-lg font-bold text-foreground">{meta.name}</h3>
-                  {isCurrent && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-foreground/[0.06] text-muted">
-                      현재 플랜
-                    </span>
-                  )}
-                </div>
-                <p className="text-muted text-xs">{meta.tagline}</p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-[1.05rem] font-bold">{meta.name}</h3>
+                {isCurrent && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-foreground/[0.06] text-muted">현재 플랜</span>}
               </div>
+              <p className="text-muted text-xs mt-1">{meta.tagline}</p>
 
-              <div className="mb-6">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-bold text-foreground tracking-tight">
-                    {meta.price}
-                  </span>
+              <div className="mt-5">
+                <div className="text-[2.3rem] font-bold tracking-tight leading-none">
+                  {amount}{tier === 'pro' && <span className="text-[.9rem] text-muted font-medium"> /월</span>}
                 </div>
-                <p className="text-muted text-xs mt-1">{meta.priceNote}</p>
+                <p className="text-[.78rem] text-muted mt-2 min-h-[1.2em]">{billed}</p>
               </div>
 
               {/* CTA */}
               {isCurrent ? (
-                <button
-                  disabled
-                  className="w-full py-2.5 rounded-xs text-sm font-semibold border border-border text-muted cursor-default mb-6"
-                >
-                  현재 이용 중
-                </button>
+                <button disabled className="w-full mt-5 mb-6 py-2.5 rounded-xs text-sm font-semibold border border-border text-muted cursor-default">현재 이용 중</button>
               ) : tier === 'free' ? (
-                <a
-                  href={loggedIn ? '/dashboard' : '/signup'}
-                  className="block text-center w-full py-2.5 rounded-xs text-sm font-semibold border border-border text-foreground hover:bg-foreground/[0.04] transition-colors mb-6"
-                >
-                  {meta.cta}
-                </a>
+                <a href={loggedIn ? '/dashboard' : '/signup'} className="block text-center w-full mt-5 mb-6 py-2.5 rounded-xs text-sm font-semibold border border-border hover:bg-white/[0.04] transition-colors">{meta.cta}</a>
               ) : (
-                <button
-                  onClick={() => setUpgradeTier(tier)}
-                  className={`w-full py-2.5 rounded-xs text-sm font-semibold text-white transition-all mb-6 bg-gradient-to-r ${
-                    meta.gradient
-                  } hover:opacity-90`}
-                >
-                  {meta.cta}
-                </button>
+                <button onClick={() => setUpgradeTier(tier)} className="w-full mt-5 mb-6 py-2.5 rounded-xs text-sm font-semibold text-white transition-opacity hover:opacity-90" style={{ background: GRAD }}>{meta.cta}</button>
               )}
 
-              {/* 기능 목록 */}
+              {/* 기능 그룹 */}
+              <div className="text-[.72rem] uppercase tracking-wider text-muted font-bold mb-3">{meta.includesNote}</div>
               <ul className="space-y-2.5 mt-auto">
                 {FEATURE_ROWS.map((row) => {
                   const val = gateValue(row, tier);
                   const isBool = typeof val === 'boolean';
                   const muted = isBool && !val;
                   return (
-                    <li
-                      key={row.key}
-                      className={`flex items-center gap-2 text-sm ${
-                        muted ? 'text-muted/50' : 'text-foreground'
-                      }`}
-                    >
-                      {isBool ? (
-                        val ? (
-                          <Check size={15} className="text-primary shrink-0" strokeWidth={2.2} />
-                        ) : (
-                          <Minus size={15} className="text-muted/40 shrink-0" />
-                        )
-                      ) : (
-                        <Check size={15} className="text-primary shrink-0" strokeWidth={2.2} />
-                      )}
-                      <span>
-                        {row.label}
-                        {!isBool && (
-                          <span className="text-muted"> · {val as string}</span>
-                        )}
-                      </span>
+                    <li key={row.key} className={`flex items-center gap-2 text-sm ${muted ? 'text-muted/45' : 'text-foreground/90'}`}>
+                      {isBool ? (val ? <Check size={15} className="text-[#4ade80] shrink-0" strokeWidth={2.2} /> : <Minus size={15} className="text-muted/40 shrink-0" />)
+                        : <Check size={15} className="text-[#4ade80] shrink-0" strokeWidth={2.2} />}
+                      <span>{row.label}{!isBool && <span className="text-muted"> · {val as string}</span>}</span>
                     </li>
                   );
                 })}
@@ -132,36 +94,24 @@ export function PricingCards({
         })}
       </div>
 
-      {/* 기능 비교표 */}
+      {/* 비교표 */}
       <div className="max-w-5xl mx-auto mt-16">
-        <h2 className="text-center text-lg font-bold text-foreground mb-6">기능 자세히 비교</h2>
+        <h2 className="text-center text-lg font-bold mb-6">기능 자세히 비교</h2>
         <div className="overflow-x-auto rounded-2xl border border-border">
           <table className="w-full text-sm border-collapse min-w-[560px]">
             <thead>
               <tr className="border-b border-border bg-foreground/[0.02]">
                 <th className="text-left font-medium text-muted px-5 py-3.5 w-[34%]">기능</th>
-                {TIERS.map((tier) => (
-                  <th key={tier} className="font-semibold text-foreground px-4 py-3.5">
-                    {TIER_META[tier].name}
-                  </th>
-                ))}
+                {TIERS.map((t) => <th key={t} className="font-semibold px-4 py-3.5">{TIER_META[t].name}</th>)}
               </tr>
             </thead>
             <tbody>
               {FEATURE_ROWS.map((row) => (
                 <tr key={row.key} className="border-b border-border/60 last:border-0">
                   <td className="text-left text-foreground/80 px-5 py-3">{row.label}</td>
-                  {TIERS.map((tier) => {
-                    const val = gateValue(row, tier);
-                    return (
-                      <td key={tier} className="text-center px-4 py-3">
-                        {typeof val === 'boolean' ? (
-                          <BoolMark on={val} />
-                        ) : (
-                          <span className="text-foreground/90">{val}</span>
-                        )}
-                      </td>
-                    );
+                  {TIERS.map((t) => {
+                    const val = gateValue(row, t);
+                    return <td key={t} className="text-center px-4 py-3">{typeof val === 'boolean' ? <BoolMark on={val} /> : <span className="text-foreground/90">{val}</span>}</td>;
                   })}
                 </tr>
               ))}
@@ -170,9 +120,7 @@ export function PricingCards({
         </div>
       </div>
 
-      {upgradeTier && (
-        <UpgradeNotice tier={upgradeTier} onClose={() => setUpgradeTier(null)} />
-      )}
+      {upgradeTier && <UpgradeNotice tier={upgradeTier} onClose={() => setUpgradeTier(null)} />}
     </>
   );
 }

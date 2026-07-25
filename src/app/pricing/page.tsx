@@ -51,8 +51,9 @@ export default async function PricingPage() {
 
       {/* 본문 */}
       <main className="relative max-w-6xl mx-auto px-6 py-16">
-        <div className="text-center mb-14">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">
+        <div className="text-center mb-12">
+          <span className="text-[.72rem] tracking-[.14em] uppercase text-primary font-bold">요금제</span>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3 mt-3">
             나에게 맞는 플랜을 선택하세요
           </h1>
           <p className="text-muted text-base">

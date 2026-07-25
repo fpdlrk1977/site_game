@@ -18,6 +18,13 @@ export interface TierMeta {
   /** 강조 그라데이션 (null=강조 없음) */
   gradient: string | null;
   recommended?: boolean;
+  /** 월간/연간 표시 가격(연간은 "월 환산"). null이면 단일 표기(price 사용). */
+  priceMonthly?: string;
+  priceYearly?: string;
+  billedMonthly?: string;
+  billedYearly?: string;
+  /** 카드 기능 목록 그룹 제목("Free의 모든 기능 +" 등) */
+  includesNote?: string;
 }
 
 export const TIER_META: Record<PlanTier, TierMeta> = {
@@ -28,15 +35,21 @@ export const TIER_META: Record<PlanTier, TierMeta> = {
     priceNote: '평생 무료',
     cta: '무료로 시작',
     gradient: null,
+    includesNote: '기본',
   },
   pro: {
     name: 'Pro',
     tagline: '창작자 · 프리랜서를 위한',
     price: '₩9,900',
     priceNote: '월 (가격 미확정)',
+    priceMonthly: '₩9,900',
+    priceYearly: '₩7,920',
+    billedMonthly: '매월 청구 · 가격 미확정',
+    billedYearly: '연 ₩95,040 청구 · 월 대비 20% 절약',
     cta: 'Pro 시작하기',
     gradient: 'from-violet-600 to-cyan-600',
     recommended: true,
+    includesNote: 'Free의 모든 기능 +',
   },
   business: {
     name: 'Business',
@@ -45,6 +58,7 @@ export const TIER_META: Record<PlanTier, TierMeta> = {
     priceNote: '맞춤 견적',
     cta: '문의하기',
     gradient: 'from-amber-500 to-orange-600',
+    includesNote: 'Pro의 모든 기능 +',
   },
 };
 

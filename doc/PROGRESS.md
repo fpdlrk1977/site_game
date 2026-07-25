@@ -1646,6 +1646,27 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - **확인 필요(멀티탭)**: 두 창 같은 `/editor/{id}` → 한쪽에서 박스 추가/이동/삭제·색·환경 변경이 **다른 쪽 실시간 반영**·동시 편집 수렴(충돌 없이) · 새로고침 후 유지(리더 저장) · 드래그 중 상대 편집에도 내 조작 안 튐.
 - **알려진 한계(정직·후속)**: ①**협업 undo는 스토어 command 히스토리 그대로** — 내 undo가 원격 변경까지 되돌릴 수 있음(진짜 per-user undo=`Y.UndoManager` 통합은 위험해 **보류**). ②같은 오브젝트 동시편집=오브젝트 단위 LWW(필드 단위 머지 아님). ③order/meta는 배열 단위 LWW(동시 재정렬/환경 동시수정은 한쪽 우선). ④**Pro 게이팅 미적용**(개발/테스트 위해 개방 — 마지막에 `PlanGate`로 제한 예정). ⑤대형 씬 초기 sync가 Supabase broadcast 메시지 상한(256KB) 초과 시 청크 필요(미구현). ⑥**전제: Supabase Realtime 활성화**. ⑦프로덕션 스케일/다중 사용자 부하는 실배포 검증 필요.
 
+### 🎨 UI 고도화 (Figma·Spline 벤치마킹) — 랜딩+R3F 히어로 + 커뮤니티/갤러리 (2026-07-25)
+> 사용자: 에디터 제외 페이지 UI를 Figma·Spline 벤치마킹해 고도화. 다크 우선. 레퍼런스 4장(Spline 홈·가격 모달·템플릿 갤러리·작품 상세) 반영. **프로토타입 아티팩트 3종으로 룩 합의 후 실코드 이식 시작.** 기존 다크 바이올렛 토큰(`globals.css`) 계승. tsc 클린. **브라우저 확인 대기.** (dev EPERM 플래키는 [[troubleshoot-next-worker-crash]] — 코드 무관.)
+- **디자인 언어**: Figma(명료·절제)=유틸리티 페이지 / Spline(큰 라운드·유리·그라데이션 메시·3D)=마케팅 페이지. 공통=글래스·그라데이션 메시 배경·`rounded-xl`·`shadow-float`·바이올렛→시안 액센트·절제된 모션(reduced-motion 존중).
+- **✅ 랜딩 `/` (신규, 실코드)**: 기존 `/`=login/dashboard 리다이렉트 → **공개 마케팅 랜딩**으로 전환(`app/page.tsx`가 `LandingClient` 렌더, 로그인 여부로 CTA만 분기). `components/landing/LandingClient.tsx`(Tailwind+토큰) + **`HeroScene.tsx`=진짜 R3F 라이브 씬**(라운드박스·구·토러스·아이코사·캡슐이 drei `Float`로 부유+자전, 후처리·물리 없이 경량, `dpr[1,2]`, reduced-motion 정지, `ssr:false` 동적로드). 히어로 프리뷰 카드 안에 라이브 3D = "제품으로 만든 마케팅". 기능·커뮤니티 갤러리·요금제 티저·CTA.
+- **✅ 커뮤니티/갤러리 (신규, 실코드 + DB)**: 레퍼런스 4번(좋아요·댓글·팔로우·리믹스·태그) 정식 구현.
+  - **마이그레이션 `0007_community.sql`**: `profiles`(가입 시 트리거 자동생성+기존 백필) · `projects.tags text[]`·`remixed_from` · `project_likes`·`project_comments`·`user_follows` + RLS(공개 조회·본인만 쓰기). **⚠️ 사용자가 Supabase에 적용해야 소셜 동작**(미적용이어도 페이지는 방어적 쿼리로 렌더).
+  - **`app/community/queries.ts`**: `getGallery(tag?)`·`getWorkDetail(id)`. 소셜 테이블 없어도 렌더되게 **`safe()` 방어 쿼리**(실패=빈값), 기본 갤러리는 확실한 컬럼만 조회(마이그레이션 전에도 공개 프로젝트 표시).
+  - **`app/community/page.tsx`**: 공개 프로젝트 갤러리(큰 라운드 카드·그라데이션 폴백 썸네일·작가·♡/⇄) + 태그 필터 칩(서버 링크 `?tag=`).
+  - **`app/community/[projectId]/page.tsx` + `WorkDetailClient.tsx`**: 레퍼런스 4 레이아웃 — 프리뷰(3D로 열기→`/space`)·제목·작가+팔로우·좋아요/리믹스·설명·태그·댓글(작성/목록) + 우측 레일(공유·작가 다른작품·비슷한작품·Park3D 제작). 낙관적 좋아요/팔로우, `useTransition`.
+  - **`app/community/actions.ts`**: `toggleLike`·`toggleFollow`·`addComment`·`deleteComment`·`setProjectTags`·**`remixProject`**(공개 프로젝트를 내 계정으로 복제+`remixed_from` 기록, 에셋 스토리지 복사·씬 리맵 — `duplicateProject` 패턴 재사용).
+  - **리팩터**: `remapSceneData`를 `lib/remapScene.ts`로 추출(대시보드 복제 + 커뮤니티 리믹스 공유, `'use server'` 파일은 함수 export 불가라 lib로).
+- **프로토타입 아티팩트(룩 참고용, 실코드 아님)**: 랜딩·대시보드·회원가입+요금제 3종(claude.ai/code/artifact). **대시보드·인증·요금제의 실코드 이식은 미완**(프로토타입만).
+- **✅ 나머지 페이지 이식 (2026-07-25)**: 프로토타입→실코드. **요금제** = Spline식 **연/월 토글**(Pro 연간 ₩7,920/월·-20% 배지)·**"가장 인기" 필**·**기능 그룹 서브헤딩**("Free의 모든 기능 +")·비교표 유지(`PricingCards` 재작성 + `pricingData`에 연간가 추가). **회원가입** 좌측 패널에 **떠 있는 3D 칩**(플로팅 애니, reduced-motion 정지) — login/complete는 AuthShell로 이미 다크. **계정**은 이미 다크 surface 카드·섹션 구조라 무변경. tsc 클린 + 라우트 200.
+- **✅ 대시보드 전면 재구조화 (2026-07-25)**: 사용자 "아티팩트와 너무 상이" → 프로토타입(Spline 갤러리) 그대로 **사이드바 레이아웃**으로 재작성. `dashboard/page.tsx`=서버(데이터 조회) + `DashboardSidebar.tsx`(client)·`DashboardBody.tsx`(client) 분리.
+  - **사이드바**: 브랜드 + nav(내 프로젝트[active]·둘러보기→`/community`·요금제→`/pricing`) + 계정(계정 설정·로그아웃) + 테마 토글 + **Pro 업셀 카드**(free만). **죽은 링크 회피** — 실제 라우트만(템플릿/에셋 라이브러리는 에디터 레벨이라 nav서 제외).
+  - **상단 바**: 탭(프로젝트/둘러보기) + 검색(실동작 필터) + "AI로 만들기(곧)" 비활성 칩 + `NewProjectButton` + 아바타(이메일 이니셜).
+  - **빠른 생성 스트립**: 빈 씬·템플릿·가져오기(전부 `createProject` 서버액션 → 에디터 진입, 템플릿/업로드는 에디터서) + "둘러보고 리믹스"(→`/community`).
+  - **필터 칩**(전체/공개/비공개, client) + 그리드(`ProjectCard` 선명 그라데이션 썸네일 + `NewProjectCard`). ProjectCard·모달·서버액션 **로직 전부 보존**(재사용).
+- **다음(미완)**: 커뮤니티 프로젝트 태그 편집 UI(에디터/설정) · AI 자동배치(별도 로드맵) · 랜딩 로그인 사용자 자동 대시보드 리다이렉트 여부 결정(현재 랜딩 노출).
+- **알려진 한계**: 커뮤니티 소셜은 **0007 마이그레이션 적용 후** 동작(미적용=0/빈값) · 리믹스는 에셋 스토리지 복사(공개 프로젝트만) · 랜딩 R3F는 경량(후처리 없음).
+
 ## 알려진 제약/한계
 
 - **액추에이터/무빙 콜라이더 "미는" 미지원 (2026-07-20 확인, 보류)**: 움직이는 콜라이더(actuator/moving = kinematicPosition)가 **가만히 선 캐릭터를 밀지 못하고 관통**한다. 원인 = Rapier `KinematicCharacterController.computeColliderMovement`가 **캐릭터 자신의 `desired` 이동에 대해서만** 충돌 해결(움직이는 콜라이더가 나를 미는 건 미계산). 증상: W로 밀 땐 캐릭터 전진이 막혀 밀리는 듯 보이나, **밀리는 중 W를 놓으면 물체가 통과**. 해결하려면 무빙 플랫폼 "pusher" 로직(접촉 시 콜라이더 변위를 캐릭터 `desired`에 합산) 필요 — 회귀 위험으로 **보류**. 다시 문제되면 그때 구현. (`PlayModeController.tsx:359`, `PlayCanvas.tsx` ActuatorCollider/MovingCollider)

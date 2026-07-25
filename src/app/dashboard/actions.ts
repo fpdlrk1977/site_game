@@ -5,6 +5,7 @@ import { assertCountLimit, assertFeatureEnabled } from '@/lib/checkPlan';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { makeEmptySceneData } from '@/types/scene';
+import { remapSceneData } from '@/lib/remapScene';
 
 export async function createProject(formData: FormData) {
   const supabase = await createSupabaseServer();
@@ -54,41 +55,6 @@ export async function createProject(formData: FormData) {
     .eq('id', project.id);
 
   redirect(`/editor/${project.id}`);
-}
-
-// scene_data 안의 프로젝트/씬 id·에셋 참조·go_to_scene 값을 복사본 것으로 리맵
-function remapSceneData(
-  raw: Record<string, unknown>,
-  newProjectId: string,
-  newSceneId: string,
-  assetMap: Map<string, { id: string; dracoUrl: string; thumbUrl?: string }>,
-  sceneIdMap: Map<string, string>,
-): Record<string, unknown> {
-  const data = JSON.parse(JSON.stringify(raw ?? {}));
-  data.projectId = newProjectId;
-  data.sceneId = newSceneId;
-
-  if (Array.isArray(data.assets)) {
-    data.assets = data.assets.map((a: Record<string, unknown>) => {
-      const m = typeof a?.id === 'string' ? assetMap.get(a.id) : undefined;
-      if (!m) return a;
-      return { ...a, id: m.id, dracoUrl: m.dracoUrl, ...(m.thumbUrl ? { thumbnailUrl: m.thumbUrl } : {}) };
-    });
-  }
-
-  if (Array.isArray(data.objects)) {
-    for (const o of data.objects as Record<string, unknown>[]) {
-      if (typeof o?.assetId === 'string' && assetMap.has(o.assetId)) o.assetId = assetMap.get(o.assetId)!.id;
-      if (Array.isArray(o?.events)) {
-        for (const ev of o.events as Record<string, unknown>[]) {
-          if (ev?.action === 'go_to_scene' && typeof ev.value === 'string' && sceneIdMap.has(ev.value)) {
-            ev.value = sceneIdMap.get(ev.value);
-          }
-        }
-      }
-    }
-  }
-  return data;
 }
 
 export async function duplicateProject(projectId: string) {

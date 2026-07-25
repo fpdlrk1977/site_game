@@ -8,6 +8,17 @@ import { deleteProject, duplicateProject, renameProject, togglePublish } from '.
 import { ShareModal } from './ShareModal';
 import { CustomDomainModal } from './CustomDomainModal';
 
+// 썸네일 없을 때 프로젝트별 결정적 그라데이션(커뮤니티 갤러리와 동일 톤)
+function fallbackBg(id: string): string {
+  const p = [
+    'linear-gradient(145deg,#f4a3c9,#c9689e)', 'linear-gradient(145deg,#8b78ff,#4a2fd0)',
+    'linear-gradient(145deg,#39d0ea,#1583b0)', 'linear-gradient(145deg,#f2c14e,#d98a2b)',
+    'linear-gradient(145deg,#6a4dff,#c04aff)', 'linear-gradient(145deg,#2dd4bf,#0d9488)',
+  ];
+  let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return p[Math.abs(h) % p.length];
+}
+
 // 상대 시간 표기 — 방금 / N분 전 / N시간 전 / N일 전 / N개월 전 / N년 전
 function timeAgo(iso: string): string {
   const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -107,11 +118,8 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
         {project.thumbnail_url ? (
           <img src={project.thumbnail_url} alt={project.name} className="w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-muted/20 flex items-center justify-center text-muted opacity-50 group-hover:opacity-70 transition-opacity">
-              <Globe size={30} />
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-900/10 to-cyan-900/10" />
+          <div className="absolute inset-0" style={{ background: fallbackBg(project.id) }}>
+            <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 28% 22%, rgba(255,255,255,.22), transparent 55%)' }} />
           </div>
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">

@@ -74,6 +74,14 @@ export default function SignUpPage() {
           <div className="absolute -top-24 -left-24 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
           <div className="absolute bottom-0 right-0 w-96 h-96 bg-cyan-300/20 rounded-full blur-3xl" />
         </div>
+        {/* 떠 있는 3D 칩 (장식) */}
+        <div className="signup-chip pointer-events-none absolute right-10 top-[46%] w-24 h-24 rounded-[22px]"
+          style={{ background: 'linear-gradient(145deg,#ffffff,#cbd6ff)', boxShadow: '0 30px 60px -18px rgba(0,0,0,.45), inset 0 3px 6px rgba(255,255,255,.6)', transform: 'rotate(-12deg)' }} />
+        <style>{`
+          @keyframes signupFloat { 0%,100%{ transform: rotate(-12deg) translateY(0); } 50%{ transform: rotate(-6deg) translateY(-14px); } }
+          .signup-chip { animation: signupFloat 7s ease-in-out infinite; }
+          @media (prefers-reduced-motion: reduce){ .signup-chip { animation: none; } }
+        `}</style>
 
         <Link href="/" className="relative flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center text-2xl">
