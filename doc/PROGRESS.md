@@ -1673,6 +1673,30 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - **다음(미완)**: 커뮤니티 프로젝트 태그 편집 UI · AI 자동배치(별도 로드맵) · 랜딩 로그인 사용자 자동 대시보드 리다이렉트 여부.
 - **알려진 한계**: 커뮤니티 소셜은 **0007 마이그레이션 적용 후** 동작(미적용=0/빈값) · 리믹스는 에셋 스토리지 복사(공개 프로젝트만) · 랜딩 R3F는 경량(후처리 없음).
 
+### 🧱 앱셸 통일 + 라이트 모드 기본 + 테마 적응 (2026-07-25)
+> 사용자 요청 다발: ①레이아웃 왜곡방지 앱셸을 에디터 제외 전 페이지에 ②기본 라이트 모드 ③다크 top-bar 메뉴 회색 문제. tsc 클린 + 전 라우트 200 + html 기본 `dark` 없음(라이트). **브라우저 확인 대기.**
+- **신규 `components/ui/SiteShell.tsx`**: 뷰포트 고정 앱셸(`h-dvh overflow-hidden` + 전체폭 top-bar `h-14 shrink-0` + `main flex-1 overflow-y-auto overflow-x-hidden`). AmbientBackground 소유(z-0), header z-30, main z-10. **랜딩·커뮤니티(갤러리+상세)·요금제·계정**에 적용(각 페이지의 sticky nav+개별 배경 제거, nav 내용만 셸 슬롯으로). 대시보드는 이미 동일 구조(사이드바 포함 버전).
+- **라이트 모드 기본**: `layout.tsx` html에서 `dark` 제거 + FOUC 스크립트 기본 `'light'`, `themeStore` 기본 `'light'`. (사용자 토글/저장값 우선.)
+- **테마 적응 색**: nav 메뉴 링크 `text-muted`(다크서 회색) → **`text-foreground/70 hover:text-foreground`**(양 모드 가독). 대시보드 사이드바 비활성 항목도 동일. 하드코딩 다크값 토큰화(nav 배경 `rgba(14,13,19)`→셸의 `bg-background/80`, 그리드 라인 흰색→뉴트럴 바이올렛). **히어로 3D 프리뷰는 "다크 에디터 스크린샷"이라 테마 무관 다크 고정**(#141320, 라이트 페이지 위 다크 앱 스크린샷 대비).
+- **미완(다음)**: 요금제 **업그레이드 모달**(레퍼런스 pricing.png식 — 3열 비교·연/월 토글·Popular·기능그룹, 라이트) — 현재는 /pricing **페이지** + "준비 중" `UpgradeNotice`. 스펙은 Spline 값($·Spline AI)이라 우리 제품(Free/Pro/Business·₩)으로 어댑트 예정. 마케팅 페이지 라이트 모드 실화면 미세조정.
+
+### 🌐 전면 영문화 + 요금제 모달 + 메인 풀사이즈 (2026-07-25)
+> 사용자 요청 다발. tsc 클린 + 전 라우트 200 + 렌더 한글 없음(비-에디터 UI). 에디터 제외.
+- **요금제 업그레이드 모달**: 신규 `store/pricingModalStore.ts`(open/close) + `components/ui/PricingModal.tsx`(레퍼런스 pricing.png 레이아웃 어댑트 — 3열 Free/Pro/Business·연/월 토글·Popular·기능그룹·X·오버레이, 우리 플랜/$). Upgrade 클릭 시 인라인 "coming soon"(결제 미구현). **대시보드 사이드바 upsell·"Pricing" nav·계정 Upgrade 버튼**이 `/pricing` 링크 → **모달 오픈**으로 전환(대시보드·계정에 `<PricingModal/>` 마운트). ShareModal/CustomDomainModal(에디터 공유)은 그대로 `/pricing` 링크.
+- **전면 영문화**: 랜딩·커뮤니티(갤러리+상세)·요금제(페이지+카드+데이터+UpgradeNotice)·대시보드(사이드바/탑바/바디)·인증(login/signup/complete/AuthShell)·계정·루트 메타데이터·Skeleton 스피너 aria-label. `pricingData` 가격도 **$**(Free $0 / Pro $12·연 $9.60 / Business Custom). 개발 주석은 한글 유지.
+- **메인 풀사이즈**: 대시보드 `DashboardBody` main의 `max-w-[1600px]` 캡 제거 → `w-full`(화면 가로 꽉 채움) + 넓은 화면 최대 5열.
+- **랜딩 프리미엄 재작성**: 영문 카피 + 타이트한 타이포(`tracking-[-0.035em]`·큰 헤드라인)·정제 간격. 히어로 3D 프리뷰는 다크 고정("에디터 스크린샷").
+- **확인 필요(브라우저)**: 라이트/다크 양쪽 · 요금제 모달(사이드바/계정 Upgrade) · 대시보드 풀폭 · 영문 카피.
+
+### ✨ 랜딩 대전환 — 인터랙티브 풀블리드 3D 히어로 + 벤토 + 마퀴 + 스크롤 애니 (2026-07-25)
+> 사용자: "영문·색만 바뀌었다. full 화면·인터랙티브·화려하게." → 절제 톤을 걷어내고 드라마틱하게 재작성. tsc 클린 + `/` 200. **브라우저 확인 대기(특히 3D 인터랙션·Bloom 성능).**
+- **`HeroScene.tsx` 인터랙티브 재작성**: 커서를 향해 기우는(`state.pointer` lerp) + 자전하는 발광 오브젝트 클러스터(6종, emissive) + **`@react-three/postprocessing` Bloom**(발광 글로우). reduced-motion이면 정지·Bloom 생략. ssr:false.
+- **풀블리드 다크 히어로**(`LandingClient`): 3D 캔버스가 히어로 전체(`calc(100dvh-56px)`)를 채우고, 오버레이 콘텐츠는 `pointer-events-none`(버튼만 auto)이라 **커서가 어디에 있든 3D가 반응**. 다크 스테이지(라이트 페이지 위 드라마틱 대비) + 스크림 + 하단 페이드 + 스크롤 큐(바운스).
+- **신규 `components/ui/Reveal.tsx`**: `Reveal`(IntersectionObserver fade-up 스크롤 애니) + `CountUp`(뷰 진입 시 숫자 카운트업). reduced-motion 대응. 전 섹션에 적용.
+- **벤토 기능 그리드**: 큰 타일(col-span-2·row-span-2, 그라데이션 글로우) + 작은 타일 3개(hover 글로우/스케일). **자동 스크롤 갤러리 마퀴**(full-bleed, CSS 무한 루프, hover 시 일시정지). **풀블리드 다크 최종 CTA**(글로우).
+- **전체 full-width**: SiteShell main 위에 섹션들이 `w-full`(마퀴·히어로·CTA는 화면 끝까지), 텍스트만 내부 `max-w`.
+- **확인 필요(브라우저)**: 히어로 3D가 커서 따라 반응·발광 · 스크롤 시 섹션 fade-up·숫자 카운트업 · 마퀴 자동 스크롤 · 벤토 hover · Bloom 성능(저사양). **참고**: 히어로는 라이트 모드에서도 **다크 스테이지 고정**(의도 — 드라마틱 대비). 원하면 라이트로 전환 가능.
+
 ## 알려진 제약/한계
 
 - **액추에이터/무빙 콜라이더 "미는" 미지원 (2026-07-20 확인, 보류)**: 움직이는 콜라이더(actuator/moving = kinematicPosition)가 **가만히 선 캐릭터를 밀지 못하고 관통**한다. 원인 = Rapier `KinematicCharacterController.computeColliderMovement`가 **캐릭터 자신의 `desired` 이동에 대해서만** 충돌 해결(움직이는 콜라이더가 나를 미는 건 미계산). 증상: W로 밀 땐 캐릭터 전진이 막혀 밀리는 듯 보이나, **밀리는 중 W를 놓으면 물체가 통과**. 해결하려면 무빙 플랫폼 "pusher" 로직(접촉 시 콜라이더 변위를 캐릭터 `desired`에 합산) 필요 — 회귀 위험으로 **보류**. 다시 문제되면 그때 구현. (`PlayModeController.tsx:359`, `PlayCanvas.tsx` ActuatorCollider/MovingCollider)

@@ -23,7 +23,7 @@ export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier 
       {/* 연/월 토글 */}
       <div className="flex justify-center mb-9">
         <div className="inline-flex bg-surface border border-border rounded-xs p-1 gap-0.5">
-          {([['연간', true], ['월간', false]] as const).map(([label, y]) => (
+          {([['Yearly', true], ['Monthly', false]] as const).map(([label, y]) => (
             <button key={label} onClick={() => setYearly(y)}
               className={`text-sm font-semibold px-4 py-2 rounded-xs transition-colors ${yearly === y ? 'text-white' : 'text-muted hover:text-foreground'}`}
               style={yearly === y ? { background: GRAD } : {}}>
@@ -48,25 +48,25 @@ export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier 
               className={`relative flex flex-col rounded-xs border bg-surface p-7 ${highlight ? 'border-transparent md:-translate-y-2' : 'border-border'}`}
               style={{ boxShadow: highlight ? '0 0 0 2px #6a4dff, var(--shadow-float)' : 'var(--shadow-card)' }}>
               {highlight && (
-                <span className="absolute -top-3 left-6 text-white text-[.68rem] font-bold px-3 py-1 rounded-full" style={{ background: GRAD }}>가장 인기</span>
+                <span className="absolute -top-3 left-6 text-white text-[.68rem] font-bold px-3 py-1 rounded-full" style={{ background: GRAD }}>Popular</span>
               )}
 
               <div className="flex items-center gap-2">
                 <h3 className="text-[1.05rem] font-bold">{meta.name}</h3>
-                {isCurrent && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-foreground/[0.06] text-muted">현재 플랜</span>}
+                {isCurrent && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-foreground/[0.06] text-muted">Current</span>}
               </div>
               <p className="text-muted text-xs mt-1">{meta.tagline}</p>
 
               <div className="mt-5">
                 <div className="text-[2.3rem] font-bold tracking-tight leading-none">
-                  {amount}{tier === 'pro' && <span className="text-[.9rem] text-muted font-medium"> /월</span>}
+                  {amount}{tier === 'pro' && <span className="text-[.9rem] text-muted font-medium"> /mo</span>}
                 </div>
                 <p className="text-[.78rem] text-muted mt-2 min-h-[1.2em]">{billed}</p>
               </div>
 
               {/* CTA */}
               {isCurrent ? (
-                <button disabled className="w-full mt-5 mb-6 py-2.5 rounded-xs text-sm font-semibold border border-border text-muted cursor-default">현재 이용 중</button>
+                <button disabled className="w-full mt-5 mb-6 py-2.5 rounded-xs text-sm font-semibold border border-border text-muted cursor-default">Current plan</button>
               ) : tier === 'free' ? (
                 <a href={loggedIn ? '/dashboard' : '/signup'} className="block text-center w-full mt-5 mb-6 py-2.5 rounded-xs text-sm font-semibold border border-border hover:bg-white/[0.04] transition-colors">{meta.cta}</a>
               ) : (
@@ -96,12 +96,12 @@ export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier 
 
       {/* 비교표 */}
       <div className="max-w-5xl mx-auto mt-16">
-        <h2 className="text-center text-lg font-bold mb-6">기능 자세히 비교</h2>
+        <h2 className="text-center text-lg font-bold mb-6">Compare features</h2>
         <div className="overflow-x-auto rounded-xs border border-border">
           <table className="w-full text-sm border-collapse min-w-[560px]">
             <thead>
               <tr className="border-b border-border bg-foreground/[0.02]">
-                <th className="text-left font-medium text-muted px-5 py-3.5 w-[34%]">기능</th>
+                <th className="text-left font-medium text-muted px-5 py-3.5 w-[34%]">Feature</th>
                 {TIERS.map((t) => <th key={t} className="font-semibold px-4 py-3.5">{TIER_META[t].name}</th>)}
               </tr>
             </thead>

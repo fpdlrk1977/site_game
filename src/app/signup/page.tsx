@@ -10,9 +10,9 @@ import { AuthField, AuthSubmit, AuthMessage } from '@/components/ui/AuthShell';
 import { BfcacheGuard } from '@/components/ui/BfcacheGuard';
 
 const BENEFITS = [
-  { icon: MousePointerClick, text: '드래그 앤 드롭으로 3D 공간 제작' },
-  { icon: Boxes, text: '물리 · 애니메이션 · 게임 로직까지 노코드로' },
-  { icon: Rocket, text: '클릭 한 번으로 웹에 바로 배포' },
+  { icon: MousePointerClick, text: 'Drag-and-drop 3D creation' },
+  { icon: Boxes, text: 'Physics, animation, and game logic — no code' },
+  { icon: Rocket, text: 'Publish to the web in one click' },
 ];
 
 export default function SignUpPage() {
@@ -29,7 +29,7 @@ export default function SignUpPage() {
     setError(null);
 
     if (password.length < 6) {
-      setError('비밀번호는 6자 이상이어야 합니다.');
+      setError('Password must be at least 6 characters.');
       return;
     }
 
@@ -59,7 +59,7 @@ export default function SignUpPage() {
         router.push('/signup/complete?status=pending');
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
       setLoading(false);
     }
   };
@@ -92,13 +92,12 @@ export default function SignUpPage() {
 
         <div className="relative">
           <h1 className="text-4xl font-bold leading-tight tracking-tight mb-4">
-            코딩 없이,
+            Build 3D for the web,
             <br />
-            3D 웹을 만들다.
+            without code.
           </h1>
           <p className="text-white/80 text-base leading-relaxed mb-10 max-w-md">
-            지금 무료로 가입하고 나만의 3D 공간·게임·인터랙티브 웹사이트를
-            직접 만들어 배포해 보세요.
+            Sign up free and start building your own 3D spaces, games, and interactive websites.
           </p>
           <ul className="space-y-4">
             {BENEFITS.map(({ icon: Icon, text }) => (
@@ -112,7 +111,7 @@ export default function SignUpPage() {
           </ul>
         </div>
 
-        <p className="relative text-white/60 text-xs">© Park3D — 노코드 3D 공간 제작 플랫폼</p>
+        <p className="relative text-white/60 text-xs">© Park3D — No-code 3D space builder</p>
       </aside>
 
       {/* 우측 — 가입 폼 */}
@@ -127,18 +126,18 @@ export default function SignUpPage() {
           </Link>
 
           <h2 className="text-2xl font-bold text-foreground tracking-tight mb-1.5">
-            회원가입
+            Sign up
           </h2>
           <p className="text-muted text-sm mb-8">
-            이미 계정이 있으신가요?{' '}
+            Already have an account?{' '}
             <Link href="/login" className="text-primary font-medium hover:underline">
-              로그인
+              Log in
             </Link>
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <AuthField
-              label="이메일"
+              label="Email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -147,12 +146,12 @@ export default function SignUpPage() {
               autoComplete="email"
             />
             <AuthField
-              label="비밀번호"
+              label="Password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="6자 이상"
+              placeholder="At least 6 characters"
               autoComplete="new-password"
               minLength={6}
             />
@@ -168,11 +167,11 @@ export default function SignUpPage() {
             </ul>
 
             {error && <AuthMessage type="error" text={error} />}
-            <AuthSubmit loading={loading}>계정 만들기</AuthSubmit>
+            <AuthSubmit loading={loading}>Create account</AuthSubmit>
           </form>
 
           <p className="text-muted/70 text-xs mt-6 leading-relaxed">
-            가입하면 Park3D의 서비스 약관 및 개인정보 처리방침에 동의하는 것으로 간주됩니다.
+            By signing up, you agree to Park3D's Terms and Privacy Policy.
           </p>
         </div>
       </main>

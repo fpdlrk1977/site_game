@@ -44,19 +44,19 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
       setLoading(false);
     }
   };
 
   return (
     <AuthShell
-      title="로그인"
+      title="Log in"
       footer={
         <p className="text-sm text-muted">
-          계정이 없으신가요?{' '}
+          Don&apos;t have an account?{" "}
           <Link href="/signup" className="text-foreground font-medium hover:underline">
-            회원가입
+            Sign up
           </Link>
         </p>
       }
@@ -64,7 +64,7 @@ export default function LoginPage() {
       <BfcacheGuard />
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthField
-          label="이메일"
+          label="Email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -73,7 +73,7 @@ export default function LoginPage() {
           autoComplete="email"
         />
         <AuthField
-          label="비밀번호"
+          label="Password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -82,7 +82,7 @@ export default function LoginPage() {
           autoComplete="current-password"
         />
         {error && <AuthMessage type="error" text={error} />}
-        <AuthSubmit loading={loading}>로그인</AuthSubmit>
+        <AuthSubmit loading={loading}>Log in</AuthSubmit>
       </form>
     </AuthShell>
   );

@@ -2,11 +2,13 @@ import Link from 'next/link';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import type { PlanTier } from '@/store/userStore';
 import { PricingCards } from './PricingCards';
-import { AmbientBackground } from '@/components/ui/AmbientBackground';
+import { SiteShell } from '@/components/ui/SiteShell';
+
+const GRAD = 'linear-gradient(120deg,#6a4dff,#39d0ea)';
 
 export const metadata = {
-  title: '요금제 — Park3D',
-  description: 'Park3D 요금제를 비교하고 나에게 맞는 플랜을 선택하세요.',
+  title: 'Pricing — Park3D',
+  description: 'Compare Park3D plans and pick the one that fits.',
 };
 
 export default async function PricingPage() {
@@ -26,44 +28,36 @@ export default async function PricingPage() {
     currentTier = (planData?.plan_tier ?? 'free') as PlanTier;
   }
 
+  const nav = (
+    <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
+      <Link href="/" className="flex items-center gap-2.5 font-bold text-[1.02rem]">
+        <span className="w-[28px] h-[28px] rounded-xs grid place-items-center text-white text-[.85rem]" style={{ background: GRAD }}>⬡</span> Park3D
+      </Link>
+      <Link href={user ? '/dashboard' : '/login'} className="text-sm text-foreground/70 hover:text-foreground transition-colors">
+        {user ? "Dashboard" : "Log in"}
+      </Link>
+    </div>
+  );
+
   return (
-    <div className="relative min-h-screen bg-background">
-      <AmbientBackground />
-
-      {/* 미니 헤더 */}
-      <header className="relative border-b border-border/60 px-6 py-4 flex items-center justify-between backdrop-blur-sm bg-sidebar/70">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm shadow-lg shadow-violet-500/25">
-            ⬡
-          </div>
-          <span className="font-bold text-lg tracking-tight">Park3D</span>
-        </Link>
-        <Link
-          href={user ? '/dashboard' : '/login'}
-          className="text-sm text-muted hover:text-foreground transition-colors px-3 py-1.5 rounded-xs hover:bg-surface"
-        >
-          {user ? '대시보드' : '로그인'}
-        </Link>
-      </header>
-
-      {/* 본문 */}
-      <main className="relative max-w-6xl mx-auto px-6 py-16">
+    <SiteShell nav={nav}>
+      <div className="max-w-6xl mx-auto px-6 py-16">
         <div className="text-center mb-12">
-          <span className="text-[.72rem] tracking-[.14em] uppercase text-primary font-bold">요금제</span>
+          <span className="text-[.72rem] tracking-[.14em] uppercase text-primary font-bold">Pricing</span>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3 mt-3">
-            나에게 맞는 플랜을 선택하세요
+            Choose the plan that fits
           </h1>
           <p className="text-muted text-base">
-            코딩 없이 3D 공간을 만들고 배포하세요. 언제든 업그레이드할 수 있습니다.
+            Build and publish 3D spaces without code. Upgrade anytime.
           </p>
         </div>
 
         <PricingCards currentTier={currentTier} loggedIn={!!user} />
 
         <p className="text-center text-muted/70 text-xs mt-14">
-          가격은 확정 전 안내용이며 변경될 수 있습니다. 결제 기능은 준비 중입니다.
+          Prices are provisional and may change. Billing is coming soon.
         </p>
-      </main>
-    </div>
+      </div>
+    </SiteShell>
   );
 }

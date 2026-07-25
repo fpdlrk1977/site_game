@@ -36,7 +36,7 @@ export function UpgradeNotice({
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-muted hover:text-foreground transition-colors"
-          aria-label="닫기"
+          aria-label="Close"
         >
           <X size={18} />
         </button>
@@ -46,19 +46,19 @@ export function UpgradeNotice({
         </div>
 
         <h3 className="text-lg font-semibold text-foreground mb-1.5">
-          {meta.name} 플랜 준비 중
+          {meta.name} is coming soon
         </h3>
         <p className="text-muted text-sm leading-relaxed mb-6">
-          결제 연동은 현재 준비 중입니다.
+          Billing isn’t available just yet.
           <br />
-          곧 제공될 예정이니 조금만 기다려 주세요.
+          We’re putting the finishing touches on checkout.
         </p>
 
         <button
           onClick={onClose}
           className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold py-2.5 rounded-xs transition-all"
         >
-          확인
+          OK
         </button>
       </div>
     </div>

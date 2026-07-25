@@ -25,7 +25,7 @@ export function AuthShell({
             <span className="text-3xl">⬡</span>
           </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Park3D</h1>
-          <p className="text-muted text-sm mt-1">노코드 3D 공간 제작 플랫폼</p>
+          <p className="text-muted text-sm mt-1">No-code 3D space builder</p>
         </Link>
 
         {/* 카드 */}
@@ -70,7 +70,7 @@ export function AuthSubmit({
       disabled={loading}
       className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold py-2.5 rounded-xs transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:-translate-y-0.5"
     >
-      {loading ? '처리 중...' : children}
+      {loading ? 'Working…' : children}
     </button>
   );
 }

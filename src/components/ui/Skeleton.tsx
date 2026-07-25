@@ -19,7 +19,7 @@ export function Spinner({ size = 28 }: { size?: number }) {
       className="animate-spin rounded-full border-2 border-foreground/15 border-t-primary"
       style={{ width: size, height: size }}
       role="status"
-      aria-label="로딩 중"
+      aria-label="Loading"
     />
   );
 }

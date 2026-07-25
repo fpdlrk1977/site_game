@@ -17,8 +17,8 @@ function Avatar({ author, size = 30 }: { author: Author; size?: number }) {
 }
 function timeAgo(iso: string) {
   const d = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (d < 60) return '방금'; if (d < 3600) return `${Math.floor(d / 60)}분 전`;
-  if (d < 86400) return `${Math.floor(d / 3600)}시간 전`; return `${Math.floor(d / 86400)}일 전`;
+  if (d < 60) return 'just now'; if (d < 3600) return `${Math.floor(d / 60)}m ago`;
+  if (d < 86400) return `${Math.floor(d / 3600)}h ago`; return `${Math.floor(d / 86400)}d ago`;
 }
 
 export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; loggedIn: boolean }) {
@@ -70,7 +70,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
             {detail.sceneId && (
               <Link href={`/space/${detail.sceneId}`} className="absolute inset-0 grid place-items-center group">
                 <span className="flex items-center gap-2 px-5 py-3 rounded-full text-white font-semibold backdrop-blur-md bg-black/40 border border-white/20 group-hover:bg-black/55 transition-colors">
-                  <Play size={18} /> 3D로 열기
+                  <Play size={18} /> Open in 3D
                 </span>
               </Link>
             )}
@@ -85,12 +85,12 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
               <Avatar author={detail.author} />
               <div>
                 <div className="text-sm font-semibold">{detail.author.name}</div>
-                <div className="text-[.76rem] text-muted">{followers.toLocaleString()} 팔로워</div>
+                <div className="text-[.76rem] text-muted">{followers.toLocaleString()} followers</div>
               </div>
               {!detail.viewerIsOwner && (
                 <button onClick={onFollow} disabled={pending}
                   className={`ml-2 px-3.5 py-1.5 rounded-xs text-sm font-semibold ${follows ? 'border border-border bg-surface text-muted' : 'text-white'}`}
-                  style={follows ? {} : { background: GRAD }}>{follows ? '팔로잉' : '+ 팔로우'}</button>
+                  style={follows ? {} : { background: GRAD }}>{follows ? 'Following' : '+ Follow'}</button>
               )}
             </div>
           </div>
@@ -100,7 +100,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
             </button>
             <span className={btn} style={{ pointerEvents: 'none' }}><Repeat2 size={15} /> {detail.remixes.toLocaleString()}</span>
             <button onClick={onRemix} disabled={pending} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xs text-sm font-semibold text-white" style={{ background: GRAD }}>
-              <Repeat2 size={15} /> 리믹스
+              <Repeat2 size={15} /> Remix
             </button>
           </div>
         </div>
@@ -108,7 +108,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
         {/* description + tags */}
         {detail.description && <p className="mt-5 text-[.95rem] text-foreground/90 leading-relaxed">{detail.description}</p>}
         {detail.remixedFrom && (
-          <p className="mt-3 text-[.82rem] text-muted inline-flex items-center gap-1.5"><Repeat2 size={13} /> <Link href={`/community/${detail.remixedFrom.id}`} className="text-primary hover:underline">{detail.remixedFrom.name}</Link> 에서 리믹스됨</p>
+          <p className="mt-3 text-[.82rem] text-muted inline-flex items-center gap-1.5"><Repeat2 size={13} /> Remixed from <Link href={`/community/${detail.remixedFrom.id}`} className="text-primary hover:underline">{detail.remixedFrom.name}</Link></p>
         )}
         {detail.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-4">
@@ -120,11 +120,11 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
 
         {/* comments */}
         <div className="mt-9 pt-7 border-t border-border">
-          <h2 className="font-semibold mb-4">{detail.comments.length} 댓글</h2>
+          <h2 className="font-semibold mb-4">{detail.comments.length} Comments</h2>
           <div className="flex gap-3 mb-6">
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder={loggedIn ? '생각·응원·피드백을 남겨보세요' : '댓글을 남기려면 로그인하세요'}
+            <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder={loggedIn ? 'Share your thoughts…' : 'Log in to comment'}
               rows={1} className="flex-1 bg-surface border border-border rounded-xs px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:border-primary" />
-            <button onClick={onComment} disabled={pending || !comment.trim()} className="px-4 rounded-xs text-sm font-semibold text-white disabled:opacity-50" style={{ background: GRAD }}>등록</button>
+            <button onClick={onComment} disabled={pending || !comment.trim()} className="px-4 rounded-xs text-sm font-semibold text-white disabled:opacity-50" style={{ background: GRAD }}>Post</button>
           </div>
           <div className="space-y-5">
             {detail.comments.map((c) => (
@@ -136,7 +136,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
                 </div>
               </div>
             ))}
-            {detail.comments.length === 0 && <p className="text-sm text-muted">첫 댓글을 남겨보세요.</p>}
+            {detail.comments.length === 0 && <p className="text-sm text-muted">Be the first to comment.</p>}
           </div>
         </div>
       </div>
@@ -144,16 +144,16 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
       {/* right rail */}
       <aside className="space-y-7">
         <div>
-          <div className="text-[.8rem] font-semibold text-muted mb-2.5">공유</div>
+          <div className="text-[.8rem] font-semibold text-muted mb-2.5">Share</div>
           <div className="flex gap-2">
-            <button onClick={onCopyLink} className={btn} title="링크 복사"><Link2 size={15} /> {copied ? '복사됨' : '링크'}</button>
+            <button onClick={onCopyLink} className={btn} title="Copy link"><Link2 size={15} /> {copied ? 'Copied' : 'Link'}</button>
             <span className={btn} style={{ pointerEvents: 'none' }}><Share2 size={15} /></span>
           </div>
         </div>
 
         {detail.more.length > 0 && (
           <div>
-            <div className="text-[.8rem] font-semibold text-muted mb-2.5">{detail.author.name}의 다른 작품</div>
+            <div className="text-[.8rem] font-semibold text-muted mb-2.5">More by {detail.author.name}</div>
             <div className="grid grid-cols-3 gap-2">
               {detail.more.map((m) => (
                 <Link key={m.id} href={`/community/${m.id}`} className="aspect-square rounded-xs overflow-hidden border border-border relative" style={{ background: bgFor(m.id) }}>
@@ -166,7 +166,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
 
         {detail.similar.length > 0 && (
           <div>
-            <div className="text-[.8rem] font-semibold text-muted mb-2.5">비슷한 작품</div>
+            <div className="text-[.8rem] font-semibold text-muted mb-2.5">Similar</div>
             <div className="space-y-2.5">
               {detail.similar.map((s) => (
                 <Link key={s.id} href={`/community/${s.id}`} className="flex gap-3 items-center group">
@@ -184,8 +184,8 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
         )}
 
         <div className="pt-5 border-t border-border text-[.8rem] text-muted space-y-2">
-          <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-xs grid place-items-center text-white text-[.55rem]" style={{ background: GRAD }}>⬡</span> Park3D로 제작</div>
-          <div className="flex items-center gap-2 text-[.78rem]"><Users size={13} /> {followers.toLocaleString()} 팔로워 · ♡ {likes.toLocaleString()}</div>
+          <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-xs grid place-items-center text-white text-[.55rem]" style={{ background: GRAD }}>⬡</span> Made with Park3D</div>
+          <div className="flex items-center gap-2 text-[.78rem]"><Users size={13} /> {followers.toLocaleString()} followers · ♡ {likes.toLocaleString()}</div>
         </div>
       </aside>
     </main>

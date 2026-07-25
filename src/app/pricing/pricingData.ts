@@ -30,35 +30,35 @@ export interface TierMeta {
 export const TIER_META: Record<PlanTier, TierMeta> = {
   free: {
     name: 'Free',
-    tagline: '개인 프로젝트로 시작하기',
-    price: '₩0',
-    priceNote: '평생 무료',
-    cta: '무료로 시작',
+    tagline: 'For personal projects',
+    price: '$0',
+    priceNote: 'Free forever',
+    cta: 'Get started',
     gradient: null,
-    includesNote: '기본',
+    includesNote: 'Includes',
   },
   pro: {
     name: 'Pro',
-    tagline: '창작자 · 프리랜서를 위한',
-    price: '₩9,900',
-    priceNote: '월 (가격 미확정)',
-    priceMonthly: '₩9,900',
-    priceYearly: '₩7,920',
-    billedMonthly: '매월 청구 · 가격 미확정',
-    billedYearly: '연 ₩95,040 청구 · 월 대비 20% 절약',
-    cta: 'Pro 시작하기',
+    tagline: 'For creators & freelancers',
+    price: '$12',
+    priceNote: 'per month',
+    priceMonthly: '$12',
+    priceYearly: '$9.60',
+    billedMonthly: 'Billed monthly',
+    billedYearly: 'Billed $115/year · Save 20%',
+    cta: 'Upgrade to Pro',
     gradient: 'from-violet-600 to-cyan-600',
     recommended: true,
-    includesNote: 'Free의 모든 기능 +',
+    includesNote: 'Everything in Free, plus',
   },
   business: {
     name: 'Business',
-    tagline: '팀 · 비즈니스를 위한',
-    price: '문의',
-    priceNote: '맞춤 견적',
-    cta: '문의하기',
+    tagline: 'For teams & businesses',
+    price: 'Custom',
+    priceNote: 'Tailored quote',
+    cta: 'Contact sales',
     gradient: 'from-amber-500 to-orange-600',
-    includesNote: 'Pro의 모든 기능 +',
+    includesNote: 'Everything in Pro, plus',
   },
 };
 
@@ -72,20 +72,20 @@ export interface FeatureRow {
 
 /** 가격 카드 · 비교표에 노출할 기능 행 (위→아래 순서대로 렌더) */
 export const FEATURE_ROWS: FeatureRow[] = [
-  { label: '프로젝트 수', kind: 'num', key: 'maxProjects' },
-  { label: '씬당 오브젝트', kind: 'num', key: 'maxObjectsPerScene' },
-  { label: '에셋 스토리지', kind: 'storage', key: 'maxStorageMb' },
-  { label: '다중 씬', kind: 'bool', key: 'multiScene' },
-  { label: '커스텀 도메인', kind: 'bool', key: 'customDomain' },
-  { label: '임베드', kind: 'bool', key: 'embedMode' },
-  { label: '방문 통계', kind: 'bool', key: 'analytics' },
-  { label: '버전 기록', kind: 'bool', key: 'sceneVersionHistory' },
-  { label: '워터마크 제거', kind: 'bool', key: 'hideBadge' },
+  { label: 'Projects', kind: 'num', key: 'maxProjects' },
+  { label: 'Objects per scene', kind: 'num', key: 'maxObjectsPerScene' },
+  { label: 'Asset storage', kind: 'storage', key: 'maxStorageMb' },
+  { label: 'Multi-scene', kind: 'bool', key: 'multiScene' },
+  { label: 'Custom domain', kind: 'bool', key: 'customDomain' },
+  { label: 'Embed', kind: 'bool', key: 'embedMode' },
+  { label: 'Analytics', kind: 'bool', key: 'analytics' },
+  { label: 'Version history', kind: 'bool', key: 'sceneVersionHistory' },
+  { label: 'Remove watermark', kind: 'bool', key: 'hideBadge' },
 ];
 
-const fmtNum = (v: number) => (v === Infinity ? '무제한' : `${v.toLocaleString()}개`);
+const fmtNum = (v: number) => (v === Infinity ? 'Unlimited' : `${v.toLocaleString()}`);
 const fmtStorage = (v: number) =>
-  v === Infinity ? '무제한' : v >= 1024 ? `${v / 1024}GB` : `${v}MB`;
+  v === Infinity ? 'Unlimited' : v >= 1024 ? `${v / 1024}GB` : `${v}MB`;
 
 /** 한 행·한 tier의 표시값. bool이면 boolean, 그 외엔 문자열. */
 export function gateValue(row: FeatureRow, tier: PlanTier): string | boolean {

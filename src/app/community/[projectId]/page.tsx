@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import { getWorkDetail } from '../queries';
 import { WorkDetailClient } from './WorkDetailClient';
+import { SiteShell } from '@/components/ui/SiteShell';
 
 const GRAD = 'linear-gradient(120deg,#6a4dff,#39d0ea)';
 
@@ -20,21 +21,21 @@ export default async function WorkDetailPage({ params }: { params: Promise<{ pro
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
-  return (
-    <div className="min-h-screen bg-background text-foreground">
-      <nav className="sticky top-0 z-30 border-b border-border backdrop-blur-xl" style={{ background: 'linear-gradient(180deg,rgba(14,13,19,.9),rgba(14,13,19,.6))' }}>
-        <div className="max-w-[1180px] mx-auto px-7 h-16 flex items-center gap-7">
-          <Link href="/" className="flex items-center gap-2.5 font-bold text-[1.05rem]">
-            <span className="w-[30px] h-[30px] rounded-xs grid place-items-center text-white" style={{ background: GRAD }}>⬡</span> Park3D
-          </Link>
-          <Link href="/community" className="text-sm text-muted hover:text-foreground">← 갤러리</Link>
-          <div className="ml-auto flex items-center gap-3">
-            <Link href={user ? '/dashboard' : '/login'} className="text-sm text-muted hover:text-foreground">{user ? '대시보드' : '로그인'}</Link>
-          </div>
-        </div>
-      </nav>
-
-      <WorkDetailClient detail={detail} loggedIn={!!user} />
+  const nav = (
+    <div className="max-w-[1180px] mx-auto px-7 h-full flex items-center gap-7">
+      <Link href="/" className="flex items-center gap-2.5 font-bold text-[1.02rem]">
+        <span className="w-[28px] h-[28px] rounded-xs grid place-items-center text-white text-[.85rem]" style={{ background: GRAD }}>⬡</span> Park3D
+      </Link>
+      <Link href="/community" className="text-sm text-foreground/70 hover:text-foreground transition-colors">← Gallery</Link>
+      <div className="ml-auto flex items-center gap-3">
+        <Link href={user ? '/dashboard' : '/login'} className="text-sm text-foreground/70 hover:text-foreground transition-colors">{user ? 'Dashboard' : 'Log in'}</Link>
+      </div>
     </div>
+  );
+
+  return (
+    <SiteShell nav={nav}>
+      <WorkDetailClient detail={detail} loggedIn={!!user} />
+    </SiteShell>
   );
 }

@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import { createSupabaseServer } from '@/lib/supabase-server';
+import { DashboardTopBar } from './DashboardTopBar';
 import { DashboardSidebar } from './DashboardSidebar';
 import { DashboardBody } from './DashboardBody';
 import { UserInitializer } from '@/components/ui/UserInitializer';
 import { BfcacheGuard } from '@/components/ui/BfcacheGuard';
+import { PricingModal } from '@/components/ui/PricingModal';
 import type { PlanTier } from '@/store/userStore';
 
 export default async function DashboardPage() {
@@ -41,16 +43,19 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       <UserInitializer userId={user.id} email={user.email ?? ''} planTier={planTier} />
       <BfcacheGuard />
-      <DashboardSidebar planTier={planTier} />
-      <DashboardBody
-        projects={list}
-        viewCounts={viewCounts}
-        showAnalytics={planTier === 'pro' || planTier === 'business'}
-        email={user.email ?? ''}
-      />
+      <PricingModal />
+      <DashboardTopBar email={user.email ?? ''} />
+      <div className="flex flex-1 min-h-0">
+        <DashboardSidebar planTier={planTier} />
+        <DashboardBody
+          projects={list}
+          viewCounts={viewCounts}
+          showAnalytics={planTier === 'pro' || planTier === 'business'}
+        />
+      </div>
     </div>
   );
 }

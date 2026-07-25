@@ -5,12 +5,12 @@
 export function AmbientBackground({ fixed = true }: { fixed?: boolean }) {
   return (
     <div aria-hidden className={`pointer-events-none ${fixed ? 'fixed' : 'absolute'} inset-0 z-0 overflow-hidden`}>
-      {/* 미세 그리드 — 상단에서 은은히 페이드 */}
+      {/* 미세 그리드 — 상단에서 은은히 페이드 (라이트/다크 모두 subtle) */}
       <div
         className="absolute inset-0"
         style={{
           backgroundImage:
-            'linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px)',
+            'linear-gradient(rgba(124,108,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(124,108,255,.06) 1px,transparent 1px)',
           backgroundSize: '56px 56px',
           WebkitMaskImage: 'radial-gradient(ellipse 78% 55% at 50% -5%, #000 30%, transparent 72%)',
           maskImage: 'radial-gradient(ellipse 78% 55% at 50% -5%, #000 30%, transparent 72%)',

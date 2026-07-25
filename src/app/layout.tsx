@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Park3D — 노코드 3D 공간 제작',
-  description: '코딩 없이 3D 공간을 만들고 배포하세요.',
+  title: 'Park3D — No-code 3D space builder',
+  description: 'Build and publish interactive 3D spaces without code.',
 };
 
 export default function RootLayout({
@@ -28,9 +28,9 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
-      {/* FOUC 방지 — hydration 전에 localStorage 테마를 읽어 .dark 클래스 적용 */}
+      {/* FOUC 방지 — hydration 전에 localStorage 테마를 읽어 .dark 클래스 적용. 기본=light */}
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -38,7 +38,7 @@ export default function RootLayout({
               try {
                 var s = localStorage.getItem('park3d-theme');
                 var t = s ? JSON.parse(s) : null;
-                var theme = (t && t.state && t.state.theme) ? t.state.theme : 'dark';
+                var theme = (t && t.state && t.state.theme) ? t.state.theme : 'light';
                 if (theme === 'dark') document.documentElement.classList.add('dark');
                 else document.documentElement.classList.remove('dark');
               } catch(e) {}
