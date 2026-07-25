@@ -75,7 +75,7 @@ export default function SignUpPage() {
           <div className="absolute bottom-0 right-0 w-96 h-96 bg-cyan-300/20 rounded-full blur-3xl" />
         </div>
         {/* 떠 있는 3D 칩 (장식) */}
-        <div className="signup-chip pointer-events-none absolute right-10 top-[46%] w-24 h-24 rounded-[22px]"
+        <div className="signup-chip pointer-events-none absolute right-10 top-[46%] w-24 h-24 rounded-xs"
           style={{ background: 'linear-gradient(145deg,#ffffff,#cbd6ff)', boxShadow: '0 30px 60px -18px rgba(0,0,0,.45), inset 0 3px 6px rgba(255,255,255,.6)', transform: 'rotate(-12deg)' }} />
         <style>{`
           @keyframes signupFloat { 0%,100%{ transform: rotate(-12deg) translateY(0); } 50%{ transform: rotate(-6deg) translateY(-14px); } }
@@ -84,7 +84,7 @@ export default function SignUpPage() {
         `}</style>
 
         <Link href="/" className="relative flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center text-2xl">
+          <div className="w-11 h-11 rounded-xs bg-white/15 backdrop-blur flex items-center justify-center text-2xl">
             ⬡
           </div>
           <span className="text-xl font-bold tracking-tight">Park3D</span>
@@ -103,7 +103,7 @@ export default function SignUpPage() {
           <ul className="space-y-4">
             {BENEFITS.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-3">
-                <span className="w-9 h-9 shrink-0 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center">
+                <span className="w-9 h-9 shrink-0 rounded-xs bg-white/15 backdrop-blur flex items-center justify-center">
                   <Icon size={18} strokeWidth={2} />
                 </span>
                 <span className="text-white/95 text-sm">{text}</span>
@@ -120,7 +120,7 @@ export default function SignUpPage() {
         <div className="w-full max-w-sm">
           {/* 모바일 로고 (좌측 배너가 숨겨질 때) */}
           <Link href="/" className="lg:hidden flex items-center gap-2.5 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-xl">
+            <div className="w-10 h-10 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-xl">
               ⬡
             </div>
             <span className="text-lg font-bold tracking-tight">Park3D</span>

@@ -9,7 +9,7 @@ const GRAD = 'linear-gradient(120deg,#6a4dff,#39d0ea)';
 
 export function DashboardSidebar({ planTier }: { planTier: PlanTier }) {
   const item = (active: boolean) =>
-    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
+    `flex items-center gap-3 px-3 py-2.5 rounded-xs text-sm transition-colors ${
       active ? 'text-primary font-semibold' : 'text-muted hover:text-foreground hover:bg-foreground/[0.04]'
     }`;
   const activeStyle = { background: 'rgba(124,108,255,.14)' };
@@ -17,7 +17,7 @@ export function DashboardSidebar({ planTier }: { planTier: PlanTier }) {
   return (
     <aside className="w-[238px] shrink-0 bg-sidebar border-r border-border flex-col p-3 sticky top-0 h-screen hidden md:flex">
       <Link href="/" className="flex items-center gap-2.5 font-bold text-[1.02rem] px-2 py-2 mb-2">
-        <span className="w-[30px] h-[30px] rounded-[9px] grid place-items-center text-white" style={{ background: GRAD, boxShadow: '0 6px 16px -4px rgba(106,77,255,.6)' }}>⬡</span>
+        <span className="w-[30px] h-[30px] rounded-xs grid place-items-center text-white" style={{ background: GRAD, boxShadow: '0 6px 16px -4px rgba(106,77,255,.6)' }}>⬡</span>
         Park3D
       </Link>
 
@@ -39,10 +39,10 @@ export function DashboardSidebar({ planTier }: { planTier: PlanTier }) {
           <ThemeToggle />
         </div>
         {planTier === 'free' && (
-          <div className="rounded-2xl p-4 border border-border" style={{ background: 'linear-gradient(160deg,rgba(106,77,255,.18),rgba(57,208,234,.1))' }}>
+          <div className="rounded-xs p-4 border border-border" style={{ background: 'linear-gradient(160deg,rgba(106,77,255,.18),rgba(57,208,234,.1))' }}>
             <p className="text-sm font-semibold mb-1">Pro로 업그레이드</p>
             <p className="text-xs text-muted leading-relaxed">커스텀 도메인 · 무제한 씬 · 방문 통계</p>
-            <Link href="/pricing" className="block text-center mt-3 text-white text-[.82rem] font-semibold py-2 rounded-[10px]" style={{ background: GRAD }}>업그레이드 →</Link>
+            <Link href="/pricing" className="block text-center mt-3 text-white text-[.82rem] font-semibold py-2 rounded-xs" style={{ background: GRAD }}>업그레이드 →</Link>
           </div>
         )}
       </div>

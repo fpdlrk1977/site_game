@@ -6,13 +6,10 @@ import { useRouter } from 'next/navigation';
 import { Heart, Repeat2, Users, Link2, Share2, Play } from 'lucide-react';
 import type { WorkDetail, Author } from '../queries';
 import { toggleLike, toggleFollow, addComment, remixProject } from '../actions';
+import { thumbGradient } from '@/lib/thumbGradient';
 
 const GRAD = 'linear-gradient(120deg,#6a4dff,#39d0ea)';
-function bgFor(id: string) {
-  const p = ['linear-gradient(145deg,#f4a3c9,#c9689e)', 'linear-gradient(145deg,#8b78ff,#4a2fd0)', 'linear-gradient(145deg,#39d0ea,#1583b0)', 'linear-gradient(145deg,#f2c14e,#d98a2b)', 'linear-gradient(145deg,#6a4dff,#c04aff)', 'linear-gradient(145deg,#2dd4bf,#0d9488)'];
-  let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-  return p[Math.abs(h) % p.length];
-}
+const bgFor = thumbGradient;
 function Avatar({ author, size = 30 }: { author: Author; size?: number }) {
   return author.avatarUrl
     ? <img src={author.avatarUrl} alt={author.name} className="rounded-full object-cover" style={{ width: size, height: size }} />
@@ -67,7 +64,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
       {/* main column */}
       <div className="min-w-0">
         {/* preview */}
-        <div className="rounded-xl border border-border overflow-hidden relative" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="rounded-xs border border-border overflow-hidden relative" style={{ boxShadow: 'var(--shadow-card)' }}>
           <div className="aspect-[16/9] relative" style={{ background: bgFor(detail.id) }}>
             {detail.thumbnailUrl && <img src={detail.thumbnailUrl} alt={detail.name} className="absolute inset-0 w-full h-full object-cover" />}
             {detail.sceneId && (
@@ -111,7 +108,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
         {/* description + tags */}
         {detail.description && <p className="mt-5 text-[.95rem] text-foreground/90 leading-relaxed">{detail.description}</p>}
         {detail.remixedFrom && (
-          <p className="mt-3 text-[.82rem] text-muted">⇄ <Link href={`/community/${detail.remixedFrom.id}`} className="text-primary hover:underline">{detail.remixedFrom.name}</Link> 에서 리믹스됨</p>
+          <p className="mt-3 text-[.82rem] text-muted inline-flex items-center gap-1.5"><Repeat2 size={13} /> <Link href={`/community/${detail.remixedFrom.id}`} className="text-primary hover:underline">{detail.remixedFrom.name}</Link> 에서 리믹스됨</p>
         )}
         {detail.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-4">
@@ -159,7 +156,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
             <div className="text-[.8rem] font-semibold text-muted mb-2.5">{detail.author.name}의 다른 작품</div>
             <div className="grid grid-cols-3 gap-2">
               {detail.more.map((m) => (
-                <Link key={m.id} href={`/community/${m.id}`} className="aspect-square rounded-md overflow-hidden border border-border relative" style={{ background: bgFor(m.id) }}>
+                <Link key={m.id} href={`/community/${m.id}`} className="aspect-square rounded-xs overflow-hidden border border-border relative" style={{ background: bgFor(m.id) }}>
                   {m.thumbnailUrl && <img src={m.thumbnailUrl} alt={m.name} className="absolute inset-0 w-full h-full object-cover" />}
                 </Link>
               ))}
@@ -173,7 +170,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
             <div className="space-y-2.5">
               {detail.similar.map((s) => (
                 <Link key={s.id} href={`/community/${s.id}`} className="flex gap-3 items-center group">
-                  <span className="w-16 h-12 rounded-md overflow-hidden border border-border relative flex-none" style={{ background: bgFor(s.id) }}>
+                  <span className="w-16 h-12 rounded-xs overflow-hidden border border-border relative flex-none" style={{ background: bgFor(s.id) }}>
                     {s.thumbnailUrl && <img src={s.thumbnailUrl} alt={s.name} className="absolute inset-0 w-full h-full object-cover" />}
                   </span>
                   <span className="min-w-0">
@@ -187,7 +184,7 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
         )}
 
         <div className="pt-5 border-t border-border text-[.8rem] text-muted space-y-2">
-          <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-[5px] grid place-items-center text-white text-[.55rem]" style={{ background: GRAD }}>⬡</span> Park3D로 제작</div>
+          <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-xs grid place-items-center text-white text-[.55rem]" style={{ background: GRAD }}>⬡</span> Park3D로 제작</div>
           <div className="flex items-center gap-2 text-[.78rem]"><Users size={13} /> {followers.toLocaleString()} 팔로워 · ♡ {likes.toLocaleString()}</div>
         </div>
       </aside>

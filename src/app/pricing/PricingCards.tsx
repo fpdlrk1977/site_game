@@ -25,7 +25,7 @@ export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier 
         <div className="inline-flex bg-surface border border-border rounded-xs p-1 gap-0.5">
           {([['연간', true], ['월간', false]] as const).map(([label, y]) => (
             <button key={label} onClick={() => setYearly(y)}
-              className={`text-sm font-semibold px-4 py-2 rounded-[9px] transition-colors ${yearly === y ? 'text-white' : 'text-muted hover:text-foreground'}`}
+              className={`text-sm font-semibold px-4 py-2 rounded-xs transition-colors ${yearly === y ? 'text-white' : 'text-muted hover:text-foreground'}`}
               style={yearly === y ? { background: GRAD } : {}}>
               {label}
               {y && <span className="ml-1.5 text-[.66rem] px-1.5 py-0.5 rounded-full font-bold" style={{ background: 'rgba(74,222,128,.16)', color: '#4ade80' }}>-20%</span>}
@@ -45,7 +45,7 @@ export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier 
 
           return (
             <div key={tier}
-              className={`relative flex flex-col rounded-2xl border bg-surface p-7 ${highlight ? 'border-transparent md:-translate-y-2' : 'border-border'}`}
+              className={`relative flex flex-col rounded-xs border bg-surface p-7 ${highlight ? 'border-transparent md:-translate-y-2' : 'border-border'}`}
               style={{ boxShadow: highlight ? '0 0 0 2px #6a4dff, var(--shadow-float)' : 'var(--shadow-card)' }}>
               {highlight && (
                 <span className="absolute -top-3 left-6 text-white text-[.68rem] font-bold px-3 py-1 rounded-full" style={{ background: GRAD }}>가장 인기</span>
@@ -97,7 +97,7 @@ export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier 
       {/* 비교표 */}
       <div className="max-w-5xl mx-auto mt-16">
         <h2 className="text-center text-lg font-bold mb-6">기능 자세히 비교</h2>
-        <div className="overflow-x-auto rounded-2xl border border-border">
+        <div className="overflow-x-auto rounded-xs border border-border">
           <table className="w-full text-sm border-collapse min-w-[560px]">
             <thead>
               <tr className="border-b border-border bg-foreground/[0.02]">

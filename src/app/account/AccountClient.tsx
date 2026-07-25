@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { createBrowserSupabase } from '@/lib/supabase';
 import type { PlanTier } from '@/store/userStore';
+import { AmbientBackground } from '@/components/ui/AmbientBackground';
 
 const PLAN_LABELS: Record<PlanTier, { label: string; color: string }> = {
   free:     { label: 'Free',     color: 'text-muted bg-background' },
@@ -66,12 +67,8 @@ export function AccountClient({ email, displayName, planTier }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* 배경 장식 */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-cyan-600/5 rounded-full blur-3xl -translate-x-1/2 translate-y-1/2" />
-      </div>
+    <div className="relative min-h-screen bg-background text-foreground">
+      <AmbientBackground />
 
       {/* 헤더 */}
       <header className="relative border-b border-border/60 px-6 py-4 flex items-center justify-between backdrop-blur-sm bg-sidebar/80">
@@ -94,7 +91,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
         <h1 className="text-2xl font-bold">계정 설정</h1>
 
         {/* 프로필 */}
-        <section className="bg-surface border border-border rounded-2xl p-6 space-y-5">
+        <section className="bg-surface border border-border rounded-xs p-6 space-y-5">
           <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">프로필</h2>
 
           {/* 이메일 */}
@@ -136,7 +133,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
         </section>
 
         {/* 보안 */}
-        <section className="bg-surface border border-border rounded-2xl p-6 space-y-5">
+        <section className="bg-surface border border-border rounded-xs p-6 space-y-5">
           <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">보안</h2>
 
           <div>
@@ -189,7 +186,7 @@ export function AccountClient({ email, displayName, planTier }: Props) {
         </section>
 
         {/* 플랜 */}
-        <section className="bg-surface border border-border rounded-2xl p-6">
+        <section className="bg-surface border border-border rounded-xs p-6">
           <h2 className="text-sm font-semibold text-muted uppercase tracking-wider mb-4">플랜</h2>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

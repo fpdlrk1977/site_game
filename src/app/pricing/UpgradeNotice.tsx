@@ -30,7 +30,7 @@ export function UpgradeNotice({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-sm bg-surface border border-border rounded-2xl p-7 shadow-modal text-center"
+        className="relative w-full max-w-sm bg-surface border border-border rounded-xs p-7 shadow-modal text-center"
         onClick={(e) => e.stopPropagation()}
       >
         <button

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import type { PlanTier } from '@/store/userStore';
 import { PricingCards } from './PricingCards';
+import { AmbientBackground } from '@/components/ui/AmbientBackground';
 
 export const metadata = {
   title: '요금제 — Park3D',
@@ -26,12 +27,8 @@ export default async function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* 배경 장식 */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl translate-x-1/3 -translate-y-1/3" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-cyan-600/5 rounded-full blur-3xl -translate-x-1/3 translate-y-1/3" />
-      </div>
+    <div className="relative min-h-screen bg-background">
+      <AmbientBackground />
 
       {/* 미니 헤더 */}
       <header className="relative border-b border-border/60 px-6 py-4 flex items-center justify-between backdrop-blur-sm bg-sidebar/70">

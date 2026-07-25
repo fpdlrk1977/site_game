@@ -25,7 +25,7 @@ export default async function WorkDetailPage({ params }: { params: Promise<{ pro
       <nav className="sticky top-0 z-30 border-b border-border backdrop-blur-xl" style={{ background: 'linear-gradient(180deg,rgba(14,13,19,.9),rgba(14,13,19,.6))' }}>
         <div className="max-w-[1180px] mx-auto px-7 h-16 flex items-center gap-7">
           <Link href="/" className="flex items-center gap-2.5 font-bold text-[1.05rem]">
-            <span className="w-[30px] h-[30px] rounded-[9px] grid place-items-center text-white" style={{ background: GRAD }}>⬡</span> Park3D
+            <span className="w-[30px] h-[30px] rounded-xs grid place-items-center text-white" style={{ background: GRAD }}>⬡</span> Park3D
           </Link>
           <Link href="/community" className="text-sm text-muted hover:text-foreground">← 갤러리</Link>
           <div className="ml-auto flex items-center gap-3">

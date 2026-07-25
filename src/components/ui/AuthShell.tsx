@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AmbientBackground } from '@/components/ui/AmbientBackground';
 
 /**
  * 로그인 / 회원가입 / 가입완료 페이지가 공유하는 인증 화면 셸.
@@ -15,16 +16,12 @@ export function AuthShell({
 }) {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      {/* 배경 */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl" />
-      </div>
+      <AmbientBackground />
 
       <div className="relative w-full max-w-md">
         {/* 로고 */}
         <Link href="/" className="block text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-500 mb-4 shadow-lg shadow-violet-500/25">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-xs bg-gradient-to-br from-violet-500 to-cyan-500 mb-4 shadow-lg shadow-violet-500/25">
             <span className="text-3xl">⬡</span>
           </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Park3D</h1>
@@ -32,7 +29,7 @@ export function AuthShell({
         </Link>
 
         {/* 카드 */}
-        <div className="bg-surface/80 backdrop-blur-sm border border-border rounded-2xl p-8 shadow-modal">
+        <div className="bg-surface/80 backdrop-blur-sm border border-border rounded-xs p-8 shadow-modal">
           <h2 className="text-lg font-semibold text-foreground mb-6">{title}</h2>
           {children}
         </div>

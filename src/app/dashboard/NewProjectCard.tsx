@@ -25,7 +25,7 @@ export function NewProjectCard() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="relative bg-surface/50 border border-border border-dashed rounded-2xl overflow-hidden flex flex-col items-center justify-center gap-2 group hover:border-border/60 hover:bg-surface transition-all duration-200 min-h-[160px]"
+        className="relative bg-surface/50 border border-border border-dashed rounded-xs overflow-hidden flex flex-col items-center justify-center gap-2 group hover:border-border/60 hover:bg-surface transition-all duration-200 min-h-[160px]"
       >
         <div className="w-10 h-10 rounded-xs bg-background group-hover:bg-gradient-to-br group-hover:from-violet-600 group-hover:to-cyan-600 flex items-center justify-center text-muted group-hover:text-white text-xl transition-all duration-200 group-hover:shadow-lg group-hover:shadow-violet-500/25">
           +
@@ -36,7 +36,7 @@ export function NewProjectCard() {
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <div className="relative bg-surface border border-border rounded-sm p-6 w-full max-w-sm shadow-modal">
+          <div className="relative bg-surface border border-border rounded-xs p-6 w-full max-w-sm shadow-modal">
             <h3 className="text-lg font-bold text-foreground mb-1">새 프로젝트</h3>
             <p className="text-muted text-sm mb-5">프로젝트 이름을 입력하세요</p>
             <form onSubmit={handleSubmit} className="space-y-4">
