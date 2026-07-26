@@ -29,7 +29,8 @@ export function Reveal({ children, delay = 0, y = 26, className = '' }: {
         opacity: shown ? 1 : 0,
         transform: shown ? 'none' : `translateY(${y}px)`,
         transition: `opacity .7s cubic-bezier(.22,.61,.28,1) ${delay}ms, transform .8s cubic-bezier(.22,.61,.28,1) ${delay}ms`,
-        willChange: 'opacity, transform',
+        // will-change를 계속 걸어두면 요소마다 합성 레이어가 남아 스크롤이 무거워진다 → 등장 전에만
+        willChange: shown ? undefined : 'opacity, transform',
       }}>
       {children}
     </div>

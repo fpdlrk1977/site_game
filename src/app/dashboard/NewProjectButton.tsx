@@ -26,7 +26,7 @@ export function NewProjectButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="group flex items-center gap-2 bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold px-5 py-2.5 rounded-xs transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:-translate-y-0.5 text-sm"
+        className="group flex items-center gap-2 bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold px-5 py-2.5 rounded-xs transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 text-sm"
       >
         <span className="text-base leading-none transition-transform group-hover:rotate-90 duration-200">+</span>
         새 프로젝트

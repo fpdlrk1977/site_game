@@ -97,14 +97,16 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
   const createdAgo = timeAgo(project.created_at);
 
   return (
-    <div className={`group relative bg-surface border border-border rounded-xs transition-all duration-200 hover:border-border/60 hover:shadow-xl hover:shadow-black/10 hover:-translate-y-0.5 ${deleting || duplicating ? 'opacity-40 pointer-events-none' : ''}`}>
+    // 랜딩 갤러리 카드와 같은 형태 — 테두리 하이라이트만(움직임 없음) + 16:10 썸네일 + 구분선 푸터.
+    // overflow-hidden은 쓰지 않는다 — 더보기 메뉴가 카드 밖(위쪽)으로 열려 잘리기 때문.
+    <div className={`group relative bg-surface border border-border rounded-xs transition-colors hover:border-primary/60 ${deleting || duplicating ? 'opacity-40 pointer-events-none' : ''}`}>
       {duplicating && (
         <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xs bg-black/40 backdrop-blur-sm">
           <span className="text-xs font-medium text-white bg-black/50 px-3 py-1.5 rounded-xs">복제 중…</span>
         </div>
       )}
       {/* 썸네일 */}
-      <Link href={`/editor/${project.id}`} className="block relative aspect-video bg-background overflow-hidden rounded-t-xs">
+      <Link href={`/editor/${project.id}`} className="block relative aspect-[16/10] bg-background overflow-hidden rounded-t-xs">
         {project.thumbnail_url ? (
           <img src={project.thumbnail_url} alt={project.name} className="w-full h-full object-cover" />
         ) : (
@@ -132,8 +134,8 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
         )}
       </Link>
 
-      {/* 하단 정보 */}
-      <div className="px-4 py-3 flex items-center justify-between gap-2">
+      {/* 하단 정보 — 랜딩 갤러리 카드와 같은 한 줄 구성(제목 좌 · 정보 우) */}
+      <div className="px-5 py-4 flex items-center gap-3 min-w-0 border-t border-border/60">
         <div className="min-w-0 flex-1">
           {renaming ? (
             <input
@@ -145,26 +147,22 @@ export function ProjectCard({ project, viewCount = 0, showAnalytics = false }: {
                 if (e.key === 'Enter') handleRename();
                 if (e.key === 'Escape') { setNameValue(project.name); setRenaming(false); }
               }}
-              className="w-full bg-background border border-primary rounded-xs px-2 py-0.5 text-sm text-foreground focus:outline-none"
+              className="w-full bg-background border border-primary rounded-xs px-2 py-1 text-[1.05rem] text-foreground focus:outline-none"
             />
           ) : (
-            <p className="text-sm font-medium text-foreground truncate">{project.name}</p>
+            <p className="text-[1.05rem] font-semibold text-foreground truncate group-hover:text-primary transition-colors" title={project.name}>{project.name}</p>
           )}
-          <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-xs text-muted" suppressHydrationWarning>{createdAgo} 등록 · {updatedDate} 수정</p>
-            {showAnalytics && (
-              <span className="text-[10px] text-muted">
-                · 방문 {viewCount.toLocaleString()}회
-              </span>
-            )}
-          </div>
         </div>
 
+        <span className="text-[.82rem] text-muted shrink-0 hidden sm:inline" suppressHydrationWarning title={`${createdAgo} 등록`}>
+          {updatedDate} 수정{showAnalytics ? ` · ${viewCount.toLocaleString()}회` : ''}
+        </span>
+
         {/* 더보기 메뉴 */}
-        <div ref={menuRef} className="relative">
+        <div ref={menuRef} className="relative shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-            className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-all opacity-0 group-hover:opacity-100"
+            className="w-7 h-7 rounded-xs flex items-center justify-center text-muted hover:text-foreground hover:bg-background transition-colors opacity-0 group-hover:opacity-100"
           >
             <MoreHorizontal size={16} />
           </button>

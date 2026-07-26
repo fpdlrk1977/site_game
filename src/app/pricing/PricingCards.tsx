@@ -14,7 +14,8 @@ function BoolMark({ on }: { on: boolean }) {
     : <Minus size={16} className="text-muted/40 mx-auto" />;
 }
 
-export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier | null; loggedIn: boolean }) {
+/** showComparison=false면 비교표를 숨긴다(랜딩 Pricing 섹션처럼 요약만 보여줄 때) */
+export function PricingCards({ currentTier, loggedIn, showComparison = true }: { currentTier: PlanTier | null; loggedIn: boolean; showComparison?: boolean }) {
   const [upgradeTier, setUpgradeTier] = useState<PlanTier | null>(null);
   const [yearly, setYearly] = useState(true);
 
@@ -95,6 +96,7 @@ export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier 
       </div>
 
       {/* 비교표 */}
+      {showComparison && (
       <div className="max-w-5xl mx-auto mt-16">
         <h2 className="text-center text-lg font-bold mb-6">Compare features</h2>
         <div className="overflow-x-auto rounded-xs border border-border">
@@ -119,6 +121,7 @@ export function PricingCards({ currentTier, loggedIn }: { currentTier: PlanTier 
           </table>
         </div>
       </div>
+      )}
 
       {upgradeTier && <UpgradeNotice tier={upgradeTier} onClose={() => setUpgradeTier(null)} />}
     </>

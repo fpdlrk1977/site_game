@@ -12,7 +12,7 @@ const GRAD = 'linear-gradient(120deg,#6a4dff,#39d0ea)';
 function Card({ item }: { item: GalleryItem }) {
   return (
     <Link href={`/community/${item.id}`}
-      className="group bg-surface border border-border rounded-xs overflow-hidden block transition-all duration-200 hover:border-border/50 hover:-translate-y-0.5"
+      className="group bg-surface border border-border rounded-xs overflow-hidden block transition-all duration-200 hover:border-border/50"
       style={{ boxShadow: 'var(--shadow-card)' }}>
       <div className="aspect-[4/3] relative overflow-hidden" style={{ background: thumbGradient(item.id) }}>
         <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 30% 18%, rgba(255,255,255,.14), transparent 52%)' }} />

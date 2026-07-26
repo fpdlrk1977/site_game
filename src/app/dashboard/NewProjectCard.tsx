@@ -23,14 +23,15 @@ export function NewProjectCard() {
 
   return (
     <>
+      {/* 프로젝트 카드와 같은 높이/모양이라 그리드가 어긋나지 않는다 */}
       <button
         onClick={() => setOpen(true)}
-        className="relative bg-surface/50 border border-border border-dashed rounded-xs overflow-hidden flex flex-col items-center justify-center gap-2 group hover:border-border/60 hover:bg-surface transition-all duration-200 min-h-[160px]"
+        className="relative bg-surface/50 border border-border border-dashed rounded-xs overflow-hidden flex flex-col items-center justify-center gap-2.5 group hover:border-primary/60 hover:bg-surface transition-colors h-full min-h-[220px]"
       >
-        <div className="w-10 h-10 rounded-xs bg-background group-hover:bg-gradient-to-br group-hover:from-violet-600 group-hover:to-cyan-600 flex items-center justify-center text-muted group-hover:text-white text-xl transition-all duration-200 group-hover:shadow-lg group-hover:shadow-violet-500/25">
+        <div className="w-12 h-12 rounded-xs bg-background group-hover:bg-gradient-to-br group-hover:from-violet-600 group-hover:to-cyan-600 flex items-center justify-center text-muted group-hover:text-white text-2xl transition-colors">
           +
         </div>
-        <span className="text-sm text-muted group-hover:text-foreground transition-colors">새 프로젝트</span>
+        <span className="text-[1.05rem] font-semibold text-muted group-hover:text-foreground transition-colors">새 프로젝트</span>
       </button>
 
       {open && (

@@ -28,7 +28,7 @@ function QuickTile({ icon, label, hint, name }: { icon: React.ReactNode; label: 
     <form action={createProject} className="contents">
       <input type="hidden" name="name" value={name} />
       <button type="submit" title={hint}
-        className="bg-surface border border-border rounded-xs p-[18px] flex items-center gap-3 transition-all hover:-translate-y-[3px] hover:border-border/60 hover:shadow-[var(--shadow-card)] text-left w-full">
+        className="bg-surface border border-border rounded-xs p-[18px] flex items-center gap-3 transition-all hover:border-border/60 hover:shadow-[var(--shadow-card)] text-left w-full">
         <span className="w-[42px] h-[42px] rounded-xs grid place-items-center shrink-0" style={{ background: 'linear-gradient(145deg,rgba(139,120,255,.25),rgba(57,208,234,.12))', border: '1px solid var(--border)' }}>{icon}</span>
         <span className="min-w-0"><b className="text-[.92rem] block">{label}</b><span className="text-[.78rem] text-muted">{hint}</span></span>
       </button>
@@ -74,7 +74,7 @@ export function DashboardBody({ projects, viewCounts, showAnalytics }: {
           <QuickTile icon={<Box size={20} className="text-foreground" />} label="Blank scene" hint="Start from scratch" name="New project" />
           <QuickTile icon={<LayoutTemplate size={20} className="text-foreground" />} label="Template" hint="Showroom, gallery, café — in editor" name="New project" />
           <QuickTile icon={<Upload size={20} className="text-foreground" />} label="Import" hint="Upload .glb in editor" name="Imported project" />
-          <Link href="/community" className="rounded-xs p-[18px] flex items-center gap-3 text-white transition-transform hover:-translate-y-[3px]" style={{ background: GRAD }}>
+          <Link href="/community" className="rounded-xs p-[18px] flex items-center gap-3 text-white transition-transform" style={{ background: GRAD }}>
             <span className="w-[42px] h-[42px] rounded-xs grid place-items-center shrink-0 bg-white/20 border border-white/30"><Sparkles size={20} /></span>
             <span><b className="text-[.92rem] block">Explore & remix</b><span className="text-[.78rem] text-white/85">Start from others&apos; work</span></span>
           </Link>
