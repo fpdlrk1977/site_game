@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Heart, Repeat2, Users, Link2, Share2, Play } from 'lucide-react';
 import type { WorkDetail, Author } from '../queries';
+import { authorHref } from '@/lib/authorLink';
 import { toggleLike, toggleFollow, addComment, remixProject } from '../actions';
 import { thumbGradient } from '@/lib/thumbGradient';
 
@@ -14,6 +15,13 @@ function Avatar({ author, size = 30 }: { author: Author; size?: number }) {
   return author.avatarUrl
     ? <img src={author.avatarUrl} alt={author.name} className="rounded-full object-cover" style={{ width: size, height: size }} />
     : <span className="rounded-full grid place-items-center text-white font-bold" style={{ width: size, height: size, background: GRAD, fontSize: size * 0.4 }}>{author.name.charAt(0).toUpperCase()}</span>;
+}
+/** 프로필이 있으면 링크, 없으면 그냥 감싸기(죽은 링크를 만들지 않는다) */
+function AuthorLink({ author, className, children }: { author: Author; className?: string; children: React.ReactNode }) {
+  const to = authorHref(author);
+  return to
+    ? <Link href={to} className={`${className ?? ''} hover:opacity-80 transition-opacity`}>{children}</Link>
+    : <span className={className}>{children}</span>;
 }
 function timeAgo(iso: string) {
   const d = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -82,11 +90,13 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
           <div className="min-w-0 flex-1">
             <h1 className="text-[1.5rem] font-bold tracking-tight">{detail.name}</h1>
             <div className="flex items-center gap-2.5 mt-2">
-              <Avatar author={detail.author} />
-              <div>
-                <div className="text-sm font-semibold">{detail.author.name}</div>
-                <div className="text-[.76rem] text-muted">{followers.toLocaleString()} followers</div>
-              </div>
+              <AuthorLink author={detail.author} className="flex items-center gap-2.5 min-w-0">
+                <Avatar author={detail.author} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold truncate">{detail.author.name}</span>
+                  <span className="block text-[.76rem] text-muted">{followers.toLocaleString()} followers</span>
+                </span>
+              </AuthorLink>
               {!detail.viewerIsOwner && (
                 <button onClick={onFollow} disabled={pending}
                   className={`ml-2 px-3.5 py-1.5 rounded-xs text-sm font-semibold ${follows ? 'border border-border bg-surface text-muted' : 'text-white'}`}
@@ -129,9 +139,12 @@ export function WorkDetailClient({ detail, loggedIn }: { detail: WorkDetail; log
           <div className="space-y-5">
             {detail.comments.map((c) => (
               <div key={c.id} className="flex gap-3">
-                <Avatar author={c.author} size={30} />
+                <AuthorLink author={c.author} className="shrink-0"><Avatar author={c.author} size={30} /></AuthorLink>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[.82rem]"><b className="font-semibold">{c.author.name}</b><span className="text-muted">{timeAgo(c.createdAt)}</span></div>
+                  <div className="flex items-center gap-2 text-[.82rem]">
+                    <AuthorLink author={c.author}><b className="font-semibold">{c.author.name}</b></AuthorLink>
+                    <span className="text-muted">{timeAgo(c.createdAt)}</span>
+                  </div>
                   <p className="text-[.9rem] text-foreground/90 mt-0.5 break-words">{c.body}</p>
                 </div>
               </div>

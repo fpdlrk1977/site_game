@@ -1,13 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { Search, Box, LayoutTemplate, Upload, Sparkles } from 'lucide-react';
+import { Search, Box } from 'lucide-react';
 import { ProjectCard } from './ProjectCard';
-import { NewProjectCard } from './NewProjectCard';
-import { createProject } from './actions';
-
-const GRAD = 'linear-gradient(120deg,#6a4dff,#39d0ea)';
+import { TemplateGallery } from './TemplateGallery';
+import { OnboardingChecklist, type OnboardingState } from './OnboardingChecklist';
 
 interface Project {
   id: string;
@@ -22,24 +19,11 @@ interface Project {
 
 type Filter = 'all' | 'published' | 'private';
 
-/** 빠른 생성 타일 — createProject 서버액션으로 새 프로젝트 → 에디터로 이동 */
-function QuickTile({ icon, label, hint, name }: { icon: React.ReactNode; label: string; hint: string; name: string }) {
-  return (
-    <form action={createProject} className="contents">
-      <input type="hidden" name="name" value={name} />
-      <button type="submit" title={hint}
-        className="bg-surface border border-border rounded-xs p-[18px] flex items-center gap-3 transition-all hover:border-border/60 hover:shadow-[var(--shadow-card)] text-left w-full">
-        <span className="w-[42px] h-[42px] rounded-xs grid place-items-center shrink-0" style={{ background: 'linear-gradient(145deg,rgba(139,120,255,.25),rgba(57,208,234,.12))', border: '1px solid var(--border)' }}>{icon}</span>
-        <span className="min-w-0"><b className="text-[.92rem] block">{label}</b><span className="text-[.78rem] text-muted">{hint}</span></span>
-      </button>
-    </form>
-  );
-}
-
-export function DashboardBody({ projects, viewCounts, showAnalytics }: {
+export function DashboardBody({ projects, viewCounts, showAnalytics, onboarding }: {
   projects: Project[];
   viewCounts: Record<string, number>;
   showAnalytics: boolean;
+  onboarding: OnboardingState;
 }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -69,22 +53,15 @@ export function DashboardBody({ projects, viewCounts, showAnalytics }: {
           </label>
         </div>
 
-        {/* Quick create */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-9">
-          <QuickTile icon={<Box size={20} className="text-foreground" />} label="Blank scene" hint="Start from scratch" name="New project" />
-          <QuickTile icon={<LayoutTemplate size={20} className="text-foreground" />} label="Template" hint="Showroom, gallery, café — in editor" name="New project" />
-          <QuickTile icon={<Upload size={20} className="text-foreground" />} label="Import" hint="Upload .glb in editor" name="Imported project" />
-          <Link href="/community" className="rounded-xs p-[18px] flex items-center gap-3 text-white transition-transform" style={{ background: GRAD }}>
-            <span className="w-[42px] h-[42px] rounded-xs grid place-items-center shrink-0 bg-white/20 border border-white/30"><Sparkles size={20} /></span>
-            <span><b className="text-[.92rem] block">Explore & remix</b><span className="text-[.78rem] text-white/85">Start from others&apos; work</span></span>
-          </Link>
-        </div>
+        <OnboardingChecklist state={onboarding} firstProjectId={projects[0]?.id ?? null} />
+
+        <TemplateGallery />
 
         {projects.length === 0 ? (
           <div className="text-center py-24">
             <div className="inline-flex w-14 h-14 rounded-xs border border-border bg-surface items-center justify-center text-muted mb-4"><Box size={24} /></div>
             <h2 className="text-lg font-semibold">No projects yet</h2>
-            <p className="text-muted text-sm mt-1.5">Create your first 3D space with a <b className="text-foreground">Blank scene</b> above.</p>
+            <p className="text-muted text-sm mt-1.5">Pick a template above — you&apos;ll be in the editor in one click.</p>
           </div>
         ) : (
           <>
@@ -104,7 +81,6 @@ export function DashboardBody({ projects, viewCounts, showAnalytics }: {
                     viewCount={project.default_scene_id ? (viewCounts[project.default_scene_id] ?? 0) : 0}
                     showAnalytics={showAnalytics} />
                 ))}
-                <NewProjectCard />
               </div>
             )}
           </>

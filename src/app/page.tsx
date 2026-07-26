@@ -3,7 +3,10 @@ import type { PlanTier } from '@/store/userStore';
 import { LandingClient } from '@/components/landing/LandingClient';
 
 // 공개 랜딩(마케팅) 페이지. 로그인 여부에 따라 CTA만 달라진다(대시보드 vs 회원가입).
-export default async function RootPage() {
+// ?ref= 는 게시된 공간의 "Made with Park3D" 배지/임베드 워터마크에서 넘어온 방문자 표식 —
+// 이미 결과물을 보고 온 사람이므로 첫 문장을 그 맥락에 맞춘다.
+export default async function RootPage({ searchParams }: { searchParams: Promise<{ ref?: string }> }) {
+  const { ref } = await searchParams;
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -18,5 +21,6 @@ export default async function RootPage() {
     currentTier = (planData?.plan_tier ?? 'free') as PlanTier;
   }
 
-  return <LandingClient loggedIn={!!user} currentTier={currentTier} />;
+  const referral = ref === 'badge' || ref === 'embed' ? ref : null;
+  return <LandingClient loggedIn={!!user} currentTier={currentTier} referral={referral} />;
 }

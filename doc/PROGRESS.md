@@ -1697,6 +1697,79 @@ L2의 마지막 미착수 항목. 환경 조명(태양·환경광)에 색이 없
 - **전체 full-width**: SiteShell main 위에 섹션들이 `w-full`(마퀴·히어로·CTA는 화면 끝까지), 텍스트만 내부 `max-w`.
 - **확인 필요(브라우저)**: 히어로 3D가 커서 따라 반응·발광 · 스크롤 시 섹션 fade-up·숫자 카운트업 · 마퀴 자동 스크롤 · 벤토 hover · Bloom 성능(저사양). **참고**: 히어로는 라이트 모드에서도 **다크 스테이지 고정**(의도 — 드라마틱 대비). 원하면 라이트로 전환 가능.
 
+---
+
+## 🧭 진행 중 (2026-07-26) — 제품 퍼널 보강 "즉시" 7종 (엔진 밖의 빈칸 메우기)
+> 사용자 요청: 제품 분석에서 도출한 우선순위대로 진행. **진단 = 엔진(에디터)은 깊은데 그 주변(발견→학습→배포→재방문→결제)이 비어 있다.** 특히 ①이미 쌓이는 데이터/테이블이 화면에 연결 안 됨 ②가입 후 첫 결과물까지의 길이 없음.
+> 이번 배치는 **"신규 개발"이 아니라 "이미 있는 것을 연결"** 이 대부분이라 투입 대비 효과가 크고 회귀 위험이 낮다. tsc 클린 + **전 테스트 통과(analytics 18 · cameraLimits 16 · playRouting 25 · sceneNav 6 · sceneTemplates · motorPivot 61)** + 전 공개 라우트 200. **브라우저 확인 대기.**
+
+### ① Analytics 페이지 (`/dashboard/analytics`) — Pro의 실체
+> `scene_events`에 view/click/area_enter가 계속 쌓이고 있는데 **보여 주는 화면이 없었다**(대시보드 카드에 숫자 하나뿐). `PLAN_GATES.analytics = pro`인데 팔 물건이 화면에 없던 상태.
+- **🔴 적용 중 발견한 기존 버그 — 상호작용 이벤트가 전부 조용히 실패하고 있었다 (2026-07-26)**
+  > 0008을 실행하니 `column e.object_name does not exist`. 실제 DB의 `scene_events`는 `id/scene_id/event_type/object_id/created_at` 뿐이었다(파일 `0004_analytics.sql`엔 `object_name`이 있는데 **적용된 스키마와 드리프트**).
+  - 그런데 뷰어 `trackEvent`는 **`object_name`을 함께 insert**하고, 트리거도 **`click/area_enter/area_exit/interact` 4종**을 보낸다. 반면 테이블 CHECK 제약은 **`view/click/area_enter` 3종만** 허용.
+  - insert 결과를 **버리고 있어서**(에러 처리 없음) → **지금까지 쌓인 건 `view` 뿐. 클릭·근접·E 상호작용 기록은 단 한 건도 저장된 적이 없다.** "Most interacted objects"가 비어 보이는 건 이 때문이지 데이터가 적어서가 아니다.
+  - **수정**: 0008 상단에서 ①`object_name` 컬럼 추가 ②`event_type` CHECK를 실제 사용 4+1종으로 교체(**제약 이름을 확신할 수 없어 `pg_constraint`에서 event_type 참조 CHECK를 전부 찾아 drop 후 재생성**하는 DO 블록). ③`ViewerClient`의 두 insert에 `.then(reportInsert)` — 실패 시 콘솔 경고(같은 방식으로 다시 숨지 않게).
+  - **집계 정의 보정**: `area_exit`은 `area_enter`와 짝이라 함께 세면 한 접촉이 두 번 계산된다 → **상호작용 집계에서 제외**(수집은 계속). `lib/analytics.ts`의 `INTERACTION_TYPES` + top_objects RPC 양쪽에 반영, 테스트 20/20.
+  - **교훈**: 마이그레이션 파일이 곧 실제 스키마가 아니다. 그리고 **결과를 확인하지 않는 insert는 실패해도 아무도 모른다.**
+- **★ 신규 마이그레이션 `0008_analytics_rpc.sql` (사용자가 Supabase SQL Editor에서 실행해야 함)**: 위 스키마 보정 + `owner_events_daily` · `owner_events_by_scene` · `owner_events_top_objects`.
+  - **왜 RPC인가**: 원본 행을 그대로 끌어오면 **PostgREST `max_rows`(기본 1000)에 잘려 조용히 틀린 수치**가 나온다. DB에서 집계하면 반환 행이 수십 개라 절대 안 잘린다.
+  - `security invoker`(기본) → 호출자의 RLS가 그대로 적용 = `scene_events`의 "owner reads" 정책 덕에 **자기 씬만** 집계(추가 소유자 체크 불필요).
+  - **미적용이어도 페이지는 뜬다** — RPC 에러를 감지해 상단에 "0008을 실행하세요" 안내 배너를 띄우고 수치는 0으로 표시(조용히 틀리지 않게).
+- **신규 `lib/analytics.ts`(순수) + `analytics.test.ts` 18/18**: `lastDayKeys`·`buildDailySeries`(**빈 날짜를 0으로 채움** — 안 채우면 방문 없는 날이 그래프에서 사라져 추이가 왜곡)·`trendPct`(앞뒤 절반 비교, 이전 0이면 null)·`parseRange`. 기준 타임존 **UTC**로 RPC와 일치시킴(안 맞추면 날짜가 하루 밀린다).
+- **화면**: 스탯 타일 4(Views·Interactions·Avg/day·Published) + **일자별 누적 막대**(`DailyChart.tsx`, 계열 2개라 범례 상시 + 세그먼트 2px 간격 + 열 전체 호버 툴팁) + Top spaces / Most interacted objects 순위 막대. 범위 토글 7/30/90d(`?days=`, 서버 렌더).
+  - 색은 프로젝트 토큰(`--primary`/`--accent`)을 dataviz 검증 스크립트로 확인 — light/dark 양쪽 PASS(light는 accent 대비 2.99:1 WARN → 범례·툴팁·표로 라벨 제공해 해소).
+- **Free 플랜**: `UpgradeCta` — "잠겨 있다"가 아니라 **"방문 기록은 이미 쌓이는 중"** 으로 안내(사실이기도 하고 전환 동기가 됨).
+- **`DashboardSidebar`에 `active` prop 추가** + Analytics 항목(기존엔 Projects가 하드코딩 활성).
+
+### ② 공개 프로필 `/u/[username]`
+> `user_follows`·`profiles`가 있는데 **팔로우해도 갈 곳이 없었다**.
+- `queries.getProfile(username)` — 작품(공개만)·좋아요한 작품·팔로워/팔로잉·받은 좋아요 합. `Author`에 **`username` 추가**(프로필 URL용).
+- 화면: 아바타/이름/@username/가입월/소개 + 스탯 4 + Works 그리드 + Likes 그리드. 본인이면 "Edit profile"(→`/account`), 아니면 `FollowButton`(낙관적 갱신).
+- **작가 링크 연결**: 작품 상세(`WorkDetailClient`)의 작가·댓글 작성자 → 프로필. 갤러리 카드는 **카드 자체가 링크라 중첩 앵커가 되므로 일부러 링크하지 않음**.
+- **🐛 함정(겪음)**: `authorHref`를 `community/queries.ts`에 두고 클라이언트 컴포넌트가 **값으로** import → `queries.ts`가 `supabase-server`(next/headers)를 끌고 와 **전 라우트 500**. → 신규 `lib/authorLink.ts`로 분리. (타입만 `import type`으로 가져오는 건 런타임 임포트가 아니라 안전 — 그래서 기존 코드는 멀쩡했던 것.)
+
+### ③ 커뮤니티 검색·정렬·Featured
+- `getGallery({tag, q, sort})` — 검색(이름/작가/태그)·정렬(Newest/Popular)·**`featured`**(좋아요+리믹스×2 상위 3, 리믹스를 무겁게 치는 이유 = "실제로 써 봤다"는 더 강한 신호). 조회 상한 60→120.
+- 필터·정렬은 **메모리에서** 적용(좋아요/리믹스가 별도 테이블 집계라 DB 정렬로 한 번에 못 얻음). 수천 개가 되면 집계 컬럼/뷰로 옮길 것 — 주석에 명시.
+- 페이지: 검색 폼(GET, 현재 필터 유지) + 정렬 토글 + 태그 칩 + "Most loved" 행(**필터가 없을 때만** — 필터 결과 위에 무관한 추천을 얹지 않는다) + 결과 없음/필터 해제 상태.
+- **공용 컴포넌트 추출**: `community/GalleryCard.tsx`(갤러리·프로필 공유) · `components/ui/SiteNav.tsx`(커뮤니티·요금제·프로필·문서 페이지가 각자 복제하던 상단바).
+
+### ④ 템플릿을 대시보드 전면으로 + `createProject` 템플릿 지원
+> 템플릿 5종이 **에디터 안 '새 씬' 모달에만** 있어 사실상 발견되지 않았다. 신규 사용자는 빈 씬만 보게 됨.
+- **`createProject(formData)`가 `template` 필드 지원** → `SCENE_TEMPLATES.build()`로 첫 씬을 굽는다(없으면 빈 씬). 대시보드에서 **한 번 클릭 = 꾸며진 씬으로 에디터 진입**.
+- **★ `sceneTemplates.ts`에서 `three` 제거**: `MathUtils.generateUUID()` → `crypto.randomUUID()`. 이 모듈이 이제 **서버 액션에서도 임포트**되므로 three 번들을 서버로 끌고 오면 안 된다. (Node 19+·브라우저 양쪽에 있고, 클라이언트에서도 이미 쓰던 API.)
+- **신규 `lib/sceneTemplateMeta.ts`**: 대시보드는 이름·설명만 필요한데 `sceneTemplates.ts`를 import하면 전 템플릿의 `build()`가 클라이언트 번들에 딸려 온다 → 경량 메타만 분리. **드리프트는 `sceneTemplates.test.ts`가 잡는다**(id/name 양방향 대조 추가).
+- `TemplateGallery.tsx`: 템플릿 5 + Import .glb + Remix 카드. 기존 QuickTile 4종 대체.
+
+### ⑤ 온보딩 체크리스트 (대시보드 상단)
+> 활성화율에 가장 직접적. **추적 테이블 없이 이미 있는 데이터로만** 판정 — ①프로젝트 생성 ②게시 ③**첫 방문자**(scene_events view>0) ④리믹스 경험(`remixed_from`).
+- 완료/닫기(localStorage) 시 자리를 비운다(끝난 뒤에도 남으면 잔소리가 됨). 다음 할 일 1개만 힌트+CTA 노출. 진행 바 = 상단 2px.
+- 판정용 쿼리는 **count 2개**만 추가(플랜 무관 총 조회수 1회 + 리믹스 여부 1회).
+
+### ⑥ 푸터 + 약관/개인정보/문의/변경로그
+- **신규 `lib/siteInfo.ts`** — 사업자 정보 단일 소스. **빈 값은 화면에 안 나온다**(없는 정보를 있는 척하지 않음). `platformUrl()` 헬퍼 포함.
+- **`components/ui/SiteFooter.tsx`**(Product/Resources/Company 3열, 죽은 링크 없음) → 랜딩·커뮤니티·요금제·프로필·문서 페이지에 적용. 랜딩의 기존 미니 푸터 대체.
+- **신규 페이지**: `/legal/terms` · `/legal/privacy` · `/legal/changelog` · `/contact`. 공용 `legal/LegalPage.tsx`(좁은 단·섹션 번호 고정).
+  - **개인정보처리방침은 실제 동작 기준으로 작성**(일반 템플릿 아님): scene_events에 **IP·식별자 없음**을 명시 / **에셋 스토리지가 public 버킷**이라 URL을 아는 사람은 받을 수 있다는 사실 공개 / localStorage 항목 명시.
+  - 상단에 **"법률 검토 전 초안"** 배너(결제 개시 전 검토 필요) — 변경로그만 제외.
+  - 문의는 **가짜 폼 대신 mailto**(조용히 유실되는 폼보다 낫다).
+
+### ⑦ 배지 리퍼럴 루프
+- 배지 문구 `Powered by` → **`Made with Park3D`**, 링크는 하드코딩 `park3d.io` → **`platformUrl('/', {ref:'badge'})`**(커스텀 도메인에서 서빙되면 `location.origin`이 플랫폼이 아니므로 반드시 이 헬퍼로).
+- **임베드 워터마크를 클릭 가능하게**(`ref=embed`) — 남의 사이트에 걸리는 임베드가 유입 경로로서 가치가 가장 크다.
+- 랜딩이 `?ref=`를 감지해 **첫 문장을 맥락에 맞게 교체**("You just visited a space someone built here." / "That 3D scene you just saw was built here.").
+
+### 🔜 다음(사용자 결정 필요·미착수)
+- **Stripe 결제** — 계정/API 키가 필요해 사용자 개입 필수. 지금은 파이프가 끊겨 있어 다른 노력이 매출로 안 바뀜.
+- 알림 센터(좋아요/댓글/팔로우) · 팀 워크스페이스+권한(Business를 팔 수 있는 상태로) · 무료 스타터 에셋 팩 · 에디터 Publish 패널 승격 · Learn 허브.
+### ✅ 오브젝트 수 한도 정리 (2026-07-26) — 요금제에서 제거
+> 발견: `PLAN_GATES.maxObjectsPerScene`(Free 30/Pro 200)이 **요금제 페이지엔 광고되는데 코드 어디서도 강제되지 않았다.** 게다가 cafe 템플릿이 34개라 Free는 첫 템플릿부터 초과.
+- **사용자 결정 = "요금제 표에서 뺀다"**. 근거: 오브젝트 수는 **운영 비용이 거의 안 드는 항목**(씬 JSON 수 KB·렌더는 방문자 GPU)이라 과금 축으로 부적절하고, 30개는 가구 놓인 방 하나(30~80개)도 못 만드는 수준이라 지키면 오히려 해롭다. 실제 비용은 **저장공간(GLB)** 이 지고 있고 그건 이미 Free 100MB로 제한 중.
+- **적용**: `pricingData.FEATURE_ROWS`에서 'Objects per scene' 행 삭제 + `PLAN_GATES.maxObjectsPerScene` 자체 제거(주석으로 이력·판단 근거 남김). tsc 클린·잔여 참조 0.
+- **규칙으로 굳힘**: `FEATURE_ROWS` 주석에 **"실제로 강제되는 것만 넣는다"** 명시 — 광고만 하고 안 막으면 거짓말이고, 나중에 막는 순간 기존 사용자가 깨진다.
+- 남은 Free/Pro 차별점: 프로젝트 수 · 저장공간 · 다중 씬 · 커스텀 도메인 · 임베드 · Analytics · 버전 기록 · 워터마크 제거.
+
 ## 알려진 제약/한계
 
 - **액추에이터/무빙 콜라이더 "미는" 미지원 (2026-07-20 확인, 보류)**: 움직이는 콜라이더(actuator/moving = kinematicPosition)가 **가만히 선 캐릭터를 밀지 못하고 관통**한다. 원인 = Rapier `KinematicCharacterController.computeColliderMovement`가 **캐릭터 자신의 `desired` 이동에 대해서만** 충돌 해결(움직이는 콜라이더가 나를 미는 건 미계산). 증상: W로 밀 땐 캐릭터 전진이 막혀 밀리는 듯 보이나, **밀리는 중 W를 놓으면 물체가 통과**. 해결하려면 무빙 플랫폼 "pusher" 로직(접촉 시 콜라이더 변위를 캐릭터 `desired`에 합산) 필요 — 회귀 위험으로 **보류**. 다시 문제되면 그때 구현. (`PlayModeController.tsx:359`, `PlayCanvas.tsx` ActuatorCollider/MovingCollider)

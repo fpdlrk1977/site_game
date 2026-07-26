@@ -70,10 +70,16 @@ export interface FeatureRow {
   key: keyof typeof PLAN_GATES;
 }
 
-/** 가격 카드 · 비교표에 노출할 기능 행 (위→아래 순서대로 렌더) */
+/**
+ * 가격 카드 · 비교표에 노출할 기능 행 (위→아래 순서대로 렌더)
+ *
+ * ⚠️ 여기에 넣는 항목은 **실제로 강제되는 것만**. 광고만 하고 코드가 안 막으면
+ *    거짓말이 되고, 나중에 막는 순간 기존 사용자가 깨진다.
+ *    ('씬당 오브젝트 수'가 정확히 그 상태여서 2026-07-26에 내렸다 —
+ *     오브젝트 개수는 운영 비용도 거의 안 드는 항목이라 애초에 과금 축으로 부적절.)
+ */
 export const FEATURE_ROWS: FeatureRow[] = [
   { label: 'Projects', kind: 'num', key: 'maxProjects' },
-  { label: 'Objects per scene', kind: 'num', key: 'maxObjectsPerScene' },
   { label: 'Asset storage', kind: 'storage', key: 'maxStorageMb' },
   { label: 'Multi-scene', kind: 'bool', key: 'multiScene' },
   { label: 'Custom domain', kind: 'bool', key: 'customDomain' },

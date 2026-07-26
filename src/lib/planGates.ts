@@ -12,12 +12,11 @@ export const PLAN_GATES = {
     business: Infinity,
   },
 
-  // 씬당 오브젝트 수 상한
-  maxObjectsPerScene: {
-    free: 30,
-    pro: 200,
-    business: Infinity,
-  },
+  // ※ 'maxObjectsPerScene'(Free 30/Pro 200)은 2026-07-26에 제거했다.
+  //    선언만 돼 있고 **어디서도 강제되지 않으면서 요금제 페이지에는 광고**되고 있었다
+  //    (게다가 카페 템플릿이 34개라 Free는 첫 템플릿부터 초과). 오브젝트 수는 서버 비용이
+  //    거의 안 드는 항목(씬 JSON 수 KB · 렌더는 방문자 GPU)이라 과금 축으로도 부적절해
+  //    되살리지 않기로 함. 남용 방지가 필요해지면 그때 '강제 로직과 함께' 다시 넣을 것.
 
   // 에셋 스토리지 (MB)
   maxStorageMb: {

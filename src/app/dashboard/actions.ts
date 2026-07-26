@@ -6,13 +6,21 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { makeEmptySceneData } from '@/types/scene';
 import { remapSceneData } from '@/lib/remapScene';
+import { SCENE_TEMPLATES } from '@/lib/sceneTemplates';
 
+/**
+ * 새 프로젝트.
+ * formData.template 에 씬 템플릿 id가 오면 그 템플릿으로 첫 씬을 굽는다(없으면 빈 씬).
+ * 템플릿은 생성 시점에 scene_data로 구워지므로, 이후 템플릿을 고쳐도 기존 씬은 안 바뀐다.
+ */
 export async function createProject(formData: FormData) {
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const name = (formData.get('name') as string)?.trim() || '새 프로젝트';
+  const templateId = ((formData.get('template') as string) || '').trim();
+  const template = templateId ? SCENE_TEMPLATES.find((t) => t.id === templateId) : undefined;
+  const name = (formData.get('name') as string)?.trim() || template?.name || '새 프로젝트';
 
   // 1. project INSERT (default_scene_id = null)
   const { data: project, error: projectError } = await supabase
@@ -43,7 +51,7 @@ export async function createProject(formData: FormData) {
       id: sceneId,
       project_id: project.id,
       name: '메인 씬',
-      scene_data: makeEmptySceneData(project.id, sceneId),
+      scene_data: template ? template.build(project.id, sceneId) : makeEmptySceneData(project.id, sceneId),
     });
 
   if (sceneError) throw new Error(sceneError.message);

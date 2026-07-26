@@ -1,10 +1,9 @@
-import Link from 'next/link';
 import { createSupabaseServer } from '@/lib/supabase-server';
 import type { PlanTier } from '@/store/userStore';
 import { PricingCards } from './PricingCards';
 import { SiteShell } from '@/components/ui/SiteShell';
-
-const GRAD = 'linear-gradient(120deg,#6a4dff,#39d0ea)';
+import { SiteNav } from '@/components/ui/SiteNav';
+import { SiteFooter } from '@/components/ui/SiteFooter';
 
 export const metadata = {
   title: 'Pricing — Park3D',
@@ -28,19 +27,8 @@ export default async function PricingPage() {
     currentTier = (planData?.plan_tier ?? 'free') as PlanTier;
   }
 
-  const nav = (
-    <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
-      <Link href="/" className="flex items-center gap-2.5 font-bold text-[1.02rem]">
-        <span className="w-[28px] h-[28px] rounded-xs grid place-items-center text-white text-[.85rem]" style={{ background: GRAD }}>⬡</span> Park3D
-      </Link>
-      <Link href={user ? '/dashboard' : '/login'} className="text-sm text-foreground/70 hover:text-foreground transition-colors">
-        {user ? "Dashboard" : "Log in"}
-      </Link>
-    </div>
-  );
-
   return (
-    <SiteShell nav={nav}>
+    <SiteShell nav={<SiteNav active="pricing" loggedIn={!!user} />}>
       <div className="max-w-6xl mx-auto px-6 py-16">
         <div className="text-center mb-12">
           <span className="text-[.72rem] tracking-[.14em] uppercase text-primary font-bold">Pricing</span>
@@ -58,6 +46,7 @@ export default async function PricingPage() {
           Prices are provisional and may change. Billing is coming soon.
         </p>
       </div>
+      <SiteFooter />
     </SiteShell>
   );
 }

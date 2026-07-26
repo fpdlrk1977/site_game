@@ -1,4 +1,5 @@
-import { MathUtils } from 'three';
+// three를 안 쓴다 — 이 모듈이 서버(createProject 액션)에서도 임포트되므로 three 번들을 끌고 오면 안 된다.
+// crypto.randomUUID()는 Node 19+와 브라우저(보안 컨텍스트) 양쪽에 있다.
 import type { ProjectSceneSchema, ObjectNodeSchema } from '@/types/scene';
 import { DEFAULT_PHYSICS, DEFAULT_ENVIRONMENT } from '@/types/scene';
 
@@ -19,7 +20,7 @@ function obj(
   rot: [number, number, number] = [0, 0, 0],
 ): ObjectNodeSchema {
   return {
-    id: MathUtils.generateUUID(),
+    id: crypto.randomUUID(),
     name,
     assetId: null,
     primitiveShape: shape,
@@ -64,7 +65,7 @@ function mesh(
 ): ObjectNodeSchema {
   const rot = o.rot ?? [0, 0, 0];
   return {
-    id: MathUtils.generateUUID(),
+    id: crypto.randomUUID(),
     name,
     assetId: null,
     primitiveShape: shape,
@@ -99,7 +100,7 @@ function point(
   opts: { color?: string; intensity?: number; distance?: number; castShadow?: boolean } = {},
 ): ObjectNodeSchema {
   return {
-    id: MathUtils.generateUUID(),
+    id: crypto.randomUUID(),
     name,
     assetId: null,
     light: {
@@ -132,7 +133,7 @@ function spot(
 ): ObjectNodeSchema {
   const rot = opts.rot ?? [0, 0, 0];
   return {
-    id: MathUtils.generateUUID(),
+    id: crypto.randomUUID(),
     name,
     assetId: null,
     light: {

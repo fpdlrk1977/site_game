@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import type { ProjectSceneSchema, ObjectNodeSchema, EventSchema, EventCondition, HudElement, Vector3, GameVariable } from '@/types/scene';
 import { sampleClip, type ClipSample } from '@/lib/animSample';
 import { nextSceneHref } from '@/lib/sceneNav';
+import { platformUrl } from '@/lib/siteInfo';
 
 // 애니 클립 키프레임 보간(경첩 원호 포함)은 공용 lib로 추출 — 뷰어/에디터 미리보기 공유(ANIMATION.md).
 
@@ -414,8 +415,19 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
   }, [playMode]);
 
   // 방문 이벤트 수집
+  //
+  // ⚠️ insert 결과를 반드시 확인할 것. 예전엔 결과를 버려서, 스키마가 어긋난 뒤
+  //    (object_name 컬럼 누락 + event_type 체크 제약 불일치) **상호작용 기록이
+  //    통째로 조용히 실패하는데도 아무도 몰랐다**. 방문자 화면을 망가뜨리진 않되
+  //    콘솔에는 반드시 남긴다.
+  const reportInsert = ({ error }: { error: { message: string } | null }) => {
+    if (error) console.warn('[park3d] analytics insert failed:', error.message);
+  };
+
   useEffect(() => {
-    supabase.from('scene_events').insert({ scene_id: scene.sceneId, event_type: 'view' });
+    supabase.from('scene_events')
+      .insert({ scene_id: scene.sceneId, event_type: 'view' })
+      .then(reportInsert);
   }, [scene.sceneId, supabase]);
 
   const trackEvent = (eventType: string, objectId?: string, objectName?: string) => {
@@ -424,7 +436,7 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
       event_type: eventType,
       object_id: objectId,
       object_name: objectName,
-    });
+    }).then(reportInsert);
   };
 
   // ── 게임 변수 조건/연산 (GAME_LOGIC.md Phase 1) ──
@@ -951,27 +963,35 @@ export function ViewerClient({ scene, projectName = '', isOwner = false, project
 
       {playMode && isTouch && <MobileControls inputRef={mobileInputRef} />}
 
-      {/* Park3D 배지 — 독립 URL, Free 플랜만 */}
+      {/* Park3D 배지 — 독립 URL, Free 플랜만.
+          ref 파라미터로 유입 출처를 구분한다(방문자 → 제작자 전환 경로).
+          커스텀 도메인에서 서빙될 수 있으므로 링크는 platformUrl()로 만든다. */}
       {variant === 'standalone' && !hideBadge && (
         <a
-          href="https://park3d.io"
+          href={platformUrl('/', { ref: 'badge' })}
           target="_blank"
           rel="noopener noreferrer"
+          title="Build your own 3D space with Park3D"
           className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/10 text-white/50 hover:text-white/80 text-[10px] px-2.5 py-1.5 rounded-xs transition-colors"
         >
           <span className="text-sm leading-none">⬡</span>
-          Powered by Park3D
+          Made with Park3D
         </a>
       )}
 
-      {/* 임베드 워터마크 */}
+      {/* 임베드 워터마크 — 임베드는 남의 사이트에 걸리므로 유입 경로로서 가치가 크다.
+          작지만 클릭 가능하게 두되(표준 관행), 캔버스 조작을 가리지 않도록 구석에 최소 크기로. */}
       {variant === 'embed' && (
-        <div className="absolute bottom-3 left-3 pointer-events-none">
-          <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm text-white/30 text-[9px] px-2 py-1 rounded-xs">
-            <span className="text-xs leading-none">⬡</span>
-            Park3D
-          </div>
-        </div>
+        <a
+          href={platformUrl('/', { ref: 'embed' })}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Made with Park3D"
+          className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/30 backdrop-blur-sm text-white/30 hover:text-white/70 text-[9px] px-2 py-1 rounded-xs transition-colors"
+        >
+          <span className="text-xs leading-none">⬡</span>
+          Park3D
+        </a>
       )}
 
       {/* 팝업 모달 — 위치 프리셋(center/left/right/bottom) + iframe/auto 본문 + 등장 애니메이션.

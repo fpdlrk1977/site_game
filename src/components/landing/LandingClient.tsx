@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { MousePointerClick, Gamepad2, Rocket, Users2, Play, Heart, Repeat2, Check, ArrowRight, ChevronDown, Boxes, Gauge, Globe } from 'lucide-react';
 import { SiteShell } from '@/components/ui/SiteShell';
+import { SiteFooter } from '@/components/ui/SiteFooter';
 import { Reveal, CountUp } from '@/components/ui/Reveal';
 import { EditorArt, PhysicsArt, PublishArt, CollabArt, CtaArt } from './FeatureArt';
 import { PricingCards } from '@/app/pricing/PricingCards';
@@ -24,9 +25,20 @@ const GALLERY = [
   { t: 'Game Level', u: '@rin' }, { t: 'Product Hero', u: '@lee' },
   { t: 'Showroom', u: '@ari' }, { t: 'Sky Gallery', u: '@noa' },
 ];
-export function LandingClient({ loggedIn, currentTier = null }: { loggedIn: boolean; currentTier?: PlanTier | null }) {
+/** 배지/워터마크를 타고 온 방문자에게 보여 줄 첫 문장 — 이미 결과물을 본 사람이다 */
+const REFERRAL_COPY: Record<string, string> = {
+  badge: 'You just visited a space someone built here.',
+  embed: 'That 3D scene you just saw was built here.',
+};
+
+export function LandingClient({ loggedIn, currentTier = null, referral = null }: {
+  loggedIn: boolean;
+  currentTier?: PlanTier | null;
+  referral?: 'badge' | 'embed' | null;
+}) {
   const primaryHref = loggedIn ? '/dashboard' : '/signup';
   const primaryLabel = loggedIn ? 'Go to dashboard' : 'Start building free';
+  const referralLine = referral ? REFERRAL_COPY[referral] : null;
   // 히어로 오브젝트를 한 번이라도 클릭하면 안내 힌트를 감춘다
   const [heroPicked, setHeroPicked] = useState(false);
 
@@ -76,7 +88,7 @@ export function LandingClient({ loggedIn, currentTier = null }: { loggedIn: bool
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-7 pt-[86px] pb-16 pointer-events-none">
           <span className="pointer-events-auto inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xs text-[.78rem] font-medium mb-8 text-white/85 border border-white/15 bg-white/5 backdrop-blur-md">
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#39d0ea', boxShadow: '0 0 10px #39d0ea' }} />
-            No-code 3D web builder
+            {referralLine ?? 'No-code 3D web builder'}
           </span>
           <h1 className="font-bold tracking-[-0.04em] text-white leading-[0.98]" style={{ fontSize: 'clamp(3rem,8.5vw,6.2rem)', textWrap: 'balance' }}>
             Build 3D worlds,<br />
@@ -241,20 +253,7 @@ export function LandingClient({ loggedIn, currentTier = null }: { loggedIn: bool
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="w-full py-12 border-t border-border text-muted/70 text-[.85rem]">
-        <div className="max-w-[1240px] mx-auto px-7 flex justify-between flex-wrap gap-5 items-center">
-          <Link href="/" className="flex items-center gap-2.5 font-bold text-foreground">
-            <span className="w-[26px] h-[26px] rounded-xs grid place-items-center text-white text-[.8rem]" style={{ background: GRAD }}>⬡</span> Park3D
-          </Link>
-          <div className="flex gap-6">
-            <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-            <Link href="/community" className="hover:text-foreground transition-colors">Gallery</Link>
-            <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
-          </div>
-          <div>© 2026 Park3D</div>
-        </div>
-      </footer>
+      <SiteFooter />
     </SiteShell>
   );
 }

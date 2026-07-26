@@ -42,6 +42,30 @@ export default async function DashboardPage() {
     viewCounts = Object.fromEntries(countResults);
   }
 
+  // 온보딩 진행도 — 추적 테이블 없이 이미 있는 데이터로만 판정.
+  // (플랜 무관하게 필요하므로 위 viewCounts와 별개로 총합 1회만 센다.)
+  let totalViews = 0;
+  if (sceneIds.length > 0) {
+    const { count } = await supabase
+      .from('scene_events')
+      .select('*', { count: 'exact', head: true })
+      .in('scene_id', sceneIds)
+      .eq('event_type', 'view');
+    totalViews = count ?? 0;
+  }
+  const { count: remixCount } = await supabase
+    .from('projects')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', user.id)
+    .not('remixed_from', 'is', null);
+
+  const onboarding = {
+    hasProject: list.length > 0,
+    hasPublished: list.some((p) => p.is_published),
+    hasVisitor: totalViews > 0,
+    hasRemixed: (remixCount ?? 0) > 0,
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       <UserInitializer userId={user.id} email={user.email ?? ''} planTier={planTier} />
@@ -54,6 +78,7 @@ export default async function DashboardPage() {
           projects={list}
           viewCounts={viewCounts}
           showAnalytics={planTier === 'pro' || planTier === 'business'}
+          onboarding={onboarding}
         />
       </div>
     </div>

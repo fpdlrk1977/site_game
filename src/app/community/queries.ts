@@ -19,7 +19,7 @@ const countBy = <T extends Record<string, unknown>>(rows: T[], key: keyof T) => 
   return m;
 };
 
-export interface Author { id: string; name: string; avatarUrl: string | null }
+export interface Author { id: string; name: string; username: string | null; avatarUrl: string | null }
 export interface GalleryItem {
   id: string; name: string; thumbnailUrl: string | null; sceneId: string | null;
   author: Author; tags: string[]; likes: number; remixes: number;
@@ -28,23 +28,36 @@ export interface GalleryItem {
 function authorFrom(prof: { id: string; username?: string; display_name?: string; avatar_url?: string | null } | undefined, ownerId: string): Author {
   return {
     id: ownerId,
-    name: prof?.display_name || prof?.username || '익명 크리에이터',
+    name: prof?.display_name || prof?.username || 'Anonymous creator',
+    username: prof?.username ?? null,
     avatarUrl: prof?.avatar_url ?? null,
   };
 }
 
-/** 공개 프로젝트 갤러리 (tag로 필터 가능) */
-export async function getGallery(tag?: string): Promise<{ items: GalleryItem[]; tags: string[] }> {
+export type GallerySort = 'recent' | 'popular';
+export interface GalleryQuery { tag?: string; q?: string; sort?: GallerySort }
+
+/**
+ * 공개 프로젝트 갤러리.
+ * 필터(tag/q)와 정렬(sort)은 **가져온 뒤 메모리에서** 적용한다 —
+ * 좋아요/리믹스 수가 별도 테이블 집계라 DB 정렬로는 한 번에 못 얻고,
+ * 공개 프로젝트 수가 아직 수백 규모라 이 편이 단순하고 정확하다.
+ * (수천 개가 되면 집계 컬럼이나 뷰로 옮길 것.)
+ */
+export async function getGallery(
+  query: GalleryQuery | string = {},
+): Promise<{ items: GalleryItem[]; tags: string[]; featured: GalleryItem[] }> {
+  const { tag, q, sort = 'recent' }: GalleryQuery = typeof query === 'string' ? { tag: query } : query;
   const svc = createServiceSupabase();
   // 기본 프로젝트 목록은 확실히 존재하는 컬럼만 조회 → 마이그레이션 전에도 동작
   let projects: Array<{ id: string; name: string; thumbnail_url: string | null; owner_id: string; default_scene_id: string | null }> = [];
   try {
     const { data } = await svc.from('projects')
       .select('id, name, thumbnail_url, owner_id, default_scene_id, created_at')
-      .eq('is_published', true).order('created_at', { ascending: false }).limit(60);
+      .eq('is_published', true).order('created_at', { ascending: false }).limit(120);
     projects = (data ?? []) as typeof projects;
   } catch { projects = []; }
-  if (projects.length === 0) return { items: [], tags: [] };
+  if (projects.length === 0) return { items: [], tags: [], featured: [] };
 
   const ids = projects.map((p) => p.id);
   const owners = [...new Set(projects.map((p) => p.owner_id))];
@@ -74,8 +87,100 @@ export async function getGallery(tag?: string): Promise<{ items: GalleryItem[]; 
   }));
 
   const allTags = [...new Set(items.flatMap((i) => i.tags))].sort().slice(0, 20);
+
+  // Featured = 반응이 가장 많은 작품(리믹스는 좋아요보다 무겁게 친다 — 실제로 써 본 신호라서).
+  // 필터가 걸리지 않았을 때만 의미가 있으므로 호출부에서 그때만 렌더한다.
+  const featured = [...items]
+    .filter((i) => i.likes + i.remixes > 0)
+    .sort((a, b) => (b.likes + b.remixes * 2) - (a.likes + a.remixes * 2))
+    .slice(0, 3);
+
   if (tag) items = items.filter((i) => i.tags.includes(tag));
-  return { items, tags: allTags };
+  if (q) {
+    const needle = q.trim().toLowerCase();
+    if (needle) {
+      items = items.filter((i) =>
+        i.name.toLowerCase().includes(needle) ||
+        i.author.name.toLowerCase().includes(needle) ||
+        i.tags.some((t) => t.toLowerCase().includes(needle)));
+    }
+  }
+  if (sort === 'popular') items.sort((a, b) => (b.likes + b.remixes * 2) - (a.likes + a.remixes * 2));
+
+  return { items, tags: allTags, featured };
+}
+
+export interface ProfilePage {
+  author: Author;
+  bio: string | null;
+  joinedAt: string | null;
+  works: GalleryItem[];
+  liked: GalleryItem[];
+  followers: number;
+  following: number;
+  totalLikes: number;
+  viewerFollows: boolean;
+  viewerIsSelf: boolean;
+  viewerId: string | null;
+}
+
+/**
+ * 공개 프로필 — 작품 / 좋아요한 작품 / 팔로워.
+ * 공개(published) 프로젝트만 노출한다(본인이 봐도 동일 — 프로필은 "공개된 모습"이므로).
+ */
+export async function getProfile(username: string): Promise<ProfilePage | null> {
+  const svc = createServiceSupabase();
+  const profRows = await safe<{ id: string; username: string; display_name: string; avatar_url: string | null; bio: string | null; created_at: string }>(
+    () => svc.from('profiles').select('id, username, display_name, avatar_url, bio, created_at').eq('username', username).limit(1),
+  );
+  const prof = profRows[0];
+  if (!prof) return null;
+
+  const authed = await createSupabaseServer();
+  const { data: { user } } = await authed.auth.getUser();
+
+  const [works, likedRows, followerRows, followingRows] = await Promise.all([
+    safe<{ id: string; name: string; thumbnail_url: string | null; default_scene_id: string | null; tags: string[] | null }>(
+      () => svc.from('projects').select('id, name, thumbnail_url, default_scene_id, tags, created_at')
+        .eq('owner_id', prof.id).eq('is_published', true).order('created_at', { ascending: false }).limit(60)),
+    safe<{ project_id: string }>(() => svc.from('project_likes').select('project_id').eq('user_id', prof.id).limit(60)),
+    safe<{ follower_id: string }>(() => svc.from('user_follows').select('follower_id').eq('following_id', prof.id)),
+    safe<{ following_id: string }>(() => svc.from('user_follows').select('following_id').eq('follower_id', prof.id)),
+  ]);
+
+  const author = authorFrom(prof, prof.id);
+  const workIds = works.map((w) => w.id);
+
+  // 이 작가 작품들이 받은 좋아요·리믹스 수
+  const [likeRows, remixRows] = await Promise.all([
+    workIds.length ? safe<{ project_id: string }>(() => svc.from('project_likes').select('project_id').in('project_id', workIds)) : Promise.resolve([]),
+    workIds.length ? safe<{ remixed_from: string }>(() => svc.from('projects').select('remixed_from').in('remixed_from', workIds)) : Promise.resolve([]),
+  ]);
+  const likeCount = countBy(likeRows, 'project_id');
+  const remixCount = countBy(remixRows, 'remixed_from');
+
+  const items: GalleryItem[] = works.map((w) => ({
+    id: w.id, name: w.name, thumbnailUrl: w.thumbnail_url, sceneId: w.default_scene_id,
+    author, tags: w.tags ?? [], likes: likeCount.get(w.id) ?? 0, remixes: remixCount.get(w.id) ?? 0,
+  }));
+
+  // 좋아요한 작품(공개된 것만) — 갤러리에서 골라 온다
+  const likedIds = new Set(likedRows.map((l) => l.project_id));
+  const gallery = likedIds.size ? (await getGallery()).items.filter((g) => likedIds.has(g.id)).slice(0, 8) : [];
+
+  return {
+    author,
+    bio: prof.bio ?? null,
+    joinedAt: prof.created_at ?? null,
+    works: items,
+    liked: gallery,
+    followers: followerRows.length,
+    following: followingRows.length,
+    totalLikes: items.reduce((s, i) => s + i.likes, 0),
+    viewerFollows: !!user && followerRows.some((f) => f.follower_id === user.id),
+    viewerIsSelf: !!user && user.id === prof.id,
+    viewerId: user?.id ?? null,
+  };
 }
 
 export interface Comment { id: string; body: string; createdAt: string; author: Author }
