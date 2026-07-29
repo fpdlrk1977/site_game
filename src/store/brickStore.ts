@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import {
-  BRICK_CELLS_Y, CELL_X, CELL_Z, CHUNK_X, CHUNK_Z, chunkKey, Y_MAX,
+  CELL_X, CELL_Z, CHUNK_X, CHUNK_Z, chunkKey, chunkOfY,
   type ChunkCoord, type Rot,
 } from '@/lib/brick/grid';
 import type { MatClass, PartId } from '@/lib/brick/parts';
@@ -13,6 +13,10 @@ import type { StudStyle } from '@/lib/brick/brickGeometry';
 import { decodeChunk, encodeChunk, toBrickData } from '@/lib/brick/serialize';
 import { localBrickStorage, supabaseBrickStorage, type BrickStorage, type ChunkWrite } from '@/lib/brick/storage';
 import { BrickWorld } from '@/lib/brick/world';
+import { deepenAround, generateSurface, noteLoadedTerrain, resetTerrainState, SURFACE_Y, terrainKey, type TerrainGenerated } from '@/lib/brick/terrain';
+
+/** 도구 — 왼쪽 클릭이 무슨 뜻인지 결정한다 */
+export type Tool = 'place' | 'erase';
 
 /** 팔레트 — P1에서 청크 팔레트로 승격된다 */
 export const BRICK_COLORS = [
@@ -36,11 +40,6 @@ function scheduleLight(set: (fn: (s: BrickState) => Partial<BrickState>) => void
   }, 140);
 }
 
-/** 고정 높이는 지면 위 & 세로 상한 안으로 (P2에서 파기가 들어오면 하한이 음수로 열린다) */
-function clampLock(y: number): number {
-  return Math.max(0, Math.min(Y_MAX - BRICK_CELLS_Y + 1, y));
-}
-
 interface BrickState {
   world: BrickWorld;
   version: number;
@@ -51,10 +50,15 @@ interface BrickState {
   mat: MatClass;
 
   /**
-   * 높이 고정 — null이면 드롭 모드(발밑에 얹힘), 숫자면 그 높이에 고정.
-   * 드롭 모델은 받쳐줄 게 없는 자리에 못 놓는다(천장·2층 바닥·다리 상판).
+   * 현재 도구. **액션은 왼쪽 버튼 하나로만** 한다.
+   *
+   * ★ 예전엔 우클릭이 삭제였는데, 오른쪽 버튼은 **카메라 회전도** 물고 있었다.
+   *   드래그로 화면을 돌리고 떼면 `contextmenu`가 그대로 발동해 **브릭이 지워졌다**.
+   *   버튼 하나에 두 뜻을 담으면 이런 충돌이 계속 생긴다.
+   *   게다가 우클릭은 **모바일·트랙패드에 없다** — 웹 서비스라 이게 결정적이다.
    */
-  lockY: number | null;
+  tool: Tool;
+  setTool: (t: Tool) => void;
 
   /** 돌기 모양 — 레고와의 시각적 차별화 검토용(BRICK_SYSTEM.md §8.5). 저장 데이터엔 영향 없음 */
   studStyle: StudStyle;
@@ -65,14 +69,14 @@ interface BrickState {
   rotate: () => void;
   setColor: (c: string) => void;
   setMat: (m: MatClass) => void;
-  /** 현재 고스트 높이로 잠그거나, 잠겨 있으면 해제 */
-  toggleLock: (currentY: number) => void;
-  /** 한 단(브릭 높이 = 3칸)씩 올리고 내리기 */
-  nudgeLock: (dir: 1 | -1) => void;
 
-  place: (x: number, y: number, z: number) => boolean;
+  /** 놓기 — 새 브릭 id, 못 놓으면 null */
+  place: (x: number, y: number, z: number) => number | null;
+  /** 놓은 브릭을 다른 칸으로 (드래그로 자리 고치기). 막혀 있으면 원래 자리로 되돌린다 */
+  moveBrick: (id: number, x: number, y: number, z: number) => number | null;
   removeBrick: (id: number) => void;
-  clear: () => void;
+  /** 전체 지우기 — 저장소까지 비워 **처음 상태**로 되돌린다 */
+  clear: () => Promise<void>;
   /** 스트레스 테스트 — 꽉 찬 직육면체를 채워 폴리곤 예산을 잰다 */
   stressFill: (studsX: number, studsZ: number, layers: number) => void;
 
@@ -103,6 +107,29 @@ const LOAD_BATCH = 24;
 const chunkIndex = new Map<number, ChunkCoord>();
 /** 스트리밍 재진입 방지 */
 let streaming = false;
+/** 마지막으로 스트리밍한 중심 — 전체 지우기 뒤 그 자리에 바닥을 다시 깔 때 쓴다 */
+const lastCenter = { x: 0, z: 0 };
+
+/** 지형을 이미 깔아 준 청크 열 — 다 파낸 청크가 되살아나지 않게 한다 */
+const terrainDone: TerrainGenerated = new Set();
+/** 지면(y=0 부근)이 속한 청크층 */
+export const GROUND_CY = chunkOfY(SURFACE_Y);
+
+/**
+ * 저장된 청크가 "이 기둥의 지형은 이미 깔았다"를 증명하는가.
+ *
+ * ★ **지면층 청크만** 증명한다. 청크는 세로로도 나뉘므로(`CHUNK_Y=32`),
+ *   지면에 놓은 브릭(y 0..2)은 지형(y −3..−1)과 **다른 층**에 저장된다.
+ *   층을 안 가리면 "브릭만 든 청크"를 읽고서 지형을 깔았다고 착각해
+ *   그 기둥(8m×8m) 흙이 통째로 안 생긴다 — 브릭 하나 놓고 새로고침하면 땅이 패였다.
+ */
+export function provesTerrainGenerated(c: ChunkCoord): boolean {
+  return c.cy === GROUND_CY;
+}
+
+function markTerrainGenerated(c: ChunkCoord): void {
+  terrainDone.add(terrainKey(c.cx, c.cz));
+}
 
 /**
  * 저장소는 갈아끼운다 — 프로토타입은 localStorage, 씬에 붙으면 Supabase(`brick_chunks`).
@@ -115,9 +142,20 @@ let storage: BrickStorage = localBrickStorage('proto');
  * (훅이 아니다 — 모듈 상태를 바꾸는 부수효과라 effect에서 부를 것)
  */
 export function attachBrickStorage(sceneId: string | null): void {
-  storage = sceneId ? supabaseBrickStorage(sceneId) : localBrickStorage('proto');
-  chunkIndex.clear();
+  setBrickStorage(sceneId ? supabaseBrickStorage(sceneId) : localBrickStorage('proto'));
   useBrickStore.setState({ backend: sceneId ? 'db' : 'local' });
+}
+
+/**
+ * 저장소를 직접 갈아끼운다 — **새로고침과 같은 상태**로 되돌린다(월드·인덱스·지형 기록 초기화).
+ * 테스트에서 메모리 저장소를 물릴 때 쓴다. 앱 코드는 `attachBrickStorage`를 쓸 것.
+ */
+export function setBrickStorage(s: BrickStorage): void {
+  storage = s;
+  chunkIndex.clear();
+  terrainDone.clear();
+  resetTerrainState();
+  useBrickStore.setState({ world: new BrickWorld(), version: 0, loaded: false, saveState: 'idle' });
 }
 
 export const useBrickStore = create<BrickState>()((set, get) => ({
@@ -128,7 +166,6 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   rot: 0,
   color: BRICK_COLORS[0],
   mat: 'opaque',
-  lockY: null,
   // 기본값 = 라인. 제품의 얼굴은 기본값이 정한다 — 스크린샷·템플릿·대부분의 사용자 콘텐츠가
   // 이 모양으로 나온다(BRICK_SYSTEM.md §8.5). 원형 등 나머지는 선택지로 남겨 둔다.
   studStyle: 'line',
@@ -138,34 +175,75 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     void storage.saveSettings({ studStyle: s });
   },
 
+  tool: 'place',
+  setTool: (t) => set({ tool: t }),
+
   setPart: (p) => set({ part: p }),
   setRot: (r) => set({ rot: r }),
   rotate: () => set((s) => ({ rot: ((s.rot + 1) % 4) as Rot })),
   setColor: (c) => set({ color: c }),
   setMat: (m) => set({ mat: m }),
 
-  toggleLock: (currentY) => set((s) => ({ lockY: s.lockY === null ? clampLock(currentY) : null })),
-  nudgeLock: (dir) => set((s) => (s.lockY === null ? {} : { lockY: clampLock(s.lockY + dir * BRICK_CELLS_Y) })),
-
   place: (x, y, z) => {
     const { world, part, rot, color, mat } = get();
     const id = world.place(part, x, y, z, rot, color, mat);
-    if (id === null) return false;
+    if (id === null) return null;
     set((s) => ({ version: s.version + 1, saveState: 'pending' }));
     scheduleLight(set);
-    return true;
+    return id;
+  },
+
+  /**
+   * 방금 놓은 브릭을 다른 칸으로 옮긴다 — 드래그로 자리를 고칠 때 쓴다.
+   * 목적지가 막혀 있으면 **원래 자리에 그대로 되돌린다**(브릭이 사라지지 않게).
+   */
+  moveBrick: (id, x, y, z) => {
+    const { world } = get();
+    const b = world.bricks.get(id);
+    if (!b) return null;
+    if (b.x === x && b.y === y && b.z === z) return id;
+    const { part, rot, color, mat } = b;
+    world.remove(id); // 자기 자신과의 충돌을 피하려면 먼저 빼야 한다
+    const next = world.place(part, x, y, z, rot, color, mat)
+      ?? world.place(part, b.x, b.y, b.z, rot, color, mat);
+    set((s) => ({ version: s.version + 1, saveState: 'pending' }));
+    scheduleLight(set);
+    return next;
   },
 
   removeBrick: (id) => {
-    if (get().world.remove(id)) {
+    const { world } = get();
+    const b = world.bricks.get(id);
+    if (!b) return;
+    // 지형을 파면 **먼저 아래를 채운다** — 그래야 구멍에 벽과 바닥이 생긴다.
+    //   (판 뒤에 채우면 방금 판 자리가 되살아난다)
+    if (b.part === 'terrain') deepenAround(world, b.x, b.y, b.z);
+    if (world.remove(id)) {
+      world.refreshPending(); // deepenAround가 placeFast라 가시성을 다시 굽는다(주변만)
       set((s) => ({ version: s.version + 1, saveState: 'pending' }));
       scheduleLight(set);
     }
   },
 
-  clear: () => {
-    get().world.clear();
-    set((s) => ({ version: s.version + 1, saveState: 'pending' }));
+  /**
+   * 전체 지우기 = **처음 상태로**. 저장소까지 비운다.
+   *
+   * ★ 예전엔 월드만 비우고 "빈 청크는 저장 시 삭제된다"에 기댔다. 그런데 지면층은
+   *   **비어도 남기도록** 바뀌어서(판 구덩이가 되메워지지 않게), 그 빈 청크가
+   *   "지형을 다 파냈다"로 읽혀 **새로고침하면 바닥이 영영 안 깔렸다.**
+   *   지우기는 "다 팠다"가 아니라 "없던 일로 한다"이므로 저장소를 통째로 비워야 맞다.
+   */
+  clear: async () => {
+    const { world } = get();
+    world.clear();
+    world.clearDirty(); // 저장소를 통째로 비울 것이라 dirty는 의미가 없다
+    chunkIndex.clear();
+    terrainDone.clear();
+    resetTerrainState();
+    set((s) => ({ version: s.version + 1, saveState: 'idle' }));
+    await storage.clear();
+    // 바닥을 바로 다시 깔아 준다 — 안 그러면 카메라를 움직일 때까지 빈 화면이다
+    await get().streamAround(lastCenter.x, lastCenter.z);
   },
 
   stressFill: (studsX, studsZ, layers) => {
@@ -199,6 +277,7 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   },
 
   streamAround: async (camX, camZ) => {
+    lastCenter.x = camX; lastCenter.z = camZ;
     if (streaming) return;
     const { world } = get();
     const ccx = Math.floor(camX / (CHUNK_X * CELL_X));
@@ -220,34 +299,57 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
       const d = Math.max(Math.abs(c.cx - ccx), Math.abs(c.cz - ccz));
       if (d <= LOAD_R) toLoad.push({ key, c, d });
     }
-    if (toUnload.length === 0 && toLoad.length === 0) return;
     toLoad.sort((a, b) => a.d - b.d); // 가까운 것부터
 
     streaming = true;
     try {
-      // 내리기 전에 **반드시 저장**한다 — 안 그러면 편집분이 사라진다
+      // 지형 생성분은 저장하지 않으므로(아래 clearDirty), 사용자가 편집한 것은 **먼저 저장**해 둔다
+      await get().flush();
+
       if (toUnload.length > 0) {
-        await get().flush();
         for (const key of toUnload) world.unloadChunk(key);
       }
 
       // 나눠 읽는다 — 한 번에 다 읽으면 화면이 멈춘다(12만 브릭에서 3초였다)
+      let loadedAny = false;
       for (let i = 0; i < toLoad.length; i += LOAD_BATCH) {
         for (const { c } of toLoad.slice(i, i + LOAD_BATCH)) {
           const data = await storage.loadChunk(c);
           if (!data) continue;
+          loadedAny = true;
+          if (provesTerrainGenerated(c)) markTerrainGenerated(c); // 지면층만 지형을 증명한다
           for (const d of decodeChunk(data, c.cx, c.cy, c.cz)) {
             world.placeFast(d.part, d.x, d.y, d.z, d.rot, d.color, d.mat);
+            // 불러온 지형의 최하단을 학습 — 이어서 팔 때 판 자리가 되살아나지 않게
+            if (d.part === 'terrain') noteLoadedTerrain(world, d.x, d.y, d.z);
           }
         }
         set((s) => ({ version: s.version + 1 })); // 들어온 만큼 바로 보여준다
         if (i + LOAD_BATCH < toLoad.length) await new Promise((r) => setTimeout(r, 0));
       }
 
-      world.recomputeAll();
-      world.recomputeLight();
-      world.clearDirty(); // 읽어온 것은 저장 대상이 아니다
+      // ★ 바닥 깔기 — **저장된 청크가 하나도 없어도 반드시 돈다.**
+      //   예전엔 위에서 "올릴 것도 내릴 것도 없으면 return" 했는데, 빈 월드에선 항상 그 조건이라
+      //   바닥이 아예 안 생겼다(브릭을 하나 놓아 청크가 생겨야 비로소 돌았다).
+      let generated = 0;
+      for (let dcx = ccx - LOAD_R; dcx <= ccx + LOAD_R; dcx++) {
+        for (let dcz = ccz - LOAD_R; dcz <= ccz + LOAD_R; dcz++) {
+          generated += generateSurface(world, { cx: dcx, cy: GROUND_CY, cz: dcz }, terrainDone);
+        }
+      }
+
+      if (toLoad.length === 0 && toUnload.length === 0 && generated === 0) return;
+
+      // 들어온 것 주변만 다시 굽는다 — 전량 재계산은 리전을 전부 되만들어 이동이 끊긴다
+      world.refreshPending();
+      // 읽어온 것·생성한 지형은 저장 대상이 아니다(손대지 않은 바닥까지 저장하면 낭비).
+      // 파거나 놓는 순간 그 청크가 dirty가 되어 그때 저장된다.
+      world.clearDirty();
       set((s) => ({ version: s.version + 1 }));
+      // ★ 빛은 **저장된 청크를 읽어온 때만** 다시 굽는다.
+      //   새로 깐 지형은 윗면이 열린 하늘(O(1))·옆은 이웃 지형·아래는 안 판 땅이라
+      //   빛 지도에 아무것도 더하지 않는다. 그걸 확인하려고 전 기둥을 훑을 이유가 없다.
+      if (loadedAny) scheduleLight(set);
     } finally {
       streaming = false;
     }
@@ -260,7 +362,12 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     // 스냅샷을 먼저 뜨고 dirty를 비운다 — 쓰는 동안 들어온 변경이 묻히지 않게
     const writes: ChunkWrite[] = world.dirtyChunks().map(({ coord, bricks }) => ({
       coord,
-      data: bricks.length === 0 ? null : encodeChunk(bricks.map(toBrickData), coord.cx, coord.cy, coord.cz),
+      // ★ 빈 청크는 지우지만 **지면층은 비어도 남긴다.**
+      //   지우면 다음 로드에서 읽을 게 없어 "지형을 다 파냈다"는 사실이 사라지고,
+      //   `generateSurface`가 다시 돌아 **판 구덩이가 도로 메워진다.**
+      data: bricks.length === 0 && !provesTerrainGenerated(coord)
+        ? null
+        : encodeChunk(bricks.map(toBrickData), coord.cx, coord.cy, coord.cz),
     }));
     world.clearDirty();
     await storage.save(writes);

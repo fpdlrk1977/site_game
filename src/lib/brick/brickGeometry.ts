@@ -82,6 +82,14 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
   const h = part.h * CELL_Y;
   const d = part.sz * CELL_Z;
 
+  // 지형(바닥) 블록은 돌기가 없다 — 브릭이 아니라 파낼 땅이므로 어떤 스타일이든 민짜 상자.
+  if (part.id === 'terrain') {
+    const g = new THREE.BoxGeometry(w, h, d);
+    g.computeBoundingSphere();
+    cache.set(key, g);
+    return g;
+  }
+
   // 돌기 없음 = 상자 하나로 끝. 스터드 컬링도 무의미해진다.
   //   none: 모따기로 경계를 보이게(108삼각형) · line: 민짜 상자(12) + 셰이더 외곽선
   if (studStyle === 'none' || studStyle === 'line') {

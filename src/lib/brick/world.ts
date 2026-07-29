@@ -6,8 +6,8 @@
 //   → 저장은 레코드, "이 칸 비었나" 조회는 파생 점유 격자(occ).
 
 import {
-  BRICK_CELLS_Y, cellKey, chunkCoordOf, chunkKey, colKey, DIRS, regionKeyOf, Y_MAX, Y_MIN,
-  type ChunkCoord, type Rot,
+  cellKey, chunkCoordOf, chunkKey, colKey, colKeyX, colKeyZ,
+  COL_STEP_X, COL_STEP_Z, DIRS, regionKeyOf, Y_MAX, Y_MIN, type ChunkCoord, type Rot,
 } from './grid';
 import { extentOf, PARTS, type MatClass, type PartId } from './parts';
 
@@ -110,11 +110,14 @@ export class BrickWorld {
     this.bricks.clear();
     this.occ.clear();
     this.colTop.clear();
+    this.solidBelow.clear();
     this.visible.clear();
     this.studless.clear();
     this.byChunk.clear();
     for (const k of this.regionBricks.keys()) this.bumpRegion(k); // 렌더러가 비워진 걸 알도록
     this.regionBricks.clear();
+    this.pendingFast.length = 0;
+    this.light.clear();
     this.nextId = 1;
   }
 
@@ -149,15 +152,25 @@ export class BrickWorld {
     const ids = this.byChunk.get(key);
     if (!ids) return 0;
     const n = ids.size;
+    // 빠지는 브릭에 가려져 있던 이웃은 다시 보여야 한다 — 지우기 전에 모아 둔다
+    const nbrs = new Set<number>();
     for (const id of [...ids]) {
       const b = this.bricks.get(id);
       if (!b) continue;
+      this.forEachFaceCell(b, (cx, cy, cz) => {
+        const nid = this.occ.get(cellKey(cx, cy, cz));
+        if (nid !== undefined && !ids.has(nid)) nbrs.add(nid);
+      });
       this.forEachCell(b, (cx, cy, cz) => this.occ.delete(cellKey(cx, cy, cz)));
       this.bricks.delete(id);
       if (this.visible.has(id)) this.setRegionMember(b, false);
       this.visible.delete(id);
       this.studless.delete(id);
       this.forEachColumn(b, (cx, cz) => this.recomputeColumn(cx, cz));
+    }
+    for (const id of nbrs) {
+      const b = this.bricks.get(id);
+      if (b) this.refresh(b);
     }
     this.byChunk.delete(key);
     this.chunkCoord.delete(key);
@@ -204,25 +217,31 @@ export class BrickWorld {
         fn(b.x + dx, b.z + dz);
   }
 
+  // ★ 기둥 높이는 **음수도 다뤄야 한다** — 바닥을 파면 지형이 지면(y=0) 아래에 남는다.
+  //   예전엔 0을 바닥으로 가정해 `?? 0` / `top > 0`으로 잘랐는데, 그러면 판 구멍 안에 브릭이
+  //   못 얹히고 지면 높이에 떠 버린다.
+
   private raiseColumns(b: Brick): void {
     const top = b.y + extentOf(PARTS[b.part], b.rot).ey;
     this.forEachColumn(b, (cx, cz) => {
       const k = colKey(cx, cz);
-      const cur = this.colTop.get(k) ?? 0;
-      if (top > cur) this.colTop.set(k, top);
+      const cur = this.colTop.get(k);
+      if (cur === undefined || top > cur) this.colTop.set(k, top);
     });
   }
 
   /** 현재 높이에서 아래로 훑어 실제 꼭대기를 다시 찾는다(위에 뭐가 남아 있으면 즉시 멈춤) */
   private recomputeColumn(x: number, z: number): void {
     const k = colKey(x, z);
-    let top = this.colTop.get(k) ?? 0;
-    while (top > 0 && !this.occ.has(cellKey(x, top - 1, z))) top--;
-    if (top === 0) this.colTop.delete(k);
+    const cur = this.colTop.get(k);
+    if (cur === undefined) return;
+    let top = cur;
+    while (top > Y_MIN && !this.occ.has(cellKey(x, top - 1, z))) top--;
+    if (top <= Y_MIN) this.colTop.delete(k); // 이 기둥엔 아무것도 없다
     else this.colTop.set(k, top);
   }
 
-  /** 그 기둥 꼭대기 = 얹힐 수 있는 첫 칸 */
+  /** 그 기둥 꼭대기 = 얹힐 수 있는 첫 칸. 아무것도 없으면 지면(0) */
   topOfColumn(x: number, z: number): number {
     return this.colTop.get(colKey(x, z)) ?? 0;
   }
@@ -233,13 +252,13 @@ export class BrickWorld {
    */
   restY(part: PartId, x: number, z: number, rot: Rot): number {
     const e = extentOf(PARTS[part], rot);
-    let top = 0;
+    let top = -Infinity;
     for (let dx = 0; dx < e.ex; dx++)
       for (let dz = 0; dz < e.ez; dz++) {
-        const t = this.topOfColumn(x + dx, z + dz);
+        const t = this.topOfColumn(x + dx, z + dz); // 파낸 구멍 안이면 음수
         if (t > top) top = t;
       }
-    return top;
+    return top === -Infinity ? 0 : top;
   }
 
   // ── 가시성 ────────────────────────────────────────────────────────────
@@ -340,54 +359,82 @@ export class BrickWorld {
     return true;
   }
 
-  // ── 하늘빛 (P3-a) ─────────────────────────────────────────────────────
-  // 마인크래프트처럼 **구운 빛**으로 입체감을 낸다. 실시간 그림자를 대신하는 것이다
-  // (12만 브릭 실측: 그림자 패스가 프레임의 절반을 먹었다).
-  //
-  // ★ P3-a는 **깊이 기반 감쇠**다 — 그 칸이 하늘에서 얼마나 파묻혔는지만 본다(O(1)).
-  //   문·창으로 빛이 옆에서 새어 들어오는 건 **진짜 flood fill이 필요**하고 P3-b로 미룬다.
-  //   지금 모델로는 창문 있는 방도 균일하게 어둡다.
+  // ── 빛 ────────────────────────────────────────────────────────────────
+  // 마인크래프트처럼 **구운 빛**으로 입체감을 낸다. 실시간 그림자는 쓰지 않는다
+  // (12만 브릭 실측: 그림자 패스가 프레임의 절반인 10.3ms를 먹었다).
+  // 최종 면 밝기 = **하늘빛 전파(BFS)** × **면 방향 고정 배율(FACE_TONE)**.
 
-  /** 하늘까지 파묻힌 깊이가 이만큼(셀)이면 가장 어두워진다. 브릭 15개 높이 */
-  private static readonly SKY_FALLOFF = BRICK_CELLS_Y * 15;
   /** 완전한 암흑은 만들지 않는다 — 실내가 새까매지면 아무것도 안 보인다 */
   private static readonly SKY_MIN = 0.16;
 
-  /** 이 칸이 받는 하늘빛 0..1. 열린 하늘이면 1, 깊이 파묻힐수록 어두워진다 */
-  skyFactor(x: number, y: number, z: number): number {
-    const depth = this.topOfColumn(x, z) - y;
-    if (depth <= 0) return 1; // 위가 뻥 뚫림
-    const t = 1 - depth / BrickWorld.SKY_FALLOFF;
-    return t <= BrickWorld.SKY_MIN ? BrickWorld.SKY_MIN : t;
-  }
+  /**
+   * 면 방향 고정 배율 [+x, -x, +y, -y, +z, -z] — **마인크래프트가 입체감을 내는 방식**.
+   *
+   * ★ 마인크래프트엔 **태양 방향이 없다.** 블록을 쌓아도 다른 블록에 그림자가 지지 않고,
+   *   카메라를 돌려도 면 밝기가 변하지 않는다. 면이 어느 쪽을 보는지에 따라
+   *   **고정된 배율**(윗면 1.0 · 남북 0.8 · 동서 0.6 · 밑면 0.5)을 곱할 뿐이다.
+   *   실시간 방향광을 쓰면 그 위에 **움직이는 음영**이 겹쳐, 어떤 면은 직사광선처럼
+   *   번쩍이고 어떤 면은 죽는다(사용자 피드백). 그래서 방향광 대신 이 표를 쓴다.
+   */
+  private static readonly FACE_TONE = [0.6, 0.6, 1.0, 0.5, 0.8, 0.8] as const;
 
-  // ── 빛 전파 (P3-b) ────────────────────────────────────────────────────
-  // P3-a의 깊이 감쇠는 **옆에서 들어오는 빛을 표현하지 못했다**(창문 있는 방도 균일하게 어두움).
-  // 여기서 마인크래프트식 BFS를 넣는다 — 하늘빛이 문틈으로 새어 들어오고, 발광 브릭이 주변을 밝힌다.
+  // ── 빛 전파 (BFS) ─────────────────────────────────────────────────────
+  // 하늘빛이 문틈으로 새어 들어오고, 발광 브릭이 주변을 밝힌다.
   //
   // ★ 무한 맵인데 BFS가 폭발하지 않는 이유:
   //   **열린 하늘 칸은 아예 다루지 않는다.** `y >= colTop`이면 항상 최대 밝기라 O(1)로 답이 나오고,
   //   저장할 필요도 전파할 필요도 없다. BFS는 **그늘진 공기**(구조물 안쪽)만 훑으므로
   //   탐색 범위가 사용자가 지은 만큼으로 자연히 한정된다.
 
+  // 전파 거리(칸). 짧으면 실내가 급격히 어두워진다 — 20으로 줄였더니 "그림자가 심하다"는
+  // 피드백이 나와 되돌렸다. 비용은 씨앗 탐색이 지배하므로 이 값과 거의 무관하다.
   private static readonly LIGHT_MAX = 30;
   /** 병적인 구조(거대한 밀폐 공간)에서 멈추도록 하는 상한 */
   private static readonly LIGHT_BUDGET = 400_000;
 
   /** cellKey → 0..LIGHT_MAX. **그늘진 공기 칸만** 담는다(열린 하늘은 계산으로 답한다) */
   private readonly light = new Map<number, number>();
+
+  /**
+   * colKey → 이 y **미만은 아직 파내지 않은 땅속**. 빛이 통하지 않는다.
+   *
+   * ★ 없으면 빛 BFS가 폭발한다: 지형은 한 겹뿐이고 그 아래는 빈 칸이라,
+   *   지형 가장자리에서 들어온 빛이 **땅 밑 전체를 훑는다**(실측 35만 칸 · 510ms).
+   *   땅 밑은 공기가 아니라 안 판 땅이므로 막아야 한다. (지형 모듈이 채울 때마다 알려준다)
+   */
+  private readonly solidBelow = new Map<number, number>();
+
+  /** 지형이 "이 기둥은 y 아래로 안 판 땅"이라고 알려준다 */
+  markSolidBelow(x: number, z: number, y: number): void {
+    const k = colKey(x, z);
+    const cur = this.solidBelow.get(k);
+    if (cur === undefined || y < cur) this.solidBelow.set(k, y);
+  }
+
+  private isUnminedGround(x: number, y: number, z: number): boolean {
+    const b = this.solidBelow.get(colKey(x, z));
+    return b !== undefined && y < b;
+  }
   /** 마지막 계산 통계 — 성능 확인용 */
   lightStats = { cells: 0, ms: 0 };
 
-  /** 위가 뻥 뚫린 칸인가 (colTop 정의상 이런 칸은 비어 있다) */
+  /**
+   * 위가 뻥 뚫린 칸인가 (colTop 정의상 이런 칸은 비어 있다).
+   *
+   * ★ **아무것도 없는 기둥은 `Y_MIN` 기준** — 즉 통째로 열린 하늘로 본다.
+   *   `topOfColumn`처럼 0을 기본값으로 쓰면, 지형이 없는 기둥의 `y<0`이 전부 "그늘진 공기"가 되어
+   *   **BFS가 지형 가장자리에서 무한한 빈 지하로 흘러넘친다**(실측 43만 칸 · 485ms).
+   *   땅이 아예 없는 곳은 지하가 아니라 허공이므로 탐색 대상이 아니다.
+   *   (배치용 `topOfColumn`은 지면(0) 기본값을 유지 — 빈 곳에 놓으면 지면 높이에 놓여야 하므로)
+   */
   private isOpenSky(x: number, y: number, z: number): boolean {
-    return y >= this.topOfColumn(x, z);
+    return y >= (this.colTop.get(colKey(x, z)) ?? Y_MIN);
   }
 
   /** 이 칸의 최종 밝기 0..1 */
   lightAt(x: number, y: number, z: number): number {
     if (this.isOpenSky(x, y, z)) return 1;
-    if (this.occ.has(cellKey(x, y, z))) return BrickWorld.SKY_MIN; // 막힌 칸
+    if (this.occ.has(cellKey(x, y, z)) || this.isUnminedGround(x, y, z)) return BrickWorld.SKY_MIN; // 막힌 칸 · 안 판 땅속
     const lv = this.light.get(cellKey(x, y, z));
     if (lv === undefined) return BrickWorld.SKY_MIN;
     const t = lv / BrickWorld.LIGHT_MAX;
@@ -421,25 +468,44 @@ export class BrickWorld {
       if (level <= 1) return;
       if (this.isOpenSky(x, y, z)) return;              // 열린 하늘은 계산으로 답한다
       const k = cellKey(x, y, z);
-      if (this.occ.has(k)) return;                      // 브릭은 빛을 막는다
+      if (this.occ.has(k) || this.isUnminedGround(x, y, z)) return; // 브릭·안 판 땅속은 빛을 막는다
       if ((this.light.get(k) ?? 0) >= level) return;    // 이미 더 밝음
       this.light.set(k, level);
       buckets[level].push(x, y, z);
     };
 
-    // ① 씨앗 — 브릭에 맞닿은 그늘 칸. 열린 하늘과 닿아 있으면 하늘빛이 새어 들어오고,
-    //    발광 브릭 옆이면 그 자체가 광원이다.
+    // ① 하늘빛 씨앗 — **하늘과 그늘이 만나는 자리**만 훑는다.
+    //
+    //    ★ 그런 자리는 **옆에만** 있다. 그늘 칸의 정의가 `y < colTop`이므로,
+    //      바로 위 칸(`y+1 >= colTop`)이 열린 하늘이려면 그 칸은 기둥 꼭대기 = **브릭**이다.
+    //      아래도 마찬가지. 즉 **하늘빛은 항상 옆(4방향)에서 들어온다.**
+    //    → 기둥마다 "이웃 기둥이 낮아서 옆이 트인 높이 구간"만 보면 된다.
+    //      평평한 지형은 이웃 높이가 같아 구간이 비므로 **비용이 0**이다.
+    //
+    //    예전엔 브릭 표면 칸을 전부 훑었다(브릭당 32칸). 평평한 지형에서도
+    //    "씨앗이 없다"는 사실을 증명하는 데만 94ms가 들었다.
+    //
+    //    ※ 기둥이 수만 개라 **루프 안의 할당·좌표 복원이 실측으로 드러난다**(43k 기둥에서 36ms).
+    //      이웃 키는 더하기로 얻고(`COL_STEP_*`), 좌표 복원은 실제로 씨앗이 있을 때만 한다.
+    this.colTop.forEach((top, ck) => {
+      const floor = this.solidBelow.get(ck) ?? Y_MIN; // 안 판 땅속은 볼 필요 없다
+      let x = 0, z = 0, gotXZ = false;
+      for (let d = 0; d < 4; d++) {
+        const nk = d === 0 ? ck + COL_STEP_X : d === 1 ? ck - COL_STEP_X
+          : d === 2 ? ck + COL_STEP_Z : ck - COL_STEP_Z;
+        const nTop = this.colTop.get(nk) ?? Y_MIN;
+        let y = nTop > floor ? nTop : floor;
+        if (y >= top) continue;                       // 이웃이 낮지 않다 = 트인 구간 없음
+        if (!gotXZ) { x = colKeyX(ck); z = colKeyZ(ck); gotXZ = true; }
+        for (; y < top; y++) seed(x, y, z, MAX - 1);
+      }
+    });
+
+    // ② 발광 브릭 — 스스로 광원이므로 맞닿은 칸을 직접 밝힌다(보이는 것만).
     for (const id of this.visible) {
       const b = this.bricks.get(id);
-      if (!b) continue;
-      const emissive = b.mat === 'emissive';
-      this.forEachFaceCell(b, (cx, cy, cz) => {
-        if (this.isOpenSky(cx, cy, cz) || this.occ.has(cellKey(cx, cy, cz))) return;
-        if (emissive) seed(cx, cy, cz, MAX);
-        for (const [ox, oy, oz] of DIRS) {
-          if (this.isOpenSky(cx + ox, cy + oy, cz + oz)) { seed(cx, cy, cz, MAX - 1); break; }
-        }
-      });
+      if (!b || b.mat !== 'emissive') continue;
+      this.forEachFaceCell(b, (cx, cy, cz) => seed(cx, cy, cz, MAX));
     }
 
     // ② 밝은 버킷부터 퍼뜨린다. seed는 항상 더 낮은 버킷에 넣으므로 순회 중 커지지 않는다.
@@ -460,7 +526,7 @@ export class BrickWorld {
   }
 
   /**
-   * 브릭 6면의 밝기 — **면 바로 바깥 칸**이 받는 하늘빛의 평균.
+   * 브릭 6면의 밝기 — **면 바로 바깥 칸**이 받는 하늘빛 × **면 방향 고정 배율**.
    * 반환 순서는 월드 기준 [+x, -x, +y, -y, +z, -z] (회전은 렌더러가 슬롯을 돌려 맞춘다).
    */
   faceLight(b: Brick, out: Float32Array): void {
@@ -468,36 +534,86 @@ export class BrickWorld {
     const x0 = b.x, y0 = b.y, z0 = b.z;
     const x1 = x0 + e.ex - 1, y1 = y0 + e.ey - 1, z1 = z0 + e.ez - 1;
 
-    // 면마다 바로 바깥 칸들의 밝기를 평균. `lightAt`이 열린하늘·전파된 빛·막힘을 모두 처리한다.
+    /**
+     * 면마다 바로 바깥 칸들의 밝기를 평균한다.
+     *
+     * ★ **막힌 칸은 평균에서 뺀다.** 그 부분의 면은 이웃 브릭에 **가려져 안 보이므로**,
+     *   보이는 부분의 밝기를 끌어내리면 안 된다.
+     *   빼지 않으면: 지형 블록(2×2) 위에 브릭을 **걸쳐** 놓았을 때 절반만 덮였는데도
+     *   타일 **전체**가 균일하게 어두워져 **양옆에 그림자가 진 것처럼 보인다**(사용자 보고).
+     *   면 하나에 밝기 하나뿐이라 생기는 문제다 — 진짜 해법은 정점 단위 밝기(후속).
+     */
     const avg = (
       ax: number, bx: number, ay: number, by: number, az: number, bz: number,
     ): number => {
       let sum = 0, n = 0;
       for (let cx = ax; cx <= bx; cx++)
         for (let cy = ay; cy <= by; cy++)
-          for (let cz = az; cz <= bz; cz++) { sum += this.lightAt(cx, cy, cz); n++; }
-      return n === 0 ? 1 : sum / n;
+          for (let cz = az; cz <= bz; cz++) {
+            if (this.occ.has(cellKey(cx, cy, cz))) continue; // 가려진 부분은 안 보인다
+            sum += this.lightAt(cx, cy, cz); n++;
+          }
+      return n === 0 ? BrickWorld.SKY_MIN : sum / n; // 전부 막힘 = 어차피 안 그려지는 면
     };
 
-    out[0] = avg(x1 + 1, x1 + 1, y0, y1, z0, z1); // +x
-    out[1] = avg(x0 - 1, x0 - 1, y0, y1, z0, z1); // -x
-    out[2] = avg(x0, x1, y1 + 1, y1 + 1, z0, z1); // +y
-    out[3] = avg(x0, x1, y0 - 1, y0 - 1, z0, z1); // -y
-    out[4] = avg(x0, x1, y0, y1, z1 + 1, z1 + 1); // +z
-    out[5] = avg(x0, x1, y0, y1, z0 - 1, z0 - 1); // -z
+    const T = BrickWorld.FACE_TONE;
+    out[0] = avg(x1 + 1, x1 + 1, y0, y1, z0, z1) * T[0]; // +x
+    out[1] = avg(x0 - 1, x0 - 1, y0, y1, z0, z1) * T[1]; // -x
+    out[2] = avg(x0, x1, y1 + 1, y1 + 1, z0, z1) * T[2]; // +y
+    out[3] = avg(x0, x1, y0 - 1, y0 - 1, z0, z1) * T[3]; // -y
+    out[4] = avg(x0, x1, y0, y1, z1 + 1, z1 + 1) * T[4]; // +z
+    out[5] = avg(x0, x1, y0, y1, z0 - 1, z0 - 1) * T[5]; // -z
   }
 
-  /** 전량 재계산 — 대량 생성(불러오기·스트레스) 직후에만 쓴다 */
+  /** 전량 재계산 — **월드 전체**를 다시 굽는다. 첫 로드·스트레스 테스트에만 쓸 것 */
   recomputeAll(): void {
     this.visible.clear();
     this.studless.clear();
     for (const k of this.regionBricks.keys()) this.bumpRegion(k);
     this.regionBricks.clear();
+    this.pendingFast.length = 0;
     // refresh가 wasVisible=false로 보고 리전 멤버십을 새로 채운다
     for (const b of this.bricks.values()) this.refresh(b);
   }
 
-  /** 대량 생성용 — 가시성 계산을 건너뛰고 넣는다. 끝나면 recomputeAll()을 불러야 한다 */
+  /** `placeFast`로 넣어 아직 가시성을 안 잡은 브릭들 */
+  private pendingFast: number[] = [];
+
+  /**
+   * **방금 넣은 브릭 주변만** 가시성을 다시 잡는다.
+   *
+   * ★ `recomputeAll`은 로드된 브릭 전부를 훑고 **모든 리전을 갱신 대상으로 표시**해
+   *   렌더러가 인스턴스 버퍼를 통째로 다시 만든다 — 실측 24~33ms(지형 1만 블록).
+   *   스트리밍 한 걸음마다, 땅 한 번 팔 때마다 그걸 하면 그대로 끊김이 된다.
+   *   새 브릭이 바꿀 수 있는 건 **자기 자신과 맞닿은 브릭의 가시성**뿐이므로 그만 훑는다.
+   */
+  refreshPending(): void {
+    if (this.pendingFast.length === 0) return;
+    // 들어온 양이 월드의 상당 부분이면(첫 로드) **전량이 더 싸다** —
+    // 주변 훑기는 브릭마다 면 칸 32개를 보므로 대량일 땐 오히려 비싸다(실측 100ms vs 28ms).
+    if (this.pendingFast.length * 3 >= this.bricks.size) { this.recomputeAll(); return; }
+    const seen = new Set<number>();
+    const touch = (id: number): void => {
+      if (seen.has(id)) return;
+      const b = this.bricks.get(id);
+      if (!b) return;
+      seen.add(id);
+      this.refresh(b);
+    };
+    for (const id of this.pendingFast) {
+      const b = this.bricks.get(id);
+      if (!b) continue;
+      touch(id);
+      // 새 브릭이 이웃을 덮으면 그 이웃이 숨겨지거나 돌기가 없어진다
+      this.forEachFaceCell(b, (cx, cy, cz) => {
+        const nid = this.occ.get(cellKey(cx, cy, cz));
+        if (nid !== undefined) touch(nid);
+      });
+    }
+    this.pendingFast.length = 0;
+  }
+
+  /** 대량 생성용 — 가시성 계산을 미룬다. 끝나면 `refreshPending()`을 부를 것 */
   placeFast(part: PartId, x: number, y: number, z: number, rot: Rot, color: string, mat: MatClass): number | null {
     if (!this.canPlace(part, x, y, z, rot)) return null;
     const b: Brick = { id: this.nextId++, part, x, y, z, rot, color, mat };
@@ -505,6 +621,7 @@ export class BrickWorld {
     this.forEachCell(b, (cx, cy, cz) => this.occ.set(cellKey(cx, cy, cz), b.id));
     this.raiseColumns(b); // 기둥 높이는 즉시 반영 — 드롭 계산이 항상 최신이어야 한다
     this.indexChunk(b);
+    this.pendingFast.push(b.id);
     return b.id;
   }
 }

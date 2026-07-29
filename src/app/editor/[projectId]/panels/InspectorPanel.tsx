@@ -1,16 +1,13 @@
 'use client';
 
 import { useState, useRef, useLayoutEffect, type MutableRefObject } from 'react';
-import { Download, X, CirclePile, Package, Clapperboard, Eye, EyeOff, Lock, Unlock, MoreHorizontal, Cpu } from 'lucide-react';
+import { Download, X, CirclePile, Clapperboard, Eye, EyeOff, Lock, Unlock, MoreHorizontal, Cpu } from 'lucide-react';
 import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useSceneStore } from '@/store/sceneStore';
 import { useToast } from '@/hooks/useToast';
 import { RichContent } from '@/components/ui/RichContent';
 import { PopupFrame } from '@/components/ui/PopupFrame';
-import { buildMergedGlb } from '@/lib/mergeObjects';
-import { uploadGlbBlob } from '@/lib/uploadAsset';
-import { persistCurrentScene } from '@/lib/saveScene';
 import { SectionHeader, GroupBox } from './inspector/ui';
 import { EnvironmentPanel } from './inspector/EnvironmentPanel';
 import { GlbClipPicker, useGlbClipNames } from './inspector/GlbClipPicker';
@@ -25,8 +22,6 @@ import { ParticleSection } from './inspector/ParticleSection';
 import { VisibilitySection } from './inspector/VisibilitySection';
 import { SubdivisionSection } from './inspector/SubdivisionSection';
 import { GeometrySection } from './inspector/GeometrySection';
-import { ClonerSection } from './inspector/ClonerSection';
-import { ArraySection } from './inspector/ArraySection';
 import { PrefabSection } from './inspector/PrefabSection';
 import { TransformSection } from './inspector/TransformSection';
 import { MaterialSection } from './inspector/MaterialSection';
@@ -100,27 +95,8 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
   const scrollElRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { if (scrollElRef.current) scrollElRef.current.scrollTop = scrollTopRef.current; }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => { scrollTopRef.current = e.currentTarget.scrollTop; };
-  const { objects, assets, selectedId, selectedIds, projectId, environment, prefabs, updateObject, setObjectLocked, pushHistory, instantiatePrefab, deletePrefab, requestExport, mergeIntoAsset } = useSceneStore();
+  const { objects, assets, selectedId, selectedIds, environment, prefabs, updateObject, setObjectLocked, pushHistory, instantiatePrefab, deletePrefab, requestExport } = useSceneStore();
   const { addToast } = useToast();
-  // 단일 오브젝트를 GLB로 구워 Models(에셋)에 등록 — Merge와 동일 파이프라인(단일 rootId).
-  const [savingModel, setSavingModel] = useState(false);
-  const saveAsModel = async (targetId: string, name: string) => {
-    if (!projectId || savingModel) return;
-    setSavingModel(true);
-    try {
-      const result = await buildMergedGlb(useSceneStore.getState().objects, [targetId]);
-      if (!result) { addToast('구울 프리미티브가 없어요 (GLB·콘텐츠·라이트 제외).', 'error'); return; }
-      const asset = await uploadGlbBlob(result.blob, name, projectId, 'model');
-      mergeIntoAsset([targetId], asset, result.center, name);
-      const save = await persistCurrentScene();
-      if (save.status === 'conflict') addToast('저장했지만 다른 탭·기기에서 씬이 먼저 저장돼 반영하지 못했어요. 새로고침 후 다시 시도해 주세요.', 'error');
-      else addToast('모델 에셋으로 저장했어요 — Assets › Models에서 재사용할 수 있어요.', 'success');
-    } catch (err) {
-      addToast(`모델 저장 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`, 'error');
-    } finally {
-      setSavingModel(false);
-    }
-  };
   const obj = objects.find((o) => o.id === selectedId) as ObjectNodeSchema | undefined;
   const isMultiSelect = selectedIds.length > 1;
 
@@ -314,15 +290,7 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
                   </button>
                   {/* 모델 에셋으로 저장 — 프리미티브(또는 프리미티브 그룹)만. GLB/콘텐츠/라이트/파티클은 제외
                       (이미 에셋이거나 프리미티브가 아님). */}
-                  {!obj.assetId && !obj.content && !obj.light && !obj.particle && (
-                    <button
-                      onClick={() => { saveAsModel(obj.id, obj.name || '모델'); close(); }}
-                      disabled={savingModel}
-                      className="w-full text-left px-3 py-1.5 text-[11px] text-foreground hover:bg-background transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Package size={13} className="text-foreground" /> {savingModel ? '모델로 굽는 중…' : '모델 에셋으로 저장'}
-                    </button>
-                  )}
+                  {/* '모델 에셋으로 저장'은 Merge 파이프라인에 얹혀 있었다 → 브릭 전환으로 함께 은퇴 */}
                 </>
               )}
             </DropdownMenu>
@@ -342,10 +310,8 @@ function InspectorInner({ isOpen, toggleSection, scrollTopRef }: { isOpen: (key:
         {(obj.primitiveShape === 'box' || obj.primitiveShape === 'frustum' || obj.primitiveShape === 'loft' || obj.primitiveShape === 'torus') && <GeometrySection obj={obj} open={isOpen('geometry')} onToggle={() => toggleSection('geometry')} />}
 
         {/* Cloner (라이브 비파괴 배열) */}
-        {obj.clonerConfig && <ClonerSection obj={obj} open={isOpen('cloner')} onToggle={() => toggleSection('cloner')} />}
 
         {/* Array — 반복 복제 (클로너 그룹엔 위 Cloner를 씀) */}
-        {!obj.clonerConfig && !obj.clonerClone && <ArraySection obj={obj} open={isOpen('array')} onToggle={() => toggleSection('array')} />}
 
         {/* Content (content 오브젝트만) */}
         {obj.content && <ContentSection obj={obj} open={isOpen('content')} onToggle={() => toggleSection('content')} />}

@@ -8,7 +8,6 @@ import * as THREE from "three";
 import { useSceneStore } from "@/store/sceneStore";
 import { EditorObjectInstance } from "./EditorObjectInstance";
 import { GizmoController } from "./GizmoController";
-import { ManipulationHandles } from "./ManipulationHandles";
 import { SelectionOutline } from "./SelectionOutline";
 import { RemoteSelections } from "./RemoteSelections";
 import { SelectionGroundGuide } from "./SelectionGroundGuide";
@@ -1270,7 +1269,6 @@ export function EditorCanvas() {
           <ClipPreview />
 
           <GizmoController orbitRef={orbitRef} gizmoDraggingRef={gizmoDraggingRef} />
-          <ManipulationHandles orbitRef={orbitRef} handleDraggingRef={handleDraggingRef} />
           <SelectionOutline />
           <RemoteSelections />
           <SelectionGroundGuide />

@@ -20,8 +20,7 @@ import { PrimitiveMaterial } from "@/components/three/PrimitiveMaterial";
 import type { ObjectNodeSchema, AssetRefSchema, EventSchema, MotionConfig, ActuatorConfig } from "@/types/scene";
 import { computeMotion, makeWanderState } from "@/lib/motion";
 import { computeActuator, computeDriveValue, makeDriveState, easeDrive } from "@/lib/actuator";
-import { createPrimitiveGeometry, createRoundedBoxDims, profileSig } from "@/lib/primitiveGeometry";
-import { voxelSig, voxelSkinsSig } from "@/lib/voxelGeometry";
+import { createPrimitiveGeometry, createRoundedBoxDims } from "@/lib/primitiveGeometry";
 import { useVoxelSkinMaterials } from "@/components/three/useVoxelSkinMaterials";
 
 const DEG2RAD = Math.PI / 180;
@@ -617,7 +616,7 @@ export function ViewerObject({
       : isRoundedBox
         ? createRoundedBoxDims(rbX, rbY, rbZ, object.geom?.cornerRadius ?? 0, object.geom?.cornerSegments ?? 4, object.geom?.subdivisions ?? 0)
         : createPrimitiveGeometry(object.primitiveShape, object.geom),
-    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), voxelSkinsSig(object.geom?.voxelSkins), object.geom?.subdivisions, isRoundedBox, rbX, rbY, rbZ],
+    [isPrimitive, object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, object.geom?.tubeRatio, object.geom?.subdivisions, isRoundedBox, rbX, rbY, rbZ],
   );
   useEffect(() => () => primGeom?.dispose(), [primGeom]);
   // 복셀 색별 스킨 재질 배열(없으면 null → 기존 PrimitiveMaterial 경로).

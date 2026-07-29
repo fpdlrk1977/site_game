@@ -35,6 +35,17 @@ export function colKey(x: number, z: number): number {
   return (x + XZ_BIAS) * XZ_SPAN + (z + XZ_BIAS);
 }
 
+/** 기둥 키 → 셀 좌표 (기둥 맵을 순회할 때 좌표를 되찾는 용도) */
+export function colKeyX(k: number): number { return Math.floor(k / XZ_SPAN) - XZ_BIAS; }
+export function colKeyZ(k: number): number { return (k % XZ_SPAN) - XZ_BIAS; }
+
+/**
+ * 이웃 기둥 키는 **더하기 한 번**으로 얻는다 — `colKey(x±1, z)` / `colKey(x, z±1)`와 같다.
+ * 기둥 맵을 크게 순회할 때 좌표 복원 + 키 재계산 비용이 실측으로 무시할 수 없어서 둔다.
+ */
+export const COL_STEP_X = XZ_SPAN;
+export const COL_STEP_Z = 1;
+
 // ── 청크 ─────────────────────────────────────────────────────────────────
 // 저장·스트리밍의 단위. 세로 512칸 ÷ 32 = 16 청크층.
 // 물리 크기 8m × 6.4m × 8m (Y 셀이 1/3이라 대략 정육면체가 된다).

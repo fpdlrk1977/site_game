@@ -1,59 +1,17 @@
 'use client';
 
-// 다중선택 패널 — 2개+ 오브젝트 선택 시 인스펙터. 일괄편집·거리·합치기(Merge)·Boolean·정렬.
-// InspectorPanel 분리 리팩터: isMultiSelect 반환 브랜치 + async 핸들러(handleMerge/handleBoolean)를 통째 이동.
-import { useState } from 'react';
-import { SlidersHorizontal, Combine, AlignCenter, Wand2, AlignHorizontalSpaceAround, Blend } from 'lucide-react';
+// 다중선택 패널 — 2개+ 오브젝트 선택 시 인스펙터. 일괄편집 · 거리 표시.
+//
+// 2026-07-29 브릭 전환: **짓기 도구(Merge·Boolean·정렬·Tidy/Distribute)를 은퇴**했다.
+// 이것들은 "박스를 서로 맞추려고" 있던 것들인데, 격자 조립이 그 문제 자체를 없앴다.
+// (기존 씬의 결과물은 그대로 열린다 — 만드는 도구만 사라졌다)
+import { SlidersHorizontal } from 'lucide-react';
 import { useSceneStore } from '@/store/sceneStore';
-import { useToast } from '@/hooks/useToast';
 import { ColorPicker } from '@/components/ui/ColorPicker';
-import { buildMergedGlb } from '@/lib/mergeObjects';
-import { buildBooleanGlb, type BooleanOp } from '@/lib/booleanObjects';
-import { uploadGlbBlob } from '@/lib/uploadAsset';
-import { persistCurrentScene } from '@/lib/saveScene';
 import { SectionHeader, Toggle } from './ui';
 
 export function MultiSelectPanel() {
-  const { objects, selectedIds, projectId, batchUpdateObjects, alignSelected, tidyUpSelected, distributeSelected, mergeIntoAsset, pushHistory } = useSceneStore();
-  const { addToast } = useToast();
-  const [merging, setMerging] = useState(false);
-  // 여러 프리미티브를 하나의 GLB 에셋으로 굽는다(Merge). 원본 제거 + 에셋 오브젝트 1개로 대체.
-  const handleMerge = async (rootIds: string[]) => {
-    if (!projectId || merging) return;
-    setMerging(true);
-    try {
-      const result = await buildMergedGlb(useSceneStore.getState().objects, rootIds);
-      if (!result) { addToast("No primitives to merge (GLB, content and lights aren't merged).", 'error'); return; }
-      const asset = await uploadGlbBlob(result.blob, 'Merged object', projectId, 'model');
-      mergeIntoAsset(rootIds, asset, result.center, 'Merged object');
-      const save = await persistCurrentScene();
-      if (save.status === 'conflict') addToast("Merged, but another tab or device saved the scene first so it couldn't be applied. Refresh and try again.", 'error');
-      else addToast(`Merged ${result.count} into one`, 'success');
-    } catch (err) {
-      addToast(`Merge failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
-    } finally {
-      setMerging(false);
-    }
-  };
-
-  // Boolean(합집합/차집합/교집합) — base ∘ tool. subtract는 먼저 선택한 것(base)에서 나중 것(tool)을 뺀다.
-  const handleBoolean = async (baseId: string, toolId: string, op: BooleanOp) => {
-    if (!projectId || merging) return;
-    setMerging(true);
-    try {
-      const result = await buildBooleanGlb(useSceneStore.getState().objects, baseId, toolId, op);
-      if (!result) { addToast('Only works on two primitives (GLB, content and lights excluded).', 'error'); return; }
-      const asset = await uploadGlbBlob(result.blob, 'Boolean result', projectId, 'model');
-      mergeIntoAsset([baseId, toolId], asset, result.center, 'Boolean result');
-      const save = await persistCurrentScene();
-      if (save.status === 'conflict') addToast("Done, but another tab or device saved the scene first so it couldn't be applied. Refresh and try again.", 'error');
-      else addToast('Boolean operation complete', 'success');
-    } catch (err) {
-      addToast(`Boolean failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
-    } finally {
-      setMerging(false);
-    }
-  };
+  const { objects, selectedIds, batchUpdateObjects, pushHistory } = useSceneStore();
     // 2개 선택 시 거리 계산
     let distance: number | null = null;
     if (selectedIds.length === 2) {
@@ -127,91 +85,7 @@ export function MultiSelectPanel() {
               />
             </label>
           </div>
-
-          {/* 합치기(Merge) — 여러 프리미티브를 하나의 GLB 객체로 */}
-          <SectionHeader title="Merge" icon={<Combine size={14} />} />
-          <div className="px-3 py-3 space-y-2">
-            <button
-              onClick={() => handleMerge(selectedIds)}
-              disabled={merging}
-              className="w-full py-1.5 rounded-xs bg-primary hover:bg-primary/80 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
-            >
-              {merging ? 'Merging…' : <><Combine size={13} /> Merge into one</>}
-            </button>
-            <p className="text-[10px] text-muted/50">Merges the selected primitives into <b>a single real object</b> as a new asset. After merging you can&apos;t edit them individually; undo (Ctrl+Z) reverts it. (GLB, content and lights are excluded)</p>
-          </div>
-
-          {/* Boolean — 정확히 2개 선택 시. base=먼저 선택, tool=나중 선택 */}
-          {selectedIds.length === 2 && (
-            <>
-              <SectionHeader title="Boolean" icon={<Blend size={14} />} />
-              <div className="px-3 py-3 space-y-2">
-                <div className="grid grid-cols-3 gap-1">
-                  <button onClick={() => handleBoolean(selectedIds[0], selectedIds[1], 'union')} disabled={merging}
-                    className="py-1.5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground text-[10px] transition-colors disabled:opacity-50" title="Combine the two shapes">Union</button>
-                  <button onClick={() => handleBoolean(selectedIds[0], selectedIds[1], 'subtract')} disabled={merging}
-                    className="py-1.5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground text-[10px] transition-colors disabled:opacity-50" title="Subtract the second from the first (cut a hole)">Subtract</button>
-                  <button onClick={() => handleBoolean(selectedIds[0], selectedIds[1], 'intersect')} disabled={merging}
-                    className="py-1.5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground text-[10px] transition-colors disabled:opacity-50" title="Keep only where the two shapes overlap">Intersect</button>
-                </div>
-                <p className="text-[10px] text-muted/50">
-                  <b>Subtract</b> removes <b>{objects.find((o) => o.id === selectedIds[1])?.name ?? 'the second'}</b> (selected last) from <b>{objects.find((o) => o.id === selectedIds[0])?.name ?? 'the first'}</b> (selected first). e.g. subtract a cylinder from a body to cut a wheel well. The result becomes a new asset; Ctrl+Z undoes it.
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* 정렬 */}
-          <SectionHeader title="Align" icon={<AlignCenter size={14} />} />
-          <div className="px-3 py-3 space-y-3">
-            {(['x', 'y', 'z'] as const).map((axis) => (
-              <div key={axis}>
-                <p className="text-[10px] font-semibold text-muted tracking-wide mb-1.5">{axis.toUpperCase()} axis</p>
-                <div className="grid grid-cols-3 gap-1">
-                  {(['min', 'center', 'max'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => alignSelected(axis, mode)}
-                      className="py-1 rounded-xs text-[10px] bg-background text-muted hover:bg-surface hover:text-foreground transition-colors"
-                    >
-                      {mode === 'min' ? 'Min' : mode === 'center' ? 'Center' : 'Max'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* 정돈 & 간격 균등 (Tidy Up / Distribute) */}
-          <SectionHeader title="Arrange" icon={<AlignHorizontalSpaceAround size={14} />} />
-          <div className="px-3 py-3 space-y-3">
-            <button
-              onClick={() => tidyUpSelected()}
-              title="Auto-arrange the selection along its longest axis with even spacing (cross axes centered). Locked/hidden are skipped."
-              className="w-full py-1.5 rounded-xs bg-background text-muted hover:bg-surface hover:text-foreground transition-colors text-[11px] inline-flex items-center justify-center gap-1.5"
-            >
-              <Wand2 size={13} /> Tidy up
-            </button>
-            <div>
-              <p className="text-[10px] font-semibold text-muted tracking-wide mb-1.5">
-                Distribute spacing {selectedIds.length < 3 && <span className="text-muted/50">(needs 3+)</span>}
-              </p>
-              <div className="grid grid-cols-3 gap-1">
-                {(['x', 'y', 'z'] as const).map((axis) => (
-                  <button
-                    key={axis}
-                    onClick={() => distributeSelected(axis)}
-                    disabled={selectedIds.length < 3}
-                    title={`Even out gaps along the ${axis.toUpperCase()} axis (order and endpoints kept)`}
-                    className="py-1 rounded-xs text-[10px] bg-background text-muted hover:bg-surface hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {axis.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </aside>
-    );
+  );
 }

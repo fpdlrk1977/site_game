@@ -4,8 +4,7 @@ import { useRef, useLayoutEffect, useMemo, useEffect, useState, Suspense } from 
 import * as THREE from 'three';
 import { useThree, useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Text3D, Center, Line, Billboard, Html, Outlines, Edges } from '@react-three/drei';
-import { createPrimitiveGeometry, createRoundedBoxDims, primitiveGeomKey, profileSig } from '@/lib/primitiveGeometry';
-import { voxelSig, voxelSkinsSig } from '@/lib/voxelGeometry';
+import { createPrimitiveGeometry, createRoundedBoxDims, primitiveGeomKey } from '@/lib/primitiveGeometry';
 import { useVoxelSkinMaterials } from '@/components/three/useVoxelSkinMaterials';
 import { primLocalBboxCache } from '@/lib/primBboxCache';
 import { worldBBox } from '@/lib/objectBBox';
@@ -715,9 +714,8 @@ export function EditorObjectInstance({ object }: Props) {
     () => isRoundedBox
       ? createRoundedBoxDims(sX, sY, sZ, object.geom?.cornerRadius ?? 0, object.geom?.cornerSegments ?? 4, object.geom?.subdivisions ?? 0)
       : createPrimitiveGeometry(object.primitiveShape, object.geom),
-    // profileSig/voxelSig는 내용을 반영 → 펜툴·복셀 재편집으로 데이터가 바뀌면 지오메트리 재생성.
     // 둥근 박스는 치수(scale)에도 의존 → 크기 커밋(마우스업) 시 재생성돼 모서리가 균일해진다.
-    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, (object.geom?.sections ?? []).join(','), object.geom?.extrudeDepth, object.geom?.profileClosed, profileSig(object.geom), voxelSig(object.geom?.voxels), voxelSkinsSig(object.geom?.voxelSkins), object.geom?.subdivisions, isRoundedBox, sX, sY, sZ],
+    [object.primitiveShape, object.geom?.cornerRadius, object.geom?.cornerSegments, object.geom?.topScale, object.geom?.tubeRatio, object.geom?.subdivisions, isRoundedBox, sX, sY, sZ],
   );
   useEffect(() => () => primGeom.dispose(), [primGeom]);
   // 복셀 색별 스킨(재질 배열) — 그룹 지오메트리의 색 순서에 매칭. skins 없으면 null(기존 경로).

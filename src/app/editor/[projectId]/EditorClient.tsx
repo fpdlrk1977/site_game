@@ -21,8 +21,6 @@ import { ViewportStatusBar } from "./canvas/ViewportStatusBar";
 import { ViewportFloatingToolbar } from "./canvas/ViewportFloatingToolbar";
 import { ViewportOrientationGizmo } from "./canvas/ViewportOrientationGizmo";
 import { CommandPalette } from "./panels/CommandPalette";
-import { PenToolModal } from "./panels/PenToolModal";
-import { VoxelToolModal } from "./panels/VoxelToolModal";
 import { BoundaryShapeModal } from "./panels/BoundaryShapeModal";
 import { Toaster } from "@/components/ui/Toaster";
 import type { ProjectSceneSchema } from "@/types/scene";
@@ -373,8 +371,6 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
       <EditorOnboarding />
       <Toaster />
       {showCommandPalette && <CommandPalette onClose={() => setShowCommandPalette(false)} />}
-      <PenToolModal />
-      <VoxelToolModal />
       <BoundaryShapeModal />
       <LogicPopup />
     </div>

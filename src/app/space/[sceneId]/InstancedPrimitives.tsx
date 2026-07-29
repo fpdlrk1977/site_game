@@ -3,7 +3,7 @@
 import { useRef, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { ObjectNodeSchema } from '@/types/scene';
-import { createPrimitiveGeometry, profileSig } from '@/lib/primitiveGeometry';
+import { createPrimitiveGeometry } from '@/lib/primitiveGeometry';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -66,7 +66,7 @@ function makeKey(obj: ObjectNodeSchema): string {
   const metalness = obj.material?.metalness ?? 0.1;
   const emissive = obj.material?.emissive ?? '#000000';
   // geom 파라미터(둥근 박스·각뿔대·로프트)까지 키에 포함 — 다른 파라미터는 다른 인스턴스 그룹으로 분리.
-  const g = `${obj.geom?.cornerRadius ?? 0}:${obj.geom?.cornerSegments ?? 4}:${obj.geom?.topScale ?? 0.5}:${(obj.geom?.sections ?? []).join(',')}:${obj.geom?.extrudeDepth ?? 0}:${profileSig(obj.geom)}`;
+  const g = `${obj.geom?.cornerRadius ?? 0}:${obj.geom?.cornerSegments ?? 4}:${obj.geom?.topScale ?? 0.5}:${obj.geom?.tubeRatio ?? 0.28}:${obj.geom?.subdivisions ?? 0}`;
   return `${obj.primitiveShape}|${color}|${roughness}|${metalness}|${emissive}|${g}`;
 }
 

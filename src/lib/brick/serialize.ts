@@ -15,21 +15,27 @@ import {
   chunkOriginX, chunkOriginY, chunkOriginZ,
   type Rot,
 } from './grid';
-import { PART_LIST, type MatClass, type PartId } from './parts';
+import { PARTS, type MatClass, type PartId } from './parts';
 import type { Brick } from './world';
 
 const MAGIC = 0x42524b; // 'BRK'
 const VERSION = 1;
 
 /** 저장 인덱스 ↔ PartId. **순서를 바꾸면 기존 저장물이 깨진다** — 뒤에만 추가할 것 */
-const PART_ORDER: PartId[] = ['b1x1', 'b1x2', 'b2x2', 'b2x4'];
+const PART_ORDER: PartId[] = [
+  // ↓ 여기까지가 v1 저장물의 인덱스 0~4 — **절대 순서를 바꾸지 말 것**
+  'b1x1', 'b1x2', 'b2x2', 'b2x4', 'terrain',
+  // ↓ 이후 추가분은 뒤에만 붙인다
+  'b1x3', 'b1x4', 'b1x6', 'b1x8', 'b2x3', 'b2x6', 'b2x8',
+  'p1x1', 'p1x2', 'p2x2', 'p2x4', 'p2x6',
+];
 const PART_INDEX = new Map<PartId, number>(PART_ORDER.map((p, i) => [p, i]));
 
 /** 저장 인덱스 ↔ 재질군. 같은 규칙(뒤에만 추가) */
 const MAT_ORDER: MatClass[] = ['opaque', 'transparent', 'emissive'];
 const MAT_INDEX = new Map<MatClass, number>(MAT_ORDER.map((m, i) => [m, i]));
 
-if (PART_ORDER.length !== PART_LIST.length) {
+if (PART_ORDER.length !== Object.keys(PARTS).length) {
   throw new Error('serialize: PART_ORDER가 파츠 카탈로그와 어긋남 — 새 파츠는 PART_ORDER 뒤에 추가할 것');
 }
 

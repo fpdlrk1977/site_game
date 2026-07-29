@@ -32,8 +32,6 @@ interface Props {
   /** 변경 신호 — BrickWorld는 mutable이라 참조로는 감지가 안 된다 */
   version: number;
   onHover?: (hit: BrickHit | null) => void;
-  onPlace?: (hit: BrickHit) => void;
-  onRemove?: (hit: BrickHit) => void;
   onStats?: (s: { groups: number; instances: number; tris: number }) => void;
   /** 돌기 모양 — 바뀌면 지오메트리를 새로 굽는다 (BRICK_SYSTEM.md §8.5) */
   studStyle?: StudStyle;
@@ -120,8 +118,15 @@ function injectFaceLight(shader: {
   );
 }
 
-function materialFor(mat: MatClass, edges: boolean): THREE.MeshStandardMaterial {
-  const key = `${mat}|${edges ? 'e' : '-'}`;
+/**
+ * ★ 거칠기가 룩을 좌우한다 — **구운 빛을 쓰기 때문**이다.
+ *   반사광(specular)은 **보는 방향에 따라 변하므로** 카메라를 돌리면 어떤 면은 번쩍이고
+ *   어떤 면은 죽는다. 구운 값은 고정인데 그 위에 움직이는 하이라이트가 겹치면
+ *   "빛이 한쪽만 직사광선처럼 쬔다"는 느낌이 된다(사용자 피드백).
+ *   → 브릭은 플라스틱다운 옅은 광택만, **흙·돌은 완전 무광**.
+ */
+function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshStandardMaterial {
+  const key = `${mat}|${edges ? 'e' : '-'}|${matte ? 'm' : '-'}`;
   const hit = materialCache.get(key);
   if (hit) return hit;
 
@@ -150,7 +155,8 @@ function materialFor(mat: MatClass, edges: boolean): THREE.MeshStandardMaterial 
       if (edges) injectEdgeLines(shader);
     };
   } else {
-    m = new THREE.MeshStandardMaterial({ roughness: 0.45, metalness: 0 });
+    // 지형(흙·돌)은 무광, 브릭은 ABS 플라스틱다운 옅은 광택
+    m = new THREE.MeshStandardMaterial({ roughness: matte ? 0.98 : 0.72, metalness: 0 });
   }
   if (mat !== 'emissive') {
     m.onBeforeCompile = (shader) => {
@@ -200,9 +206,9 @@ function groupsOf(world: BrickWorld, regionKey: number, studStyle: StudStyle): G
   return [...map.values()].sort((a, b) => Number(a.mat === 'transparent') - Number(b.mat === 'transparent'));
 }
 
-function BrickGroup({ group, world, studStyle, onHover, onPlace, onRemove }: {
+function BrickGroup({ group, world, studStyle, onHover }: {
   group: Group; world: BrickWorld; studStyle: StudStyle;
-  onHover?: Props['onHover']; onPlace?: Props['onPlace']; onRemove?: Props['onRemove'];
+  onHover?: Props['onHover'];
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
 
@@ -218,7 +224,8 @@ function BrickGroup({ group, world, studStyle, onHover, onPlace, onRemove }: {
     return g;
   }, [group.part, group.studs, studStyle]);
 
-  const material = materialFor(group.mat, studStyle === 'line');
+  // 그룹 키가 이미 part별이라 지형 전용 재질을 써도 드로우콜이 늘지 않는다
+  const material = materialFor(group.mat, studStyle === 'line', group.part === 'terrain');
 
   useLayoutEffect(() => {
     const mesh = ref.current;
@@ -272,16 +279,16 @@ function BrickGroup({ group, world, studStyle, onHover, onPlace, onRemove }: {
       receiveShadow
       onPointerMove={(e) => { e.stopPropagation(); onHover?.(toHit(e)); }}
       onPointerOut={() => onHover?.(null)}
-      onClick={(e) => { e.stopPropagation(); const h = toHit(e); if (h) onPlace?.(h); }}
-      onContextMenu={(e) => { e.stopPropagation(); e.nativeEvent.preventDefault(); const h = toHit(e); if (h) onRemove?.(h); }}
+      // 놓기·지우기는 여기서 처리하지 않는다 — 페이지가 캔버스 pointerdown에서 받는다.
+      // 브릭이 할 일은 **어느 브릭의 어느 지점인지** 알려주는 것뿐이다.
     />
   );
 }
 
 /** 리전 하나 — `rev`가 그대로면 useMemo가 유지돼 인스턴스 버퍼를 다시 쓰지 않는다 */
-function Region({ world, regionKey, rev, studStyle, onHover, onPlace, onRemove, onGroups }: {
+function Region({ world, regionKey, rev, studStyle, onHover, onGroups }: {
   world: BrickWorld; regionKey: number; rev: number; studStyle: StudStyle;
-  onHover?: Props['onHover']; onPlace?: Props['onPlace']; onRemove?: Props['onRemove'];
+  onHover?: Props['onHover'];
   onGroups: (key: number, groups: Group[]) => void;
 }) {
   const groups = useMemo(
@@ -294,13 +301,13 @@ function Region({ world, regionKey, rev, studStyle, onHover, onPlace, onRemove, 
   return (
     <>
       {groups.map((g) => (
-        <BrickGroup key={g.key} group={g} world={world} studStyle={studStyle} onHover={onHover} onPlace={onPlace} onRemove={onRemove} />
+        <BrickGroup key={g.key} group={g} world={world} studStyle={studStyle} onHover={onHover} />
       ))}
     </>
   );
 }
 
-export function BrickInstances({ world, version, onHover, onPlace, onRemove, onStats, studStyle = 'line' }: Props) {
+export function BrickInstances({ world, version, onHover, onStats, studStyle = 'line' }: Props) {
   const regions = useMemo(
     () => world.regionSnapshot(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -340,8 +347,6 @@ export function BrickInstances({ world, version, onHover, onPlace, onRemove, onS
           rev={r.rev}
           studStyle={studStyle}
           onHover={onHover}
-          onPlace={onPlace}
-          onRemove={onRemove}
           onGroups={onGroups}
         />
       ))}
