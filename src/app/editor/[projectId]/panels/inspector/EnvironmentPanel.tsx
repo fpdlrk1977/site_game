@@ -1438,7 +1438,7 @@ export function EnvironmentPanel() {
         )}
       </GroupBox>
 
-      {/* 게임 로직(게임 변수·전역 규칙·HUD)은 GNB 'Logic' 탭으로 이동 → panels/LogicPanel */}
+      {/* 게임 로직(게임 변수·전역 규칙·HUD)은 Environment 헤더의 Logic 버튼 → panels/LogicPopup 으로 이동 */}
 
       {/* 씬 메모 */}
       <GroupBox>
