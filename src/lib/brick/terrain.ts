@@ -26,10 +26,16 @@ const DIG_DEPTH_LAYERS = 8;
  */
 const DIG_RING = 1;
 
-/** 층별 색 — 위는 흙, 아래로 갈수록 돌 */
+/**
+ * 층별 색 — 맨 위는 잔디, 아래로 갈수록 흙 → 돌.
+ *
+ * ★ **표면 한 겹만 녹색**이다(마인크래프트와 같은 방식). 파면 흙 단면이 드러나야
+ *   "땅을 팠다"는 느낌이 나고, 전부 녹색이면 파낸 자리가 밋밋하다.
+ * ⚠️ 색은 지형을 **생성할 때 브릭에 구워져 저장**된다 — 여기를 고쳐도 **이미 만든 씬은 안 바뀐다.**
+ */
 function layerColor(layer: number): string {
-  if (layer <= 0) return '#6b5233'; // 흙
-  if (layer < 3) return '#5a4a3a';  // 굳은 흙
+  if (layer <= 0) return '#5d8c3a'; // 잔디
+  if (layer < 3) return '#6b5233';  // 흙
   return '#565659';                 // 돌
 }
 

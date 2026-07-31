@@ -3,8 +3,10 @@
 // ★★ 잠그는 규칙은 하나다: **겨눈 칸의 옆 칸에 놓는다. 자동 보정은 없다.**
 //
 //   ① 겨눈 칸은 **표면의 칸**이다 (커서가 있는 칸, 브릭 범위 안으로 자름)
-//   ② 새 브릭의 첫 칸 = 겨눈 칸의 **옆 칸** — 면 축만 한 칸 비켜난다
-//   ③ **파츠 크기가 달라도 첫 칸은 같다** (크기에 따라 몰래 밀지 않는다)
+//   ② 새 브릭은 **겨눈 칸을 덮는다** — 면 축만 한 칸 비켜난다
+//   ③ **회전은 겨눈 칸(꼭지점)을 축으로 돈다** — 네 방향이 서로 다른 자리를 차지한다
+//      (2026-07-31 이전 규칙은 "파츠 크기가 달라도 첫 칸이 같다"였다. 앵커가 늘 최소 모서리라
+//       긴 브릭이 +X/+Z로만 자랐고, R을 눌러도 방향이 둘밖에 안 나왔다.)
 //   ④ **막히면 막혔다고 보고한다** — 알아서 옮기지 않는다
 //   ⑤ 드래그는 고정 축을 안 건드린다
 //
@@ -30,7 +32,7 @@ const FACES: Face[] = [
 
 // ── ①②③ 전수: 겨눈 칸 → 옆 칸. 크기와 무관하게 첫 칸이 같다 ─────────────
 {
-  let cellBad = 0, adjBad = 0, sizeBad = 0, total = 0;
+  let cellBad = 0, adjBad = 0, total = 0;
 
   for (const target of PART_IDS) {
     for (const tRot of ROTS) {
@@ -67,14 +69,23 @@ const FACES: Face[] = [
                   const wantAx = face.dir > 0 ? fp.cell[ax] + 1 : fp.cell[ax] - ext[ax];
                   if (a[ax] !== wantAx) adjBad++;
 
-                  // 나머지 두 축은 겨눈 칸 그대로 — 크기가 끼어들 자리가 없다
-                  for (let k = 0; k < 3; k++) if (k !== ax && a[k] !== fp.cell[k]) adjBad++;
+                  // 나머지 두 축은 **겨눈 칸을 덮는다**.
+                  //
+                  // ★ 예전엔 "앵커 == 겨눈 칸"이었다(첫 칸이 최소 모서리 고정). 그런데 그러면
+                  //   긴 브릭이 **항상 +X/+Z로만 자라서** R을 눌러도 방향이 두 개밖에 안 나왔다.
+                  //   이제 기준 칸이 회전과 함께 돌므로 앵커는 겨눈 칸의 **네 모서리 중 하나**다.
+                  //   변하지 않는 것 = **겨눈 칸이 브릭이 덮는 범위 안에 있다**(몰래 옮기지 않는다).
+                  for (let k = 0; k < 3; k++) {
+                    if (k === ax) continue;
+                    if (fp.cell[k] < a[k] || fp.cell[k] >= a[k] + ext[k]) adjBad++;
+                  }
 
                   firstCells.push(`${a[ax === 0 ? 1 : 0]},${a[ax === 2 ? 1 : 2]}`);
                 }
               }
-              // ③ 같은 칸을 겨눴으면 **어떤 파츠·회전이든 첫 칸이 같다**
-              if (new Set(firstCells).size !== 1) sizeBad++;
+              // ③ (삭제) "파츠·회전이 달라도 첫 칸이 같다"는 **옛 규칙**이라 지웠다.
+              //    이제 회전마다 자라는 방향이 달라야 하고, 그건 아래 전용 항목이 검사한다.
+              void firstCells;
             }
           }
         }
@@ -83,8 +94,43 @@ const FACES: Face[] = [
   }
   ok(total > 10000, `전수 조합이 충분한가 (${total})`);
   ok(cellBad === 0, `① 겨눈 칸 = 표면의 그 칸 — 위반 ${cellBad}/${total}`);
-  ok(adjBad === 0, `② 첫 칸 = 겨눈 칸의 옆 칸 (보정 없음) — 위반 ${adjBad}/${total}`);
-  ok(sizeBad === 0, `★③ 파츠 크기가 달라도 첫 칸이 같다 — 위반 ${sizeBad}`);
+  ok(adjBad === 0, `② 겨눈 칸을 덮는다 · 면 축은 바로 옆 (보정 없음) — 위반 ${adjBad}/${total}`);
+}
+
+// ── ★ 회전 = 꼭지점(겨눈 칸) 기준으로 돈다 ────────────────────────────────
+//
+//   `□□■` 같은 긴 브릭에서 **겨눈 칸(■)이 제자리에 붙어 있고** 나머지가 위·오른쪽·아래·왼쪽으로 돈다.
+//   예전엔 앵커가 늘 최소 모서리라 **+X/+Z 두 방향밖에** 안 나왔다 — 눈으로는 "R이 안 먹는다"로 보인다.
+{
+  const w = new BrickWorld();
+  const tid = w.place('terrain', 0, 30, 0, 0, '#fff', 'opaque')!;
+  const te = extentOf(PARTS.terrain, 0);
+  const top: Face = { axis: 1, dir: 1 };
+  const pt: [number, number, number] = [0.5 * CELL_X, (30 + te.ey - 0.5) * CELL_Y, 0.5 * CELL_Z];
+
+  /** 그 회전에서 실제로 점유하는 칸들 */
+  const cellsOf = (part: PartId, rot: Rot) => {
+    const fp = anchorFromFace(w, tid, top, pt[0], pt[1], pt[2], part, rot)!;
+    const e = extentOf(PARTS[part], rot);
+    const out: string[] = [];
+    for (let dx = 0; dx < e.ex; dx++) for (let dz = 0; dz < e.ez; dz++)
+      out.push(`${fp.anchor.x + dx},${fp.anchor.z + dz}`);
+    return { set: new Set(out), fp };
+  };
+
+  for (const part of ['b1x4', 'b2x4', 'b2x2'] as PartId[]) {
+    const sets = ([0, 1, 2, 3] as Rot[]).map((r) => cellsOf(part, r));
+    const keys = sets.map((s) => [...s.set].sort().join('|'));
+    ok(new Set(keys).size === 4, `★ ${part}: 회전 네 가지가 서로 다른 자리를 차지한다 — 서로 다른 자리 ${new Set(keys).size}/4`);
+
+    // 겨눈 칸(XZ)은 어떤 회전에서도 브릭 안에 있다 — 그게 "꼭지점 고정"의 뜻이다
+    const aimed = `${sets[0].fp.cell[0]},${sets[0].fp.cell[2]}`;
+    ok(sets.every((s) => s.set.has(aimed)), `★ ${part}: 겨눈 칸이 네 회전 모두에 포함된다`);
+  }
+
+  // 1×1은 회전해도 같은 자리 — 기준 칸이 곧 전부라 당연하다(회귀 감시용)
+  const one = ([0, 1, 2, 3] as Rot[]).map((r) => [...cellsOf('b1x1', r).set].join('|'));
+  ok(new Set(one).size === 1, `1×1은 회전과 무관하게 같은 칸 — ${new Set(one).size}`);
 }
 
 // ── ④ 막히면 막혔다고 보고한다 (몰래 옮기지 않는다) ──────────────────────

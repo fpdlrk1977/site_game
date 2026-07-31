@@ -16,6 +16,7 @@ import type * as THREE from 'three';
 import { attachBrickStorage, useBrickStore } from '@/store/brickStore';
 import { BrickBuilder } from './BrickBuilder';
 import { BrickInstances } from './BrickInstances';
+import { BrickMover } from './BrickMover';
 
 interface Props {
   sceneId: string | null;
@@ -86,6 +87,8 @@ export function BrickScene({ sceneId, readOnly = false, onStats }: Props) {
         ? <BrickInstances world={world} version={version} studStyle={studStyle} onStats={onStats} />
         : <BrickBuilder onStats={onStats} />}
       <BrickStreamer />
+      {/* WASD 이동 — 보기 전용(뷰어)에서도 돌아다닐 수 있어야 한다 */}
+      <BrickMover />
     </>
   );
 }

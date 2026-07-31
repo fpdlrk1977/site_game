@@ -174,6 +174,8 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
   } | null>(null);
   /** 놓기 획이 도는 동안에만 존재하는 좌표원 */
   const [placeDrag, setPlaceDrag] = useState<{ spot: FacePlacement; line: boolean } | null>(null);
+  /** 마지막으로 겨눈 지점 — 커서가 안 움직여도(R 등) 자리를 다시 계산하려면 필요하다 */
+  const lastHitRef = useRef<{ brickId: number; p: [number, number, number] } | null>(null);
 
   /** 커서가 가리킨 면 → 붙을 자리 */
   const onBrickHover = useCallback((h: BrickHit | null) => {
@@ -195,10 +197,28 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
     if (placeStrokeRef.current) return;
 
     setHoverBrick(h ? h.brickId : null);
+    lastHitRef.current = h ? { brickId: h.brickId, p: [h.point.x, h.point.y, h.point.z] } : null;
     const f = h ? faceOf(world, h.brickId, h.point.x, h.point.y, h.point.z) : null;
     setSpot(f && h ? anchorFromFace(world, h.brickId, f, h.point.x, h.point.y, h.point.z, part, rot) : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [world, version, part, rot, removeBrick]);
+
+  /**
+   * ★ **R(회전)·파츠 변경은 포인터 이벤트가 아니다.**
+   *
+   * `spot`은 커서가 움직일 때만 다시 계산되는데, 앵커가 **회전에 따라 달라지므로**(꼭지점 기준)
+   * 마우스를 안 움직이고 R만 누르면 **앵커는 옛것 · 크기는 새것**이 되어 고스트가 겨눈 칸을 벗어난다.
+   * (예전엔 앵커가 회전과 무관해서 이 문제가 안 보였다 — 규칙이 바뀌며 드러난 것)
+   * → 마지막으로 겨눈 지점에서 다시 계산한다.
+   */
+  useEffect(() => {
+    if (placeStrokeRef.current || eraseStrokeRef.current) return; // 획 중엔 평면이 자리를 정한다
+    const last = lastHitRef.current;
+    if (!last) return;
+    if (!world.bricks.has(last.brickId)) { setSpot(null); return; }
+    const f = faceOf(world, last.brickId, last.p[0], last.p[1], last.p[2]);
+    setSpot(f ? anchorFromFace(world, last.brickId, f, last.p[0], last.p[1], last.p[2], part, rot) : null);
+  }, [part, rot, world]);
 
   /**
    * 놓기 획 진행 — 평면 위 칸을 받아 **잠근 층**에 놓는다.

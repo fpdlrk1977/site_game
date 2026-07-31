@@ -5,8 +5,8 @@
 // ★ 이 세션에 배치 규칙이 네 번 바뀌었다. UI도 두 곳에 흩어지면 같은 일이 난다.
 //   여기 하나만 고치면 둘 다 바뀐다.
 //
-// 담는 것: 도구 · 파츠 · 방향 · 재질 · 색 · 돌기 모양.
-// 안 담는 것: 통계·스트레스 테스트·전체 지우기 등 **프로토타입 전용 계측**(그건 그 페이지가 갖는다).
+// 담는 것: 도구 · 파츠 · 방향 · 재질 · 색 · 돌기 모양 · 전체 지우기.
+// 안 담는 것: 통계·스트레스 테스트 등 **프로토타입 전용 계측**(그건 그 페이지가 갖는다).
 
 import { useEffect, useMemo, useState } from 'react';
 import { STUD_STYLES } from '@/lib/brick/brickGeometry';
@@ -162,6 +162,56 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
           </div>
         </>
       )}
+
+      <ClearAllButton />
+    </>
+  );
+}
+
+/**
+ * 전체 지우기 — **되돌릴 수 없다.** 월드뿐 아니라 **저장소까지** 비운다.
+ *
+ * ★ 그래서 한 번 더 묻는다. `window.confirm`을 안 쓰는 이유는 브라우저 기본 대화상자가
+ *   캔버스 포인터 상태를 흐트러뜨리고(놓친 pointerup으로 드래그가 붙는다) 스타일도 못 맞추기 때문.
+ *   버튼 자리에서 두 단계로 처리하면 그 문제가 없다.
+ */
+function ClearAllButton() {
+  const clear = useBrickStore((s) => s.clear);
+  const [asking, setAsking] = useState(false);
+
+  // 물어보는 상태로 두고 딴짓하다 잊는 걸 막는다 — 4초 뒤 저절로 닫힌다
+  useEffect(() => {
+    if (!asking) return;
+    const t = setTimeout(() => setAsking(false), 4000);
+    return () => clearTimeout(t);
+  }, [asking]);
+
+  if (!asking) {
+    return (
+      <>
+        <div className={label}>초기화</div>
+        <button
+          onClick={() => setAsking(true)}
+          className={`${btn} w-full ${off} text-danger`}
+          title="지은 것을 전부 지우고 처음 지형으로 되돌린다 (되돌리기 불가)"
+        >
+          전체 지우기
+        </button>
+      </>
+    );
+  }
+  return (
+    <>
+      <div className={label}>정말 지울까요? <span className="opacity-60">되돌릴 수 없음</span></div>
+      <div className="flex gap-1">
+        <button
+          onClick={() => { setAsking(false); void clear(); }}
+          className={`${btn} flex-1 bg-danger text-white border-danger`}
+        >
+          지우기
+        </button>
+        <button onClick={() => setAsking(false)} className={`${btn} flex-1 ${off}`}>취소</button>
+      </div>
     </>
   );
 }

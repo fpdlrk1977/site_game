@@ -62,6 +62,14 @@ const materialCache = new Map<string, THREE.MeshStandardMaterial>();
  *
  * 지오메트리는 민짜 상자(12삼각형) 그대로다 — 선은 픽셀 단계에서만 그린다.
  */
+/**
+ * 브릭 경계선의 진하기(0 = 없음).
+ *
+ * ★ 환경광을 `π`로 올려 씬이 밝아지자 선만 상대적으로 도드라졌다 — 0.45는 그 전 밝기에 맞춘 값이었다.
+ *   선은 **브릭의 경계를 알려 주는 보조선**이지 그림이 아니다. 그늘(AO)이 제 몫을 하는 지금은 옅어도 된다.
+ */
+const EDGE_DARKEN = 0.14;
+
 function injectEdgeLines(shader: { vertexShader: string; fragmentShader: string }): void {
   // 텍스처가 없으면 three가 vUv를 안 만든다 → 직접 켠다
   shader.vertexShader = '#define USE_UV\n' + shader.vertexShader;
@@ -75,7 +83,7 @@ function injectEdgeLines(shader: { vertexShader: string; fragmentShader: string 
       float w = fwidth(d);
       float line = smoothstep(0.0, w * 1.2, d);          // 0 = 선 위, 1 = 면 안쪽
       float fade = 1.0 - smoothstep(0.12, 0.30, w);      // 너무 멀면 선을 지운다
-      diffuseColor.rgb *= 1.0 - 0.45 * (1.0 - line) * fade;
+      diffuseColor.rgb *= 1.0 - ${EDGE_DARKEN.toFixed(2)} * (1.0 - line) * fade;
     }`,
   );
 }
@@ -105,6 +113,7 @@ const DEBUG_BAKED_LIGHT = false;
  *   CPU 쪽 AO는 그만큼 세게 잡아 두었다. **하나만 바꾸면 접촉 그늘이 무너진다.**
  */
 const SHADE_CURVE = 1.6;
+
 
 function injectBakedLight(shader: {
   vertexShader: string; fragmentShader: string;

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { BrickOrbit } from '@/components/brick/BrickOrbit';
+import { BrickMover } from '@/components/brick/BrickMover';
 import { BrickBuilder, brickCursor, useEffectiveTool } from '@/components/brick/BrickBuilder';
 import { BrickToolPanel } from '@/components/brick/BrickToolPanel';
 import type { FacePlacement } from '@/lib/brick/placement';
@@ -21,7 +22,7 @@ interface Stats { groups: number; instances: number; tris: number }
 
 export default function BrickPrototype() {
   const { world, version, saveState, loaded, backend } = useBrickStore();
-  const { clear, stressFill, loadWorld, flush, indexedChunks } = useBrickStore();
+  const { stressFill, loadWorld, flush, indexedChunks } = useBrickStore();
 
   const [stats, setStats] = useState<Stats>({ groups: 0, instances: 0, tris: 0 });
   const [perf, setPerf] = useState({ fps: 0, calls: 0, tris: 0 });
@@ -97,7 +98,7 @@ export default function BrickPrototype() {
         <BrickBuilder onStats={setStats} onSpot={onSpot} />
 
         <PerfMeter onPerf={setPerf} />
-        <Mover />
+        <BrickMover />
         <Streamer />
 
         {/* 카메라 조작 — 에디터와 **같은 컴포넌트**. 설정을 바꿀 땐 BrickOrbit만 고친다 */}
@@ -117,7 +118,7 @@ export default function BrickPrototype() {
           <button onClick={() => stressFill(100, 100, 20)} className={`${btn} flex-1 ${off}`}>2.5만</button>
           <button onClick={() => stressFill(200, 200, 25)} className={`${btn} flex-1 ${off}`}>12만</button>
         </div>
-        <button onClick={() => { void clear(); }} className={`${btn} w-full ${off}`}>전체 지우기</button>
+        {/* 전체 지우기는 **도구 패널이 갖는다**(에디터와 같은 UI). 여기 또 두면 둘로 갈라진다 */}
       </div>
 
       {/* ── 우측 통계 ─────────────────────────────────────────────── */}
@@ -230,65 +231,6 @@ function Streamer() {
   return null;
 }
 
-/**
- * WASD 이동 — 카메라와 **보는 지점**을 함께 옮긴다.
- *
- * 이게 없으면 OrbitControls로는 제자리 회전·줌만 되어 **월드를 돌아다닐 수가 없다**
- * (= 스트리밍도 영영 안 돈다). 속도는 줌 거리에 비례 — 멀리서 볼수록 빠르게.
- */
-function Mover() {
-  const keys = useRef(new Set<string>());
-  useEffect(() => {
-    const isEdit = (e: KeyboardEvent) => (e.target as HTMLElement)?.tagName === 'INPUT';
-    const down = (e: KeyboardEvent) => { if (!isEdit(e)) keys.current.add(e.code); };
-    const up = (e: KeyboardEvent) => keys.current.delete(e.code);
-    const blur = () => keys.current.clear(); // 창을 벗어나면 눌린 채로 남지 않게
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    window.addEventListener('blur', blur);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-      window.removeEventListener('blur', blur);
-    };
-  }, []);
-
-  const fwd = useRef(new THREE.Vector3());
-  const right = useRef(new THREE.Vector3());
-  const move = useRef(new THREE.Vector3());
-
-  useFrame(({ camera, controls }, dt) => {
-    const k = keys.current;
-    const target = (controls as { target?: THREE.Vector3; update?: () => void } | null);
-    if (!target?.target) return;
-
-    const f = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
-    const r = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
-    const u = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0);
-    if (f === 0 && r === 0 && u === 0) return;
-
-    // 수평 기준 전방/우측 (위아래를 봐도 평면 위를 걷듯 움직이게)
-    camera.getWorldDirection(fwd.current);
-    fwd.current.y = 0;
-    if (fwd.current.lengthSq() < 1e-6) fwd.current.set(0, 0, -1);
-    fwd.current.normalize();
-    // 오른쪽 = fwd × up. 부호를 뒤집으면 A/D가 반대로 간다(실제로 그랬다)
-    right.current.set(-fwd.current.z, 0, fwd.current.x);
-
-    const speed = Math.max(6, camera.position.distanceTo(target.target) * 0.9) * (k.has('ShiftLeft') ? 3 : 1);
-    move.current.set(0, 0, 0)
-      .addScaledVector(fwd.current, f)
-      .addScaledVector(right.current, r);
-    if (move.current.lengthSq() > 0) move.current.normalize();
-    move.current.y = u;
-    move.current.multiplyScalar(speed * dt);
-
-    camera.position.add(move.current);
-    target.target.add(move.current);
-    target.update?.();
-  });
-  return null;
-}
 
 function PerfMeter({ onPerf }: { onPerf: (p: { fps: number; calls: number; tris: number }) => void }) {
   const gl = useThree((s) => s.gl);

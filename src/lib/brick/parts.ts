@@ -113,3 +113,23 @@ export function extentOf(part: BrickPart, rot: Rot): Extent {
   const swap = rot === 1 || rot === 3;
   return { ex: swap ? part.sz : part.sx, ey: part.h, ez: swap ? part.sx : part.sz };
 }
+
+/**
+ * **기준 칸(꼭지점)** 이 회전 후 AABB 안 어디에 오는가 — 셀 단위 오프셋 `[dx, dz]`.
+ *
+ * ★ 이게 없으면 긴 브릭이 **항상 +X/+Z 쪽으로만 자란다.** 앵커가 늘 최소 모서리라서다.
+ *   게다가 `extentOf`는 회전 0·2가 같은 값이라, 1×3 브릭은 R을 눌러도 **두 방향밖에 안 나온다.**
+ *   기준 칸을 회전과 함께 돌리면 겨눈 칸이 제자리에 붙어 있고 나머지가 **위→오른쪽→아래→왼쪽**으로 돈다.
+ *
+ * 로컬 칸 (0,0)이 회전 후 가는 모서리:
+ *   rot 0 → 최소(0,0) · rot 1 → (ex−1, 0) · rot 2 → (ex−1, ez−1) · rot 3 → (0, ez−1)
+ */
+export function pivotOffset(part: BrickPart, rot: Rot): [number, number] {
+  const e = extentOf(part, rot);
+  switch (rot) {
+    case 1: return [e.ex - 1, 0];
+    case 2: return [e.ex - 1, e.ez - 1];
+    case 3: return [0, e.ez - 1];
+    default: return [0, 0];
+  }
+}

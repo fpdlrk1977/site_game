@@ -17,7 +17,7 @@
 //   큰 브릭은 첫 칸이 겨눈 칸이고 나머지가 한 방향으로 뻗는다. 방향은 **회전(R)** 으로 바꾼다.
 
 import { CELL_X, CELL_Y, CELL_Z, worldToCellX, worldToCellY, worldToCellZ, type Rot } from './grid';
-import { extentOf, PARTS, type PartId } from './parts';
+import { extentOf, PARTS, pivotOffset, type PartId } from './parts';
 import type { BrickWorld } from './world';
 
 export interface Anchor { x: number; y: number; z: number }
@@ -74,6 +74,11 @@ export interface FacePlacement {
   planeAt: number;
   /** 놓을 브릭의 칸수(회전 반영) */
   ext: [number, number, number];
+  /**
+   * 기준 칸(꼭지점)이 AABB 안 어디인지 — `[dx, dz]`. **드래그도 같은 규칙을 써야** 한다.
+   * (여기 안 담고 `slideAnchor`에서 다시 계산하면 파츠·회전을 또 넘겨야 하고, 그러다 어긋난다)
+   */
+  pivot: [number, number];
 }
 
 /**
@@ -102,8 +107,12 @@ export function anchorFromFace(
   const e = extentOf(PARTS[part], rot);
   const ext: [number, number, number] = [e.ex, e.ey, e.ez];
 
-  // 새 브릭의 첫 칸 = 겨눈 칸의 옆 칸. 면 축만 한 칸 비켜 놓는다(아래쪽 면이면 두께만큼)
-  const anchor: [number, number, number] = [cell[0], cell[1], cell[2]];
+  // 새 브릭의 첫 칸. 면 축만 한 칸 비켜 놓는다(아래쪽 면이면 두께만큼).
+  //
+  // ★ 나머지 축은 **겨눈 칸이 기준 칸(꼭지점)** 이 되도록 뒤로 민다 — 그래야 R을 눌러도
+  //   겨눈 칸이 제자리에 붙어 있고 브릭이 그 둘레로 돈다. 안 밀면 항상 +X/+Z로만 자란다.
+  const [pdx, pdz] = pivotOffset(PARTS[part], rot);
+  const anchor: [number, number, number] = [cell[0] - pdx, cell[1], cell[2] - pdz];
   anchor[face.axis] = face.dir > 0 ? cell[face.axis] + 1 : cell[face.axis] - ext[face.axis];
 
   // 수평면(윗면·밑면)이면 XZ 두 방향, 수직면이면 그 벽을 따라 수평 한 방향만
@@ -114,6 +123,7 @@ export function anchorFromFace(
     cell,
     slide,
     ext,
+    pivot: [pdx, pdz],
     // 브릭이 **표면에 닿는 면**. 위쪽 면을 겨눴으면 브릭의 아래쪽, 아래쪽 면이면 위쪽이 닿는다
     planeAt: (face.dir > 0 ? anchor[face.axis] : anchor[face.axis] + ext[face.axis]) * CELL[face.axis],
   };
@@ -126,7 +136,10 @@ export function anchorFromFace(
 export function slideAnchor(base: FacePlacement, px: number, py: number, pz: number): Anchor {
   const p = [px, py, pz];
   const out = [base.anchor.x, base.anchor.y, base.anchor.z];
-  for (const a of base.slide) out[a] = toCell[a](p[a]);
+  // 커서가 있는 칸이 **기준 칸**이 되도록 민다 — 첫 클릭(anchorFromFace)과 같은 규칙이라야
+  // 드래그하는 동안 브릭이 커서 밑에서 튀지 않는다.
+  const pivotOf = [base.pivot[0], 0, base.pivot[1]];
+  for (const a of base.slide) out[a] = toCell[a](p[a]) - pivotOf[a];
   return { x: out[0], y: out[1], z: out[2] };
 }
 
