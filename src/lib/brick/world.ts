@@ -21,6 +21,8 @@ export interface Brick {
   rot: Rot;
   color: string;
   mat: MatClass;
+  /** 무늬(재료) 칸 번호 — 0 = 민짜. `textures.ts`의 `BRICK_TEXTURES` 참고 */
+  tex: number;
 }
 
 export class BrickWorld {
@@ -87,9 +89,9 @@ export class BrickWorld {
     return true;
   }
 
-  place(part: PartId, x: number, y: number, z: number, rot: Rot, color: string, mat: MatClass): number | null {
+  place(part: PartId, x: number, y: number, z: number, rot: Rot, color: string, mat: MatClass, tex = 0): number | null {
     if (!this.canPlace(part, x, y, z, rot)) return null;
-    const b: Brick = { id: this.nextId++, part, x, y, z, rot, color, mat };
+    const b: Brick = { id: this.nextId++, part, x, y, z, rot, color, mat, tex };
     this.bricks.set(b.id, b);
     this.forEachCell(b, (cx, cy, cz) => this.occ.set(cellKey(cx, cy, cz), b.id));
     this.raiseColumns(b);
@@ -705,9 +707,9 @@ export class BrickWorld {
   }
 
   /** 대량 생성용 — 가시성 계산을 미룬다. 끝나면 `refreshPending()`을 부를 것 */
-  placeFast(part: PartId, x: number, y: number, z: number, rot: Rot, color: string, mat: MatClass): number | null {
+  placeFast(part: PartId, x: number, y: number, z: number, rot: Rot, color: string, mat: MatClass, tex = 0): number | null {
     if (!this.canPlace(part, x, y, z, rot)) return null;
-    const b: Brick = { id: this.nextId++, part, x, y, z, rot, color, mat };
+    const b: Brick = { id: this.nextId++, part, x, y, z, rot, color, mat, tex };
     this.bricks.set(b.id, b);
     this.forEachCell(b, (cx, cy, cz) => this.occ.set(cellKey(cx, cy, cz), b.id));
     this.raiseColumns(b); // 기둥 높이는 즉시 반영 — 드롭 계산이 항상 최신이어야 한다

@@ -19,7 +19,21 @@ import { PARTS, type MatClass, type PartId } from './parts';
 import type { Brick } from './world';
 
 const MAGIC = 0x42524b; // 'BRK'
-const VERSION = 1;
+
+/**
+ * 저장 버전.
+ *   v1 — 팔레트 엔트리 4바이트 `[matClass, r, g, b]`
+ *   v2 — 팔레트 엔트리 **5바이트** `[matClass, r, g, b, tex]` (무늬/재료 추가)
+ *
+ * ★ 무늬를 **브릭 레코드가 아니라 팔레트에** 넣은 이유: 무늬는 색·재질과 거의 항상 함께 다닌다
+ *   (잔디 무늬 = 녹색). 팔레트는 조합당 한 번만 적히므로 **브릭이 많아도 저장이 안 커진다.**
+ *   브릭 레코드에 1바이트를 더했다면 청크당 최대 8천 바이트가 늘었다.
+ *
+ * ⚠️ v1도 계속 읽는다 — 이미 저장된 월드가 있다. 읽기 분기를 지우지 말 것.
+ */
+const VERSION = 2;
+const PALETTE_REC_V1 = 4;
+const PALETTE_REC = 5;
 
 /** 저장 인덱스 ↔ PartId. **순서를 바꾸면 기존 저장물이 깨진다** — 뒤에만 추가할 것 */
 const PART_ORDER: PartId[] = [
@@ -59,6 +73,8 @@ export interface BrickData {
   rot: Rot;
   color: string;
   mat: MatClass;
+  /** 무늬(재료) 칸 번호 — 0 = 민짜. v1 저장물엔 없어서 0으로 읽힌다 */
+  tex?: number;
 }
 
 /**
@@ -75,14 +91,14 @@ export function encodeChunk(bricks: BrickData[], cx: number, cy: number, cz: num
   // 팔레트 — 같은 (재질군, 색) 조합은 한 번만 적는다. 색을 많이 써도 레코드는 안 커진다.
   const palette: number[] = [];
   const paletteIdx = new Map<string, number>();
-  const matIdxOf = (mat: MatClass, color: string): number => {
-    const key = `${mat}|${color.toLowerCase()}`;
+  const matIdxOf = (mat: MatClass, color: string, tex: number): number => {
+    const key = `${mat}|${color.toLowerCase()}|${tex}`;
     const hit = paletteIdx.get(key);
     if (hit !== undefined) return hit;
     const [r, g, b] = parseHex(color);
     const idx = paletteIdx.size;
     paletteIdx.set(key, idx);
-    palette.push(MAT_INDEX.get(mat) ?? 0, r, g, b);
+    palette.push(MAT_INDEX.get(mat) ?? 0, r, g, b, tex & 255);
     return idx;
   };
 
@@ -94,19 +110,19 @@ export function encodeChunk(bricks: BrickData[], cx: number, cy: number, cz: num
     }
     const pi = PART_INDEX.get(b.part);
     if (pi === undefined) throw new Error(`encodeChunk: 모르는 파츠 ${b.part}`);
-    const mi = matIdxOf(b.mat, b.color);
+    const mi = matIdxOf(b.mat, b.color, b.tex ?? 0);
     recs.push(pi, b.rot, lx, ly, lz, mi & 255, (mi >> 8) & 255);
   }
 
   const paletteCount = paletteIdx.size;
-  const out = new Uint8Array(8 + paletteCount * 4 + bricks.length * REC);
+  const out = new Uint8Array(8 + paletteCount * PALETTE_REC + bricks.length * REC);
   const dv = new DataView(out.buffer);
   out[0] = (MAGIC >> 16) & 255; out[1] = (MAGIC >> 8) & 255; out[2] = MAGIC & 255;
   out[3] = VERSION;
   dv.setUint16(4, paletteCount, true);
   dv.setUint16(6, bricks.length, true);
   out.set(palette, 8);
-  out.set(recs, 8 + paletteCount * 4);
+  out.set(recs, 8 + paletteCount * PALETTE_REC);
   return out;
 }
 
@@ -116,7 +132,10 @@ export function decodeChunk(data: Uint8Array, cx: number, cy: number, cz: number
   if (data[0] !== ((MAGIC >> 16) & 255) || data[1] !== ((MAGIC >> 8) & 255) || data[2] !== (MAGIC & 255)) {
     throw new Error('decodeChunk: BRK 서명이 아님');
   }
-  if (data[3] !== VERSION) throw new Error(`decodeChunk: 모르는 버전 ${data[3]}`);
+  const ver = data[3];
+  // ⚠️ v1도 계속 읽는다 — 이미 저장된 월드가 있다. 다른 점은 **팔레트 엔트리 크기**뿐이다.
+  if (ver !== 1 && ver !== VERSION) throw new Error(`decodeChunk: 모르는 버전 ${ver}`);
+  const palRec = ver === 1 ? PALETTE_REC_V1 : PALETTE_REC;
 
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const paletteCount = dv.getUint16(4, true);
@@ -124,14 +143,16 @@ export function decodeChunk(data: Uint8Array, cx: number, cy: number, cz: number
 
   const colors: string[] = [];
   const mats: MatClass[] = [];
+  const texes: number[] = [];
   for (let i = 0; i < paletteCount; i++) {
-    const o = 8 + i * 4;
+    const o = 8 + i * palRec;
     mats.push(MAT_ORDER[data[o]] ?? 'opaque');
     colors.push(toHex(data[o + 1], data[o + 2], data[o + 3]));
+    texes.push(ver === 1 ? 0 : data[o + 4]); // v1 = 무늬 개념이 없다 → 민짜
   }
 
   const ox = chunkOriginX(cx), oy = chunkOriginY(cy), oz = chunkOriginZ(cz);
-  const base = 8 + paletteCount * 4;
+  const base = 8 + paletteCount * palRec;
   const out: BrickData[] = [];
   for (let i = 0; i < brickCount; i++) {
     const o = base + i * REC;
@@ -144,6 +165,7 @@ export function decodeChunk(data: Uint8Array, cx: number, cy: number, cz: number
       z: oz + data[o + 4],
       color: colors[mi] ?? '#ffffff',
       mat: mats[mi] ?? 'opaque',
+      tex: texes[mi] ?? 0,
     });
   }
   return out;
@@ -151,7 +173,7 @@ export function decodeChunk(data: Uint8Array, cx: number, cy: number, cz: number
 
 /** Brick(런타임) → BrickData(저장용). id·파생 상태는 저장하지 않는다 */
 export function toBrickData(b: Brick): BrickData {
-  return { part: b.part, x: b.x, y: b.y, z: b.z, rot: b.rot, color: b.color, mat: b.mat };
+  return { part: b.part, x: b.x, y: b.y, z: b.z, rot: b.rot, color: b.color, mat: b.mat, tex: b.tex };
 }
 
 // ── base64 (localStorage용 — DB는 bytea로 그대로 넣는다) ──────────────────

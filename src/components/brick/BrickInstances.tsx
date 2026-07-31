@@ -21,6 +21,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import { brickGeometry, triCount, type StudStyle } from '@/lib/brick/brickGeometry';
+import { getBrickAtlas, TEX_COLS, TEX_ROWS } from '@/lib/brick/textures';
 import { anchorCenterWorld } from '@/lib/brick/placement';
 import { PARTS, type MatClass, type PartId } from '@/lib/brick/parts';
 import type { BrickWorld } from '@/lib/brick/world';
@@ -115,6 +116,50 @@ const DEBUG_BAKED_LIGHT = false;
 const SHADE_CURVE = 1.6;
 
 
+/**
+ * 무늬(재료) — **아틀라스 한 장**에서 인스턴스마다 다른 칸을 뽑아 쓴다.
+ *
+ * ★ 재질이 갈리지 않으므로 **draw call이 안 늘어난다.** 재료마다 텍스처를 따로 두면
+ *   재료 수만큼 메시가 쪼개진다(인스턴싱을 고른 이유와 같은 논리).
+ *
+ * ★ 무늬는 흑백이라 **곱하기 한 번**이면 된다. 색은 팔레트에서 오고, 마인크래프트 잔디처럼
+ *   같은 무늬에 색만 달리 쓸 수 있다. `aTile < 0.5`(민짜)면 샘플링을 건너뛴다.
+ *
+ * ⚠️ UV는 면마다 0~1이라 **파츠 한 면에 무늬 한 장**이 깔린다. 2×8처럼 긴 브릭은 늘어나 보이는데,
+ *   칸 수만큼 반복하려면 지오메트리에 별도 UV가 필요하다(경계선이 같은 UV를 쓰고 있어서 겸용 불가).
+ *   실제로 늘어나 보이면 그때 `aTexUV`를 추가할 것.
+ */
+function injectTexture(shader: {
+  vertexShader: string; fragmentShader: string;
+  uniforms: Record<string, { value: unknown }>;
+}): void {
+  shader.uniforms.uBrickAtlas = { value: getBrickAtlas() };
+
+  shader.vertexShader = `#define USE_UV
+    attribute float aTile;
+    varying float vTile;
+  ` + shader.vertexShader.replace(
+    '#include <begin_vertex>',
+    '#include <begin_vertex>\n    vTile = aTile;',
+  );
+
+  shader.fragmentShader = `#define USE_UV
+    uniform sampler2D uBrickAtlas;
+    varying float vTile;
+  ` + shader.fragmentShader.replace(
+    '#include <color_fragment>',
+    `#include <color_fragment>
+    if (vTile > 0.5) {
+      float t = floor(vTile + 0.5);
+      vec2 tile = vec2(mod(t, ${TEX_COLS}.0), floor(t / ${TEX_COLS}.0));
+      // 칸 경계에서 옆 칸이 새어 들어오지 않게 안쪽으로 살짝 물린다
+      vec2 f = clamp(fract(vUv), 0.002, 0.998);
+      vec2 uv = (tile + f) / vec2(${TEX_COLS}.0, ${TEX_ROWS}.0);
+      diffuseColor.rgb *= texture2D(uBrickAtlas, uv).rgb;
+    }`,
+  );
+}
+
 function injectBakedLight(shader: {
   vertexShader: string; fragmentShader: string;
 }): void {
@@ -206,7 +251,8 @@ function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshS
           totalEmissiveRadiance *= vColor;
         #endif`,
       );
-      // 발광 브릭은 스스로 빛나므로 하늘빛을 곱하지 않는다
+      // 발광 브릭은 스스로 빛나므로 하늘빛을 곱하지 않는다. 무늬는 발광에도 얹는다
+      injectTexture(shader);
       if (edges) injectEdgeLines(shader);
     };
   } else {
@@ -215,6 +261,7 @@ function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshS
   }
   if (mat !== 'emissive') {
     m.onBeforeCompile = (shader) => {
+      injectTexture(shader);
       injectBakedLight(shader);
       if (edges) injectEdgeLines(shader);
     };
@@ -293,6 +340,7 @@ function BrickGroup({ group, world, studStyle, onHover }: {
     const n = group.ids.length;
     const cornerA = new Float32Array(n * 4);
     const cornerB = new Float32Array(n * 4);
+    const tiles = new Float32Array(n); // 무늬 칸 번호(0 = 민짜)
     const corner = new Float32Array(8);
 
     group.ids.forEach((brickId, i) => {
@@ -304,6 +352,7 @@ function BrickGroup({ group, world, studStyle, onHover }: {
       _m.compose(_p, _q, _s);
       mesh.setMatrixAt(i, _m);
       mesh.setColorAt(i, _c.set(b.color));
+      tiles[i] = b.tex ?? 0;
 
       // 꼭짓점 밝기 — 월드 기준으로 구한 뒤 회전에 맞춰 로컬 슬롯에 담는다
       world.cornerLight(b, corner);
@@ -314,6 +363,7 @@ function BrickGroup({ group, world, studStyle, onHover }: {
 
     geo.setAttribute('aCornerA', new THREE.InstancedBufferAttribute(cornerA, 4));
     geo.setAttribute('aCornerB', new THREE.InstancedBufferAttribute(cornerB, 4));
+    geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tiles, 1));
 
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

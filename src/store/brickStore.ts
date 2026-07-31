@@ -56,7 +56,7 @@ function scheduleLight(set: (fn: (s: BrickState) => Partial<BrickState>) => void
 //   다시 실행(redo)이 같은 브릭을 가리킨다.
 
 /** 브릭 하나를 되살리기 위한 값. id는 재발급되므로 담지 않는다 */
-type BrickSnap = { part: PartId; x: number; y: number; z: number; rot: Rot; color: string; mat: MatClass };
+type BrickSnap = { part: PartId; x: number; y: number; z: number; rot: Rot; color: string; mat: MatClass; tex: number };
 /** add = 새로 생김(되돌리기 = 지우기) · del = 사라짐(되돌리기 = 되살리기) */
 type UndoOp = { kind: 'add' | 'del'; id: number; b: BrickSnap };
 /** 되돌리기 한 단계 — 한 제스처(드래그 한 획 등)가 여러 op일 수 있다 */
@@ -95,8 +95,8 @@ function recordAll(ops: UndoOp[]): void {
   else pushEntry(ops);
 }
 
-const snapOf = (b: { part: PartId; x: number; y: number; z: number; rot: Rot; color: string; mat: MatClass }): BrickSnap =>
-  ({ part: b.part, x: b.x, y: b.y, z: b.z, rot: b.rot, color: b.color, mat: b.mat });
+const snapOf = (b: { part: PartId; x: number; y: number; z: number; rot: Rot; color: string; mat: MatClass; tex: number }): BrickSnap =>
+  ({ part: b.part, x: b.x, y: b.y, z: b.z, rot: b.rot, color: b.color, mat: b.mat, tex: b.tex });
 
 /** 되돌릴 수 없는 조작(전체 지우기 등) 뒤엔 스택을 비운다 — 못 되돌리면서 되돌릴 수 있는 척하면 안 된다 */
 function resetHistory(): void {
@@ -115,7 +115,7 @@ function applyReverse(world: BrickWorld, op: UndoOp): void {
   if (op.kind === 'add') {
     world.remove(resolveId(world, op));
   } else {
-    const nid = world.place(op.b.part, op.b.x, op.b.y, op.b.z, op.b.rot, op.b.color, op.b.mat);
+    const nid = world.place(op.b.part, op.b.x, op.b.y, op.b.z, op.b.rot, op.b.color, op.b.mat, op.b.tex);
     if (nid !== null) op.id = nid; // id 재발급 — 다시 실행이 같은 브릭을 가리키도록
   }
 }
@@ -123,7 +123,7 @@ function applyReverse(world: BrickWorld, op: UndoOp): void {
 /** op 하나를 다시 실행한다(원래 방향) */
 function applyForward(world: BrickWorld, op: UndoOp): void {
   if (op.kind === 'add') {
-    const nid = world.place(op.b.part, op.b.x, op.b.y, op.b.z, op.b.rot, op.b.color, op.b.mat);
+    const nid = world.place(op.b.part, op.b.x, op.b.y, op.b.z, op.b.rot, op.b.color, op.b.mat, op.b.tex);
     if (nid !== null) op.id = nid;
   } else {
     world.remove(resolveId(world, op));
@@ -184,6 +184,10 @@ interface BrickState {
   /** 최근에 쓴 임의 색(기기에 남는다) */
   recentColors: string[];
   setMat: (m: MatClass) => void;
+  /** 무늬(재료) 칸 번호 — 0 = 민짜. `lib/brick/textures.ts` */
+  tex: number;
+  /** 재료를 고르면 **기본색도 함께** 잡아 준다(잔디→녹색). 색은 그 뒤에 바꿔도 된다 */
+  setTex: (t: number) => void;
 
   /** 놓기 — 새 브릭 id, 못 놓으면 null */
   /** 한 제스처를 되돌리기 한 단계로 묶는다(포인터 down/up) */
@@ -323,6 +327,12 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   hydrateRecentColors: () => set({ recentColors: loadRecentColors() }),
   setMat: (m) => set({ mat: m }),
 
+  tex: 0,
+  // ★ 재료를 고르면 색을 **흰색으로** 되돌린다 — 무늬가 자기 색을 갖고 있고 그 위에 색이 곱해지므로,
+  //   흰색이라야 재료 본래 색이 그대로 나온다(마인크래프트 잔디 틴트와 같은 구조).
+  //   색을 고르면 그때부터 그 색으로 물든다(빨간 벽돌 × 파랑 = 푸른 벽돌).
+  setTex: (t) => set(t === 0 ? { tex: 0 } : { tex: t, color: '#ffffff' }),
+
   // ── 되돌리기 ───────────────────────────────────────────────────────────
   undoDepth: 0,
   redoDepth: 0,
@@ -356,10 +366,10 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   },
 
   place: (x, y, z) => {
-    const { world, part, rot, color, mat } = get();
-    const id = world.place(part, x, y, z, rot, color, mat);
+    const { world, part, rot, color, mat, tex } = get();
+    const id = world.place(part, x, y, z, rot, color, mat, tex);
     if (id === null) return null;
-    record({ kind: 'add', id, b: { part, x, y, z, rot, color, mat } });
+    record({ kind: 'add', id, b: { part, x, y, z, rot, color, mat, tex } });
     set((s) => ({ version: s.version + 1, saveState: 'pending', undoDepth: undoStack.length, redoDepth: redoStack.length }));
     scheduleLight(set);
     return id;

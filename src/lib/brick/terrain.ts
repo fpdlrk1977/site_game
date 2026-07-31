@@ -10,6 +10,7 @@
 //   삭제·저장·조명·컬링·스트리밍이 **이미 있는 코드로 전부 처리된다.**
 
 import { CHUNK_X, CHUNK_Z, chunkOriginX, chunkOriginZ, Y_MIN, BRICK_CELLS_Y, type ChunkCoord } from './grid';
+import { TEX_DIRT, TEX_GRASS, TEX_STONE } from './textures';
 import { TERRAIN_STEP } from './parts';
 import type { BrickWorld } from './world';
 
@@ -27,17 +28,26 @@ const DIG_DEPTH_LAYERS = 8;
 const DIG_RING = 1;
 
 /**
- * 층별 색 — 맨 위는 잔디, 아래로 갈수록 흙 → 돌.
+ * 층별 무늬 — 맨 위는 잔디, 아래로 갈수록 흙 → 돌.
  *
- * ★ **표면 한 겹만 녹색**이다(마인크래프트와 같은 방식). 파면 흙 단면이 드러나야
- *   "땅을 팠다"는 느낌이 나고, 전부 녹색이면 파낸 자리가 밋밋하다.
- * ⚠️ 색은 지형을 **생성할 때 브릭에 구워져 저장**된다 — 여기를 고쳐도 **이미 만든 씬은 안 바뀐다.**
+ * ★ **표면 한 겹만 잔디**다(마인크래프트와 같은 방식). 파면 흙 단면이 드러나야
+ *   "땅을 팠다"는 느낌이 나고, 전부 잔디면 파낸 자리가 밋밋하다.
+ * ⚠️ 무늬·색은 지형을 **생성할 때 브릭에 구워져 저장**된다 — 여기를 고쳐도 **이미 만든 씬은 안 바뀐다.**
  */
-function layerColor(layer: number): string {
-  if (layer <= 0) return '#5d8c3a'; // 잔디
-  if (layer < 3) return '#6b5233';  // 흙
-  return '#565659';                 // 돌
+function layerTex(layer: number): number {
+  if (layer <= 0) return TEX_GRASS;
+  if (layer < 3) return TEX_DIRT;
+  return TEX_STONE;
 }
+
+/**
+ * 지형 색은 **흰색**이다.
+ *
+ * ★ 색은 무늬 위에 **곱해지는 틴트**라, 잔디 무늬(초록)에 초록색을 또 곱하면 시커메진다.
+ *   무늬가 자기 색을 갖고 있으므로 흰색이라야 재료 본래 색이 그대로 나온다.
+ *   (예전엔 무늬가 없어서 색이 곧 재료였다 — 그때 쓰던 층별 색 함수는 지웠다)
+ */
+const TERRAIN_TINT = '#ffffff';
 
 const colK = (x: number, z: number) => `${x},${z}`;
 
@@ -102,7 +112,7 @@ export function generateSurface(world: BrickWorld, c: ChunkCoord, done: TerrainG
   for (let dx = 0; dx < CHUNK_X; dx += TERRAIN_STEP) {
     for (let dz = 0; dz < CHUNK_Z; dz += TERRAIN_STEP) {
       const x = ox + dx, z = oz + dz;
-      if (world.placeFast('terrain', x, SURFACE_Y, z, 0, layerColor(0), 'opaque') !== null) {
+      if (world.placeFast('terrain', x, SURFACE_Y, z, 0, TERRAIN_TINT, 'opaque', layerTex(0)) !== null) {
         filledTo.set(colK(x, z), SURFACE_Y);
         markSolid(world, x, z, SURFACE_Y);
         n++;
@@ -119,14 +129,14 @@ function extendColumn(world: BrickWorld, gx: number, gz: number, targetY: number
   let n = 0;
   if (bottom === undefined) {
     // 아직 표면도 없는 기둥(청크 경계 밖 등) — 표면부터 만든다
-    if (world.placeFast('terrain', gx, SURFACE_Y, gz, 0, layerColor(0), 'opaque') !== null) n++;
+    if (world.placeFast('terrain', gx, SURFACE_Y, gz, 0, TERRAIN_TINT, 'opaque', layerTex(0)) !== null) n++;
     bottom = SURFACE_Y;
   }
   let layer = Math.round((SURFACE_Y - bottom) / BRICK_CELLS_Y);
   while (bottom > targetY && bottom - BRICK_CELLS_Y >= Y_MIN) {
     bottom -= BRICK_CELLS_Y;
     layer++;
-    if (world.placeFast('terrain', gx, bottom, gz, 0, layerColor(layer), 'opaque') !== null) n++;
+    if (world.placeFast('terrain', gx, bottom, gz, 0, TERRAIN_TINT, 'opaque', layerTex(layer)) !== null) n++;
   }
   filledTo.set(k, bottom);
   markSolid(world, gx, gz, bottom);

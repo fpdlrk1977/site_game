@@ -205,13 +205,49 @@ function rng(seed: number) {
   ];
 
   const got = decodeChunk(bytes, 0, 2, 0);
-  ok(sameSet(expected, got), '골든: 고정 바이트열이 정해진 브릭으로 디코드된다 (파츠·재질 인덱스 순서 고정)');
+  ok(sameSet(expected, got), '★ 골든 v1: 옛 바이트열을 지금 코드가 그대로 읽는다 (파츠·재질 인덱스 순서 고정)');
+  ok(got.every((b) => (b.tex ?? 0) === 0), '골든 v1: 무늬 개념이 없던 저장물은 민짜(0)로 읽힌다');
 
-  // 인코더도 같은 바이트를 낸다 (포맷이 안 바뀌었음)
+  // ⚠️ **인코더는 이제 v2를 낸다** — v1 바이트열과 같을 수 없다(2026-07-31, 무늬 추가).
+  //    그래도 v1은 계속 읽혀야 하므로 위 디코드 항목은 그대로 남긴다.
   const re = encodeChunk(expected, 0, 2, 0);
+  ok(re[3] === 2, `인코더는 v2를 쓴다 — got ${re[3]}`);
+  ok(re.length !== bytes.length, 'v2는 팔레트가 한 칸 넓어 v1과 길이가 다르다');
+}
+
+// ── ★ 골든 v2: 무늬가 들어간 지금 포맷 ──────────────────────────────────
+//
+//   v1 픽스처를 갈아끼우는 대신 **새 픽스처를 추가**한다. 옛 저장물을 읽는 능력과
+//   지금 포맷의 고정성은 **서로 다른 보증**이라, 하나로 합치면 둘 다 약해진다.
+{
+  const bricks: BrickData[] = [
+    { part: 'b1x1', x: 0, y: 0, z: 0, rot: 0, color: '#d01012', mat: 'opaque', tex: 0 },
+    { part: 'b1x2', x: 1, y: 3, z: 2, rot: 1, color: '#0d69ab', mat: 'transparent', tex: 5 },
+    { part: 'terrain', x: 4, y: 6, z: 5, rot: 0, color: '#5d8c3a', mat: 'opaque', tex: 1 },
+  ];
+  const bytes = encodeChunk(bricks, 0, 2, 0);
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+  const GOLDEN_V2 =
+    '42524b020300030000d0101200010d69ab05005d8c3a01000000000000000101010302010004000406050200';
+  ok(hex === GOLDEN_V2, `★ 골든 v2: 바이트열이 고정돼 있다\n      got  ${hex}\n      want ${GOLDEN_V2}`);
+  ok(sameSet(bricks, decodeChunk(bytes, 0, 2, 0)), '골든 v2: 왕복이 무늬까지 보존한다');
+}
+
+// ── 무늬는 팔레트에서 합쳐진다 (브릭이 많아도 저장이 안 커진다) ───────────
+{
+  const many: BrickData[] = [];
+  for (let i = 0; i < 40; i++) {
+    many.push({ part: 'b1x1', x: i % 8, y: Math.floor(i / 8), z: 0, rot: 0, color: '#5d8c3a', mat: 'opaque', tex: 1 });
+  }
+  const bytes = encodeChunk(many, 0, 2, 0);
+  // 팔레트 1칸(5) + 브릭 40개 × 7 = 8 + 5 + 280
+  ok(bytes.length === 8 + 5 + 40 * 7, `★ 같은 (색·재질·무늬)는 팔레트에 한 번만 — ${bytes.length}바이트`);
+
+  const mixed = [...many, { ...many[0], tex: 2 }];
   ok(
-    re.length === bytes.length && re.every((v, i) => v === bytes[i]),
-    '골든: 지금 인코더가 같은 바이트열을 만든다',
+    encodeChunk(mixed, 0, 2, 0).length === 8 + 10 + 41 * 7,
+    '무늬만 다르면 팔레트 항목이 하나 더 생긴다',
   );
 }
 

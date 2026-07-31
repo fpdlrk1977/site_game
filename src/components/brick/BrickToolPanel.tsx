@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { STUD_STYLES } from '@/lib/brick/brickGeometry';
 import { MAT_CLASSES, PART_KINDS, PARTS, partsOfKind } from '@/lib/brick/parts';
+import { BRICK_TEXTURES } from '@/lib/brick/textures';
 import { BRICK_COLORS, useBrickStore, type Tool } from '@/store/brickStore';
 import { useEffectiveTool } from './BrickBuilder';
 import { BrickColorPicker } from './BrickColorPicker';
@@ -23,8 +24,8 @@ const label = 'text-[10px] uppercase text-muted mb-1';
 
 /** 돌기 모양은 룩·IP 검토용이라 프로토타입에서만 노출한다(BRICK_SYSTEM.md §8.5) */
 export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: boolean }) {
-  const { part, rot, color, mat, studStyle, recentColors } = useBrickStore();
-  const { setPart, rotate, setColor, setMat, setTool, setStudStyle, rememberColor } = useBrickStore();
+  const { part, rot, color, mat, tex, studStyle, recentColors } = useBrickStore();
+  const { setPart, rotate, setColor, setMat, setTex, setTool, setStudStyle, rememberColor } = useBrickStore();
   const [pickerOpen, setPickerOpen] = useState(false);
   const effTool = useEffectiveTool();
 
@@ -98,6 +99,22 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
       <div className="flex gap-1 mb-3">
         {MAT_CLASSES.map((m) => (
           <button key={m.id} onClick={() => setMat(m.id)} className={`${btn} flex-1 ${mat === m.id ? on : off}`}>{m.label}</button>
+        ))}
+      </div>
+
+      {/* 재료(무늬) — 색과는 **별개 축**이다. 무늬는 흑백이라 색이 그대로 곱해진다
+          (잔디 무늬 + 파란색 = 파란 잔디). 고르면 기본색도 함께 잡아 준다. */}
+      <div className={label}>재료</div>
+      <div className="grid grid-cols-4 gap-1 mb-3">
+        {BRICK_TEXTURES.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTex(t.id)}
+            className={`${btn} px-0 ${tex === t.id ? on : off}`}
+            title={t.id === 0 ? '무늬 없이 색만' : `${t.label} 무늬 — 색은 따로 고를 수 있다`}
+          >
+            {t.label}
+          </button>
         ))}
       </div>
 

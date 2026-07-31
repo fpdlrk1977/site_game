@@ -15,7 +15,7 @@ const eq = (a: unknown, b: unknown, label: string) => ok(JSON.stringify(a) === J
 
 let seq = 1;
 const brick = (part: Brick['part'], x: number, y: number, z: number): Brick =>
-  ({ id: seq++, part, x, y, z, rot: 0, color: '#fff', mat: 'opaque' });
+  ({ id: seq++, part, x, y, z, rot: 0, color: '#fff', mat: 'opaque', tex: 0 });
 
 // 축: 0=x, 1=y, 2=z
 {
