@@ -12,7 +12,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { anchorCenterWorld, anchorFromFace, faceOf, slideAnchor, type FacePlacement } from '@/lib/brick/placement';
+import { anchorCenterWorld, anchorFromFace, faceOf, type FaceAxis, type FacePlacement } from '@/lib/brick/placement';
+import {
+  beginEraseStroke, canEraseInStroke, beginPlaceStroke, canPlaceInStroke, strokeAnchor, dominantAxis, axisSteps,
+  type EraseLock, type PlaceLock,
+} from '@/lib/brick/strokeLock';
+import { CELL_X, CELL_Y, CELL_Z, worldToCellX, worldToCellY, worldToCellZ } from '@/lib/brick/grid';
 import { brickGeometry, type StudStyle } from '@/lib/brick/brickGeometry';
 import { PARTS } from '@/lib/brick/parts';
 import type { BrickWorld } from '@/lib/brick/world';
@@ -27,6 +32,9 @@ interface Props {
 }
 
 // 도구별 커서 — 지금 왼쪽 클릭이 무슨 뜻인지 커서만 봐도 알게 한다(SVG data-URI, 외부 파일 없음)
+/** 축별 칸 크기 — 줄 긋기에서 월드 거리를 칸으로 환산할 때 쓴다 */
+const CELL = [CELL_X, CELL_Y, CELL_Z] as const;
+
 const svgCursor = (body: string, hot = '12 12') =>
   `url("data:image/svg+xml;utf8,${encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round">${body}</svg>`,
@@ -63,18 +71,15 @@ export function useEffectiveTool(): Tool {
 /** 도구별 커서 CSS — 부모가 캔버스(또는 감싼 요소)에 적용한다 */
 export const brickCursor = (tool: Tool): string => (tool === 'erase' ? ERASE_CURSOR : PLACE_CURSOR);
 
-/** 드래그로 자리를 고칠 수 있는 최대 거리(m) — 시선이 얕을 때 무한대로 달아나는 것을 막는다 */
-const SLIDE_REACH = 12;
-
 /**
- * 드래그 중 좌표원 — **처음 붙은 면의 평면**에 포인터를 투영한다.
+ * 놓기 획의 좌표원 — 첫 클릭에서 잡은 **표면의 평면**에 커서를 투영해 칸을 돌려준다.
  *
- * ★ R3F 이벤트가 아니라 직접 레이캐스트인 이유:
- *   ① 방금 놓은 브릭이 **그 뒤의 평면을 가려** 이벤트가 끊긴다(끌다 멈춤)
- *   ② 브릭 표면에서 좌표를 받으면 높이가 달라 **커서와 어긋난다**(시차)
- *   평면은 수학이라 가려지지 않는다.
+ * ★ 왜 면(hover) 기준이 아니라 평면인가 — **실제로 터진 버그**(2026-07-31):
+ *   드래그 중에는 커서가 **방금 놓은 브릭의 옆면**을 짚는다. 그 면은 대개 **카메라를 향한 앞면**이라
+ *   `anchorFromFace`가 새 브릭을 **커서 방향이 아니라 내 쪽으로** 붙였고, 그게 이어져 엉뚱한 줄이 생겼다.
+ *   평면은 브릭에 가려지지도, 방향이 바뀌지도 않는다 — 커서가 가리키는 **표면 위 그 자리**가 그대로 나온다.
  */
-function SlidePlane({ base, onPoint }: { base: FacePlacement; onPoint: (x: number, y: number, z: number) => void }) {
+function StrokePlane({ base, onCell }: { base: FacePlacement; onCell: (c: [number, number, number]) => void }) {
   const plane = useMemo(() => {
     const n = new THREE.Vector3(0, 0, 0);
     n.setComponent(base.face.axis, 1);
@@ -82,16 +87,33 @@ function SlidePlane({ base, onPoint }: { base: FacePlacement; onPoint: (x: numbe
   }, [base]);
   const ray = useMemo(() => new THREE.Raycaster(), []);
   const hit = useMemo(() => new THREE.Vector3(), []);
-  const origin = useMemo(
-    () => new THREE.Vector3().fromArray(anchorCenterWorld(base.anchor, 'b1x1', 0)),
-    [base],
-  );
   useFrame(({ camera, pointer }) => {
     ray.setFromCamera(pointer, camera);
     // 시선이 평면과 거의 나란하면 교점이 무한대로 달아난다
     if (Math.abs(ray.ray.direction.getComponent(base.face.axis)) < 0.12) return;
     if (!ray.ray.intersectPlane(plane, hit)) return;
-    if (hit.distanceTo(origin) > SLIDE_REACH) return;
+    onCell([worldToCellX(hit.x), worldToCellY(hit.y), worldToCellZ(hit.z)]);
+  });
+  return null;
+}
+
+/**
+ * 줄 긋기용 좌표원 — **카메라를 향한 평면**에 커서를 투영해 월드 지점을 돌려준다.
+ *
+ * 면의 평면을 쓰면 그 평면 위 두 축밖에 못 잰다. 옆면에서 "끈 방향"을 알려면
+ * **면 밖으로 나가는 축(법선)** 까지 재야 하므로, 화면을 마주 보는 평면이 필요하다.
+ */
+function CameraPlane({ origin, onPoint }: { origin: [number, number, number]; onPoint: (x: number, y: number, z: number) => void }) {
+  const plane = useMemo(() => new THREE.Plane(), []);
+  const ray = useMemo(() => new THREE.Raycaster(), []);
+  const hit = useMemo(() => new THREE.Vector3(), []);
+  const o = useMemo(() => new THREE.Vector3(...origin), [origin]);
+  const n = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera, pointer }) => {
+    camera.getWorldDirection(n);
+    plane.setFromNormalAndCoplanarPoint(n, o);
+    ray.setFromCamera(pointer, camera);
+    if (!ray.ray.intersectPlane(plane, hit)) return;
     onPoint(hit.x, hit.y, hit.z);
   });
   return null;
@@ -115,7 +137,7 @@ function EraseHighlight({ world, brickId, studStyle }: {
 export function BrickBuilder({ onStats, onSpot }: Props) {
   const gl = useThree((s) => s.gl);
   const { world, version, part, rot, studStyle } = useBrickStore();
-  const { place, moveBrick, removeBrick } = useBrickStore();
+  const { place, removeBrick } = useBrickStore();
   const { beginBatch, endBatch, undo, redo } = useBrickStore();
 
   /** 커서 밑 브릭 — 어느 면에 붙일지, 지우기 도구가 무엇을 지울지 결정한다 */
@@ -134,17 +156,97 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
 
   const effTool = useEffectiveTool();
 
-  const dragRef = useRef<{ id: number; base: FacePlacement; moved: boolean } | null>(null);
-  const [dragging, setDragging] = useState<FacePlacement | null>(null);
+  /**
+   * 드래그 한 획 — 누른 채 끌면 **지나가는 자리에 계속 놓이거나 지워진다.**
+   * 바닥 한 층 깔기·벽 한 면 허물기가 한 번에 되고, 한 획 전체가 **되돌리기 한 번**이다.
+   *
+   * ★ 놓기와 지우기가 **같은 잠금 규칙**을 쓴다(`strokeLock.ts`) — 첫 클릭에서 층·도달 거리를 못 박아
+   *   커서가 표면을 벗어나도 엉뚱한 것이 안 지워지고, 엉뚱한 층에 안 놓인다.
+   *   단 **판정 대상이 다르다**: 지우기는 "커서 밑 브릭", 놓기는 "새 브릭이 앉을 자리".
+   */
+  const eraseStrokeRef = useRef<{ lock: EraseLock; done: Set<number> } | null>(null);
+  /** `done` = 이 획에서 이미 시도한 칸 — 같은 칸에 매 프레임 다시 놓으려 들지 않게 */
+  const placeStrokeRef = useRef<{
+    lock: PlaceLock;
+    done: Set<string>;
+    /** 수직면 = 줄 긋기(끄는 방향 한 축) · 수평면 = 면 칠하기 */
+    line: null | { start: [number, number, number] | null; axis: FaceAxis | null };
+  } | null>(null);
+  /** 놓기 획이 도는 동안에만 존재하는 좌표원 */
+  const [placeDrag, setPlaceDrag] = useState<{ spot: FacePlacement; line: boolean } | null>(null);
 
   /** 커서가 가리킨 면 → 붙을 자리 */
   const onBrickHover = useCallback((h: BrickHit | null) => {
-    if (dragRef.current) return; // 드래그 중엔 평면이 자리를 정한다
+    // 지우기 획 — 커서가 닿는 브릭을 계속 지운다(잠금을 통과한 것만)
+    const stroke = eraseStrokeRef.current;
+    if (stroke) {
+      const b = h ? world.bricks.get(h.brickId) : undefined;
+      const allowed = !!b && canEraseInStroke(stroke.lock, b);
+      // ★ 못 지울 것은 **강조도 하지 않는다** — 빨갛게 떠 있는데 안 지워지면 고장으로 보인다
+      setHoverBrick(allowed ? h!.brickId : null);
+      if (allowed && !stroke.done.has(h!.brickId)) {
+        stroke.done.add(h!.brickId);
+        removeBrick(h!.brickId);
+      }
+      return;
+    }
+
+    // 놓기 획이 도는 동안엔 **평면이 자리를 정한다** — 면(hover)으로 정하면 방향이 틀어진다(StrokePlane 참고)
+    if (placeStrokeRef.current) return;
+
     setHoverBrick(h ? h.brickId : null);
     const f = h ? faceOf(world, h.brickId, h.point.x, h.point.y, h.point.z) : null;
     setSpot(f && h ? anchorFromFace(world, h.brickId, f, h.point.x, h.point.y, h.point.z, part, rot) : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, version, part, rot]);
+  }, [world, version, part, rot, removeBrick]);
+
+  /**
+   * 놓기 획 진행 — 평면 위 칸을 받아 **잠근 층**에 놓는다.
+   *
+   * 커서가 지나간 칸마다 한 번씩만 시도한다. 막힌 자리는 `place`가 null을 내므로 따로 거르지 않는다(부분 성공).
+   */
+  const tryPlace = useCallback((a: [number, number, number]) => {
+    const st = placeStrokeRef.current;
+    if (!st || !canPlaceInStroke(st.lock, a)) return;
+    const key = `${a[0]},${a[1]},${a[2]}`;
+    if (st.done.has(key)) return;
+    st.done.add(key);
+    place(a[0], a[1], a[2]);
+  }, [place]);
+
+  const onStrokeCell = useCallback((cell: [number, number, number]) => {
+    const st = placeStrokeRef.current;
+    if (!st) return;
+    // 자유 축은 **첫 브릭에서 이어지는 격자**로 스냅한다(안 하면 벽에서 줄이 어긋난다)
+    tryPlace(strokeAnchor(st.lock, cell));
+  }, [tryPlace]);
+
+  /**
+   * 줄 긋기(수직면) — 끈 방향으로 한 축만 늘린다.
+   *
+   * ★ 축은 **한 번만** 고른다. 매 프레임 다시 고르면 손이 떨릴 때 줄이 방향을 바꿔 어지러워진다.
+   *   중간 칸을 전부 채워 **끊긴 줄이 안 생기게** 한다(빨리 끌어 프레임을 건너뛰어도).
+   */
+  const onLinePoint = useCallback((x: number, y: number, z: number) => {
+    const st = placeStrokeRef.current;
+    if (!st?.line) return;
+    if (!st.line.start) { st.line.start = [x, y, z]; return; }
+    const [sx, sy, sz] = st.line.start;
+    const d: [number, number, number] = [x - sx, y - sy, z - sz];
+    if (st.line.axis === null) {
+      // 한 칸 이상 움직이기 전엔 방향을 못 정한다 — 섣불리 고르면 엉뚱한 축으로 잠긴다
+      if (Math.hypot(d[0], d[1], d[2]) < CELL_X * 0.75) return;
+      st.line.axis = dominantAxis(d[0], d[1], d[2]);
+    }
+    const k = st.line.axis;
+    const n = axisSteps(d[k], st.lock.ext[k], CELL[k]);
+    const s = Math.sign(n);
+    for (let i = 1; i <= Math.abs(n); i++) {
+      const a: [number, number, number] = [...st.lock.originCell];
+      a[k] += s * i * Math.max(1, st.lock.ext[k]);
+      tryPlace(a);
+    }
+  }, [tryPlace]);
 
   /**
    * ★ 놓는 자리는 **화면에 보여준 그 값**(`spot`)이다 — 강조된 칸 그대로.
@@ -157,45 +259,39 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
   const onDown = useCallback((e: PointerEvent) => {
     if (e.button !== 0) return;
     if (effTool === 'erase') {
-      // 지우기는 한 번에 끝나므로 묶을 것이 없다(지형이면 아래를 채우는 op까지 store가 한 단계로 만든다)
-      if (hoverBrick !== null) removeBrick(hoverBrick); // 빨갛게 강조된 그 브릭
+      // 누르는 순간 획이 시작된다 — 뗄 때까지 지나가는 브릭이 계속 지워지고, **전부 되돌리기 한 번**이다.
+      //   ★ 첫 브릭과 짚은 면으로 **획을 잠근다**(같은 갈래·같은 층·도달 거리) — strokeLock.ts 참고.
+      //     안 잠그면 커서가 브릭을 벗어나는 순간 그 뒤의 바닥까지 지워진다(실제로 그랬다).
+      const first = hoverBrick !== null ? world.bricks.get(hoverBrick) : undefined;
+      if (!first || !spot) return;
+      beginBatch();
+      eraseStrokeRef.current = { lock: beginEraseStroke(first, spot.face.axis), done: new Set<number>([first.id]) };
+      removeBrick(first.id); // 빨갛게 강조된 그 브릭
       return;
     }
     if (!spot || !valid) return;
+    // 놓기도 획이다 — 누른 순간 첫 브릭을 놓고 **그 층으로 잠근다.**
     beginBatch();
-    const id = place(spot.anchor.x, spot.anchor.y, spot.anchor.z);
+    const a: [number, number, number] = [spot.anchor.x, spot.anchor.y, spot.anchor.z];
+    const id = place(a[0], a[1], a[2]);
     if (id === null) { endBatch(); return; }
-    dragRef.current = { id, base: spot, moved: false };
-    setDragging(spot);
-  }, [effTool, hoverBrick, removeBrick, spot, valid, place, beginBatch, endBatch]);
+    // 수평면(윗면·밑면)은 **면을 칠하고**, 수직면은 **끄는 방향으로 한 줄**을 긋는다.
+    //   바닥은 한 획에 넓게 깔려야 하고, 옆면은 "끈 쪽으로 늘어난다"가 기대되는 동작이다.
+    const isLine = spot.face.axis !== 1;
+    placeStrokeRef.current = {
+      lock: beginPlaceStroke(a, spot.face.axis, spot.ext, spot.slide),
+      done: new Set<string>([`${a[0]},${a[1]},${a[2]}`]),
+      line: isLine ? { start: null, axis: null } : null,
+    };
+    setPlaceDrag({ spot, line: isLine });
+  }, [effTool, hoverBrick, removeBrick, spot, valid, place, beginBatch, endBatch, world]);
 
   const onUp = useCallback(() => {
-    if (dragRef.current) endBatch();
-    dragRef.current = null;
-    setDragging(null);
+    if (placeStrokeRef.current || eraseStrokeRef.current) endBatch();
+    placeStrokeRef.current = null;
+    eraseStrokeRef.current = null;
+    setPlaceDrag(null);
   }, [endBatch]);
-
-  /** 드래그를 시작한 뒤 **실제로 움직였을 때만** 미끄러진다 */
-  const onMove = useCallback(() => {
-    if (dragRef.current) dragRef.current.moved = true;
-  }, []);
-
-  /**
-   * 드래그 중 — 평면 위 지점을 받아 미끄러질 수 있는 축만 옮긴다.
-   *
-   * ★ **마우스를 움직이기 전에는 절대 안 옮긴다.** 예전엔 `SlidePlane`이 마운트되는
-   *   첫 프레임에 곧바로 브릭을 옮겨서, **그냥 클릭만 해도 자리가 바뀌었다.**
-   */
-  const onSlide = useCallback((px: number, py: number, pz: number) => {
-    const d = dragRef.current;
-    if (!d || !d.moved) return;
-    const next = slideAnchor(d.base, px, py, pz);
-    const b = world.bricks.get(d.id);
-    if (!b || (b.x === next.x && b.y === next.y && b.z === next.z)) return;
-    const id = moveBrick(d.id, next.x, next.y, next.z);
-    if (id !== null) d.id = id;
-    setSpot({ ...d.base, anchor: next });
-  }, [world, moveBrick]);
 
   // ★ 포인터는 캔버스 DOM에 직접 붙인다 — 얹는 쪽이 배선할 것이 없다.
   //   `capture` 단계라 에디터의 기존 선택·마퀴보다 먼저 받는다.
@@ -203,16 +299,14 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
     const el = gl.domElement;
     const down = (e: PointerEvent) => { onDown(e); };
     el.addEventListener('pointerdown', down, { capture: true });
-    el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointerleave', onUp);
     return () => {
       el.removeEventListener('pointerdown', down, { capture: true } as EventListenerOptions);
-      el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointerleave', onUp);
     };
-  }, [gl, onDown, onMove, onUp]);
+  }, [gl, onDown, onUp]);
 
   // 되돌리기 — **짓는 화면에서만** 걸린다(읽기 전용 뷰어엔 BrickBuilder가 아예 없다).
   //   Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z. 입력창에선 브라우저 기본 동작(텍스트 되돌리기)을 살려 준다.
@@ -241,8 +335,14 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
       {/* 놓을 자리 안내는 **놓기 도구일 때만**. 지우기 중엔 놓을 자리가 없다 */}
       {effTool === 'place' && <PlacementMarker spot={spot} part={part} rot={rot} valid={valid} />}
       {effTool === 'erase' && <EraseHighlight world={world} brickId={hoverBrick} studStyle={studStyle} />}
-      {/* 드래그로 자리를 고치는 동안에만 존재하는 좌표원 */}
-      {dragging && <SlidePlane base={dragging} onPoint={onSlide} />}
+      {/* 놓기 획 중에만 존재하는 좌표원 — 수평면은 그 면의 평면, 수직면은 카메라를 마주 보는 평면 */}
+      {placeDrag && !placeDrag.line && <StrokePlane base={placeDrag.spot} onCell={onStrokeCell} />}
+      {placeDrag && placeDrag.line && (
+        <CameraPlane
+          origin={anchorCenterWorld(placeDrag.spot.anchor, part, rot)}
+          onPoint={onLinePoint}
+        />
+      )}
     </>
   );
 }

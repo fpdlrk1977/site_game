@@ -12,11 +12,13 @@ import type { MatClass, PartId } from '@/lib/brick/parts';
 import type { StudStyle } from '@/lib/brick/brickGeometry';
 import { decodeChunk, encodeChunk, toBrickData } from '@/lib/brick/serialize';
 import { localBrickStorage, supabaseBrickStorage, type BrickStorage, type ChunkWrite } from '@/lib/brick/storage';
+import { loadRecentColors, pushRecentColor } from '@/lib/brick/colorPrefs';
 import { BrickWorld } from '@/lib/brick/world';
 import { deepenAround, forgetTerrainChunk, generateSurface, noteLoadedTerrain, resetTerrainState, SURFACE_Y, terrainKey, type TerrainGenerated } from '@/lib/brick/terrain';
 
 /** 도구 — 왼쪽 클릭이 무슨 뜻인지 결정한다 */
 export type Tool = 'place' | 'erase';
+
 
 /** 팔레트 — P1에서 청크 팔레트로 승격된다 */
 export const BRICK_COLORS = [
@@ -89,26 +91,6 @@ function recordAll(ops: UndoOp[]): void {
   if (ops.length === 0) return;
   if (batch) batch.push(...ops);
   else pushEntry(ops);
-}
-
-/**
- * 배치 안에서 **생겼다가 사라진 브릭**은 서로 상쇄한다.
- *
- * 드래그로 자리를 고치면 `moveBrick`이 매 프레임 "지우고 다시 놓기"를 해서
- * `add,del,add,del,…,add`가 쌓인다. 그대로 두면 되돌릴 때 **id가 어긋난다** —
- * 되살린 브릭은 새 id를 받는데 뒤이어 나오는 add op은 옛 id를 가리켜 아무것도 못 지운다
- * (드래그 경로에 잔재가 남았다). 상쇄하면 남는 건 **마지막 자리의 add 하나**뿐이라 그 문제 자체가 없어진다.
- */
-function compact(entry: UndoEntry): UndoEntry {
-  const out: UndoEntry = [];
-  for (const op of entry) {
-    if (op.kind === 'del') {
-      const i = out.findIndex((o) => o.kind === 'add' && o.id === op.id);
-      if (i >= 0) { out.splice(i, 1); continue; } // 이 배치 안에서 생겼다 사라졌다 = 없던 일
-    }
-    out.push(op);
-  }
-  return out;
 }
 
 const snapOf = (b: { part: PartId; x: number; y: number; z: number; rot: Rot; color: string; mat: MatClass }): BrickSnap =>
@@ -193,6 +175,12 @@ interface BrickState {
   setRot: (r: Rot) => void;
   rotate: () => void;
   setColor: (c: string) => void;
+  /** 고르개에서 **확정한** 임의 색 — 현재 색으로 쓰고 최근 목록에 남긴다(드래그 중엔 setColor만 쓴다) */
+  rememberColor: (c: string) => void;
+  /** 저장된 최근 색을 불러온다 — **마운트 후(클라이언트에서)** 부른다 */
+  hydrateRecentColors: () => void;
+  /** 최근에 쓴 임의 색(기기에 남는다) */
+  recentColors: string[];
   setMat: (m: MatClass) => void;
 
   /** 놓기 — 새 브릭 id, 못 놓으면 null */
@@ -206,8 +194,6 @@ interface BrickState {
   redoDepth: number;
 
   place: (x: number, y: number, z: number) => number | null;
-  /** 놓은 브릭을 다른 칸으로 (드래그로 자리 고치기). 막혀 있으면 원래 자리로 되돌린다 */
-  moveBrick: (id: number, x: number, y: number, z: number) => number | null;
   removeBrick: (id: number) => void;
   /** 전체 지우기 — 저장소까지 비워 **처음 상태**로 되돌린다 */
   clear: () => Promise<void>;
@@ -312,6 +298,7 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   part: 'b2x4',
   rot: 0,
   color: BRICK_COLORS[0],
+  recentColors: [], // ★ 초기값은 반드시 빈 배열 — 초기화에서 localStorage를 읽으면 SSR과 어긋난다(hydrateRecentColors 참고)
   mat: 'opaque',
   // 기본값 = 라인. 제품의 얼굴은 기본값이 정한다 — 스크린샷·템플릿·대부분의 사용자 콘텐츠가
   // 이 모양으로 나온다(BRICK_SYSTEM.md §8.5). 원형 등 나머지는 선택지로 남겨 둔다.
@@ -329,6 +316,9 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   setRot: (r) => set({ rot: r }),
   rotate: () => set((s) => ({ rot: ((s.rot + 1) % 4) as Rot })),
   setColor: (c) => set({ color: c }),
+  // 고르개로 만든 색만 최근 목록에 남긴다 — 기본 팔레트는 이미 위에 있으므로 중복이다
+  rememberColor: (c) => set((s) => ({ color: c, recentColors: pushRecentColor(s.recentColors, c) })),
+  hydrateRecentColors: () => set({ recentColors: loadRecentColors() }),
   setMat: (m) => set({ mat: m }),
 
   // ── 되돌리기 ───────────────────────────────────────────────────────────
@@ -339,7 +329,7 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   endBatch: () => {
     const b = batch;
     batch = null;
-    if (b) pushEntry(compact(b));
+    if (b) pushEntry(b);
     set({ undoDepth: undoStack.length, redoDepth: redoStack.length });
   },
 
@@ -373,29 +363,6 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     return id;
   },
 
-  /**
-   * 방금 놓은 브릭을 다른 칸으로 옮긴다 — 드래그로 자리를 고칠 때 쓴다.
-   * 목적지가 막혀 있으면 **원래 자리에 그대로 되돌린다**(브릭이 사라지지 않게).
-   */
-  moveBrick: (id, x, y, z) => {
-    const { world } = get();
-    const b = world.bricks.get(id);
-    if (!b) return null;
-    if (b.x === x && b.y === y && b.z === z) return id;
-    const { part, rot, color, mat } = b;
-    const before = snapOf(b);
-    world.remove(id); // 자기 자신과의 충돌을 피하려면 먼저 빼야 한다
-    const next = world.place(part, x, y, z, rot, color, mat)
-      ?? world.place(part, b.x, b.y, b.z, rot, color, mat);
-    // 옮기기 = 지우고 다시 놓기. 두 op로 기록하면 되돌리기가 정확히 제자리로 간다.
-    if (next !== null) {
-      record({ kind: 'del', id, b: before });
-      record({ kind: 'add', id: next, b: snapOf(world.bricks.get(next)!) });
-    }
-    set((s) => ({ version: s.version + 1, saveState: 'pending', undoDepth: undoStack.length, redoDepth: redoStack.length }));
-    scheduleLight(set);
-    return next;
-  },
 
   removeBrick: (id) => {
     const { world } = get();

@@ -16,6 +16,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - `doc/BRICK_SYSTEM.md` — 설계서(확정 수치·채택/미채택 사유·데이터 모델·로드맵)
 - `doc/BRICK_PROGRESS.md` — **`⚠️ 작업 전 필독 — 반복해서 터진 함정`** + 진행 기록 + **기능 누락 검증 체크리스트**
+- `doc/BRICK_PLAN.md` — **남은 작업 계획**(항목별 기대 동작·범위·방식·검증). **여기 안 적힌 건 안 만든다** — 하고 싶어지면 문서를 먼저 고치고 확인을 받는다.
 
 ### 🔴 브릭 작업을 시작하기 전에
 

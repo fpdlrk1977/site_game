@@ -8,11 +8,13 @@
 // 담는 것: 도구 · 파츠 · 방향 · 재질 · 색 · 돌기 모양.
 // 안 담는 것: 통계·스트레스 테스트·전체 지우기 등 **프로토타입 전용 계측**(그건 그 페이지가 갖는다).
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { STUD_STYLES } from '@/lib/brick/brickGeometry';
 import { MAT_CLASSES, PART_KINDS, PARTS, partsOfKind } from '@/lib/brick/parts';
 import { BRICK_COLORS, useBrickStore, type Tool } from '@/store/brickStore';
 import { useEffectiveTool } from './BrickBuilder';
+import { BrickColorPicker } from './BrickColorPicker';
+import { Plus } from 'lucide-react';
 
 const btn = 'px-2.5 py-1.5 rounded-xs text-[12px] border transition-colors cursor-pointer';
 const on = 'bg-primary text-white border-primary';
@@ -21,9 +23,21 @@ const label = 'text-[10px] uppercase text-muted mb-1';
 
 /** 돌기 모양은 룩·IP 검토용이라 프로토타입에서만 노출한다(BRICK_SYSTEM.md §8.5) */
 export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: boolean }) {
-  const { part, rot, color, mat, studStyle } = useBrickStore();
-  const { setPart, rotate, setColor, setMat, setTool, setStudStyle } = useBrickStore();
+  const { part, rot, color, mat, studStyle, recentColors } = useBrickStore();
+  const { setPart, rotate, setColor, setMat, setTool, setStudStyle, rememberColor } = useBrickStore();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const effTool = useEffectiveTool();
+
+  /**
+   * 최근 색은 **마운트 후에** 불러온다.
+   *
+   * ★ 스토어 초기값에서 `localStorage`를 읽었더니 **하이드레이션이 깨졌다** —
+   *   서버에는 localStorage가 없어 빈 배열이고 클라이언트에는 저장된 색이 있어서,
+   *   서버가 그린 HTML(최근 줄 없음)과 클라이언트 렌더(최근 줄 있음)가 어긋난다.
+   *   브라우저에만 있는 값은 **렌더가 끝난 뒤** 채워 넣어야 한다.
+   */
+  const hydrateRecentColors = useBrickStore((s) => s.hydrateRecentColors);
+  useEffect(() => { hydrateRecentColors(); }, [hydrateRecentColors]);
 
   /** 지금 보고 있는 갈래(브릭/플레이트)의 파츠 — 목록과 숫자키가 같은 순서를 쓴다 */
   const kindParts = useMemo(() => partsOfKind(PARTS[part].kind), [part]);
@@ -92,12 +106,41 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
         {BRICK_COLORS.map((c) => (
           <button
             key={c}
-            onClick={() => setColor(c)}
+            onClick={() => { setColor(c); setPickerOpen(false); }}
             className={`h-6 rounded-xs border-2 cursor-pointer ${color === c ? 'border-primary' : 'border-border'}`}
             style={{ background: c }}
           />
         ))}
+        {/* 임의 색 — 팔레트 밖의 색을 직접 만든다 */}
+        <button
+          onClick={() => setPickerOpen((o) => !o)}
+          title="색 직접 고르기"
+          className={`h-6 rounded-xs border-2 cursor-pointer flex items-center justify-center text-foreground ${pickerOpen ? 'border-primary' : 'border-border'}`}
+          style={{ background: 'conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)' }}
+        >
+          <Plus size={12} className="text-white drop-shadow" />
+        </button>
       </div>
+
+      {pickerOpen && <BrickColorPicker value={color} onChange={setColor} onCommit={rememberColor} />}
+
+      {/* 최근에 쓴 임의 색 — 기기에 남는다(씬을 옮겨도 유지) */}
+      {recentColors.length > 0 && (
+        <>
+          <div className={label}>최근</div>
+          <div className="grid grid-cols-5 gap-1 mb-3">
+            {recentColors.map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                title={c}
+                className={`h-5 rounded-xs border-2 cursor-pointer ${color === c ? 'border-primary' : 'border-border'}`}
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {showStudStyle && (
         <>

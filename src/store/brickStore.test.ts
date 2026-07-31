@@ -201,22 +201,23 @@ async function main(): Promise<void> {
     ok(s().world.count === before, `★ 파며 채운 브릭까지 함께 되돌아간다 — ${s().world.count} vs ${before}`);
   }
 
-  // ③ 한 제스처(놓고 드래그로 자리 고치기) = **되돌리기 한 번**
-  //    안 묶으면 Ctrl+Z를 수십 번 눌러야 브릭 하나가 사라진다.
+  // ③ 연속 놓기 한 획 = **되돌리기 한 번** (BRICK_PLAN.md §1-b)
+  //    바닥 한 층을 드래그로 깔았는데 Ctrl+Z를 열 번 눌러야 한다면 쓸 수 없다.
   {
     const { api } = memoryStorage();
     await reload(api);
     const s = store;
+    const Y = SURFACE_Y + 3;
     const before = s().world.count;
     s().beginBatch();
-    let id = s().place(0, SURFACE_Y + 3, 0)!;
-    for (let i = 1; i <= 5; i++) id = s().moveBrick(id, i, SURFACE_Y + 3, 0)!; // 드래그로 5칸 미끄러짐
+    for (let i = 0; i < 6; i++) s().place(i * 2, Y, 0); // 드래그로 6칸 깔았다고 치고
     s().endBatch();
-    ok(s().world.at(5, SURFACE_Y + 3, 0) !== undefined, '드래그한 자리에 있다');
+    ok(s().world.count === before + 6, '한 획으로 6개가 놓인다');
     s().undo();
-    ok(s().world.count === before, '★ 드래그 한 획이 되돌리기 한 번 (op 6개여도)');
-    ok(s().world.at(0, SURFACE_Y + 3, 0) === undefined && s().world.at(5, SURFACE_Y + 3, 0) === undefined,
-      '★ 중간 자리에도 잔재가 없다');
+    ok(s().world.count === before, '★ 연속 놓기 한 획이 되돌리기 한 번');
+    ok(s().world.at(0, Y, 0) === undefined && s().world.at(10, Y, 0) === undefined, '★ 처음도 끝도 남지 않는다');
+    s().redo();
+    ok(s().world.count === before + 6, '★ 다시 실행하면 6개가 다시 놓인다');
   }
 
   // ④ 새 편집이 생기면 '다시 실행'은 사라진다 (분기된 미래를 남기지 않는다)
@@ -250,6 +251,38 @@ async function main(): Promise<void> {
     const n = s().world.count;
     s().undo(); s().undo(); s().redo();
     ok(s().world.count === n, '빈 스택에서 undo/redo 해도 월드가 안 변한다');
+  }
+
+  // ⑦ 지우기 드래그 한 획 = 되돌리기 한 번 (BRICK_PLAN.md §1)
+  //    벽을 드래그로 허물었는데 Ctrl+Z를 20번 눌러야 한다면 쓸 수 없다.
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+    // 브릭 20개를 미리 쌓는다(한 획으로 지울 대상)
+    const ids: number[] = [];
+    s().beginBatch();
+    for (let i = 0; i < 20; i++) {
+      const id = s().place(i * 2, SURFACE_Y + 3, 0);
+      if (id !== null) ids.push(id);
+    }
+    s().endBatch();
+    ok(ids.length === 20, `지울 브릭 20개 준비 — ${ids.length}개`);
+    const before = s().world.count;
+
+    // 한 획으로 전부 지운다(BrickBuilder의 pointerdown~up과 같은 순서)
+    s().beginBatch();
+    for (const id of ids) s().removeBrick(id);
+    s().endBatch();
+    ok(s().world.count === before - 20, '드래그 한 획으로 20개가 지워진다');
+
+    s().undo();
+    ok(s().world.count === before, '★ Ctrl+Z 한 번에 20개가 전부 돌아온다');
+    ok(s().world.at(0, SURFACE_Y + 3, 0) !== undefined && s().world.at(38, SURFACE_Y + 3, 0) !== undefined,
+      '★ 처음과 끝 브릭이 제자리에 돌아왔다');
+
+    s().redo();
+    ok(s().world.count === before - 20, '★ 다시 실행하면 다시 20개가 지워진다');
   }
 }
 
