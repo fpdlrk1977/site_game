@@ -73,6 +73,106 @@ const cache = new Map<string, THREE.BufferGeometry>();
  * 파츠 메시. 원점은 AABB **중심** — 인스턴스 행렬이 중심 기준으로 놓기 때문.
  * withStuds=false면 박스만(12삼각형).
  */
+/**
+ * 쐐기(경사) — 삼각기둥. 단면은 **Z–Y 평면**의 직각삼각형이고 X로 밀어낸다.
+ *
+ * `slope`     : 높은 쪽이 **−Z**, +Z로 갈수록 낮아진다(지붕 경사)
+ * `slopeInv`  : 그 반대로 **아랫면이 깎인** 모양(처마·계단 밑 마감)
+ *
+ * ★ 돌기(스터드)는 붙이지 않는다 — 비스듬한 면에 원기둥을 세우면 레고에도 없는 모양이 되고,
+ *   폴리곤만 는다. 대신 **6면(삼각기둥) = 8삼각형**으로 아주 가볍다.
+ */
+function wedgeGeometry(w: number, h: number, d: number, inverted: boolean): THREE.BufferGeometry {
+  const x0 = -w / 2, x1 = w / 2;
+  const y0 = -h / 2, y1 = h / 2;
+  const z0 = -d / 2, z1 = d / 2;
+
+  // 단면(z,y) 삼각형 — 시계 반대 방향으로 잡아야 앞면이 밖을 본다
+  //   slope    : (z0,y1) 높은 쪽 → (z1,y0) 낮은 쪽 → (z0,y0) 바닥 안쪽
+  //   slopeInv : 위가 꽉 차고 **아래가 깎인다** — (z0,y1) → (z1,y1) → (z1,y0)
+  const tri: [number, number][] = inverted
+    ? [[z0, y1], [z1, y1], [z1, y0]]
+    : [[z0, y1], [z1, y0], [z0, y0]];
+
+  const pos: number[] = [];
+  const nrm: number[] = [];
+  const push = (ax: number, ay: number, az: number, nx: number, ny: number, nz: number) => {
+    pos.push(ax, ay, az); nrm.push(nx, ny, nz);
+  };
+  /** 사각면 하나(반시계) */
+  const quad = (
+    a: [number, number, number], b: [number, number, number],
+    c: [number, number, number], dd: [number, number, number],
+  ) => {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    nx /= len; ny /= len; nz /= len;
+    for (const p of [a, b, c, a, c, dd]) push(p[0], p[1], p[2], nx, ny, nz);
+  };
+
+  // 양 옆(삼각형 두 장) — X 방향 법선
+  for (const [sx, sign] of [[x0, -1], [x1, 1]] as const) {
+    const t = sign > 0 ? tri : [...tri].reverse();
+    for (const [tz, ty] of t) push(sx, ty, tz, sign, 0, 0);
+  }
+  // 옆면 세 장 — 삼각형의 각 변을 X로 밀어낸 사각형
+  //   ★ 변을 **b→a 방향**으로 감는다. a→b로 감으면 세 면의 법선이 전부 **안쪽**을 향해
+  //     뒷면 컬링에 잘려 **경사면이 텅 비어 보인다**(실제로 그랬다).
+  for (let i = 0; i < 3; i++) {
+    const [az, ay] = tri[i];
+    const [bz, by] = tri[(i + 1) % 3];
+    quad([x0, by, bz], [x1, by, bz], [x1, ay, az], [x0, ay, az]);
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  g.computeBoundingSphere();
+  return g;
+}
+
+/**
+ * 정점마다 **여덟 꼭짓점에 대한 삼선형 가중치**를 붙인다 — 부드러운 조명의 절반.
+ *
+ * 렌더러는 브릭의 꼭짓점 여덟 개 밝기를 인스턴스 속성으로 넘기고, 셰이더가
+ * `dot(가중치, 밝기)`로 그 정점의 밝기를 구한다. 래스터라이저가 면 안을 보간하므로
+ * **면이 통짜로 같은 밝기이던 문제**가 사라진다.
+ *
+ * ★ 왜 "가장 가까운 꼭짓점 하나"(one-hot)가 아니라 가중치인가:
+ *   상자 모서리 정점은 정확히 꼭짓점 위라 어느 쪽이든 같지만, **돌기·모따기·쐐기**의 정점은
+ *   면 한가운데에 있다. one-hot이면 그런 정점이 엉뚱한 꼭짓점 값을 그대로 받아 얼룩진다.
+ *   삼선형이면 상자 모서리에서는 자동으로 one-hot이 되고 나머지는 자연스럽게 섞인다.
+ *
+ * 순서는 `world.cornerLight`와 같아야 한다: `i + 2j + 4k` (i=+x, j=+y, k=+z).
+ */
+function addCornerWeights(g: THREE.BufferGeometry, w: number, h: number, d: number): void {
+  const p = g.getAttribute('position');
+  const a = new Float32Array(p.count * 4);
+  const b = new Float32Array(p.count * 4);
+  const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  for (let v = 0; v < p.count; v++) {
+    const u = clamp01((p.getX(v) + w / 2) / w);
+    const t = clamp01((p.getY(v) + h / 2) / h);
+    const s = clamp01((p.getZ(v) + d / 2) / d);
+    for (let k = 0; k < 2; k++) {
+      const wk = k === 0 ? 1 - s : s;
+      for (let j = 0; j < 2; j++) {
+        const wj = (j === 0 ? 1 - t : t) * wk;
+        for (let i = 0; i < 2; i++) {
+          const idx = i + 2 * j + 4 * k;
+          const val = (i === 0 ? 1 - u : u) * wj;
+          if (idx < 4) a[v * 4 + idx] = val;
+          else b[v * 4 + (idx - 4)] = val;
+        }
+      }
+    }
+  }
+  g.setAttribute('aSelA', new THREE.Float32BufferAttribute(a, 4));
+  g.setAttribute('aSelB', new THREE.Float32BufferAttribute(b, 4));
+}
+
 export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: StudStyle = 'round'): THREE.BufferGeometry {
   const key = `${part.id}:${withStuds ? 's' : 'n'}:${studStyle}`;
   const hit = cache.get(key);
@@ -82,10 +182,19 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
   const h = part.h * CELL_Y;
   const d = part.sz * CELL_Z;
 
+  // 경사 — 돌기·모따기 없이 쐐기 하나. 돌기 스타일과 무관하다
+  if (part.shape === 'slope' || part.shape === 'slopeInv') {
+    const g = wedgeGeometry(w, h, d, part.shape === 'slopeInv');
+    addCornerWeights(g, w, h, d); // 부드러운 조명 재료
+    cache.set(key, g);
+    return g;
+  }
+
   // 지형(바닥) 블록은 돌기가 없다 — 브릭이 아니라 파낼 땅이므로 어떤 스타일이든 민짜 상자.
   if (part.id === 'terrain') {
     const g = new THREE.BoxGeometry(w, h, d);
     g.computeBoundingSphere();
+    addCornerWeights(g, w, h, d); // 부드러운 조명 재료
     cache.set(key, g);
     return g;
   }
@@ -97,6 +206,7 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
       ? new RoundedBoxGeometry(w, h, d, 1, BEVEL)
       : new THREE.BoxGeometry(w, h, d);
     g.computeBoundingSphere();
+    addCornerWeights(g, w, h, d); // 부드러운 조명 재료
     cache.set(key, g);
     return g;
   }
@@ -121,6 +231,7 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
   parts.forEach((g) => g.dispose());
   if (!merged) throw new Error(`brickGeometry: merge 실패 (${key})`);
   merged.computeBoundingSphere();
+  addCornerWeights(merged, w, h, d); // 부드러운 조명 재료
   cache.set(key, merged);
   return merged;
 }

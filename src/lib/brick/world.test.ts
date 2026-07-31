@@ -206,62 +206,51 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
   ok(lit > dark, `발광 브릭이 밀폐 공간을 밝힌다 — ${dark.toFixed(2)} → ${lit.toFixed(2)}`);
 }
 
-// 면 밝기: 하늘을 향한 윗면이 파묻힌 밑면보다 밝다
+// 꼭짓점 밝기: 하늘을 향한 위쪽 꼭짓점이 바닥에 닿은 아래쪽보다 밝다
 {
   const w = new BrickWorld();
   const id = w.place('b2x2', 0, 0, 0, 0, '#fff', 'opaque')!;
   w.recomputeLight();
-  const f = new Float32Array(6);
-  w.faceLight(w.bricks.get(id)!, f);
-  ok(f[2] > f[3], `윗면(${f[2].toFixed(2)})이 바닥에 닿은 밑면(${f[3].toFixed(2)})보다 밝다`);
-  ok(f[2] === 1, '뻥 뚫린 윗면은 최대 밝기');
+  const c = new Float32Array(8);
+  w.cornerLight(w.bricks.get(id)!, c);
+  const top = (c[2] + c[3] + c[6] + c[7]) / 4;   // j=1 (위쪽 네 꼭짓점)
+  const bot = (c[0] + c[1] + c[4] + c[5]) / 4;   // j=0 (아래쪽 네 꼭짓점)
+  ok(top > bot, `위쪽 꼭짓점(${top.toFixed(2)})이 바닥에 닿은 아래쪽(${bot.toFixed(2)})보다 밝다`);
+  ok(top === 1, '뻥 뚫린 위쪽은 최대 밝기');
 }
 
-// ★ 면 방향 고정 배율 — 마인크래프트처럼 **태양 방향이 없다**.
-//   사방이 트인 브릭은 카메라·시간과 무관하게 항상 같은 배율이어야 한다.
-//   (실시간 방향광을 되살리면 이 고정성이 깨지고 "블록에 그림자가 진다")
+// ★ 면 방향 배율은 이제 **셰이더**가 곱한다(꼭짓점을 세 면이 공유하므로).
+//   여기선 꼭짓점 값이 **배율 없는 순수 하늘빛**인지만 본다 — 배율이 섞여 들어오면
+//   같은 꼭짓점이 면마다 달라야 하는데 그럴 수 없어 조용히 틀어진다.
 {
   const w = new BrickWorld();
-  const id = w.place('b1x1', 0, 300, 0, 0, '#fff', 'opaque')!; // 허공 — 여섯 면 모두 트임
+  const id = w.place('b1x1', 0, 300, 0, 0, '#fff', 'opaque')!; // 허공 — 사방이 트임
   w.recomputeLight();
-  const f = new Float32Array(6);
-  w.faceLight(w.bricks.get(id)!, f);
-  // Float32Array라 정확히 같진 않다. 아래 브릭 없는 칸은 하늘빛이 한 단계 낮아 0.5×0.97.
-  const near = (a: number, b: number) => Math.abs(a - b) < 0.03;
-  ok(near(f[2], 1.0), `윗면 1.0 — got ${f[2].toFixed(2)}`);
-  ok(near(f[3], 0.5), `밑면 0.5 — got ${f[3].toFixed(2)}`);
-  ok(near(f[4], 0.8) && f[4] === f[5], `앞뒤(z) 0.8 · 좌우 대칭 — got ${f[4].toFixed(2)}/${f[5].toFixed(2)}`);
-  ok(near(f[0], 0.6) && f[0] === f[1], `동서(x) 0.6 · 좌우 대칭 — got ${f[0].toFixed(2)}/${f[1].toFixed(2)}`);
-  ok(f[2] > f[4] && f[4] > f[0] && f[0] > f[3], '윗면 > 남북 > 동서 > 밑면 (네 면이 균일하면 입체감이 죽는다)');
+  const c = new Float32Array(8);
+  w.cornerLight(w.bricks.get(id)!, c);
+  for (let i = 0; i < 8; i++) ok(c[i] > 0.9, `허공 브릭의 꼭짓점 ${i}는 배율 없이 밝다 — ${c[i].toFixed(2)}`);
 }
 
-// ★ 걸쳐 놓은 브릭이 아래 타일 전체를 어둡게 만들면 안 된다 (= "그림자처럼 보인다")
-//   면 하나에 밝기 하나뿐이라, 막힌 칸을 평균에 넣으면 절반만 덮였는데 전체가 어두워진다.
+// ★ 걸쳐 놓은 브릭이 아래 타일을 통째로 어둡게 만들면 안 된다 (= "그림자처럼 보인다")
+//   막힌 칸을 평균에 넣으면 절반만 덮였는데 전체가 어두워진다.
+//   ⚠️ 꼭짓점 단위가 되면서 **덮인 쪽 꼭짓점만** 어두워지는 게 정상이다(그게 부드러운 조명의 목적).
+//      그래서 "먼 쪽 꼭짓점은 그대로"를 본다.
 {
   const w = new BrickWorld();
-  // 지형 타일(2×2)을 깐다 — 각 타일은 셀 [x, x+1] × [z, z+1]
   for (let x = -2; x <= 4; x += 2) for (let z = -2; z <= 4; z += 2)
     w.place('terrain', x, -3, z, 0, '#6b5233', 'opaque');
-  const tileA = w.at(0, -3, 0)!, tileB = w.at(2, -3, 0)!;
-  const bare = new Float32Array(6), f2 = new Float32Array(6);
+  const tileA = w.at(0, -3, 0)!;
+  const bare = new Float32Array(8), c2 = new Float32Array(8);
   w.recomputeLight();
-  w.faceLight(w.bricks.get(tileA)!, bare);
-  ok(bare[2] === 1, `깔린 지형 윗면은 최대 밝기 — got ${bare[2].toFixed(2)}`);
+  w.cornerLight(w.bricks.get(tileA)!, bare);
+  ok(bare[2] === 1 && bare[6] === 1, `깔린 지형의 위쪽 꼭짓점은 최대 밝기 — ${bare[2].toFixed(2)}`);
 
-  // ★ 타일 경계에 **걸치도록** 놓는다 — 셀 x=1,2 → A타일 절반 + B타일 절반
+  // 타일 경계에 **걸치도록** 놓는다 — 셀 x=1,2 → A타일 절반 + B타일 절반
   w.place('b2x2', 1, 0, 0, 0, '#fff', 'opaque');
   w.recomputeLight();
-  w.faceLight(w.bricks.get(tileA)!, f2);
-  ok(f2[2] === bare[2], `걸친 브릭이 왼쪽 타일을 어둡게 하지 않는다 — ${bare[2].toFixed(2)} → ${f2[2].toFixed(2)}`);
-  w.faceLight(w.bricks.get(tileB)!, f2);
-  ok(f2[2] === bare[2], `걸친 브릭이 오른쪽 타일을 어둡게 하지 않는다 — ${bare[2].toFixed(2)} → ${f2[2].toFixed(2)}`);
-
-  // 완전히 덮인 타일은 어차피 안 그려진다 — 규칙(전부 막힘 = 어둠)만 확인
-  const covered = w.at(4, -3, 4)!;
-  w.place('b2x2', 4, 0, 4, 0, '#fff', 'opaque');
-  w.recomputeLight();
-  w.faceLight(w.bricks.get(covered)!, f2);
-  ok(f2[2] < bare[2], '완전히 덮인 타일 윗면은 어둡다(안 보이는 면)');
+  w.cornerLight(w.bricks.get(tileA)!, c2);
+  // 꼭짓점 인덱스 i + 2j + 4k. 덮이지 않은 −x 쪽(i=0) 위쪽 꼭짓점은 그대로여야 한다
+  ok(c2[2] === bare[2], `걸친 브릭이 **먼 쪽 꼭짓점**을 어둡게 하지 않는다 — ${bare[2].toFixed(2)} → ${c2[2].toFixed(2)}`);
 }
 
 // ── 플레이트(높이 1칸) — 브릭과 다른 높이 계열이 섞여도 쌓기가 맞아야 한다 ────
@@ -447,6 +436,111 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
     // 한 겹 더 파면 그 아래 블록(y=-9, -9..-7 차지)의 윗면인 -6이 꼭대기가 된다
     ok(w.topOfColumn(0, 0) === SURFACE_Y * 2, `두 겹 파면 더 내려간다 — got ${w.topOfColumn(0, 0)}, want ${SURFACE_Y * 2}`);
   }
+}
+
+// ── ★ 경사는 이웃을 감추지 않는다 (non-occluding) ────────────────────────
+//   경사는 칸을 차지하면서도 **대각선이 뚫려 있다.** 감춤으로 치면 그 너머 브릭이 안 그려져
+//   뚫린 쪽으로 **구멍**이 보인다. 화면에서만 드러나는 종류라 여기서 잠근다.
+{
+  /**
+   * 1×1 브릭(칸 (0,0..2,0))을 여섯 방향에서 막고, 가운데가 그려지는지 본다.
+   * `front`만 갈아끼운다 — 경사는 1×2라 여섯 면을 다 경사로 감싸면 **서로 겹쳐 배치가 실패**한다
+   * (처음에 그렇게 짰더니 사보타주를 넣어도 테스트가 통과했다).
+   */
+  const surround = (front: 'b1x1' | 's1x2'): boolean => {
+    const w = new BrickWorld();
+    const mid = w.place('b1x1', 0, 0, 0, 0, '#fff', 'opaque')!;
+    const box: [number, number, number][] = [[1, 0, 0], [-1, 0, 0], [0, 3, 0], [0, -3, 0], [0, 0, -1]];
+    for (const [x, y, z] of box) ok(w.place('b1x1', x, y, z, 0, '#fff', 'opaque') !== null, `감싸기 배치 (${x},${y},${z})`);
+    ok(w.place(front, 0, 0, 1, 0, '#fff', 'opaque') !== null, `앞면 막기 (${front})`);
+    return w.isVisible(mid);
+  };
+  ok(!surround('b1x1'), '여섯 면이 상자로 막히면 안 그린다(기존 규칙 유지)');
+  ok(surround('s1x2'), '★ 한 면이라도 **경사**면 여전히 그린다 — 경사 틈으로 보이기 때문');
+}
+
+// ── ★ 다시 구운 빛이 **렌더러에 닿는가** ────────────────────────────────
+//
+//   렌더러는 리전 리비전이 바뀔 때만 인스턴스 버퍼를 다시 쓴다. 예전엔 recomputeLight가
+//   리비전을 안 올려서 **빛 지도는 맞는데 화면은 옛 값**이었다(브릭을 놓으면 그때 리빌드된
+//   리전만 우연히 갱신 → "어떤 건 바뀌고 어떤 건 안 바뀐다"). 눈으로만 보면 원인을 못 찾는다.
+{
+  const w = new BrickWorld();
+  for (let x = -2; x <= 2; x += 2) for (let z = -2; z <= 2; z += 2)
+    w.place('terrain', x, -3, z, 0, '#6b5233', 'opaque');
+  w.recomputeLight();
+
+  const before = new Map(w.regionSnapshot().map((r) => [r.key, r.rev]));
+  ok(before.size > 0, '리전이 있다(전제)');
+  w.recomputeLight();
+  const after = w.regionSnapshot();
+  const stale = after.filter((r) => (before.get(r.key) ?? -1) === r.rev);
+  ok(stale.length === 0, `★ 빛을 다시 구우면 **모든 리전**의 리비전이 오른다 — 안 오른 리전 ${stale.length}개`);
+}
+
+// ── ★ 구석 그늘(AO) ─────────────────────────────────────────────────────
+//
+//   규칙: 평평한 면·볼록 모서리는 **그대로**, 오목한 안쪽 구석만 어두워진다.
+//   (밝아지는 곳이 있으면 전역 밝기가 흔들려 "룩이 통째로 바뀌었다"가 된다)
+{
+  const w = new BrickWorld();
+  for (let x = -6; x <= 8; x += 2) for (let z = -6; z <= 8; z += 2)
+    w.place('terrain', x, -3, z, 0, '#6b5233', 'opaque');
+  w.recomputeLight();
+
+  const c = new Float32Array(8);
+  const cornersOf = (x: number, z: number) => { w.cornerLight(w.bricks.get(w.at(x, -3, z)!)!, c); return Array.from(c); };
+
+  const flat = cornersOf(6, 6);
+  ok(flat[2] === 1 && flat[3] === 1 && flat[6] === 1 && flat[7] === 1,
+    `★ 평평한 바닥의 윗면 꼭짓점은 그대로 1.0 — ${flat[2].toFixed(2)}`);
+
+  // 벽을 세운다 — 벽에 닿은 바닥 꼭짓점이 오목한 구석이다
+  const near = cornersOf(0, 0);                       // 벽이 설 자리 바로 옆 타일
+  for (let y = 0; y < 6; y += 3) w.place('b2x2', 2, y, 0, 0, '#fff', 'opaque');
+  w.recomputeLight();
+  const withWall = cornersOf(0, 0);
+
+  // +x(i=1) 위쪽 꼭짓점 = 벽에 닿은 쪽 / −x(i=0) 위쪽 = 먼 쪽
+  ok(withWall[3] < near[3], `★ 벽에 닿은 바닥 꼭짓점이 어두워진다 — ${near[3].toFixed(2)} → ${withWall[3].toFixed(2)}`);
+  ok(withWall[2] === near[2], `먼 쪽 꼭짓점은 그대로 — ${near[2].toFixed(2)} → ${withWall[2].toFixed(2)}`);
+
+  // 벽 자신의 바깥(볼록) 위쪽 꼭짓점은 안 어두워진다
+  const wallTop = new Float32Array(8);
+  w.cornerLight(w.bricks.get(w.at(2, 3, 0)!)!, wallTop);
+  ok(wallTop[3] === 1 || wallTop[7] === 1, `볼록한 벽 꼭대기 바깥 꼭짓점은 1.0 — ${wallTop[3].toFixed(2)}/${wallTop[7].toFixed(2)}`);
+}
+
+// ── ★ AO 응답 곡선 — 첫 접촉이 세고 그 뒤는 완만 (마인크래프트 밑동 그늘) ──────
+//
+//   선형으로 깎으면 **세기를 낮추면 밑동이 안 보이고, 올리면 깊은 구석이 새까매진다** — 둘 다 실제로 겪었다.
+//   `√` 응답이면 첫 칸에서 확 떨어지고 그 뒤는 완만해 둘 다 피한다. 값이 아니라 **곡선 모양**을 잠근다.
+{
+  const floorCorner = (walls: [number, number][]) => {
+    const w = new BrickWorld();
+    for (let x = -8; x <= 10; x += 2) for (let z = -8; z <= 10; z += 2)
+      w.place('terrain', x, -3, z, 0, '#6b5233', 'opaque');
+    for (const [wx, wz] of walls)
+      for (let y = 0; y < 9; y += 3) w.place('b2x2', wx, y, wz, 0, '#fff', 'opaque');
+    w.recomputeLight();
+    const c = new Float32Array(8);
+    w.cornerLight(w.bricks.get(w.at(0, -3, 0)!)!, c);
+    return c[7]; // +x·+z 쪽 위 꼭짓점 — 벽을 붙이는 방향
+  };
+
+  const flat = floorCorner([]);
+  const one = floorCorner([[2, 0]]);                 // 한 면이 벽
+  const two = floorCorner([[2, 0], [0, 2]]);         // ㄱ자 구석
+  const three = floorCorner([[2, 0], [0, 2], [2, 2]]); // 대각까지 막힘
+
+  ok(flat === 1, `평면은 1.0 — ${flat.toFixed(2)}`);
+  ok(one < flat && two < one && three <= two,
+    `막힐수록 어두워진다(깊은 쪽은 하한에서 포화) — ${flat.toFixed(2)} → ${one.toFixed(2)} → ${two.toFixed(2)} → ${three.toFixed(2)}`);
+  ok((flat - one) > (one - two) && (one - two) >= (two - three),
+    `★ 첫 접촉이 가장 크게 떨어진다(√ 응답) — 낙차 ${(flat - one).toFixed(2)} > ${(one - two).toFixed(2)} ≥ ${(two - three).toFixed(2)}`);
+  // ⚠️ 이 값들은 **셰이더 곡선(SHADE_CURVE)을 먹기 전의 원값**이다 — 화면은 이보다 밝다(0.40 → 0.56).
+  ok(one <= 0.45, `★ 접촉면이 진하다 — 원값 ${one.toFixed(2)}(화면 약 0.56)`);
+  ok(three >= 0.25, `★ 깊은 구석도 하한 아래로는 안 간다 — ${three.toFixed(2)}(화면 약 0.37)`);
 }
 
 console.log(`\n브릭 월드(파생 인덱스 + 빛 + 스트리밍 + 파기) 테스트: ${pass}/${pass + fails.length} 통과`);

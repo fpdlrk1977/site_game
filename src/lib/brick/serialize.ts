@@ -28,6 +28,7 @@ const PART_ORDER: PartId[] = [
   // ↓ 이후 추가분은 뒤에만 붙인다
   'b1x3', 'b1x4', 'b1x6', 'b1x8', 'b2x3', 'b2x6', 'b2x8',
   'p1x1', 'p1x2', 'p2x2', 'p2x4', 'p2x6',
+  's1x2', 's2x2', 'si1x2',
 ];
 const PART_INDEX = new Map<PartId, number>(PART_ORDER.map((p, i) => [p, i]));
 

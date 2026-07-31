@@ -9,7 +9,7 @@ import {
   cellKey, chunkCoordOf, chunkKey, colKey, colKeyX, colKeyZ,
   COL_STEP_X, COL_STEP_Z, DIRS, regionKeyOf, Y_MAX, Y_MIN, type ChunkCoord, type Rot,
 } from './grid';
-import { extentOf, PARTS, type MatClass, type PartId } from './parts';
+import { extentOf, occludes, PARTS, type MatClass, type PartId } from './parts';
 
 export interface Brick {
   id: number;
@@ -61,6 +61,8 @@ export class BrickWorld {
 
   get count(): number { return this.bricks.size; }
   get visibleCount(): number { return this.visible.size; }
+  /** 이 브릭을 그리는가 — 완전히 파묻히면 false (테스트·디버깅용) */
+  isVisible(id: number): boolean { return this.visible.has(id); }
 
   at(x: number, y: number, z: number): number | undefined {
     return this.occ.get(cellKey(x, y, z));
@@ -362,13 +364,27 @@ export class BrickWorld {
     return out;
   }
 
+  /**
+   * 이 칸이 시야를 **막는가**.
+   *
+   * ★ 차 있다고 다 막는 게 아니다 — **경사는 대각선이 뚫려 있다.**
+   *   경사를 '막힘'으로 치면 그 너머 브릭이 안 그려지고, 뚫린 쪽으로 **구멍**이 보인다.
+   *   (마인크래프트가 계단·반블록을 non-occluding으로 두는 것과 같은 이유)
+   */
+  private blocks(cx: number, cy: number, cz: number): boolean {
+    const id = this.occ.get(cellKey(cx, cy, cz));
+    if (id === undefined) return false;
+    const nb = this.bricks.get(id);
+    return nb !== undefined && occludes(nb.part);
+  }
+
   /** 표면에 맞닿은 칸이 하나라도 비어 있으면 보인다 (자기 몸통이 채운 칸도 '막힘'으로 친다) */
   private isBuried(b: Brick): boolean {
     let buried = true;
     this.forEachCell(b, (cx, cy, cz) => {
       if (!buried) return;
       for (const [ox, oy, oz] of DIRS) {
-        if (!this.occ.has(cellKey(cx + ox, cy + oy, cz + oz))) { buried = false; return; }
+        if (!this.blocks(cx + ox, cy + oy, cz + oz)) { buried = false; return; }
       }
     });
     return buried;
@@ -481,9 +497,23 @@ export class BrickWorld {
 
   /**
    * 빛 재계산. 편집마다 부르면 무거우므로 **스토어가 디바운스**해서 호출한다.
-   * 레벨별 버킷 큐라 각 칸을 사실상 한 번만 확정한다(가중치가 균일한 BFS).
+   *
+   * ★ 다시 구운 값은 **리전을 올려야 화면에 닿는다.** 렌더러(`Region`)는 리전 리비전이
+   *   바뀔 때만 인스턴스 버퍼를 다시 쓴다. 예전엔 여기서 리비전을 안 올려서,
+   *   빛 지도는 맞는데 **화면은 옛 값 그대로**였다 — 다른 이유로 리빌드된 리전만
+   *   우연히 새 값을 받아 "어떤 브릭은 바뀌고 어떤 브릭은 안 바뀐다"로 보였다.
+   *
+   *   게다가 배치 순간 리빌드되는 리전은 **빛 재계산 전**이라 틀린 값으로 구워진다
+   *   (`colTop`은 즉시 오르는데 빛 지도는 140ms 뒤 갱신 → 그 아래 칸이 잠깐 SKY_MIN).
+   *   리비전을 올리면 그 오값도 여기서 덮인다.
    */
   recomputeLight(): void {
+    this.bakeLight();
+    for (const k of this.regionBricks.keys()) this.bumpRegion(k);
+  }
+
+  /** 실제 굽기 — 예산 초과로 중간에 나가는 길이 있어 리전 올리기와 분리했다 */
+  private bakeLight(): void {
     const t0 = performance.now();
     this.light.clear();
     const MAX = BrickWorld.LIGHT_MAX;
@@ -550,44 +580,80 @@ export class BrickWorld {
     this.lightStats = { cells: this.light.size, ms: performance.now() - t0 };
   }
 
+
   /**
-   * 브릭 6면의 밝기 — **면 바로 바깥 칸**이 받는 하늘빛 × **면 방향 고정 배율**.
-   * 반환 순서는 월드 기준 [+x, -x, +y, -y, +z, -z] (회전은 렌더러가 슬롯을 돌려 맞춘다).
+   * **꼭짓점 여덟 개의 밝기** — 부드러운 조명(정점 단위)의 재료.
+   *
+   * ★ 면 하나에 값 하나면 **면 전체가 통짜로 같은 밝기**라, 벽 모서리·구덩이 안이 계단처럼 각져 보인다.
+   *   꼭짓점마다 값을 주면 래스터라이저가 면 안에서 **알아서 보간**해 부드러워진다(복셀 엔진 표준).
+   *
+   * 값 = 그 꼭짓점에 닿는 **여덟 칸**의 평균. 면 평균과 같은 규칙으로 **막힌 칸은 뺀다** —
+   * 가려져 안 보이는 부분이 보이는 부분의 밝기를 끌어내리면 안 된다.
+   *
+   * ⚠️ **면 배율(FACE_TONE)은 곱하지 않는다.** 한 꼭짓점을 세 면이 공유하는데 면마다 배율이 다르므로,
+   *   배율은 셰이더가 **그 면의 월드 법선**을 보고 곱한다.
+   *
+   * 순서: `i + 2j + 4k` (i=+x, j=+y, k=+z 쪽이면 1) — **월드 기준**.
+   *   회전한 브릭은 렌더러가 로컬 슬롯으로 옮겨 담는다(`CORNER_MAP`).
    */
-  faceLight(b: Brick, out: Float32Array): void {
+  cornerLight(b: Brick, out: Float32Array): void {
     const e = extentOf(PARTS[b.part], b.rot);
     const x0 = b.x, y0 = b.y, z0 = b.z;
     const x1 = x0 + e.ex - 1, y1 = y0 + e.ey - 1, z1 = z0 + e.ez - 1;
 
-    /**
-     * 면마다 바로 바깥 칸들의 밝기를 평균한다.
-     *
-     * ★ **막힌 칸은 평균에서 뺀다.** 그 부분의 면은 이웃 브릭에 **가려져 안 보이므로**,
-     *   보이는 부분의 밝기를 끌어내리면 안 된다.
-     *   빼지 않으면: 지형 블록(2×2) 위에 브릭을 **걸쳐** 놓았을 때 절반만 덮였는데도
-     *   타일 **전체**가 균일하게 어두워져 **양옆에 그림자가 진 것처럼 보인다**(사용자 보고).
-     *   면 하나에 밝기 하나뿐이라 생기는 문제다 — 진짜 해법은 정점 단위 밝기(후속).
-     */
-    const avg = (
-      ax: number, bx: number, ay: number, by: number, az: number, bz: number,
-    ): number => {
-      let sum = 0, n = 0;
-      for (let cx = ax; cx <= bx; cx++)
-        for (let cy = ay; cy <= by; cy++)
-          for (let cz = az; cz <= bz; cz++) {
-            if (this.occ.has(cellKey(cx, cy, cz))) continue; // 가려진 부분은 안 보인다
+    for (let k = 0; k < 2; k++) {
+      // 그 꼭짓점에 닿는 두 칸(안쪽 한 칸 + 바깥 한 칸)
+      const zs = k === 0 ? [z0 - 1, z0] : [z1, z1 + 1];
+      for (let j = 0; j < 2; j++) {
+        const ys = j === 0 ? [y0 - 1, y0] : [y1, y1 + 1];
+        for (let i = 0; i < 2; i++) {
+          const xs = i === 0 ? [x0 - 1, x0] : [x1, x1 + 1];
+          let sum = 0, n = 0, blocked = 0;
+          for (const cx of xs) for (const cy of ys) for (const cz of zs) {
+            const solid = this.occ.has(cellKey(cx, cy, cz)) || this.isUnminedGround(cx, cy, cz);
+            // 자기 몸은 자기 꼭짓점을 가리지 않는다 — 축마다 안쪽 좌표 하나씩이라 딱 한 칸이다
+            const own = cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1 && cz >= z0 && cz <= z1;
+            if (solid && !own) blocked++;
+            if (this.occ.has(cellKey(cx, cy, cz))) continue; // 가려진 쪽은 안 보인다
             sum += this.lightAt(cx, cy, cz); n++;
           }
-      return n === 0 ? BrickWorld.SKY_MIN : sum / n; // 전부 막힘 = 어차피 안 그려지는 면
-    };
+          const sky = n === 0 ? BrickWorld.SKY_MIN : sum / n;
+          out[i + 2 * j + 4 * k] = sky * BrickWorld.cornerAO(blocked);
+        }
+      }
+    }
+  }
 
-    const T = BrickWorld.FACE_TONE;
-    out[0] = avg(x1 + 1, x1 + 1, y0, y1, z0, z1) * T[0]; // +x
-    out[1] = avg(x0 - 1, x0 - 1, y0, y1, z0, z1) * T[1]; // -x
-    out[2] = avg(x0, x1, y1 + 1, y1 + 1, z0, z1) * T[2]; // +y
-    out[3] = avg(x0, x1, y0 - 1, y0 - 1, z0, z1) * T[3]; // -y
-    out[4] = avg(x0, x1, y0, y1, z1 + 1, z1 + 1) * T[4]; // +z
-    out[5] = avg(x0, x1, y0, y1, z0 - 1, z0 - 1) * T[5]; // -z
+  /**
+   * **구석 그늘(AO)** — 꼭짓점에 닿는 바깥 일곱 칸 중 막힌 칸 수로 깎는다.
+   *
+   * ★ 기준은 `FLAT`(=3)이다. 평평한 면의 꼭짓점은 **항상 이웃 세 칸이 막혀 있다**
+   *   (같은 평면의 이웃 셋). 거기서 더 막힌 만큼만 깎으므로:
+   *   - 평평한 바닥·벽, 볼록한 모서리 → **1.0, 지금 룩 그대로**
+   *   - 벽과 바닥이 만나는 안쪽 구석 → 어두워진다
+   *   즉 **밝아지는 곳은 없고 오목한 자리만 어두워진다.** 전역 밝기가 흔들리지 않는다.
+   *
+   * `blocked`를 세는 데 안 판 땅속도 포함한다 — 실제로 빛을 막으므로 구덩이 벽·바닥에도 그늘이 진다.
+   */
+  //
+  // ★ **응답은 선형이 아니라 `√`다** — 마인크래프트의 "밑동에 지는 진한 접촉 그늘"이 이 모양이다.
+  //   첫 접촉(막힌 칸 하나)에서 확 떨어지고 그 뒤론 완만하다. 선형으로 깎으면 둘 중 하나가 된다:
+  //   세기를 낮추면 **밑동이 안 보이고**, 올리면 **깊은 구석이 새까매져 얼룩**이 된다(둘 다 실제로 겪었다).
+  //
+  //     막힌 칸  평면 1.00 · 벽 하나 0.70 · ㄱ자 구석 0.58 · 깊은 구석 0.40
+  //
+  // ※ 번지는 폭(= 파츠 한 칸)은 못 줄이지만 **줄일 필요도 없다** — 지형 타일이 1m라
+  //   마인크래프트 블록(1m)과 폭이 같다. 예전에 "넓다"고 본 건 폭이 아니라 세기 문제였다.
+  // ⚠️ **셰이더의 `SHADE_CURVE`와 한 쌍이다.** 여기 값은 **곡선을 먹기 전의 원값**이라
+  //   화면보다 어둡게 잡혀 있다(접촉 0.40 → 화면 0.56). 한쪽만 바꾸면 접촉 그늘이 무너진다.
+  private static readonly AO_STRENGTH = 1.2;
+  private static readonly AO_MIN = 0.25;     // 하한 — 더 깊은 구석은 여기서 포화한다(화면 0.37)
+  private static cornerAO(blocked: number): number {
+    const FLAT = 3, OUTSIDE = 7;
+    const over = blocked - FLAT;
+    if (over <= 0) return 1;
+    const ao = 1 - BrickWorld.AO_STRENGTH * Math.sqrt(over / (OUTSIDE - FLAT));
+    return ao < BrickWorld.AO_MIN ? BrickWorld.AO_MIN : ao;
   }
 
   /** 전량 재계산 — **월드 전체**를 다시 굽는다. 첫 로드·스트레스 테스트에만 쓸 것 */

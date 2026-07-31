@@ -81,40 +81,86 @@ function injectEdgeLines(shader: { vertexShader: string; fragmentShader: string 
 }
 
 /**
- * 면 단위 하늘빛 — 마인크래프트식 **구운 빛**. 실시간 그림자를 대신한다.
+ * 구운 빛 — 마인크래프트식. 실시간 그림자를 대신한다.
  *
- * ★ 인스턴싱이라 정점마다 값을 줄 수 없다(지오메트리를 공유하므로).
- *   그래서 **인스턴스마다 6면의 밝기**를 넘기고, 정점 셰이더가 법선을 보고 고른다.
- *   → 면 안에서 부드럽게 번지는 그라데이션과 모서리 AO는 불가(마크의 'Fast' 룩).
+ * ★ **정점 단위(부드러운 조명)** — 면마다 값 하나였을 땐 면 전체가 통짜라 벽 모서리·구덩이가
+ *   계단처럼 각져 보였다. 이제 브릭의 **꼭짓점 여덟 개** 밝기를 인스턴스 속성으로 넘기고,
+ *   지오메트리가 들고 있는 **삼선형 가중치**(`aSelA`/`aSelB`)로 정점마다 섞는다.
+ *   래스터라이저가 면 안을 보간하므로 그라데이션과 모서리 어두움이 자연히 생긴다.
  *
- * vec3 두 개로 나눈 이유: 정점 속성 하나는 최대 4성분(vec4)이라 6개를 한 번에 못 넣는다.
+ * ★ 인스턴싱은 그대로다 — 지오메트리는 공유하고, **인스턴스마다 vec4 두 개**(=8값)만 더 넘긴다.
+ *   면 단위(6값)일 때와 속성 개수가 같아 GPU 예산도 그대로다.
  */
-function injectFaceLight(shader: {
+/**
+ * ⚠️ **진단 스위치 — 평소엔 반드시 `false`.**
+ * 켜면 브릭 색을 무시하고 **구운 밝기를 흑백으로** 그린다. "그늘이 안 보인다"가
+ * ①값이 안 오는 것인지 ②색에 묻혀 안 보이는 것인지를 한 장으로 가른다.
+ */
+const DEBUG_BAKED_LIGHT = false;
+
+/**
+ * 그늘이 **어두운 자리에 얼마나 바짝 붙는가**. 1 = 직선(면 전체에 퍼짐) · 클수록 접촉부에 몰린다.
+ *
+ * ⚠️ **`world.ts`의 `AO_STRENGTH`와 한 쌍이다.** 여기서 곡선이 어두운 값을 조금 들어올리므로
+ *   CPU 쪽 AO는 그만큼 세게 잡아 두었다. **하나만 바꾸면 접촉 그늘이 무너진다.**
+ */
+const SHADE_CURVE = 1.6;
+
+function injectBakedLight(shader: {
   vertexShader: string; fragmentShader: string;
 }): void {
   shader.vertexShader = `
-    attribute vec3 aLightA;   // 오브젝트 로컬 +x, -x, +y
-    attribute vec3 aLightB;   // 오브젝트 로컬 -y, +z, -z
-    varying float vFaceLight;
+    attribute vec4 aCornerA;  // 인스턴스: 꼭짓점 0~3 밝기 (로컬 슬롯)
+    attribute vec4 aCornerB;  // 인스턴스: 꼭짓점 4~7
+    attribute vec4 aSelA;     // 지오메트리: 이 정점의 꼭짓점 가중치 0~3
+    attribute vec4 aSelB;     // 지오메트리: 4~7
+    varying vec2 vBaked;      // x = 하늘빛×AO(보간됨) · y = 면 배율(면마다 상수)
   ` + shader.vertexShader.replace(
     '#include <begin_vertex>',
     `#include <begin_vertex>
     {
-      vec3 n = normal;
-      vFaceLight =
-          n.x >  0.5 ? aLightA.x
-        : n.x < -0.5 ? aLightA.y
-        : n.y >  0.5 ? aLightA.z
-        : n.y < -0.5 ? aLightB.x
-        : n.z >  0.5 ? aLightB.y
-        :              aLightB.z;
+      // 하늘빛 — 꼭짓점 여덟 값을 정점 위치로 섞는다. 래스터라이저가 면 안을 보간해 부드러워진다.
+      float sky = dot(aCornerA, aSelA) + dot(aCornerB, aSelB);
+
+      // 면 방향 배율 — **월드 법선**으로 판정해야 한다.
+      //   브릭은 Y축으로 90°씩 도는데 x면(0.6)과 z면(0.8)의 배율이 달라서,
+      //   로컬 법선을 쓰면 회전한 브릭의 옆면 밝기가 뒤바뀐다.
+      #ifdef USE_INSTANCING
+        vec3 wn = normalize(mat3(instanceMatrix) * normal);
+      #else
+        vec3 wn = normal;
+      #endif
+      // ★ 배율 폭이 곧 입체감이다 — 그리고 **면마다 상수라 모서리에서 딱 끊긴다**(보간 없음).
+      //   그늘(AO)은 파츠 크기만큼 번지는 반면 이건 안 번지므로, "명암을 또렷하게"의 정답은 이쪽이다.
+      //   넓힘: 앞뒤 0.8→0.72 · 좌우 0.6→0.5 · 밑면 0.5→0.35 (윗면은 1.0 유지 = 바닥 밝기 불변)
+      float tone =
+          wn.y >  0.5 ? 1.0
+        : wn.y < -0.5 ? 0.35
+        : abs(wn.x) > abs(wn.z) ? 0.5
+        : 0.72;
+
+      // 배율은 **면마다 상수**라 보간하면 안 되고, 하늘빛·AO만 정점 사이에서 섞여야 한다.
+      // → 둘을 따로 넘겨서 프래그먼트가 **하늘빛에만** 곡선을 씌운다(아래 SHADE_CURVE).
+      vBaked = vec2(sky, tone);
     }`,
   );
 
-  shader.fragmentShader = 'varying float vFaceLight;\n' + shader.fragmentShader.replace(
+  shader.fragmentShader = `varying vec2 vBaked;
+    float bakedLight() {
+      // ★ **접촉부에 바짝 붙은 진한 띠**를 만드는 곳.
+      //   정점 사이는 래스터라이저가 **직선**으로 섞는다 → 그대로 쓰면 어두운 꼭짓점에서 밝은 꼭짓점까지
+      //   면 전체에 걸쳐 완만하게 밝아져서 **"blur를 먹인 것처럼"** 보인다(사용자 피드백, 두 번).
+      //   부족분(1-빛)에 지수를 씌우면 **어두운 자리는 그대로 어둡고 조금만 떨어져도 빠르게 회복**한다.
+      //     예) 접촉 0.40 → 0.56 · 반 칸 밖 0.70 → 0.85 · 한 칸 밖 1.0 → 1.0
+      float sky = clamp(vBaked.x, 0.0, 1.0);
+      return (1.0 - pow(1.0 - sky, ${SHADE_CURVE.toFixed(2)})) * vBaked.y;
+    }
+` + shader.fragmentShader.replace(
     '#include <color_fragment>',
     `#include <color_fragment>
-    diffuseColor.rgb *= vFaceLight;`,
+    ${DEBUG_BAKED_LIGHT
+      ? 'diffuseColor.rgb = vec3(bakedLight());' // ⚠️ 진단용 — 구운 값을 흑백으로 그대로 본다
+      : 'diffuseColor.rgb *= bakedLight();'}`,
   );
 }
 
@@ -160,7 +206,7 @@ function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshS
   }
   if (mat !== 'emissive') {
     m.onBeforeCompile = (shader) => {
-      injectFaceLight(shader);
+      injectBakedLight(shader);
       if (edges) injectEdgeLines(shader);
     };
   }
@@ -169,15 +215,20 @@ function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshS
 }
 
 /**
- * 오브젝트 로컬 면 → 월드 면 인덱스. 브릭은 Y축으로 0/90/180/270만 돈다.
- * 월드 순서 [+x, -x, +y, -y, +z, -z] · 로컬 슬롯 [+x, -x, +y, -y, +z, -z]
+ * 오브젝트 로컬 꼭짓점 → 월드 꼭짓점 인덱스 (`i + 2j + 4k`, i=+x·j=+y·k=+z).
+ *
+ * 회전은 Y축 90° 단위뿐이므로 부호만 돌면 된다: `wx = sx·cos + sz·sin`, `wz = −sx·sin + sz·cos`.
+ * 손으로 적으면 틀리기 쉬워(FACE_MAP과 어긋나면 **밝기만 조용히 뒤집힌다**) 계산해서 만든다.
  */
-const FACE_MAP: number[][] = [
-  [0, 1, 2, 3, 4, 5], // rot 0
-  [5, 4, 2, 3, 0, 1], // rot 90  (로컬 +x → 월드 -z)
-  [1, 0, 2, 3, 5, 4], // rot 180
-  [4, 5, 2, 3, 1, 0], // rot 270
-];
+const CORNER_MAP: number[][] = [0, 1, 2, 3].map((rot) => {
+  const c = [1, 0, -1, 0][rot], s = [0, 1, 0, -1][rot];
+  return Array.from({ length: 8 }, (_, local) => {
+    const sx = local & 1 ? 1 : -1, sy = local & 2 ? 1 : -1, sz = local & 4 ? 1 : -1;
+    const wx = sx * c + sz * s;
+    const wz = -sx * s + sz * c;
+    return (wx > 0 ? 1 : 0) + (sy > 0 ? 2 : 0) + (wz > 0 ? 4 : 0);
+  });
+});
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -231,9 +282,9 @@ function BrickGroup({ group, world, studStyle, onHover }: {
     const mesh = ref.current;
     if (!mesh) return;
     const n = group.ids.length;
-    const lightA = new Float32Array(n * 3);
-    const lightB = new Float32Array(n * 3);
-    const face = new Float32Array(6);
+    const cornerA = new Float32Array(n * 4);
+    const cornerB = new Float32Array(n * 4);
+    const corner = new Float32Array(8);
 
     group.ids.forEach((brickId, i) => {
       const b = world.bricks.get(brickId);
@@ -245,19 +296,15 @@ function BrickGroup({ group, world, studStyle, onHover }: {
       mesh.setMatrixAt(i, _m);
       mesh.setColorAt(i, _c.set(b.color));
 
-      // 면 밝기 — 월드 기준으로 구한 뒤 회전에 맞춰 로컬 슬롯에 담는다
-      world.faceLight(b, face);
-      const map = FACE_MAP[b.rot];
-      lightA[i * 3] = face[map[0]];
-      lightA[i * 3 + 1] = face[map[1]];
-      lightA[i * 3 + 2] = face[map[2]];
-      lightB[i * 3] = face[map[3]];
-      lightB[i * 3 + 1] = face[map[4]];
-      lightB[i * 3 + 2] = face[map[5]];
+      // 꼭짓점 밝기 — 월드 기준으로 구한 뒤 회전에 맞춰 로컬 슬롯에 담는다
+      world.cornerLight(b, corner);
+      const map = CORNER_MAP[b.rot];
+      for (let c = 0; c < 4; c++) cornerA[i * 4 + c] = corner[map[c]];
+      for (let c = 0; c < 4; c++) cornerB[i * 4 + c] = corner[map[c + 4]];
     });
 
-    geo.setAttribute('aLightA', new THREE.InstancedBufferAttribute(lightA, 3));
-    geo.setAttribute('aLightB', new THREE.InstancedBufferAttribute(lightB, 3));
+    geo.setAttribute('aCornerA', new THREE.InstancedBufferAttribute(cornerA, 4));
+    geo.setAttribute('aCornerB', new THREE.InstancedBufferAttribute(cornerB, 4));
 
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
