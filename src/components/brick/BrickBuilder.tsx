@@ -116,6 +116,7 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
   const gl = useThree((s) => s.gl);
   const { world, version, part, rot, studStyle } = useBrickStore();
   const { place, moveBrick, removeBrick } = useBrickStore();
+  const { beginBatch, endBatch, undo, redo } = useBrickStore();
 
   /** 커서 밑 브릭 — 어느 면에 붙일지, 지우기 도구가 무엇을 지울지 결정한다 */
   const [hoverBrick, setHoverBrick] = useState<number | null>(null);
@@ -151,23 +152,28 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
    *   **보여준 자리와 놓는 자리를 서로 다른 값으로 갈라놨다.**
    *   사용자에게 정확한 값은 최신 값이 아니라 **눈에 보인 값**이다(WYSIWYG).
    */
+  // ★ 한 제스처(누름→끌기→뗌)가 **되돌리기 한 번**이 되도록 묶는다.
+  //   안 묶으면 드래그로 자리를 고칠 때마다 op가 쌓여, Ctrl+Z를 수십 번 눌러야 브릭 하나가 사라진다.
   const onDown = useCallback((e: PointerEvent) => {
     if (e.button !== 0) return;
     if (effTool === 'erase') {
+      // 지우기는 한 번에 끝나므로 묶을 것이 없다(지형이면 아래를 채우는 op까지 store가 한 단계로 만든다)
       if (hoverBrick !== null) removeBrick(hoverBrick); // 빨갛게 강조된 그 브릭
       return;
     }
     if (!spot || !valid) return;
+    beginBatch();
     const id = place(spot.anchor.x, spot.anchor.y, spot.anchor.z);
-    if (id === null) return;
+    if (id === null) { endBatch(); return; }
     dragRef.current = { id, base: spot, moved: false };
     setDragging(spot);
-  }, [effTool, hoverBrick, removeBrick, spot, valid, place]);
+  }, [effTool, hoverBrick, removeBrick, spot, valid, place, beginBatch, endBatch]);
 
   const onUp = useCallback(() => {
+    if (dragRef.current) endBatch();
     dragRef.current = null;
     setDragging(null);
-  }, []);
+  }, [endBatch]);
 
   /** 드래그를 시작한 뒤 **실제로 움직였을 때만** 미끄러진다 */
   const onMove = useCallback(() => {
@@ -207,6 +213,21 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
       el.removeEventListener('pointerleave', onUp);
     };
   }, [gl, onDown, onMove, onUp]);
+
+  // 되돌리기 — **짓는 화면에서만** 걸린다(읽기 전용 뷰어엔 BrickBuilder가 아예 없다).
+  //   Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z. 입력창에선 브라우저 기본 동작(텍스트 되돌리기)을 살려 준다.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const code = e.code;
+      if (code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if (code === 'KeyY' || (code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
 
   return (
     <>

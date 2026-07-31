@@ -12,11 +12,11 @@
 //   아직 없다. 구 플레이 스택은 오브젝트 콜라이더 기반이라 브릭엔 하나도 쓸 수 없어 지웠다.
 
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { SceneToneMapping } from '@/components/three/SceneToneMapping';
 import { BrickScene } from '@/components/brick/BrickScene';
 import { BrickEnvironment } from '@/components/brick/BrickEnvironment';
+import { BrickOrbit } from '@/components/brick/BrickOrbit';
 import type { ProjectSceneSchema } from '@/types/scene';
 
 const DEFAULT_POS: [number, number, number] = [13, 10, 13];
@@ -40,17 +40,8 @@ export function ViewerCanvas({ scene }: { scene: ProjectSceneSchema }) {
       <BrickEnvironment />
       {/* 읽기 전용 — 짓기 상호작용도, 자동 저장도 걸지 않는다 */}
       <BrickScene sceneId={scene.sceneId} readOnly />
-      <OrbitControls
-        makeDefault
-        target={target}
-        enableDamping={false}
-        zoomSpeed={2}
-        screenSpacePanning={false}
-        minPolarAngle={0.1}
-        maxPolarAngle={Math.PI / 2 - 0.08}
-        minDistance={1}
-        maxDistance={200}
-      />
+      {/* 뷰어는 짓지 않으므로 **좌드래그로 돈다** — 에디터와의 유일한 차이(의도) */}
+      <BrickOrbit mode="view" target={target} />
     </Canvas>
   );
 }

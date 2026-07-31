@@ -163,6 +163,94 @@ async function main(): Promise<void> {
     ok(store().world.at(0, SURFACE_Y, 0) === undefined, '★ 멀리 갔다 와도 판 구덩이가 유지된다');
     ok(store().world.at(8, SURFACE_Y, 8) !== undefined, '안 판 자리는 다시 깔린다');
   }
+
+  // ── 되돌리기 ────────────────────────────────────────────────────────────
+  // 브릭 편집은 결국 "추가/삭제"뿐이라 명령만 쌓으면 정확히 되돌아가야 한다.
+  //   ⚠️ id는 되살릴 때마다 새로 발급된다 — 그 갱신이 틀리면 **다시 실행(redo)이 엉뚱한 브릭을 지운다.**
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+
+    // ① 놓기 → 되돌리기 → 사라짐 → 다시 실행 → 되살아남
+    const before = s().world.count;
+    s().beginBatch();
+    const id = s().place(0, SURFACE_Y + 3, 0);
+    s().endBatch();
+    ok(id !== null, '놓기 성공');
+    ok(s().world.count === before + 1, '놓으면 하나 늘어난다');
+    s().undo();
+    ok(s().world.count === before, '★ 되돌리면 방금 놓은 브릭이 사라진다');
+    s().redo();
+    ok(s().world.count === before + 1, '★ 다시 실행하면 되살아난다');
+    ok(s().world.at(0, SURFACE_Y + 3, 0) !== undefined, '되살아난 자리가 원래 자리다');
+    s().undo(); // 정리
+  }
+
+  // ② 지우기 → 되돌리기 = 되살아남 (지형은 아래를 채운 것까지 함께 되돌린다)
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+    const dug = s().world.at(0, SURFACE_Y, 0)!;
+    const before = s().world.count;
+    s().removeBrick(dug);
+    ok(s().world.at(0, SURFACE_Y, 0) === undefined, '지형이 파였다');
+    s().undo();
+    ok(s().world.at(0, SURFACE_Y, 0) !== undefined, '★ 되돌리면 판 지형이 되살아난다');
+    ok(s().world.count === before, `★ 파며 채운 브릭까지 함께 되돌아간다 — ${s().world.count} vs ${before}`);
+  }
+
+  // ③ 한 제스처(놓고 드래그로 자리 고치기) = **되돌리기 한 번**
+  //    안 묶으면 Ctrl+Z를 수십 번 눌러야 브릭 하나가 사라진다.
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+    const before = s().world.count;
+    s().beginBatch();
+    let id = s().place(0, SURFACE_Y + 3, 0)!;
+    for (let i = 1; i <= 5; i++) id = s().moveBrick(id, i, SURFACE_Y + 3, 0)!; // 드래그로 5칸 미끄러짐
+    s().endBatch();
+    ok(s().world.at(5, SURFACE_Y + 3, 0) !== undefined, '드래그한 자리에 있다');
+    s().undo();
+    ok(s().world.count === before, '★ 드래그 한 획이 되돌리기 한 번 (op 6개여도)');
+    ok(s().world.at(0, SURFACE_Y + 3, 0) === undefined && s().world.at(5, SURFACE_Y + 3, 0) === undefined,
+      '★ 중간 자리에도 잔재가 없다');
+  }
+
+  // ④ 새 편집이 생기면 '다시 실행'은 사라진다 (분기된 미래를 남기지 않는다)
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+    s().beginBatch(); s().place(0, SURFACE_Y + 3, 0); s().endBatch();
+    s().undo();
+    ok(s().redoDepth === 1, '되돌린 뒤엔 다시 실행이 있다');
+    s().beginBatch(); s().place(2, SURFACE_Y + 3, 2); s().endBatch();
+    ok(s().redoDepth === 0, '★ 새로 놓으면 다시 실행이 버려진다');
+  }
+
+  // ⑤ 전체 지우기는 되돌릴 수 없다 — 되돌릴 수 있는 척하면 안 된다
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+    s().beginBatch(); s().place(0, SURFACE_Y + 3, 0); s().endBatch();
+    ok(s().undoDepth > 0, '편집이 쌓여 있다');
+    await s().clear();
+    ok(s().undoDepth === 0 && s().redoDepth === 0, '★ 전체 지우기 뒤엔 되돌리기 스택이 비어 있다');
+  }
+
+  // ⑥ 되돌릴 것이 없을 때 호출해도 안전(빈 스택에서 터지지 않는다)
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+    const n = s().world.count;
+    s().undo(); s().undo(); s().redo();
+    ok(s().world.count === n, '빈 스택에서 undo/redo 해도 월드가 안 변한다');
+  }
 }
 
 void main().then(() => {

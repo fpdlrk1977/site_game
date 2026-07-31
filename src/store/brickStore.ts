@@ -40,6 +40,131 @@ function scheduleLight(set: (fn: (s: BrickState) => Partial<BrickState>) => void
   }, 140);
 }
 
+// ── 되돌리기 ─────────────────────────────────────────────────────────────
+//
+// ★ **스냅샷이 아니라 명령을 쌓는다.**
+//   구 오브젝트 에디터는 편집마다 `objects` 배열 전체를 복사해 히스토리에 넣었다.
+//   브릭 월드는 기본이 1만 개가 넘고 무한히 커지므로, 같은 방식이면 **브릭 하나 놓을 때마다
+//   월드를 통째로 복사**하게 된다. 브릭 편집은 실제로 일어나는 일이 둘뿐이라(추가·삭제)
+//   그 둘만 기록하면 정확히 되돌릴 수 있다.
+//
+// ⚠️ **id는 재발급된다.** 되돌리며 다시 놓으면 새 id가 나오므로 op의 id를 갱신해야
+//   다시 실행(redo)이 같은 브릭을 가리킨다.
+
+/** 브릭 하나를 되살리기 위한 값. id는 재발급되므로 담지 않는다 */
+type BrickSnap = { part: PartId; x: number; y: number; z: number; rot: Rot; color: string; mat: MatClass };
+/** add = 새로 생김(되돌리기 = 지우기) · del = 사라짐(되돌리기 = 되살리기) */
+type UndoOp = { kind: 'add' | 'del'; id: number; b: BrickSnap };
+/** 되돌리기 한 단계 — 한 제스처(드래그 한 획 등)가 여러 op일 수 있다 */
+type UndoEntry = UndoOp[];
+
+/** 되돌리기 깊이. 브릭 레코드는 7바이트라 메모리는 문제가 아니고, 너무 깊으면 "어디로 돌아가는지" 감이 사라진다 */
+const UNDO_LIMIT = 100;
+
+const undoStack: UndoEntry[] = [];
+const redoStack: UndoEntry[] = [];
+/** 열려 있으면 op가 여기 모인다 — 드래그 한 획이 되돌리기 한 번이 되게 */
+let batch: UndoEntry | null = null;
+
+function pushEntry(e: UndoEntry): void {
+  if (e.length === 0) return;
+  undoStack.push(e);
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack.length = 0; // 새 편집이 생기면 다시 실행할 미래는 사라진다
+}
+
+function record(op: UndoOp): void {
+  if (batch) batch.push(op);
+  else pushEntry([op]);
+}
+
+/**
+ * 한 조작이 만든 op 여러 개를 **한 단계로** 기록한다.
+ *
+ * ★ 이걸 안 쓰고 `record`를 여러 번 부르면 배치 밖에서 **op마다 한 단계**가 되어,
+ *   지형을 한 번 팠는데 Ctrl+Z를 수십 번 눌러야 원상복구되고(그 사이 상태는 반쯤 파인 채다)
+ *   실제로 그 버그가 났다.
+ */
+function recordAll(ops: UndoOp[]): void {
+  if (ops.length === 0) return;
+  if (batch) batch.push(...ops);
+  else pushEntry(ops);
+}
+
+/**
+ * 배치 안에서 **생겼다가 사라진 브릭**은 서로 상쇄한다.
+ *
+ * 드래그로 자리를 고치면 `moveBrick`이 매 프레임 "지우고 다시 놓기"를 해서
+ * `add,del,add,del,…,add`가 쌓인다. 그대로 두면 되돌릴 때 **id가 어긋난다** —
+ * 되살린 브릭은 새 id를 받는데 뒤이어 나오는 add op은 옛 id를 가리켜 아무것도 못 지운다
+ * (드래그 경로에 잔재가 남았다). 상쇄하면 남는 건 **마지막 자리의 add 하나**뿐이라 그 문제 자체가 없어진다.
+ */
+function compact(entry: UndoEntry): UndoEntry {
+  const out: UndoEntry = [];
+  for (const op of entry) {
+    if (op.kind === 'del') {
+      const i = out.findIndex((o) => o.kind === 'add' && o.id === op.id);
+      if (i >= 0) { out.splice(i, 1); continue; } // 이 배치 안에서 생겼다 사라졌다 = 없던 일
+    }
+    out.push(op);
+  }
+  return out;
+}
+
+const snapOf = (b: { part: PartId; x: number; y: number; z: number; rot: Rot; color: string; mat: MatClass }): BrickSnap =>
+  ({ part: b.part, x: b.x, y: b.y, z: b.z, rot: b.rot, color: b.color, mat: b.mat });
+
+/** 되돌릴 수 없는 조작(전체 지우기 등) 뒤엔 스택을 비운다 — 못 되돌리면서 되돌릴 수 있는 척하면 안 된다 */
+function resetHistory(): void {
+  undoStack.length = 0;
+  redoStack.length = 0;
+  batch = null;
+}
+
+/**
+ * op 하나를 되돌린다(add ↔ del 뒤집기).
+ *
+ * ⚠️ **실패해도 조용히 넘어간다.** 되돌리려는 브릭이 없거나(멀리 걸어가 청크가 내려감)
+ *   되살릴 자리가 막혔을 수 있다. 여기서 던지면 되돌리기 도중에 월드가 반쯤 바뀐 채 멈춘다.
+ */
+function applyReverse(world: BrickWorld, op: UndoOp): void {
+  if (op.kind === 'add') {
+    world.remove(resolveId(world, op));
+  } else {
+    const nid = world.place(op.b.part, op.b.x, op.b.y, op.b.z, op.b.rot, op.b.color, op.b.mat);
+    if (nid !== null) op.id = nid; // id 재발급 — 다시 실행이 같은 브릭을 가리키도록
+  }
+}
+
+/** op 하나를 다시 실행한다(원래 방향) */
+function applyForward(world: BrickWorld, op: UndoOp): void {
+  if (op.kind === 'add') {
+    const nid = world.place(op.b.part, op.b.x, op.b.y, op.b.z, op.b.rot, op.b.color, op.b.mat);
+    if (nid !== null) op.id = nid;
+  } else {
+    world.remove(resolveId(world, op));
+  }
+}
+
+/**
+ * op이 가리키는 브릭의 **현재** id.
+ * 되살릴 때마다 id가 새로 발급되므로, 기록해 둔 id가 이미 없으면 **그 자리(앵커 칸)에 있는 것**으로 찾는다.
+ */
+function resolveId(world: BrickWorld, op: UndoOp): number {
+  if (world.bricks.has(op.id)) return op.id;
+  return world.at(op.b.x, op.b.y, op.b.z) ?? op.id;
+}
+
+function afterHistory(set: (fn: (s: BrickState) => Partial<BrickState>) => void): void {
+  set((s) => ({
+    version: s.version + 1,
+    saveState: 'pending',
+    undoDepth: undoStack.length,
+    redoDepth: redoStack.length,
+  }));
+  scheduleLight(set as Parameters<typeof scheduleLight>[0]);
+}
+
 interface BrickState {
   world: BrickWorld;
   version: number;
@@ -71,6 +196,15 @@ interface BrickState {
   setMat: (m: MatClass) => void;
 
   /** 놓기 — 새 브릭 id, 못 놓으면 null */
+  /** 한 제스처를 되돌리기 한 단계로 묶는다(포인터 down/up) */
+  beginBatch: () => void;
+  endBatch: () => void;
+  undo: () => void;
+  redo: () => void;
+  /** 남은 단계 수 — 나중에 버튼을 달 때 활성/비활성에 쓴다 */
+  undoDepth: number;
+  redoDepth: number;
+
   place: (x: number, y: number, z: number) => number | null;
   /** 놓은 브릭을 다른 칸으로 (드래그로 자리 고치기). 막혀 있으면 원래 자리로 되돌린다 */
   moveBrick: (id: number, x: number, y: number, z: number) => number | null;
@@ -197,11 +331,44 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   setColor: (c) => set({ color: c }),
   setMat: (m) => set({ mat: m }),
 
+  // ── 되돌리기 ───────────────────────────────────────────────────────────
+  undoDepth: 0,
+  redoDepth: 0,
+
+  beginBatch: () => { batch = []; },
+  endBatch: () => {
+    const b = batch;
+    batch = null;
+    if (b) pushEntry(compact(b));
+    set({ undoDepth: undoStack.length, redoDepth: redoStack.length });
+  },
+
+  undo: () => {
+    const e = undoStack.pop();
+    if (!e) return;
+    const { world } = get();
+    // **역순으로** 되돌린다 — 나중에 일어난 일부터 취소해야 중간 상태가 맞는다
+    for (let i = e.length - 1; i >= 0; i--) applyReverse(world, e[i]);
+    redoStack.push(e);
+    afterHistory(set);
+  },
+
+  redo: () => {
+    const e = redoStack.pop();
+    if (!e) return;
+    const { world } = get();
+    // 다시 실행은 **원래 순서대로**
+    for (const op of e) applyForward(world, op);
+    undoStack.push(e);
+    afterHistory(set);
+  },
+
   place: (x, y, z) => {
     const { world, part, rot, color, mat } = get();
     const id = world.place(part, x, y, z, rot, color, mat);
     if (id === null) return null;
-    set((s) => ({ version: s.version + 1, saveState: 'pending' }));
+    record({ kind: 'add', id, b: { part, x, y, z, rot, color, mat } });
+    set((s) => ({ version: s.version + 1, saveState: 'pending', undoDepth: undoStack.length, redoDepth: redoStack.length }));
     scheduleLight(set);
     return id;
   },
@@ -216,10 +383,16 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     if (!b) return null;
     if (b.x === x && b.y === y && b.z === z) return id;
     const { part, rot, color, mat } = b;
+    const before = snapOf(b);
     world.remove(id); // 자기 자신과의 충돌을 피하려면 먼저 빼야 한다
     const next = world.place(part, x, y, z, rot, color, mat)
       ?? world.place(part, b.x, b.y, b.z, rot, color, mat);
-    set((s) => ({ version: s.version + 1, saveState: 'pending' }));
+    // 옮기기 = 지우고 다시 놓기. 두 op로 기록하면 되돌리기가 정확히 제자리로 간다.
+    if (next !== null) {
+      record({ kind: 'del', id, b: before });
+      record({ kind: 'add', id: next, b: snapOf(world.bricks.get(next)!) });
+    }
+    set((s) => ({ version: s.version + 1, saveState: 'pending', undoDepth: undoStack.length, redoDepth: redoStack.length }));
     scheduleLight(set);
     return next;
   },
@@ -228,12 +401,22 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     const { world } = get();
     const b = world.bricks.get(id);
     if (!b) return;
+    const before = snapOf(b);
     // 지형을 파면 **먼저 아래를 채운다** — 그래야 구멍에 벽과 바닥이 생긴다.
     //   (판 뒤에 채우면 방금 판 자리가 되살아난다)
+    //   ★ 이때 새 브릭이 여러 개 생긴다 — **그것도 되돌림 대상**이라 id 범위로 잡아 둔다.
+    const idFrom = world.nextBrickId;
     if (b.part === 'terrain') deepenAround(world, b.x, b.y, b.z);
+    const filled: UndoOp[] = [];
+    for (let nid = idFrom; nid < world.nextBrickId; nid++) {
+      const nb = world.bricks.get(nid);
+      if (nb) filled.push({ kind: 'add', id: nid, b: snapOf(nb) });
+    }
     if (world.remove(id)) {
       world.refreshPending(); // deepenAround가 placeFast라 가시성을 다시 굽는다(주변만)
-      set((s) => ({ version: s.version + 1, saveState: 'pending' }));
+      // ★ 한 단계로 묶는다 — 판 브릭과 그때 채워진 브릭은 **같은 한 번의 조작**이다
+      recordAll([...filled, { kind: 'del', id, b: before }]);
+      set((s) => ({ version: s.version + 1, saveState: 'pending', undoDepth: undoStack.length, redoDepth: redoStack.length }));
       scheduleLight(set);
     }
   },
@@ -253,7 +436,10 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     chunkIndex.clear();
     terrainDone.clear();
     resetTerrainState();
-    set((s) => ({ version: s.version + 1, saveState: 'idle' }));
+    // ⚠️ 전체 지우기는 **되돌릴 수 없다** — 저장소까지 비우므로 메모리에 없던 청크는 복원할 길이 없다.
+    //    되돌릴 수 있는 척하지 않고 스택을 비운다.
+    resetHistory();
+    set((s) => ({ version: s.version + 1, saveState: 'idle', undoDepth: 0, redoDepth: 0 }));
     await storage.clear();
     // 바닥을 바로 다시 깔아 준다 — 안 그러면 카메라를 움직일 때까지 빈 화면이다
     await get().streamAround(lastCenter.x, lastCenter.z);
@@ -271,7 +457,8 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     }
     world.recomputeAll();
     world.recomputeLight(); // 대량 생성/불러오기 직후엔 바로 굽는다(디바운스 불필요)
-    set((s) => ({ version: s.version + 1, saveState: 'pending' }));
+    resetHistory(); // 12만 개를 op로 쌓을 이유가 없다(스트레스 테스트 전용)
+    set((s) => ({ version: s.version + 1, saveState: 'pending', undoDepth: 0, redoDepth: 0 }));
   },
 
   // ── 저장 ───────────────────────────────────────────────────────────────

@@ -10,8 +10,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { BrickOrbit } from '@/components/brick/BrickOrbit';
 import { BrickBuilder, brickCursor, useEffectiveTool } from '@/components/brick/BrickBuilder';
 import { BrickToolPanel } from '@/components/brick/BrickToolPanel';
 import type { FacePlacement } from '@/lib/brick/placement';
@@ -100,14 +100,8 @@ export default function BrickPrototype() {
         <Mover />
         <Streamer />
 
-        <OrbitControls
-          makeDefault
-          enableDamping={false}
-          maxPolarAngle={Math.PI / 2 - 0.02}
-          minDistance={1}
-          maxDistance={200}
-          mouseButtons={{ LEFT: undefined, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
-        />
+        {/* 카메라 조작 — 에디터와 **같은 컴포넌트**. 설정을 바꿀 땐 BrickOrbit만 고친다 */}
+        <BrickOrbit />
       </Canvas>
 
       {/* ── 좌측 도구 ─────────────────────────────────────────────── */}

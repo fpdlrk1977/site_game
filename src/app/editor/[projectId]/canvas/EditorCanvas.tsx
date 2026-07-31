@@ -14,13 +14,13 @@
 
 import { useRef, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { useSceneStore } from "@/store/sceneStore";
 import { SceneToneMapping } from "@/components/three/SceneToneMapping";
 import { BrickScene } from "@/components/brick/BrickScene";
 import { BrickEnvironment } from "@/components/brick/BrickEnvironment";
+import { BrickOrbit } from "@/components/brick/BrickOrbit";
 
 /** 시점 프리셋·전체 맞춤이 잡는 기본 반경(m). **브릭 월드는 무한**이라 씬 바운드로 계산할 수 없다. */
 const VIEW_SPREAD = 16;
@@ -112,19 +112,6 @@ export function EditorCanvas() {
     useSceneStore.getState().pushHistory();
   }, [startViewSaveRequest]);
 
-  // 내비 버튼 매핑 — **좌버튼은 orbit이 아니다**(브릭 놓기/지우기가 쓴다). 우드래그 = 패닝.
-  //   ★ OrbitControls 내장: PAN 중 Ctrl/Shift/Meta를 누르면 자동으로 '회전'으로 스왑된다.
-  //     → 우버튼을 PAN 고정으로 두면 "우드래그=패닝, Ctrl+우드래그=회전"이 된다.
-  //   ⚠️ 첫 effect엔 orbitRef가 아직 없을 수 있어 다음 프레임에 한 번 더 적용한다.
-  useEffect(() => {
-    const apply = () => {
-      if (orbitRef.current) orbitRef.current.mouseButtons = { LEFT: undefined, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
-    };
-    apply();
-    const raf = requestAnimationFrame(apply);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Canvas
@@ -153,25 +140,8 @@ export function EditorCanvas() {
 
         {/* 회색 격자 없음 — **지형 블록 자체가 격자**다. 놓을 자리는 `PlacementMarker`가 표면에 눕혀 보여준다. */}
 
-        <OrbitControls
-          ref={orbitRef}
-          makeDefault
-          enableDamping={false}
-          zoomSpeed={2}
-          screenSpacePanning={false}
-          minPolarAngle={0.1}
-          maxPolarAngle={Math.PI / 2 - 0.08}
-          minDistance={1}
-          maxDistance={200}
-          onChange={() => {
-            const ctrl = orbitRef.current;
-            if (!ctrl) return;
-            // 패닝으로 타겟이 바닥 아래로 내려가면 바닥이 화면 위로 올라간다.
-            //   카메라 position.y는 직접 클램프하지 않는다 — 휠 줌(dolly)과 싸워
-            //   낮은 각도에서 확대가 안 먹던 원인이었다. target.y≥0 + maxPolarAngle<90°면 충분하다.
-            if (ctrl.target.y < 0) ctrl.target.y = 0;
-          }}
-        />
+        {/* 카메라 조작 — 프로토타입·뷰어와 **같은 컴포넌트**(설정이 갈라지지 않게) */}
+        <BrickOrbit ref={orbitRef} />
       </Canvas>
     </div>
   );

@@ -31,6 +31,14 @@ export class BrickWorld {
   private readonly colTop = new Map<number, number>();
   private nextId = 1;
 
+  /**
+   * 다음에 발급될 brickId. **되돌리기가 "이 호출이 무엇을 새로 만들었나"를 알아내는 데 쓴다.**
+   * (예: 지형을 파면 `deepenAround`가 아래를 채우며 브릭을 여러 개 만든다 — 그것도 함께 되돌려야 한다)
+   */
+  get nextBrickId(): number {
+    return this.nextId;
+  }
+
   // ── 청크 인덱스 (P1 저장) ──────────────────────────────────────────────
   // 소유권은 **앵커 셀** 기준. 브릭이 경계를 넘어가도 앵커가 있는 청크가 갖는다.
   /** chunkKey → 그 청크가 소유한 brickId들 */
