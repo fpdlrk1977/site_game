@@ -1,34 +1,15 @@
 'use client';
 
-import { useMemo } from 'react';
+// 임베드 — `ViewerClient(variant='embed')`를 그대로 재사용한다(뷰어와 갈라지지 않게).
+//
+// ⚠️ 2026-07-31: 부모 페이지로 쏘던 **postMessage 브릿지를 걷어냈다.**
+//   보내던 내용이 `show_popup` / `emit_event`였는데, 오브젝트 이벤트 시스템이 사라져 **보낼 것이 없다.**
+//   호스트 페이지 연동(`park3d:event` → 호스트가 자기 모달을 띄우던 흐름)은
+//   브릭에서 무엇이 "이벤트"인지 정한 뒤 다시 설계한다.
+
 import { ViewerClient } from '@/app/space/[sceneId]/ViewerClient';
 import type { ProjectSceneSchema } from '@/types/scene';
 
-interface Props {
-  scene: ProjectSceneSchema;
-}
-
-// 임베드는 이제 ViewerClient(variant='embed')를 그대로 재사용한다.
-// → 전체 액션(E1/E2/E3)·대화 말풍선·interact·카메라 포커스 등이 자동 지원되고,
-//   show_popup/emit_event만 부모 페이지로 postMessage 브릿지한다(아래 onBridge).
-export function EmbedClient({ scene }: Props) {
-  // postMessage 수신 허용 오리진: URL 파라미터 > referrer > 와일드카드 순으로 한정
-  const parentOrigin = useMemo(() => {
-    try {
-      const param = new URLSearchParams(window.location.search).get('parentOrigin');
-      if (param) return new URL(param).origin;
-      if (document.referrer) return new URL(document.referrer).origin;
-    } catch {}
-    return '*';
-  }, []);
-
-  return (
-    <ViewerClient
-      scene={scene}
-      variant="embed"
-      onBridge={(msg) => {
-        if (window.parent !== window) window.parent.postMessage(msg, parentOrigin);
-      }}
-    />
-  );
+export function EmbedClient({ scene }: { scene: ProjectSceneSchema }) {
+  return <ViewerClient scene={scene} variant="embed" />;
 }

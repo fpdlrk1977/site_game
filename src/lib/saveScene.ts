@@ -19,15 +19,6 @@ export function buildSceneData(): ProjectSceneSchema {
     sceneId: s.sceneId ?? '',
     version: SCENE_VERSION,
     environment: s.environment,
-    assets: s.assets,
-    objects: s.objects,
-    prefabs: s.prefabs,
-    materialAssets: s.materialAssets,
-    colorAssets: s.colorAssets,
-    variables: s.variables,
-    hudElements: s.hudElements,
-    sceneEvents: s.sceneEvents,
-    animClips: s.animClips,
   };
 }
 

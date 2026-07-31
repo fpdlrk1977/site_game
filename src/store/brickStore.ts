@@ -13,7 +13,7 @@ import type { StudStyle } from '@/lib/brick/brickGeometry';
 import { decodeChunk, encodeChunk, toBrickData } from '@/lib/brick/serialize';
 import { localBrickStorage, supabaseBrickStorage, type BrickStorage, type ChunkWrite } from '@/lib/brick/storage';
 import { BrickWorld } from '@/lib/brick/world';
-import { deepenAround, generateSurface, noteLoadedTerrain, resetTerrainState, SURFACE_Y, terrainKey, type TerrainGenerated } from '@/lib/brick/terrain';
+import { deepenAround, forgetTerrainChunk, generateSurface, noteLoadedTerrain, resetTerrainState, SURFACE_Y, terrainKey, type TerrainGenerated } from '@/lib/brick/terrain';
 
 /** 도구 — 왼쪽 클릭이 무슨 뜻인지 결정한다 */
 export type Tool = 'place' | 'erase';
@@ -141,8 +141,20 @@ let storage: BrickStorage = localBrickStorage('proto');
  * 씬에 연결 — 이후 로드/저장이 그 씬의 `brick_chunks`로 간다.
  * (훅이 아니다 — 모듈 상태를 바꾸는 부수효과라 effect에서 부를 것)
  */
+/**
+ * 지금 붙어 있는 대상 — **같은 대상에 다시 붙이지 않기 위한** 표식.
+ *
+ * ★ 이게 없으면 편집물이 날아간다: 에디터의 ▶플레이는 **같은 페이지에 뷰어를 겹쳐** 띄우고,
+ *   뷰어가 같은 씬에 다시 붙으면 `setBrickStorage`가 **월드를 새로 만들어** 미저장 편집을 버린다.
+ *   컴포넌트 재마운트마다 다시 읽는 낭비도 함께 막는다.
+ */
+let attachedKey: string | null = null;
+
 export function attachBrickStorage(sceneId: string | null): void {
+  const key = sceneId ?? '__local__';
+  if (attachedKey === key) return; // 같은 대상 — 월드를 건드리지 않는다
   setBrickStorage(sceneId ? supabaseBrickStorage(sceneId) : localBrickStorage('proto'));
+  attachedKey = key;
   useBrickStore.setState({ backend: sceneId ? 'db' : 'local' });
 }
 
@@ -152,6 +164,7 @@ export function attachBrickStorage(sceneId: string | null): void {
  */
 export function setBrickStorage(s: BrickStorage): void {
   storage = s;
+  attachedKey = null; // 직접 갈아끼웠으니 표식을 지운다(다음 attach가 제대로 돌게)
   chunkIndex.clear();
   terrainDone.clear();
   resetTerrainState();
@@ -284,11 +297,17 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     const ccz = Math.floor(camZ / (CHUNK_Z * CELL_Z));
 
     // ── 내릴 것: 언로드 반경 밖 (히스테리시스 — 경계에서 껌뻑이지 않게)
+    // ★ 내릴 것은 **월드가 실제로 들고 있는 청크**에서 고른다.
+    //   저장소 목록(`chunkIndex`)으로 판정하면 **생성한 지형이 영원히 안 내려간다** —
+    //   손 안 댄 지형은 저장하지 않으므로 그 목록에 없고, `if (!c) continue`로 다 빠져나갔다.
+    //   실측: 걸어 다니다 보니 로드 8,215청크 / 브릭 525,760개(정상은 약 169청크).
     const toUnload: number[] = [];
-    for (const key of world.loadedChunkKeys()) {
-      const c = chunkIndex.get(key);
-      if (!c) continue;
-      if (Math.max(Math.abs(c.cx - ccx), Math.abs(c.cz - ccz)) > UNLOAD_R) toUnload.push(key);
+    const unloadCoords = new Map<number, ChunkCoord>();
+    for (const { key, coord: c } of world.loadedChunks()) {
+      if (Math.max(Math.abs(c.cx - ccx), Math.abs(c.cz - ccz)) > UNLOAD_R) {
+        toUnload.push(key);
+        unloadCoords.set(key, c);
+      }
     }
 
     // ── 올릴 것: 로드 반경 안. **세로는 전부** 올린다 —
@@ -306,8 +325,15 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
       // 지형 생성분은 저장하지 않으므로(아래 clearDirty), 사용자가 편집한 것은 **먼저 저장**해 둔다
       await get().flush();
 
-      if (toUnload.length > 0) {
-        for (const key of toUnload) world.unloadChunk(key);
+      // 내릴 때 **지형 기록도 잊는다** — 안 그러면 되돌아왔을 때 "이미 깔았다"며
+      // 땅을 다시 안 깐다. (판 자리는 저장소에 남아 있어 다시 로드되면서 복원된다)
+      for (const key of toUnload) {
+        const c = unloadCoords.get(key);
+        if (c && provesTerrainGenerated(c)) {
+          terrainDone.delete(terrainKey(c.cx, c.cz));
+          forgetTerrainChunk(c);
+        }
+        world.unloadChunk(key);
       }
 
       // 나눠 읽는다 — 한 번에 다 읽으면 화면이 멈춘다(12만 브릭에서 3초였다)

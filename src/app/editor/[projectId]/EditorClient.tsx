@@ -5,23 +5,10 @@ import dynamic from "next/dynamic";
 import { ChevronLeft, ChevronRight, Monitor, Square } from "lucide-react";
 import { useSceneStore } from "@/store/sceneStore";
 import { buildSceneData } from "@/lib/saveScene";
-import { ViewportToolbar } from "./panels/ViewportToolbar";
-import { type GnbTab } from "./panels/EditorGnb";
 import { LeftPanel } from "./panels/LeftPanel";
-import { CollabAvatars } from "./panels/CollabAvatars";
-import { useCollab } from "@/hooks/useCollab";
-import { useUserStore } from "@/store/userStore";
 import { InspectorPanel } from "./panels/InspectorPanel";
 import { InspectorActionBar } from "./panels/InspectorActionBar";
-import { LogicPopup } from "./panels/LogicPopup";
-import { TimelinePanel } from "./panels/TimelinePanel";
-import { EditorEmptyState } from "./panels/EditorEmptyState";
-import { EditorOnboarding } from "./EditorOnboarding";
-import { ViewportStatusBar } from "./canvas/ViewportStatusBar";
-import { ViewportFloatingToolbar } from "./canvas/ViewportFloatingToolbar";
 import { ViewportOrientationGizmo } from "./canvas/ViewportOrientationGizmo";
-import { CommandPalette } from "./panels/CommandPalette";
-import { BoundaryShapeModal } from "./panels/BoundaryShapeModal";
 import { Toaster } from "@/components/ui/Toaster";
 import type { ProjectSceneSchema } from "@/types/scene";
 
@@ -51,36 +38,7 @@ interface Props {
 }
 
 export function EditorClient({ projectName, initialScene, initialVersion }: Props) {
-  const {
-    loadScene,
-    undo,
-    redo,
-    deleteSelected,
-    duplicateSelected,
-    duplicateInPlace,
-    setTransformMode,
-    requestFocus,
-    requestFocusAll,
-    requestFocusSelected,
-    requestCameraView,
-    groupSelected,
-    ungroupSelected,
-    requestSaveBookmark,
-    requestRecallBookmark,
-    copyObjectProperties,
-    pasteObjectProperties,
-    copySelection,
-    pasteClipboard,
-    editorPlaying,
-    setEditorPlaying,
-    animMode,
-    selectedId,
-    animClips,
-  } = useSceneStore();
-
-  // 하단 타임라인(고급 모드) 표시 여부 — 선택 오브젝트에 클립이 있고 타임라인 모드일 때.
-  const timelineOpen =
-    animMode === "timeline" && !editorPlaying && animClips.some((c) => c.rootId === selectedId || c.tracks.some((t) => t.objectId === selectedId));
+  const { loadScene, requestFocusAll, requestCameraView, editorPlaying, setEditorPlaying } = useSceneStore();
 
   // 플레이 시작 시점의 편집 상태를 스냅샷으로 굳혀 뷰어에 전달(항상 play 모드로 시작).
   const playScene = useMemo(() => {
@@ -88,15 +46,9 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     const data = buildSceneData();
     return { ...data, environment: { ...data.environment, defaultMode: "play" as const } };
   }, [editorPlaying]);
-  // 실시간 협업 세션(M1: Presence) — 같은 씬 편집자의 아바타·선택·잠금 공유.
-  const collabUserId = useUserStore((s) => s.userId);
-  const collabEmail = useUserStore((s) => s.email);
-  useCollab(initialScene.sceneId, collabUserId, collabEmail);
 
   const [isMobile, setIsMobile] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
-  const [gnbTab, setGnbTab] = useState<GnbTab>("objects");
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   // 씬 로드 — sceneId가 같으면 재로드하지 않음 (initialScene prop 재생성 시 재로드 방지)
   // sceneId가 바뀌면(App Router가 param만 바꿔 컴포넌트를 재사용하는 씬 전환) 새 씬을 로드
@@ -142,121 +94,24 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
         document.getElementById("save-btn")?.click();
         return;
       }
-      if (ctrl && e.code === "KeyK") {
-        e.preventDefault();
-        setShowCommandPalette((v) => !v);
-        return;
-      }
 
       // 인풋에서는 브라우저 기본 동작 허용 (텍스트 undo/redo/copy/paste)
       if (isInput) return;
 
-      if (ctrl && e.code === "KeyZ" && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-        return;
-      }
-      if (ctrl && (e.code === "KeyY" || (e.shiftKey && e.code === "KeyZ"))) {
-        e.preventDefault();
-        redo();
-        return;
-      }
-      if (ctrl && e.code === "KeyD") {
-        e.preventDefault();
-        duplicateSelected();
-        return;
-      }
-      if (ctrl && !e.shiftKey && e.code === "KeyC") {
-        e.preventDefault();
-        copySelection();
-        return;
-      } // 오브젝트 복사(Ctrl+Shift+C=속성 복사와 구분)
-      if (ctrl && !e.shiftKey && e.code === "KeyV") {
-        e.preventDefault();
-        pasteClipboard();
-        return;
-      } // 오브젝트 붙여넣기(항상 최상위)
-      if (ctrl && e.shiftKey && e.code === "KeyG") {
-        e.preventDefault();
-        ungroupSelected();
-        return;
-      }
-      if (ctrl && e.code === "KeyG") {
-        e.preventDefault();
-        groupSelected();
-        return;
-      }
-      if (ctrl && e.shiftKey && e.code === "KeyC") {
-        e.preventDefault();
-        copyObjectProperties();
-        return;
-      }
-      if (ctrl && e.shiftKey && e.code === "KeyV") {
-        e.preventDefault();
-        pasteObjectProperties();
-        return;
-      }
 
-      // 이하 단일 키 단축키 — 브라우저 단축키(Ctrl+1 탭 전환, Ctrl+R 새로고침 등)와
-      // 겹치지 않도록 modifier가 눌린 상태에서는 무시
+      // 이하 단일 키 — 브라우저 단축키(Ctrl+1 탭 전환 등)와 겹치지 않게 modifier가 눌리면 무시
       if (ctrl || e.altKey) return;
 
-      if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
-      if (e.code === "KeyW") setTransformMode("translate");
-      if (e.code === "KeyE") setTransformMode("rotate");
-      if (e.code === "KeyR") setTransformMode("scale");
-      if (e.shiftKey && e.code === "KeyF") {
-        requestFocusAll();
-        return;
-      } // 전체 맞춤(모든 오브젝트가 화면에 꽉 차게)
-      if (e.code === "KeyF") requestFocusSelected(); // 선택물로 프레이밍(pivot 이동 + 거리 맞춤)
-      if (e.shiftKey && e.code === "KeyD") {
-        e.preventDefault();
-        duplicateInPlace();
-        return;
-      }
-      if (e.code === "Numpad7") {
-        e.preventDefault();
-        requestCameraView("top");
-        return;
-      }
-      if (e.code === "Numpad1") {
-        e.preventDefault();
-        requestCameraView("front");
-        return;
-      }
-      if (e.code === "Numpad3") {
-        e.preventDefault();
-        requestCameraView("right");
-        return;
-      }
-      // Shift+숫자는 e.key가 '!' 등 특수문자가 되므로 e.code(Digit1~5)로 판정
-      const digit = /^Digit([1-5])$/.exec(e.code);
-      if (digit && !e.shiftKey) requestRecallBookmark(Number(digit[1]));
-      if (digit && e.shiftKey) requestSaveBookmark(Number(digit[1]));
+      // ★ 브릭 단축키(1~9 파츠 · R 회전)는 BrickToolPanel이 잡는다 — 여기서 같은 키를 쓰면 안 된다.
+      //   예전엔 Digit1~5가 카메라 북마크, KeyR이 스케일 모드였다(실제로 충돌하고 있었다).
+      if (e.shiftKey && e.code === "KeyF") { requestFocusAll(); return; }   // 3D 뷰로 복귀
+      if (e.code === "Numpad7") { e.preventDefault(); requestCameraView("top"); return; }
+      if (e.code === "Numpad1") { e.preventDefault(); requestCameraView("front"); return; }
+      if (e.code === "Numpad3") { e.preventDefault(); requestCameraView("right"); return; }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [
-    undo,
-    redo,
-    deleteSelected,
-    duplicateSelected,
-    duplicateInPlace,
-    setTransformMode,
-    requestFocus,
-    requestFocusAll,
-    requestFocusSelected,
-    requestCameraView,
-    groupSelected,
-    ungroupSelected,
-    requestSaveBookmark,
-    requestRecallBookmark,
-    copyObjectProperties,
-    pasteObjectProperties,
-    copySelection,
-    pasteClipboard,
-  ]);
+  }, [requestFocusAll, requestCameraView]);
 
   if (isMobile) {
     return (
@@ -278,7 +133,6 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
     inspW = 240,
     edge = 12,
     gap = 8;
-  // 상단바(ViewportToolbar) hidden + 좌측 GNB 레일 삭제(2026-07-22) → 패널을 위·좌 가장자리까지.
   //   브랜드/프로젝트명·Objects/Assets 탭·Settings/Account는 좌측 패널, Save/Play/Preview는 우측 상단,
   //   Logic은 Environment 타이틀의 버튼(드래그 팝업)으로 이동.
   const panelTop = edge;
@@ -286,10 +140,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
   const overlayLeft = leftOpen ? leftPanelX + leftW + gap : leftPanelX; // 자유 캔버스 좌측 경계
   const overlayRight = edge + inspW + gap; // 자유 캔버스 우측 경계 = 260
   const panelShell = "rounded-xs bg-surface border border-border overflow-hidden";
-  // 하단 타임라인이 열리면 사이드 패널/오버레이 바닥을 그만큼 올린다(전체폭 바닥 패널 공간 확보).
-  const TIMELINE_H = 172;
-  const bottomInset = timelineOpen ? TIMELINE_H + gap : 0;
-  const panelBottom = edge + bottomInset;
+  const panelBottom = edge;
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-canvas">
@@ -298,11 +149,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
         <EditorCanvas />
       </div>
 
-      {/* 빈 씬 코칭 — 오브젝트 0개일 때만 (자체적으로 숨김) */}
-      <EditorEmptyState />
 
-      {/* 실시간 협업 — 접속자 아바타(협업 중일 때만 노출) */}
-      <CollabAvatars />
 
       {/* Viewport overlays — 떠있는 패널과 겹치지 않도록 '자유 캔버스' 사각형에 가둔다.
           자식 오버레이의 기존 top-3/right-3/bottom-3 좌표는 이 컨테이너 기준으로 그대로 동작. */}
@@ -310,22 +157,14 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
         className="absolute z-10 pointer-events-none"
         style={{ top: panelTop - gap, bottom: panelBottom, left: overlayLeft, right: overlayRight, transition: "left .18s ease, bottom .18s ease" }}
       >
-        <ViewportFloatingToolbar />
         <ViewportOrientationGizmo />
-        {/* <ViewportStatusBar /> */}
       </div>
 
-      {/* Floating top bar — hidden 처리(2026-07-22, 나중에 살릴 수 있게 유지). 내용은 좌/우 패널로 이동. */}
-      <div className={`hidden absolute top-3 left-3 right-3 h-11 z-40 ${panelShell}`}>
-        <ViewportToolbar />
-      </div>
 
-      {/* GNB 레일 삭제(2026-07-22) — Objects/Assets 탭은 좌패널 내부, Logic은 Environment 팝업으로 이동. */}
-
-      {/* Floating left panel (Objects / Assets) */}
+      {/* Floating left panel — 브랜드 · 프로젝트명 · 씬 전환 · ☰ 메뉴 */}
       {leftOpen && (
-        <div className={`absolute w-60 z-30 shadow-[0_1px_5px_rgba(0,0,0,0.08)] ${panelShell}`} style={{ top: panelTop, bottom: panelBottom, left: leftPanelX }}>
-          <LeftPanel tab={gnbTab} projectName={projectName} onTabChange={setGnbTab} />
+        <div className={`absolute w-60 z-30 shadow-[0_1px_5px_rgba(0,0,0,0.08)] ${panelShell}`} style={{ top: panelTop, left: leftPanelX }}>
+          <LeftPanel projectName={projectName} />
         </div>
       )}
 
@@ -347,12 +186,6 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
         </div>
       </div>
 
-      {/* Floating bottom timeline (advanced mode) — 전체폭 바닥 패널 */}
-      {timelineOpen && (
-        <div className={`absolute left-3 right-3 z-30 ${panelShell}`} style={{ bottom: edge, height: TIMELINE_H }}>
-          <TimelinePanel />
-        </div>
-      )}
 
       {/* 인에디터 플레이 — 편집 중 씬을 뷰어로 전체 오버레이 구동 */}
       {editorPlaying && playScene && (
@@ -368,11 +201,7 @@ export function EditorClient({ projectName, initialScene, initialVersion }: Prop
         </div>
       )}
 
-      <EditorOnboarding />
       <Toaster />
-      {showCommandPalette && <CommandPalette onClose={() => setShowCommandPalette(false)} />}
-      <BoundaryShapeModal />
-      <LogicPopup />
     </div>
   );
 }

@@ -181,6 +181,23 @@ export class BrickWorld {
 
   loadedChunkKeys(): number[] { return [...this.byChunk.keys()]; }
 
+  /**
+   * 지금 메모리에 올라와 있는 청크의 **키와 좌표**.
+   *
+   * ★ 언로드 판정은 **반드시 이걸로** 해야 한다. 저장소 목록(`chunkIndex`)으로 하면
+   *   **생성한 지형이 영원히 안 내려간다** — 손 안 댄 지형은 저장하지 않으므로
+   *   저장소 목록에 없고, 그래서 판정에서 통째로 건너뛰어졌다.
+   *   실측: 걸어 다니다 보니 로드 8,215청크 / 브릭 525,760개(정상은 약 169청크).
+   */
+  loadedChunks(): { key: number; coord: ChunkCoord }[] {
+    const out: { key: number; coord: ChunkCoord }[] = [];
+    for (const key of this.byChunk.keys()) {
+      const coord = this.chunkCoord.get(key);
+      if (coord) out.push({ key, coord });
+    }
+    return out;
+  }
+
   /** 저장할 청크 목록 — 비어 있으면 bricks가 빈 배열(=저장소에서 삭제하라는 뜻) */
   dirtyChunks(): { coord: ChunkCoord; bricks: Brick[] }[] {
     const out: { coord: ChunkCoord; bricks: Brick[] }[] = [];

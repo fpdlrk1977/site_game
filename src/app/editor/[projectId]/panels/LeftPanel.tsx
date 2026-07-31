@@ -10,28 +10,18 @@ import { createBrowserSupabase } from '@/lib/supabase';
 import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { ShareModal } from '@/app/dashboard/ShareModal';
 import { CustomDomainModal } from '@/app/dashboard/CustomDomainModal';
-import { HierarchyPanel } from './HierarchyPanel';
-import { AssetBrowser } from './AssetBrowser';
-import { ScenesSection } from './ScenesSection';
+import { SceneSwitcher } from './SceneSwitcher';
 import { VersionHistoryModal } from './VersionHistoryModal';
-import type { GnbTab } from './EditorGnb';
 
 // ☰ 메뉴 항목/소제목 공통 클래스
 const MENU_ITEM = 'w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-foreground hover:bg-background transition-colors text-left whitespace-nowrap';
 const MENU_TITLE = 'px-3 pt-2 pb-0.5 text-[9px] font-semibold text-muted uppercase tracking-wider';
 
-// 좌측 패널 — 프로젝트 타이틀 · Objects/Assets 탭 · Scenes 목록 · 콘텐츠(트리/에셋).
-//   2026-07-21 재구성: 상단 바에 흩어져 있던 프로젝트명·씬 전환(SceneSwitcher 드롭다운)을 여기로 **옮겼다**.
-//   GNB 레일(Objects/Assets/Logic)은 당분간 유지 — 레일 자체를 걷어낼 예정이라 그때까지 진입점이 둘이다.
-export function LeftPanel({
-  tab,
-  projectName,
-  onTabChange,
-}: {
-  tab: GnbTab;
-  projectName: string;
-  onTabChange: (tab: GnbTab) => void;
-}) {
+// 좌측 패널 — **브랜드 · 프로젝트명 · ☰ 메뉴뿐이다.**
+//   2026-07-31: Objects/Assets 탭 · Scenes 목록 · 계층 트리 · 에셋 브라우저를 전부 걷어냈다.
+//   브릭엔 오브젝트 트리도 에셋 업로드도 없다(격자에 놓는 파츠가 전부고, 도구는 우측 인스펙터에 있다).
+//   씬 전환만 되살려 프로젝트명 아래 드롭다운(SceneSwitcher)으로 뒀다.
+export function LeftPanel({ projectName }: { projectName: string }) {
   const { projectId, sceneId } = useSceneStore();
   const { theme, toggleTheme } = useThemeStore();
   const [showHistory, setShowHistory] = useState(false);
@@ -56,13 +46,9 @@ export function LeftPanel({
     setDomainData({ currentDomain: data?.custom_domain ?? null });
   };
 
-  const TABS: { id: GnbTab; label: string }[] = [
-    { id: 'objects', label: 'Objects' },
-    { id: 'assets', label: 'Assets' },
-  ];
 
   return (
-    <div className="flex flex-col overflow-hidden h-full">
+    <div className="flex flex-col overflow-hidden">
       {/* 타이틀 바 — Park3D 브랜드 + 프로젝트명 + ☰ 메뉴. 상단바에서 옮겨왔다(2026-07-22).
           ☰ 메뉴 = Back to file(대시보드) · Version history. */}
       <div className="px-3 pt-2.5 pb-2 shrink-0 space-y-1.5">
@@ -134,27 +120,10 @@ export function LeftPanel({
         <div className="truncate text-[12px] font-semibold text-foreground" title={projectName}>
           {projectName}
         </div>
+        {/* 씬 전환 — 목록을 인라인으로 펼치면 패널이 도로 길어져서 드롭다운으로 */}
+        <SceneSwitcher />
       </div>
 
-      {/* 탭 — Objects / Assets (활성 = 연회색 pill) */}
-      <div className="flex items-center gap-1 px-2 pb-1.5 shrink-0 border-b border-border/50">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => onTabChange(id)}
-            className={`flex-1 px-3 py-1.5 rounded-xs text-[11px] font-medium transition-colors ${
-              tab === id ? 'bg-muted/5 dark:bg-muted/10 text-foreground' : 'text-muted hover:text-foreground'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Scenes는 Objects 탭에서만 — 에셋 라이브러리는 프로젝트 단위라 씬 목록과 관계없다. */}
-      {tab === 'objects' && <ScenesSection />}
-
-      {tab === 'objects' ? <HierarchyPanel noWrapper /> : <AssetBrowser />}
 
       {showHistory && typeof document !== 'undefined' && createPortal(
         <VersionHistoryModal onClose={() => setShowHistory(false)} />,

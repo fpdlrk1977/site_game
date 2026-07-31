@@ -128,6 +128,41 @@ async function main(): Promise<void> {
     ok(store().world.at(0, SURFACE_Y, 0) !== undefined, '★ 지우고 새로고침해도 바닥이 있다');
     ok(store().world.at(0, 0, 0) === undefined, '지운 브릭은 새로고침해도 안 돌아온다');
   }
+  // ── ★★ 멀리 걸어도 로드된 청크가 무한히 쌓이지 않는다 ────────────────────
+  // 🐛 언로드 판정을 **저장소 목록**으로 하고 있었다. 생성한 지형은 저장하지 않으므로
+  //    그 목록에 없고 → `if (!c) continue`로 전부 빠져나가 **하나도 안 내려갔다.**
+  //    실측(사용자): 로드 8,215청크 / 브릭 525,760개. 정상은 약 169청크.
+  //    FPS는 리전 컬링이 버텨 줘서 안 죽었고, **메모리만 조용히 무한 증가**했다.
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+
+    // 한 방향으로 멀리 걸어간다 (청크 8m × 40걸음 ≈ 320m)
+    for (let i = 1; i <= 40; i++) await store().streamAround(i * 8, 0);
+
+    const loaded = store().world.chunkCount;
+    // 로드 반경 6 → 13×13 = 169, 언로드 반경 9 → 19×19 = 361이 이론 상한
+    ok(loaded <= 400, `★ 멀리 걸어도 로드 청크가 상한 안 — ${loaded}개 (상한 400)`);
+    ok(store().world.count < 30_000, `★ 브릭도 무한히 안 쌓인다 — ${store().world.count}개`);
+
+    // 되돌아오면 땅이 다시 있어야 한다 (언로드하며 지형 기록을 잊으므로)
+    await store().streamAround(0, 0);
+    ok(store().world.at(0, SURFACE_Y, 0) !== undefined, '★ 되돌아오면 지형이 다시 깔린다');
+  }
+
+  // ── 되돌아왔을 때 **판 구덩이는 그대로** (기록을 잊어도 저장분이 이긴다) ──
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const dug = store().world.at(0, SURFACE_Y, 0)!;
+    store().removeBrick(dug);
+    await store().flush();
+
+    for (let i = 1; i <= 40; i++) await store().streamAround(i * 8, 0); // 멀리 갔다가
+    await store().streamAround(0, 0);                                   // 돌아온다
+    ok(store().world.at(0, SURFACE_Y, 0) === undefined, '★ 멀리 갔다 와도 판 구덩이가 유지된다');
+    ok(store().world.at(8, SURFACE_Y, 8) !== undefined, '안 판 자리는 다시 깔린다');
+  }
 }
 
 void main().then(() => {

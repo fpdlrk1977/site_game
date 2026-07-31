@@ -31,19 +31,18 @@ const CELL = [CELL_X, CELL_Y, CELL_Z] as const;
 /** 표면에서 살짝 띄운다 — 같은 평면이면 z-파이팅으로 얼룩진다 */
 const LIFT = 0.006;
 
-/** 접촉면 네 모서리(월드). 면 축을 뺀 두 축이 사각형을 이룬다 */
-function contactCorners(spot: FacePlacement, part: PartId, rot: Rot): Float32Array {
-  const e = extentOf(PARTS[part], rot);
-  const ext = [e.ex, e.ey, e.ez];
-  const a = [spot.anchor.x, spot.anchor.y, spot.anchor.z];
-  const ax = spot.face.axis;
-
-  // 브릭이 상대 표면에 **닿는 쪽**. 바깥 면을 겨눴으면 브릭의 아래쪽, 안쪽이면 위쪽이 닿는다
-  const at = (spot.face.dir > 0 ? a[ax] : a[ax] + ext[ax]) * CELL[ax] + spot.face.dir * LIFT;
-
+/**
+ * 표면 위 사각형 네 모서리(월드).
+ * `lo`/`size`는 면 축을 뺀 두 축의 시작 칸·칸수다. 면 축은 표면 좌표 하나로 눕는다.
+ */
+function quadOn(
+  ax: 0 | 1 | 2, dir: 1 | -1, surfaceCell: number,
+  lo: [number, number, number], size: [number, number, number],
+): Float32Array {
+  const at = surfaceCell * CELL[ax] + dir * LIFT;
   const [u, v] = ax === 0 ? [1, 2] : ax === 1 ? [0, 2] : [0, 1];
-  const u0 = a[u] * CELL[u], u1 = (a[u] + ext[u]) * CELL[u];
-  const v0 = a[v] * CELL[v], v1 = (a[v] + ext[v]) * CELL[v];
+  const u0 = lo[u] * CELL[u], u1 = (lo[u] + size[u]) * CELL[u];
+  const v0 = lo[v] * CELL[v], v1 = (lo[v] + size[v]) * CELL[v];
 
   const pts = new Float32Array(12);
   const quad: [number, number][] = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
@@ -55,29 +54,53 @@ function contactCorners(spot: FacePlacement, part: PartId, rot: Rot): Float32Arr
   return pts;
 }
 
+/** 브릭이 상대 표면에 닿는 면 */
+function contactCorners(spot: FacePlacement, part: PartId, rot: Rot): Float32Array {
+  const e = extentOf(PARTS[part], rot);
+  const ext: [number, number, number] = [e.ex, e.ey, e.ez];
+  const a: [number, number, number] = [spot.anchor.x, spot.anchor.y, spot.anchor.z];
+  const ax = spot.face.axis;
+  // 바깥 면을 겨눴으면 브릭의 아래쪽이, 안쪽이면 위쪽이 닿는다
+  const surface = spot.face.dir > 0 ? a[ax] : a[ax] + ext[ax];
+  return quadOn(ax, spot.face.dir, surface, a, ext);
+}
+
+/** **겨눈 칸** 하나 — "여기 옆에 놓인다"를 보여주는 기준점 */
+function aimedCorners(spot: FacePlacement): Float32Array {
+  const ax = spot.face.axis;
+  const surface = spot.face.dir > 0 ? spot.cell[ax] + 1 : spot.cell[ax];
+  return quadOn(ax, spot.face.dir, surface, spot.cell, [1, 1, 1]);
+}
+
+function quadGeos(pts: Float32Array): { outline: THREE.BufferGeometry; fill: THREE.BufferGeometry } {
+  const attr = new THREE.BufferAttribute(pts, 3);
+  const outline = new THREE.BufferGeometry();
+  outline.setAttribute('position', attr);
+  const fill = new THREE.BufferGeometry();
+  fill.setAttribute('position', attr);
+  fill.setIndex([0, 1, 2, 0, 2, 3]);
+  return { outline, fill };
+}
+
 export function PlacementMarker({ spot, part, rot, valid }: Props) {
-  const geos = useMemo(() => {
-    if (!spot) return null;
-    const pts = contactCorners(spot, part, rot);
-
-    const outline = new THREE.BufferGeometry();
-    outline.setAttribute('position', new THREE.BufferAttribute(pts, 3));
-
-    const fill = new THREE.BufferGeometry();
-    fill.setAttribute('position', new THREE.BufferAttribute(pts, 3));
-    fill.setIndex([0, 1, 2, 0, 2, 3]);
-
-    return { outline, fill };
-  }, [spot, part, rot]);
+  const geos = useMemo(() => (spot ? {
+    brick: quadGeos(contactCorners(spot, part, rot)),
+    aimed: quadGeos(aimedCorners(spot)),
+  } : null), [spot, part, rot]);
 
   if (!geos) return null;
   const color = valid ? '#000000' : '#e02424';
   return (
     <group raycast={() => null}>
-      <mesh geometry={geos.fill}>
-        <meshBasicMaterial color={color} transparent opacity={0.14} side={THREE.DoubleSide} depthWrite={false} />
+      {/* 겨눈 칸 — 이 칸 옆에 브릭이 놓인다. 진하게 칠해 기준점이 눈에 보이게 */}
+      <mesh geometry={geos.aimed.fill}>
+        <meshBasicMaterial color={color} transparent opacity={0.3} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
-      <lineLoop geometry={geos.outline}>
+      {/* 놓일 브릭이 표면에 닿는 면 */}
+      <mesh geometry={geos.brick.fill}>
+        <meshBasicMaterial color={color} transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      <lineLoop geometry={geos.brick.outline}>
         <lineBasicMaterial color={color} transparent opacity={0.85} />
       </lineLoop>
     </group>

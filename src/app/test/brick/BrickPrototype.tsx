@@ -8,186 +8,30 @@
 //
 // 기존 에디터 코드는 건드리지 않는다. DB도 쓰지 않는다(메모리만).
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { BrickInstances, type BrickHit } from '@/components/brick/BrickInstances';
-import { STUD_STYLES } from '@/lib/brick/brickGeometry';
-import { PlacementMarker } from '@/components/brick/PlacementMarker';
-import { anchorCenterWorld, anchorFromFace, faceOf, slideAnchor, type FacePlacement } from '@/lib/brick/placement';
-import { MAT_CLASSES, PART_KINDS, PARTS, partsOfKind } from '@/lib/brick/parts';
-import { attachBrickStorage, BRICK_COLORS, useBrickStore, type Tool } from '@/store/brickStore';
-import { brickGeometry } from '@/lib/brick/brickGeometry';
-import type { BrickWorld } from '@/lib/brick/world';
-import type { StudStyle } from '@/lib/brick/brickGeometry';
+import { BrickBuilder, brickCursor, useEffectiveTool } from '@/components/brick/BrickBuilder';
+import { BrickToolPanel } from '@/components/brick/BrickToolPanel';
+import type { FacePlacement } from '@/lib/brick/placement';
+import { attachBrickStorage, useBrickStore } from '@/store/brickStore';
 
 interface Stats { groups: number; instances: number; tris: number }
 
-// 도구별 커서 — 지금 왼쪽 클릭이 무슨 뜻인지 커서만 봐도 알게 한다(SVG data-URI, 외부 파일 없음)
-const svgCursor = (body: string, hot = '12 12') =>
-  `url("data:image/svg+xml;utf8,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round">${body}</svg>`,
-  )}") ${hot}, crosshair`;
-const PLACE_CURSOR = svgCursor(
-  '<path d="M12 4v16M4 12h16" stroke="#111" stroke-opacity=".55" stroke-width="4"/><path d="M12 4v16M4 12h16" stroke="#fff"/>',
-);
-const ERASE_CURSOR = svgCursor(
-  '<path d="M5 12h14" stroke="#111" stroke-opacity=".55" stroke-width="6"/><path d="M5 12h14" stroke="#ff6b6b" stroke-width="3"/>',
-);
-
-/** 드래그로 자리를 고칠 수 있는 최대 거리(m) — 시선이 얕을 때 무한대로 달아나는 것을 막는다 */
-const SLIDE_REACH = 12;
-
-/**
- * 드래그 중 좌표원 — **처음 붙은 면의 평면**에 포인터를 투영한다.
- *
- * ★ R3F 이벤트가 아니라 직접 레이캐스트인 이유:
- *   ① 방금 놓은 브릭이 **그 뒤의 평면을 가려** 이벤트가 끊긴다(끌다 멈춤)
- *   ② 브릭 표면에서 좌표를 받으면 높이가 달라 **커서와 어긋난다**(시차)
- *   평면은 수학이라 가려지지 않는다.
- */
-function SlidePlane({ base, onPoint }: { base: FacePlacement; onPoint: (x: number, y: number, z: number) => void }) {
-  const plane = useMemo(() => {
-    const n = new THREE.Vector3(0, 0, 0);
-    n.setComponent(base.face.axis, 1);
-    return new THREE.Plane(n, -base.planeAt);
-  }, [base]);
-  const ray = useMemo(() => new THREE.Raycaster(), []);
-  const hit = useMemo(() => new THREE.Vector3(), []);
-  const origin = useMemo(
-    () => new THREE.Vector3().fromArray(anchorCenterWorld(base.anchor, 'b1x1', 0)),
-    [base],
-  );
-  useFrame(({ camera, pointer }) => {
-    ray.setFromCamera(pointer, camera);
-    // 시선이 평면과 거의 나란하면 교점이 무한대로 달아난다
-    if (Math.abs(ray.ray.direction.getComponent(base.face.axis)) < 0.12) return;
-    if (!ray.ray.intersectPlane(plane, hit)) return;
-    if (hit.distanceTo(origin) > SLIDE_REACH) return;
-    onPoint(hit.x, hit.y, hit.z);
-  });
-  return null;
-}
-
-/** 지우기 도구에서 **어느 브릭이 지워질지** 빨갛게 감싼다 */
-function EraseHighlight({ world, brickId, studStyle }: {
-  world: BrickWorld; brickId: number | null; studStyle: StudStyle;
-}) {
-  const b = brickId === null ? undefined : world.bricks.get(brickId);
-  const geo = useMemo(
-    () => (b ? brickGeometry(PARTS[b.part], true, studStyle) : null),
-    [b, studStyle],
-  );
-  if (!b || !geo) return null;
-  const [x, y, z] = anchorCenterWorld({ x: b.x, y: b.y, z: b.z }, b.part, b.rot);
-  return (
-    <mesh geometry={geo} position={[x, y, z]} rotation={[0, (b.rot * Math.PI) / 2, 0]} raycast={() => null}>
-      <meshBasicMaterial color="#f05252" transparent opacity={0.5} depthWrite={false} side={THREE.DoubleSide} />
-    </mesh>
-  );
-}
-
 export default function BrickPrototype() {
-  const { world, version, part, rot, color, mat, saveState, loaded, studStyle, backend, tool } = useBrickStore();
-  const { setPart, rotate, setColor, setMat, setTool, place, moveBrick, removeBrick, clear, stressFill, loadWorld, flush, setStudStyle, indexedChunks } = useBrickStore();
+  const { world, version, saveState, loaded, backend } = useBrickStore();
+  const { clear, stressFill, loadWorld, flush, indexedChunks } = useBrickStore();
 
-  /** 커서 밑 브릭 — 어느 면에 붙일지, 지우기 도구가 무엇을 지울지 결정한다 */
-  const [hoverBrick, setHoverBrick] = useState<number | null>(null);
-  /** 가리킨 면에 붙을 자리 (고스트가 이것을 그린다) */
-  const [spot, setSpot] = useState<FacePlacement | null>(null);
   const [stats, setStats] = useState<Stats>({ groups: 0, instances: 0, tris: 0 });
   const [perf, setPerf] = useState({ fps: 0, calls: 0, tris: 0 });
   const [copied, setCopied] = useState(false);
-  /** 지금 보고 있는 갈래(브릭/플레이트)의 파츠 — 목록·숫자키가 같은 순서를 쓴다 */
-  const kindParts = useMemo(() => partsOfKind(PARTS[part].kind), [part]);
-
+  /** 계기판용 — 지금 놓일 자리(BrickBuilder가 알려준다) */
+  const [spot, setSpot] = useState<FacePlacement | null>(null);
+  const [valid, setValid] = useState(false);
+  const onSpot = useCallback((s2: FacePlacement | null, v: boolean) => { setSpot(s2); setValid(v); }, []);
   const anchor = spot?.anchor ?? null;
-  const valid = useMemo(
-    () => (anchor ? world.canPlace(part, anchor.x, anchor.y, anchor.z, rot) : false),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [anchor, part, rot, world, version],
-  );
-
-  /** Ctrl을 누르고 있는 동안 도구를 일시 반전 — 하나 잘못 놓았을 때 팔레트 왕복을 없앤다 */
-  const [invertHeld, setInvertHeld] = useState(false);
-  useEffect(() => {
-    // macOS는 Ctrl+클릭이 우클릭이라 Cmd도 같이 받는다
-    const sync = (e: KeyboardEvent) => setInvertHeld(e.ctrlKey || e.metaKey);
-    const blur = () => setInvertHeld(false);
-    window.addEventListener('keydown', sync);
-    window.addEventListener('keyup', sync);
-    window.addEventListener('blur', blur);
-    return () => {
-      window.removeEventListener('keydown', sync);
-      window.removeEventListener('keyup', sync);
-      window.removeEventListener('blur', blur);
-    };
-  }, []);
-  const effTool: Tool = invertHeld ? (tool === 'place' ? 'erase' : 'place') : tool;
-
-  /**
-   * ★ 놓기 = **누르고 → 끌어서 자리 고치고 → 뗀다.**
-   *   누르는 순간 실제로 놓이고, 누른 채 움직이면 **그 면의 평면 위에서만** 미끄러진다.
-   *   액션이 뗄 때가 아니라 **누를 때** 일어나므로, 카메라를 돌리고 손을 떼면서
-   *   엉뚱한 곳에 놓이던 문제가 구조적으로 없다.
-   */
-  const dragRef = useRef<{ id: number; base: FacePlacement } | null>(null);
-  const [dragging, setDragging] = useState<FacePlacement | null>(null);
-
-  /**
-   * ★ 클릭은 **ref를 읽는다**(상태가 아니라).
-   *   상태는 다음 렌더에야 반영되는데 `pointerdown`은 그 사이에 끼어들 수 있다.
-   *   그러면 **마우스를 움직이면서 누를 때 한 칸 전 자리**에 놓인다
-   *   ("격자에 맞춰 클릭했는데 1칸씩 어긋난다"의 원인). ref는 즉시 반영된다.
-   *   상태는 고스트를 그리기 위해서만 둔다(한 프레임 늦어도 눈에 안 띈다).
-   */
-  const spotRef = useRef<FacePlacement | null>(null);
-  const hoverBrickRef = useRef<number | null>(null);
-
-  /** 커서가 가리킨 면 → 붙을 자리 */
-  const onBrickHover = useCallback((h: BrickHit | null) => {
-    if (dragRef.current) return; // 드래그 중엔 평면이 자리를 정한다
-    hoverBrickRef.current = h ? h.brickId : null;
-    setHoverBrick(hoverBrickRef.current);
-    const f = h ? faceOf(world, h.brickId, h.point.x, h.point.y, h.point.z) : null;
-    const fp = f && h ? anchorFromFace(world, h.brickId, f, h.point.x, h.point.y, h.point.z, part, rot) : null;
-    spotRef.current = fp;
-    setSpot(fp);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, version, part, rot]);
-
-  const onDown = useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    if (effTool === 'erase') {
-      if (hoverBrickRef.current !== null) removeBrick(hoverBrickRef.current);
-      return;
-    }
-    const fp = spotRef.current;
-    // 유효성도 여기서 새로 판정한다 — 상태로 들고 있으면 같이 한 프레임 낡는다
-    if (!fp || !world.canPlace(part, fp.anchor.x, fp.anchor.y, fp.anchor.z, rot)) return;
-    const id = place(fp.anchor.x, fp.anchor.y, fp.anchor.z);
-    if (id === null) return;
-    dragRef.current = { id, base: fp };
-    setDragging(fp);
-  }, [effTool, removeBrick, world, part, rot, place]);
-
-  const onUp = useCallback(() => {
-    dragRef.current = null;
-    setDragging(null);
-  }, []);
-
-  /** 드래그 중 — 평면 위 지점을 받아 미끄러질 수 있는 축만 옮긴다 */
-  const onSlide = useCallback((px: number, py: number, pz: number) => {
-    const d = dragRef.current;
-    if (!d) return;
-    const next = slideAnchor(d.base, px, py, pz);
-    const b = world.bricks.get(d.id);
-    if (!b || (b.x === next.x && b.y === next.y && b.z === next.z)) return;
-    const id = moveBrick(d.id, next.x, next.y, next.z);
-    if (id !== null) d.id = id;
-    setSpot({ ...d.base, anchor: next });
-  }, [world, moveBrick]);
+  const effTool = useEffectiveTool();
 
   // 저장소 선택 후 복원 (1회).
   //   `?scene=<sceneId>` → Supabase `brick_chunks` (씬에 붙은 진짜 경로)
@@ -211,19 +55,6 @@ export default function BrickPrototype() {
     return () => window.removeEventListener('pagehide', onHide);
   }, [flush]);
 
-  // 단축키 — 1~9 파츠(**지금 보고 있는 갈래 안에서**) · R 회전 · PageUp/Down 층 이동 · L 고정 토글
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key >= '1' && e.key <= '9') {
-        const p = kindParts[Number(e.key) - 1];
-        if (p) setPart(p.id);
-      }
-      else if (e.key === 'r' || e.key === 'R') rotate();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [setPart, rotate, kindParts]);
-
   const btn = 'px-2.5 py-1.5 rounded-xs text-[12px] border transition-colors cursor-pointer';
   const on = 'bg-primary text-white border-primary';
   const off = 'bg-surface text-foreground border-border hover:bg-foreground/[0.06]';
@@ -235,10 +66,7 @@ export default function BrickPrototype() {
         camera={{ position: [8, 7, 10], fov: 50 }}
         dpr={[1, 2]}
         gl={{ toneMapping: THREE.LinearToneMapping }}
-        style={{ cursor: effTool === 'erase' ? ERASE_CURSOR : PLACE_CURSOR }}
-        onPointerDown={onDown}
-        onPointerUp={onUp}
-        onPointerLeave={onUp}
+        style={{ cursor: brickCursor(effTool) }}
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* ★ 배경·안개 색이 룩을 좌우한다 — 실시간 그림자를 끈 뒤로는 특히.
@@ -264,21 +92,10 @@ export default function BrickPrototype() {
               비스듬한 시점에서 구멍 바닥이 아니라 지면 높이 지점이 잡혀 XZ가 어긋난다.
               (그래서 판 구멍 안에 브릭을 놓을 수 없었다) */}
 
-        {/* 높이 고정 모드는 없앴다 — 면에 붙이는 방식이 천장·2층 바닥을 그대로 처리한다 */}
-        {/* 드래그로 자리를 고치는 동안에만 존재하는 좌표원 */}
-        {dragging && <SlidePlane base={dragging} onPoint={onSlide} />}
+        {/* ★ 브릭 렌더 + 상호작용은 한 덩어리다 — 에디터와 **같은 컴포넌트**를 쓴다.
+            각자 배선하면 반드시 갈라진다(배치 규칙이 이 세션에 네 번 바뀌었다). */}
+        <BrickBuilder onStats={setStats} onSpot={onSpot} />
 
-        <BrickInstances
-          world={world}
-          version={version}
-          onHover={onBrickHover}
-          onStats={setStats}
-          studStyle={studStyle}
-        />
-
-        {/* 놓을 자리 안내는 **놓기 도구일 때만**. 지우기 중엔 놓을 자리가 없다 */}
-        {effTool === 'place' && <PlacementMarker spot={spot} part={part} rot={rot} valid={valid} />}
-        {effTool === 'erase' && <EraseHighlight world={world} brickId={hoverBrick} studStyle={studStyle} />}
         <PerfMeter onPerf={setPerf} />
         <Mover />
         <Streamer />
@@ -297,84 +114,8 @@ export default function BrickPrototype() {
       <div className="absolute top-3 left-3 w-56 rounded-xs bg-surface border border-border shadow-float p-3 text-foreground">
         <div className="text-[13px] font-medium mb-2">브릭 프로토타입 (P0)</div>
 
-        {/* ★ 도구 — **액션은 왼쪽 클릭 하나뿐**이다. 버튼 하나에 두 뜻을 담으면
-            카메라 조작과 충돌한다(예전 우클릭 = 회전 + 삭제). 우클릭은 모바일에도 없다. */}
-        <div className="text-[10px] uppercase text-muted mb-1">도구 <span className="opacity-60">Ctrl=일시 반전</span></div>
-        <div className="flex gap-1 mb-2">
-          {(['place', 'erase'] as Tool[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTool(t)}
-              className={`${btn} flex-1 ${effTool === t ? on : off}`}
-            >
-              {t === 'place' ? '＋ 놓기' : '－ 지우기'}
-            </button>
-          ))}
-        </div>
-
-        {/* 파츠가 16종이라 가로 나열이 안 맞는다 — 갈래 탭 + 격자 */}
-        <div className="text-[10px] uppercase text-muted mb-1">
-          파츠 <span className="opacity-60">1~9 = 아래 목록 순서</span>
-        </div>
-        <div className="flex gap-1 mb-1">
-          {PART_KINDS.map((k) => (
-            <button
-              key={k.id}
-              onClick={() => setPart(partsOfKind(k.id)[0].id)}
-              title={k.note}
-              className={`${btn} flex-1 ${PARTS[part].kind === k.id ? on : off}`}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-4 gap-1 mb-1">
-          {kindParts.map((p) => (
-            <button key={p.id} onClick={() => setPart(p.id)} className={`${btn} px-0 ${part === p.id ? on : off}`}>{p.label}</button>
-          ))}
-        </div>
-        <div className="mb-3 text-[10px] text-muted">
-          {PART_KINDS.find((k) => k.id === PARTS[part].kind)?.note}
-        </div>
-
-        <div className="text-[10px] uppercase text-muted mb-1">방향 <span className="opacity-60">R</span></div>
-        <button onClick={rotate} className={`${btn} w-full mb-3 ${off}`}>회전 {rot * 90}°</button>
-
-        <div className="text-[10px] uppercase text-muted mb-1">재질</div>
-        <div className="flex gap-1 mb-3">
-          {MAT_CLASSES.map((m) => (
-            <button key={m.id} onClick={() => setMat(m.id)} className={`${btn} flex-1 ${mat === m.id ? on : off}`}>{m.label}</button>
-          ))}
-        </div>
-
-        <div className="text-[10px] uppercase text-muted mb-1">색</div>
-        <div className="grid grid-cols-5 gap-1 mb-3">
-          {BRICK_COLORS.map((c) => (
-            <button
-              key={c}
-              onClick={() => setColor(c)}
-              className={`h-6 rounded-xs border-2 cursor-pointer ${color === c ? 'border-primary' : 'border-border'}`}
-              style={{ background: c }}
-            />
-          ))}
-        </div>
-
-        <div className="text-[10px] uppercase text-muted mb-1">돌기 모양</div>
-        <div className="flex gap-1 mb-1">
-          {STUD_STYLES.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setStudStyle(s.id)}
-              className={`${btn} flex-1 ${studStyle === s.id ? on : off}`}
-              title={s.note}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        <div className="mb-3 text-[10px] text-muted leading-relaxed">
-          {STUD_STYLES.find((s) => s.id === studStyle)?.note}
-        </div>
+        {/* ★ 도구 UI는 **에디터와 같은 컴포넌트**다 — 두 곳에 흩어지면 반드시 갈라진다 */}
+        <BrickToolPanel showStudStyle />
 
         <div className="text-[10px] uppercase text-muted mb-1">폴리곤 예산 측정</div>
         <div className="flex gap-1 mb-1">
@@ -412,6 +153,21 @@ export default function BrickPrototype() {
         <Row label="삼각형" value={stats.tris.toLocaleString()} />
         <Row label="청크 (로드/전체)" value={`${world.chunkCount} / ${indexedChunks()}`} />
         <Row label="빛 칸 · 계산" value={`${world.lightStats.cells.toLocaleString()} · ${world.lightStats.ms.toFixed(0)}ms`} />
+
+        {/* ★ 배치 계기판 — "어긋난다"를 느낌이 아니라 **숫자로** 확인한다.
+            겨눈 칸(강조된 사각형)과 놓일 첫 칸이 화면과 맞는지 여기서 바로 읽을 수 있다. */}
+        <div className="mt-1.5 pt-1.5 border-t border-border" />
+        <div className="text-[10px] uppercase text-muted mb-0.5">배치</div>
+        {spot ? (
+          <>
+            <Row label="겨눈 칸" value={`${spot.cell[0]}, ${spot.cell[1]}, ${spot.cell[2]}`} />
+            <Row label="놓일 첫 칸" value={`${anchor!.x}, ${anchor!.y}, ${anchor!.z}`} />
+            <Row label="면" value={`${'xyz'[spot.face.axis]}${spot.face.dir > 0 ? '+' : '−'}`} />
+            <Row label="놓을 수 있나" value={valid ? '예' : '아니오 (막힘)'} />
+          </>
+        ) : (
+          <Row label="겨눈 칸" value="—" />
+        )}
         <button
           onClick={() => {
             const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;

@@ -59,6 +59,21 @@ export function resetTerrainState(): void {
   filledTo.clear();
 }
 
+/**
+ * 청크를 메모리에서 내릴 때 — **그 기둥들의 기록을 잊는다.**
+ *
+ * ★ 안 잊으면 두 가지가 터진다:
+ *   ① `filledTo`가 기둥마다 남아 **걸어 다닌 만큼 무한히 커진다**
+ *   ② 되돌아왔을 때 "이미 채웠다"고 기억해 지형을 다시 안 깐다
+ *   (판 자리는 저장소에 남아 있고, 다시 로드될 때 `noteLoadedTerrain`이 학습한다)
+ */
+export function forgetTerrainChunk(c: ChunkCoord): void {
+  const ox = chunkOriginX(c.cx), oz = chunkOriginZ(c.cz);
+  for (let dx = 0; dx < CHUNK_X; dx++)
+    for (let dz = 0; dz < CHUNK_Z; dz++)
+      filledTo.delete(colK(ox + dx, oz + dz));
+}
+
 /** 불러온 지형에서 기둥별 최하단을 학습 — 그래야 이어서 팔 때 되살아나지 않는다 */
 export function noteLoadedTerrain(world: BrickWorld, x: number, y: number, z: number): void {
   const k = colK(x, z);

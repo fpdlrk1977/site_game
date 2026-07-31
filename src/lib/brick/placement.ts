@@ -1,19 +1,22 @@
 // 브릭 배치 — 기준: doc/BRICK_SYSTEM.md §4.3~4.4
 //
-// ★ 배치는 **가리킨 면에 붙이는** 방식이다(2026-07-30 전환).
+// ★★ 규칙은 하나다: **겨눈 칸의 옆 칸에 놓는다. 자동 보정은 없다.**
 //
-//   흐름: 면에 호버 → 붙을 자리를 아웃라인으로 표시 → 누르면 그 자리에 놓임
-//        → 누른 채 움직이면 **그 면의 평면 위에서만** 미끄러짐 → 떼면 확정
+//   흐름: 표면의 **칸 하나**를 겨눔(강조 표시) → 그 옆 칸에 브릭의 첫 칸을 맞춤
+//        → 걸리면 **빨강으로 표시하고 놓지 않음** (알아서 옮기지 않는다)
 //
-//   ★ 미끄러지는 축을 면이 정한다:
-//     - 윗면·밑면(수평) → 그 평면 위 2방향 자유
-//     - 옆면(수직)      → **수평 한 방향만**. 높이는 고정한다.
-//       세로로도 움직이면 받쳐줄 게 없는 자리에 브릭이 뜬다.
+// ★ 왜 자동 보정을 다 걷어냈는가 (2026-07-30, 네 번의 헛수정 뒤):
+//   마인크래프트가 정확하게 느껴지는 이유는 **블록이 전부 1칸**이라 "어느 면이냐"가
+//   정해지면 들어갈 칸이 **딱 하나**뿐이기 때문이다. 고를 여지가 없으니 계산도 없다.
+//   우리 브릭은 여러 칸이라 "그 면 위 어디에?"가 남는데, 나는 그걸 **자동으로 채워 넣었다**:
+//     · 커서 좌표로 좌우 위치 계산 (`snapCentered`)
+//     · 걸리면 알아서 한 칸 밀어냄 (`seatAlong`)
+//   둘 다 **사용자가 겨눈 것을 내가 고쳐서 놓는 것**이다. 그래서 "한 칸씩 밀리거나 올라간다".
+//   → 마인크래프트는 **막히면 그냥 안 놓인다.** 알아서 옮겨 주지 않는다. 그 규칙을 따른다.
 //
-//   (이전엔 '드롭' 모델이었다 — 포인터가 XZ만 정하고 높이는 발자국이 내려앉는 곳으로.
-//    면 판정이 없어 단순했지만, **가리킨 면에 붙는다**는 직관과 어긋났다.)
+//   큰 브릭은 첫 칸이 겨눈 칸이고 나머지가 한 방향으로 뻗는다. 방향은 **회전(R)** 으로 바꾼다.
 
-import { CELL_X, CELL_Y, CELL_Z, type Rot } from './grid';
+import { CELL_X, CELL_Y, CELL_Z, worldToCellX, worldToCellY, worldToCellZ, type Rot } from './grid';
 import { extentOf, PARTS, type PartId } from './parts';
 import type { BrickWorld } from './world';
 
@@ -24,21 +27,7 @@ export type FaceAxis = 0 | 1 | 2;
 export interface Face { axis: FaceAxis; dir: 1 | -1 }
 
 const CELL = [CELL_X, CELL_Y, CELL_Z] as const;
-
-/**
- * ★ **커서가 브릭의 중앙에 온다.**
- *
- *   `칸번호 = floor(좌표/셀)`로 잡고 거기서 보정하는 방식은 짝수 칸에서 반드시 어긋난다 —
- *   2칸·4칸짜리의 중앙은 **칸 한가운데가 아니라 칸 경계**에 있기 때문이다.
- *   그래서 2×4를 놓으면 커서가 사각형 **모서리**에 붙어 브릭이 한쪽으로 뻗어 보였다.
- *
- *   대신 **브릭 중심이 커서에 가장 가까운 자리**를 바로 고른다.
- *   `round(좌표/셀 − 칸수/2)` — 홀수든 짝수든 커서는 항상 브릭 한가운데(반 칸 이내)에 있고,
- *   자리는 커서가 **중간 지점을 넘을 때** 딱 한 칸씩 바뀐다.
- */
-function snapCentered(world: number, axis: 0 | 1 | 2, ext: number): number {
-  return Math.round(world / CELL[axis] - ext / 2);
-}
+const toCell = [worldToCellX, worldToCellY, worldToCellZ] as const;
 
 /**
  * 클릭 지점이 그 브릭의 **어느 면**인가.
@@ -66,25 +55,32 @@ export function faceOf(world: BrickWorld, brickId: number, px: number, py: numbe
   return best;
 }
 
-/** 면에 붙인 배치 — 앵커 + 어느 축으로 미끄러질 수 있는지 */
+/** 면에 붙인 배치 */
 export interface FacePlacement {
   anchor: Anchor;
   face: Face;
+  /** **겨눈 칸** — 표면에 강조해 보여준다. "여기 옆에 놓인다"가 눈에 보이게 */
+  cell: [number, number, number];
   /** 드래그로 바꿀 수 있는 축 (나머지는 고정) */
   slide: FaceAxis[];
-  /** 미끄러질 평면의 월드 좌표(면 축 기준) — 드래그 레이캐스트에 쓴다 */
+  /**
+   * 미끄러질 평면의 월드 좌표(면 축 기준) — 드래그 레이캐스트에 쓴다.
+   *
+   * ★ 반드시 **브릭이 표면에 닿는 면**이어야 한다. 한때 브릭 **중심**으로 잡았는데,
+   *   그러면 평면이 표면보다 브릭 두께의 절반(0.3m)만큼 떠 있어서 비스듬히 볼 때
+   *   투영 지점이 `0.3m × tan(기울기)`만큼 어긋난다 — 45°면 **한 칸 이상**이다.
+   *   그래서 "클릭하는 순간 브릭이 한 칸 옮겨졌다"(위에서 볼 때는 정확).
+   */
   planeAt: number;
-  /** 놓을 브릭의 칸수(회전 반영) — 드래그 때 중앙 맞춤에 다시 쓴다 */
+  /** 놓을 브릭의 칸수(회전 반영) */
   ext: [number, number, number];
 }
 
 /**
- * 가리킨 면 바깥쪽에 브릭을 붙인다.
+ * 겨눈 칸의 **옆 칸**에 브릭의 첫 칸을 맞춘다. 그게 전부다.
  *
- * **커서는 브릭 한가운데**에 온다(`snapCentered`). 크기가 홀수든 짝수든 같다.
- * 단 **옆면에서는 세로로 클릭한 브릭과 밑면을 맞춘다.**
- *   짚은 높이를 그대로 쓰면 같은 면이라도 위/아래 어디를 짚었느냐로 한 칸씩 어긋나
- *   땅에 파묻히거나 붕 뜬다. 밑면 정렬은 어디를 짚든 결과가 같다.
+ * 자동 보정이 없으므로 **결과가 항상 놓을 수 있는 자리는 아니다.**
+ * 막혔는지는 호출부가 `world.canPlace`로 판정해 빨강으로 알려준다 — 몰래 옮기지 않는다.
  */
 export function anchorFromFace(
   world: BrickWorld, brickId: number, face: Face,
@@ -94,46 +90,43 @@ export function anchorFromFace(
   const b = world.bricks.get(brickId);
   if (!b) return null;
   const be = extentOf(PARTS[b.part], b.rot);
-  const p = [px, py, pz];
+  const bLo = [b.x, b.y, b.z];
+  const bHi = [b.x + be.ex - 1, b.y + be.ey - 1, b.z + be.ez - 1];
 
-  // 면 축은 상대 브릭 바로 바깥 칸으로 고정된다(붙는 자리라 선택의 여지가 없다)
-  const outer = face.dir > 0
-    ? [b.x + be.ex, b.y + be.ey, b.z + be.ez][face.axis]
-    : [b.x, b.y, b.z][face.axis] - 1;
+  // 겨눈 칸 — 그 브릭 표면의 칸 하나. 범위 밖으로 새지 않게 자른다
+  const p = [px, py, pz];
+  const cell: [number, number, number] = [0, 0, 0];
+  for (let a = 0; a < 3; a++) cell[a] = Math.min(bHi[a], Math.max(bLo[a], toCell[a](p[a])));
+  cell[face.axis] = face.dir > 0 ? bHi[face.axis] : bLo[face.axis]; // 면 쪽 표면 칸
 
   const e = extentOf(PARTS[part], rot);
   const ext: [number, number, number] = [e.ex, e.ey, e.ez];
-  const anchor = [0, 0, 0];
-  for (let a = 0; a < 3; a++) {
-    if (a === face.axis) {
-      // 아래쪽 면이면 브릭 두께만큼 내려 붙여야 맞닿는다
-      anchor[a] = face.dir > 0 ? outer : outer - (ext[a] - 1);
-    } else if (a === 1) {
-      anchor[a] = b.y;                        // 옆면 — 클릭한 브릭과 밑면을 맞춘다
-    } else {
-      anchor[a] = snapCentered(p[a], a as FaceAxis, ext[a]); // 커서가 브릭 한가운데
-    }
-  }
+
+  // 새 브릭의 첫 칸 = 겨눈 칸의 옆 칸. 면 축만 한 칸 비켜 놓는다(아래쪽 면이면 두께만큼)
+  const anchor: [number, number, number] = [cell[0], cell[1], cell[2]];
+  anchor[face.axis] = face.dir > 0 ? cell[face.axis] + 1 : cell[face.axis] - ext[face.axis];
 
   // 수평면(윗면·밑면)이면 XZ 두 방향, 수직면이면 그 벽을 따라 수평 한 방향만
   const slide: FaceAxis[] = face.axis === 1 ? [0, 2] : [face.axis === 0 ? 2 : 0];
   return {
     anchor: { x: anchor[0], y: anchor[1], z: anchor[2] },
     face,
+    cell,
     slide,
     ext,
-    planeAt: (anchor[face.axis] + ext[face.axis] / 2) * CELL[face.axis],
+    // 브릭이 **표면에 닿는 면**. 위쪽 면을 겨눴으면 브릭의 아래쪽, 아래쪽 면이면 위쪽이 닿는다
+    planeAt: (face.dir > 0 ? anchor[face.axis] : anchor[face.axis] + ext[face.axis]) * CELL[face.axis],
   };
 }
 
 /**
  * 드래그 중 — 평면 위 지점을 받아 **미끄러질 수 있는 축만** 갱신한다.
- * 고정 축은 처음 놓은 값 그대로라 높이가 저절로 바뀌는 일이 없다.
+ * 여기도 보정 없이 **커서가 있는 칸**을 브릭의 첫 칸으로 쓴다.
  */
 export function slideAnchor(base: FacePlacement, px: number, py: number, pz: number): Anchor {
   const p = [px, py, pz];
   const out = [base.anchor.x, base.anchor.y, base.anchor.z];
-  for (const a of base.slide) out[a] = snapCentered(p[a], a, base.ext[a]);
+  for (const a of base.slide) out[a] = toCell[a](p[a]);
   return { x: out[0], y: out[1], z: out[2] };
 }
 
