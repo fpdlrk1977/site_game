@@ -111,6 +111,115 @@ for (const id of ['s1x2', 's2x2', 'si1x2'] as const) {
   ok(triCount(g) === 12, `기존 브릭(민짜 상자)은 12삼각형 — ${triCount(g)}`);
 }
 
+// ── ★ 무늬 타일링 (`aTexUV`) ─────────────────────────────────────────────
+//
+// 잠그는 것은 딱 하나: **텍셀 밀도가 파츠 크기와 무관하다.**
+// 이게 깨지면 1×1과 1×2를 나란히 놓았을 때 벽돌 줄눈 간격이 2배 차이 난다(실제로 그랬다).
+// 화면에서는 "뭔가 안 맞는다"로만 보여서 원인을 짚기 어렵다 — 그래서 수치로 잠근다.
+{
+  /** 법선이 특정 축을 향하는 정점들의 aTexUV 범위 */
+  const faceUV = (g: ReturnType<typeof brickGeometry>, axis: 0 | 1 | 2, sign: 1 | -1) => {
+    const p = g.getAttribute('position');
+    const n = g.getAttribute('normal');
+    const uv = g.getAttribute('aTexUV');
+    const lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
+    let found = 0;
+    for (let i = 0; i < p.count; i++) {
+      if (n.getComponent(i, axis) * sign < 0.99) continue; // 그 면의 정점만
+      found++;
+      for (let k = 0; k < 2; k++) {
+        const v = uv.getComponent(i, k);
+        if (v < lo[k]) lo[k] = v;
+        if (v > hi[k]) hi[k] = v;
+      }
+    }
+    return { lo, hi, found };
+  };
+
+  // 모든 파츠가 aTexUV를 갖는다 — 하나라도 빠지면 그 파츠만 무늬가 뭉개진다
+  for (const part of Object.values(PARTS)) {
+    for (const studs of [true, false]) {
+      const g = brickGeometry(part, studs, 'round');
+      const uv = g.getAttribute('aTexUV');
+      ok(!!uv && uv.count === g.getAttribute('position').count,
+        `${part.id}(${studs ? '돌기' : '민짜'}): aTexUV가 정점 수만큼 있다`);
+    }
+  }
+
+  // ★ 핵심 — 옆면 가로 타일 수 = **그 면이 걸치는 칸 수**.
+  //   주의: `b1x2`는 sx=1·sz=2라 **긴 축이 Z**다. +Z면은 X(=sx칸)를, +X면은 Z(=sz칸)를 가로로 쓴다.
+  for (const id of ['b1x1', 'b1x2', 'b1x4', 'b2x8'] as const) {
+    const g = brickGeometry(PARTS[id], false, 'line');
+    near(faceUV(g, 2, 1).hi[0] - faceUV(g, 2, 1).lo[0], PARTS[id].sx,
+      `★ ${id} 앞면(+Z) 가로 = ${PARTS[id].sx}타일`);
+    near(faceUV(g, 0, 1).hi[0] - faceUV(g, 0, 1).lo[0], PARTS[id].sz,
+      `★ ${id} 옆면(+X) 가로 = ${PARTS[id].sz}타일`);
+  }
+
+  // ★★ 1×1과 1×2가 **같은 텍셀 밀도**인가 — 사용자가 보고한 바로 그 증상.
+  //   길이가 다른 면끼리 비교해야 의미가 있다(+X면: 1칸 vs 2칸).
+  {
+    const density = (id: 'b1x1' | 'b1x2' | 'b2x8') => {
+      const f = faceUV(brickGeometry(PARTS[id], false, 'line'), 0, 1);
+      return (f.hi[0] - f.lo[0]) / (PARTS[id].sz * CELL_Z); // m당 타일 수
+    };
+    near(density('b1x1'), density('b1x2'), '★★ 1×1과 1×2의 텍셀 밀도가 같다 (m당 타일 수)');
+    near(density('b1x1'), density('b2x8'), '★★ 1×1과 2×8의 텍셀 밀도가 같다');
+    near(density('b1x1'), 1 / CELL_X, `★ 밀도 = 1칸(${CELL_X}m)당 한 장`);
+  }
+
+  // 윗면은 두 방향 모두 칸 수만큼 — 지형(2×2)도 브릭과 같은 밀도여야 한다
+  {
+    const g = brickGeometry(PARTS.b2x4, false, 'line');
+    const f = faceUV(g, 1, 1);
+    near(f.hi[0] - f.lo[0], 2, '2×4 윗면 가로 = 2타일');
+    near(f.hi[1] - f.lo[1], 4, '2×4 윗면 세로 = 4타일');
+
+    const t = faceUV(brickGeometry(PARTS.terrain, false, 'line'), 1, 1);
+    near(t.hi[0] - t.lo[0], 2, '★ 지형(2×2) 윗면 = 2타일 — 브릭과 같은 밀도');
+  }
+
+  // ★ 세로는 **위쪽 기준** — 브릭은 딱 한 장, 플레이트는 위쪽 ⅓
+  {
+    const brickF = faceUV(brickGeometry(PARTS.b1x2, false, 'line'), 2, 1);
+    near(brickF.hi[1], 1, '브릭 옆면 위 끝 = 1 (위쪽 기준)');
+    near(brickF.lo[1], 0, '브릭 옆면 아래 끝 = 0 (딱 한 장)');
+
+    const plateF = faceUV(brickGeometry(PARTS.p1x2, false, 'line'), 2, 1);
+    near(plateF.hi[1], 1, '★ 플레이트도 위 끝 = 1 — 잔디 풀 띠가 위에 남는다');
+    near(plateF.lo[1], 1 - 1 / 3, '★ 플레이트 옆면은 위쪽 ⅓만 (브릭과 같은 밀도)');
+  }
+
+  // 경사도 무늬를 받는다 — 쐐기엔 원래 uv 자체가 없었다
+  {
+    const g = brickGeometry(PARTS.s1x2, false, 'line');
+    const uv = g.getAttribute('aTexUV');
+    let span = 0;
+    for (let i = 0; i < uv.count; i++) span = Math.max(span, Math.abs(uv.getX(i)));
+    ok(span > 0.5, `★ 경사 파츠도 aTexUV가 퍼져 있다 — 최대 ${span.toFixed(2)}`);
+  }
+
+  // ★ 모든 파츠에 `uv`(면당 0~1)가 있어야 한다 — 경계선 셰이더가 이걸로 가장자리를 찾는다.
+  //   없으면 `vUv`가 (0,0)으로 읽혀 **면 전체가 '선 위'로 판정돼 통째로 어두워진다**(경사면이 14% 어두웠다).
+  for (const part of Object.values(PARTS)) {
+    const g = brickGeometry(part, false, 'line');
+    const uv = g.getAttribute('uv');
+    ok(!!uv && uv.count === g.getAttribute('position').count, `${part.id}: uv가 정점 수만큼 있다`);
+    if (!uv) continue;
+    let lo = Infinity, hi = -Infinity, bad = 0;
+    for (let i = 0; i < uv.count; i++) {
+      for (let k = 0; k < 2; k++) {
+        const v = uv.getComponent(i, k);
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+        if (v < -1e-6 || v > 1 + 1e-6) bad++;
+      }
+    }
+    ok(bad === 0, `${part.id}: uv가 0~1 범위 안 — 벗어난 값 ${bad}개`);
+    ok(hi - lo > 0.9, `★ ${part.id}: uv가 0~1로 퍼져 있다 (한 점에 뭉치면 면이 통째로 어두워진다) — ${lo}~${hi}`);
+  }
+}
+
 console.log(`\n브릭 지오메트리(경사) 테스트: ${pass}/${pass + fails.length} 통과`);
 if (fails.length) {
   console.log('\n실패:');

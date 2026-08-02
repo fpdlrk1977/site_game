@@ -21,7 +21,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import { brickGeometry, triCount, type StudStyle } from '@/lib/brick/brickGeometry';
-import { getBrickAtlas, TEX_COLS, TEX_ROWS } from '@/lib/brick/textures';
+import { faceSlots, getBrickAtlas, TEX_COLS, TEX_ROWS } from '@/lib/brick/textures';
 import { anchorCenterWorld } from '@/lib/brick/placement';
 import { PARTS, type MatClass, type PartId } from '@/lib/brick/parts';
 import type { BrickWorld } from '@/lib/brick/world';
@@ -122,12 +122,16 @@ const SHADE_CURVE = 1.6;
  * ★ 재질이 갈리지 않으므로 **draw call이 안 늘어난다.** 재료마다 텍스처를 따로 두면
  *   재료 수만큼 메시가 쪼개진다(인스턴싱을 고른 이유와 같은 논리).
  *
- * ★ 무늬는 흑백이라 **곱하기 한 번**이면 된다. 색은 팔레트에서 오고, 마인크래프트 잔디처럼
- *   같은 무늬에 색만 달리 쓸 수 있다. `aTile < 0.5`(민짜)면 샘플링을 건너뛴다.
+ * ★ **면마다 다른 칸을 쓴다** — 인스턴스가 `(윗면, 옆면, 밑면)` 세 칸을 들고 오고
+ *   정점 셰이더가 **월드 법선**으로 하나를 고른다. 잔디를 파면 단면이 흙으로 보이는 게 이것이다.
+ *   회전한 브릭에서도 맞으려면 로컬 법선이 아니라 **월드 법선**이어야 한다(아래 `injectBakedLight`와 같은 이유).
+ *   고르는 일을 정점에서 하는 이유: 면은 평평해서 법선이 면 전체에 상수라 프래그먼트에서 할 이유가 없다.
  *
- * ⚠️ UV는 면마다 0~1이라 **파츠 한 면에 무늬 한 장**이 깔린다. 2×8처럼 긴 브릭은 늘어나 보이는데,
- *   칸 수만큼 반복하려면 지오메트리에 별도 UV가 필요하다(경계선이 같은 UV를 쓰고 있어서 겸용 불가).
- *   실제로 늘어나 보이면 그때 `aTexUV`를 추가할 것.
+ * ★ 고른 칸이 0(민짜)이면 샘플링을 건너뛴다. 색은 팔레트에서 오고 무늬 위에 곱해진다.
+ *
+ * ★ **크기는 `aTexUV`가 정한다** — 지오메트리가 굽는 무늬 전용 UV로, 칸 수만큼 반복된다.
+ *   기본 `uv`는 면마다 0~1이라 **파츠가 커지면 무늬도 같이 늘어났다**(1×1과 1×2의 벽돌 줄눈이 2배 차이).
+ *   경계선은 그 0~1이 있어야 면 가장자리를 찾으므로 `vUv`를 그대로 쓴다 — 그래서 UV가 두 벌이다.
  */
 function injectTexture(shader: {
   vertexShader: string; fragmentShader: string;
@@ -136,24 +140,42 @@ function injectTexture(shader: {
   shader.uniforms.uBrickAtlas = { value: getBrickAtlas() };
 
   shader.vertexShader = `#define USE_UV
-    attribute float aTile;
+    attribute vec3 aTile;   // 인스턴스: (윗면, 옆면, 밑면) 아틀라스 칸
+    attribute vec2 aTexUV;  // 지오메트리: 칸 수에 비례한 무늬 좌표 (0~1이 아니다)
     varying float vTile;
+    varying vec2 vTexUV;
   ` + shader.vertexShader.replace(
     '#include <begin_vertex>',
-    '#include <begin_vertex>\n    vTile = aTile;',
+    `#include <begin_vertex>
+    {
+      #ifdef USE_INSTANCING
+        vec3 tn = normalize(mat3(instanceMatrix) * normal);
+      #else
+        vec3 tn = normal;
+      #endif
+      // 경사면은 법선의 y가 0.7쯤이라 **윗면 그림**을 쓴다 — 잔디 경사가 잔디로 보인다
+      vTile = tn.y > 0.5 ? aTile.x : (tn.y < -0.5 ? aTile.z : aTile.y);
+      vTexUV = aTexUV;
+    }`,
   );
 
   shader.fragmentShader = `#define USE_UV
     uniform sampler2D uBrickAtlas;
     varying float vTile;
+    varying vec2 vTexUV;
   ` + shader.fragmentShader.replace(
     '#include <color_fragment>',
     `#include <color_fragment>
     if (vTile > 0.5) {
       float t = floor(vTile + 0.5);
       vec2 tile = vec2(mod(t, ${TEX_COLS}.0), floor(t / ${TEX_COLS}.0));
-      // 칸 경계에서 옆 칸이 새어 들어오지 않게 안쪽으로 살짝 물린다
-      vec2 f = clamp(fract(vUv), 0.002, 0.998);
+      // ★ fract가 **반복**을 만든다 — aTexUV는 2×4 브릭이면 0~4까지 간다.
+      //   칸 경계에서 옆 칸이 새어 들어오지 않게 안쪽으로 살짝 물린다
+      vec2 f = clamp(fract(vTexUV), 0.002, 0.998);
+      // ★ 그림의 y=0 줄이 **면의 위쪽**이 되게 뒤집는다 (textures.ts의 규약).
+      //   아틀라스는 flipY=false로 올라가 v=0이 캔버스 맨 윗줄인데, 상자 옆면의 v=0은 **아래쪽**이다.
+      //   잡티 무늬만 있을 땐 위아래가 없어 안 드러났지만, 잔디 옆면의 풀 띠는 뒤집히면 바로 보인다.
+      f.y = 1.0 - f.y;
       vec2 uv = (tile + f) / vec2(${TEX_COLS}.0, ${TEX_ROWS}.0);
       diffuseColor.rgb *= texture2D(uBrickAtlas, uv).rgb;
     }`,
@@ -340,7 +362,7 @@ function BrickGroup({ group, world, studStyle, onHover }: {
     const n = group.ids.length;
     const cornerA = new Float32Array(n * 4);
     const cornerB = new Float32Array(n * 4);
-    const tiles = new Float32Array(n); // 무늬 칸 번호(0 = 민짜)
+    const tiles = new Float32Array(n * 3); // 무늬 칸 (윗면, 옆면, 밑면) — 0 = 민짜
     const corner = new Float32Array(8);
 
     group.ids.forEach((brickId, i) => {
@@ -352,7 +374,8 @@ function BrickGroup({ group, world, studStyle, onHover }: {
       _m.compose(_p, _q, _s);
       mesh.setMatrixAt(i, _m);
       mesh.setColorAt(i, _c.set(b.color));
-      tiles[i] = b.tex ?? 0;
+      const [tTop, tSide, tBottom] = faceSlots(b.tex ?? 0);
+      tiles[i * 3] = tTop; tiles[i * 3 + 1] = tSide; tiles[i * 3 + 2] = tBottom;
 
       // 꼭짓점 밝기 — 월드 기준으로 구한 뒤 회전에 맞춰 로컬 슬롯에 담는다
       world.cornerLight(b, corner);
@@ -363,7 +386,7 @@ function BrickGroup({ group, world, studStyle, onHover }: {
 
     geo.setAttribute('aCornerA', new THREE.InstancedBufferAttribute(cornerA, 4));
     geo.setAttribute('aCornerB', new THREE.InstancedBufferAttribute(cornerB, 4));
-    geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tiles, 1));
+    geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tiles, 3));
 
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

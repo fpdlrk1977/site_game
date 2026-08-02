@@ -7,8 +7,18 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { CELL_X, CELL_Y, CELL_Z } from './grid';
+import { BRICK_CELLS_Y, CELL_X, CELL_Y, CELL_Z } from './grid';
 import type { BrickPart } from './parts';
+
+/**
+ * 무늬 한 장이 덮는 **월드 크기**. 가로는 한 칸, 세로는 브릭 한 장 높이.
+ *
+ * ★ 이게 없으면 `BoxGeometry`의 UV가 면 크기와 무관하게 늘 0~1이라
+ *   **파츠가 커질수록 무늬도 같이 늘어난다** — 1×1과 1×2를 나란히 놓으면 벽돌 줄눈 간격이 2배 차이 났다.
+ *   마인크래프트가 이 문제를 안 겪는 건 블록이 전부 1칸이라 "면 하나 = 한 장"이 곧 "0.5m마다 한 장"이기 때문.
+ */
+const TEX_TILE_XZ = CELL_X;
+const TEX_TILE_Y = BRICK_CELLS_Y * CELL_Y;
 
 // 실제 레고 비율 유지 (스터드 지름 4.8mm · 높이 1.8mm · 간격 8mm)
 const STUD_R = (2.4 / 8) * CELL_X;
@@ -96,10 +106,18 @@ function wedgeGeometry(w: number, h: number, d: number, inverted: boolean): THRE
 
   const pos: number[] = [];
   const nrm: number[] = [];
-  const push = (ax: number, ay: number, az: number, nx: number, ny: number, nz: number) => {
-    pos.push(ax, ay, az); nrm.push(nx, ny, nz);
+  // ★ **면마다 0~1인 `uv`** — 경계선 셰이더(`injectEdgeLines`)가 가장자리를 찾는 데 쓴다.
+  //   이게 없으면 `vUv`가 (0,0)으로 읽혀 **면 전체가 '선 위'로 판정돼 통째로 어두워진다**(경사면이 14% 어두웠다).
+  //   무늬용 좌표는 별개(`aTexUV`) — 그쪽은 칸 수만큼 반복해야 하므로 겸용할 수 없다.
+  const uvs: number[] = [];
+  const push = (
+    ax: number, ay: number, az: number,
+    nx: number, ny: number, nz: number,
+    u: number, v: number,
+  ) => {
+    pos.push(ax, ay, az); nrm.push(nx, ny, nz); uvs.push(u, v);
   };
-  /** 사각면 하나(반시계) */
+  /** 사각면 하나(반시계). a→b가 가로(u), b→c가 세로(v) */
   const quad = (
     a: [number, number, number], b: [number, number, number],
     c: [number, number, number], dd: [number, number, number],
@@ -109,13 +127,23 @@ function wedgeGeometry(w: number, h: number, d: number, inverted: boolean): THRE
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     const len = Math.hypot(nx, ny, nz) || 1;
     nx /= len; ny /= len; nz /= len;
-    for (const p of [a, b, c, a, c, dd]) push(p[0], p[1], p[2], nx, ny, nz);
+    const uv: Record<number, [number, number]> = { 0: [0, 0], 1: [1, 0], 2: [1, 1], 3: [0, 1] };
+    // [a, b, c, a, c, dd] 순서에 맞춘 모서리 번호
+    const order = [0, 1, 2, 0, 2, 3];
+    [a, b, c, a, c, dd].forEach((p, k) => {
+      const [u, v] = uv[order[k]];
+      push(p[0], p[1], p[2], nx, ny, nz, u, v);
+    });
   };
 
-  // 양 옆(삼각형 두 장) — X 방향 법선
+  // 양 옆(삼각형 두 장) — X 방향 법선. uv는 단면(z,y)을 0~1로 편다
+  //   → 직각을 낀 두 변에는 선이 그어지고 **빗변에는 안 그어진다**(빗변은 uv 안쪽을 지난다).
+  //     경사의 경계를 읽기엔 충분하고, 세 변 모두 그으려면 barycentric이 필요해 과하다.
   for (const [sx, sign] of [[x0, -1], [x1, 1]] as const) {
     const t = sign > 0 ? tri : [...tri].reverse();
-    for (const [tz, ty] of t) push(sx, ty, tz, sign, 0, 0);
+    for (const [tz, ty] of t) {
+      push(sx, ty, tz, sign, 0, 0, (tz - z0) / d, (ty - y0) / h);
+    }
   }
   // 옆면 세 장 — 삼각형의 각 변을 X로 밀어낸 사각형
   //   ★ 변을 **b→a 방향**으로 감는다. a→b로 감으면 세 면의 법선이 전부 **안쪽**을 향해
@@ -129,6 +157,7 @@ function wedgeGeometry(w: number, h: number, d: number, inverted: boolean): THRE
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   g.computeBoundingSphere();
   return g;
 }
@@ -173,6 +202,46 @@ function addCornerWeights(g: THREE.BufferGeometry, w: number, h: number, d: numb
   g.setAttribute('aSelB', new THREE.Float32BufferAttribute(b, 4));
 }
 
+/**
+ * 무늬 전용 UV(`aTexUV`) — **칸 수에 비례해 반복**시킨다.
+ *
+ * ★ 왜 기본 `uv`를 안 쓰고 속성을 하나 더 두는가:
+ *   경계선 셰이더가 `vUv`로 **면 가장자리까지의 거리**를 재고 있다(`min(vUv.x, 1-vUv.x)…`).
+ *   거기에 타일링을 넣으면 **타일마다 선이 그어져** 브릭이 잘게 쪼개져 보인다.
+ *   → 무늬는 `aTexUV`, 경계선은 `uv`. 서로 간섭하지 않는다.
+ *
+ * ★ **법선의 지배축으로 평면 투영**한다. 그래서 상자·모따기 상자·쐐기(경사)·돌기가
+ *   전부 한 함수로 처리된다 — 파츠마다 UV를 손으로 적으면 반드시 어긋난다.
+ *   (쐐기는 원래 `uv` 자체가 없었다 → 경사면 무늬가 이제야 제대로 나온다.)
+ *
+ * ★ 세로는 **위쪽 기준**이다: 브릭은 딱 한 장, 플레이트(⅓ 높이)는 **위쪽 ⅓**만 보인다.
+ *   아래 기준으로 잡으면 잔디 옆면의 풀 띠가 밑으로 밀린다(`BRICK_PITFALLS.md` T-2).
+ *   가로는 파츠가 늘 정수 칸이라 딱 떨어져서 기준점이 필요 없다.
+ */
+function addTexUV(g: THREE.BufferGeometry, w: number, h: number, d: number): void {
+  const p = g.getAttribute('position');
+  const n = g.getAttribute('normal');
+  const uv = new Float32Array(p.count * 2);
+  for (let v = 0; v < p.count; v++) {
+    const nx = Math.abs(n.getX(v)), ny = Math.abs(n.getY(v)), nz = Math.abs(n.getZ(v));
+    let u: number, t: number;
+    if (ny >= nx && ny >= nz) {
+      // 윗면·밑면 — 바닥 평면(XZ)에 투영. 두 방향 모두 칸 수만큼 반복
+      u = (p.getX(v) + w / 2) / TEX_TILE_XZ;
+      t = (p.getZ(v) + d / 2) / TEX_TILE_XZ;
+    } else {
+      // 옆면 — 가로는 그 면의 길이 방향, 세로는 높이(위쪽 기준)
+      u = nx >= nz
+        ? (p.getZ(v) + d / 2) / TEX_TILE_XZ
+        : (p.getX(v) + w / 2) / TEX_TILE_XZ;
+      t = 1 - (h / 2 - p.getY(v)) / TEX_TILE_Y;
+    }
+    uv[v * 2] = u;
+    uv[v * 2 + 1] = t;
+  }
+  g.setAttribute('aTexUV', new THREE.Float32BufferAttribute(uv, 2));
+}
+
 export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: StudStyle = 'round'): THREE.BufferGeometry {
   const key = `${part.id}:${withStuds ? 's' : 'n'}:${studStyle}`;
   const hit = cache.get(key);
@@ -186,6 +255,7 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
   if (part.shape === 'slope' || part.shape === 'slopeInv') {
     const g = wedgeGeometry(w, h, d, part.shape === 'slopeInv');
     addCornerWeights(g, w, h, d); // 부드러운 조명 재료
+    addTexUV(g, w, h, d);         // 무늬 타일링
     cache.set(key, g);
     return g;
   }
@@ -195,6 +265,7 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
     const g = new THREE.BoxGeometry(w, h, d);
     g.computeBoundingSphere();
     addCornerWeights(g, w, h, d); // 부드러운 조명 재료
+    addTexUV(g, w, h, d);         // 무늬 타일링
     cache.set(key, g);
     return g;
   }
@@ -207,6 +278,7 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
       : new THREE.BoxGeometry(w, h, d);
     g.computeBoundingSphere();
     addCornerWeights(g, w, h, d); // 부드러운 조명 재료
+    addTexUV(g, w, h, d);         // 무늬 타일링
     cache.set(key, g);
     return g;
   }
@@ -232,6 +304,7 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
   if (!merged) throw new Error(`brickGeometry: merge 실패 (${key})`);
   merged.computeBoundingSphere();
   addCornerWeights(merged, w, h, d); // 부드러운 조명 재료
+  addTexUV(merged, w, h, d);         // 무늬 타일링 — 돌기까지 함께 덮는다
   cache.set(key, merged);
   return merged;
 }
