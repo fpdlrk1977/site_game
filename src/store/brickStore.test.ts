@@ -66,6 +66,30 @@ async function main(): Promise<void> {
     ok(store().world.at(8, SURFACE_Y, 8) !== undefined, '같은 청크의 다른 자리도 땅이 있다');
   }
 
+  // ── ★★ 새로고침해도 **무늬(재료)** 가 살아 있어야 한다 ────────────────────
+  //
+  // 실제로 터진 버그(2026-08-02): 저장·디코드는 멀쩡한데 **불러올 때 `tex`를 안 넘겨서**
+  // `placeFast`의 기본값 0(민짜)이 들어갔다. → 새로고침하면 **모든 브릭이 하얗게** 변한다.
+  // 색은 넘기고 무늬만 빠뜨렸기 때문에 코드를 봐도 눈에 안 띄었고, 에러도 안 났다.
+  // 놓은 직후엔 멀쩡해 보여서 **새로고침을 해봐야만** 드러난다 — 그래서 여기서 잠근다.
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+
+    store().setTex(6);            // 벽돌
+    store().setColor('#3355ff');  // 무늬와 색은 따로 저장된다 — 둘 다 확인한다
+    const id = store().place(0, 0, 0);
+    ok(id !== null, '무늬를 고르고 브릭을 놓는다');
+    ok(store().world.bricks.get(id!)?.tex === 6, '놓은 직후 무늬가 6(벽돌)이다');
+    await store().flush();
+
+    await reload(api);
+    const back = [...store().world.bricks.values()].find((b) => b.x === 0 && b.y === 0 && b.z === 0);
+    ok(back !== undefined, '새로고침해도 브릭이 남는다');
+    ok(back?.tex === 6, `★★ 새로고침해도 무늬가 살아 있다 — 지금 ${back?.tex}`);
+    ok(back?.color.toLowerCase() === '#3355ff', `색도 살아 있다 — 지금 ${back?.color}`);
+  }
+
   // ── 판 구덩이는 새로고침해도 메워지지 않는다 ─────────────────────────────
   {
     const { api } = memoryStorage();

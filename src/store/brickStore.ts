@@ -511,7 +511,10 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
           loadedAny = true;
           if (provesTerrainGenerated(c)) markTerrainGenerated(c); // 지면층만 지형을 증명한다
           for (const d of decodeChunk(data, c.cx, c.cy, c.cz)) {
-            world.placeFast(d.part, d.x, d.y, d.z, d.rot, d.color, d.mat);
+            // ⚠️ `tex`(무늬)를 빠뜨리면 **기본값 0(민짜)** 이 들어가 저장해 둔 무늬가 통째로 사라진다.
+            //   실제로 그랬다(2026-08-02) — 저장·디코드는 멀쩡한데 여기서만 안 넘겨서,
+            //   새로고침하면 모든 브릭이 하얗게 변했다. 에러가 없어서 눈으로만 알 수 있었다.
+            world.placeFast(d.part, d.x, d.y, d.z, d.rot, d.color, d.mat, d.tex);
             // 불러온 지형의 최하단을 학습 — 이어서 팔 때 판 자리가 되살아나지 않게
             if (d.part === 'terrain') noteLoadedTerrain(world, d.x, d.y, d.z);
           }

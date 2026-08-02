@@ -7,8 +7,8 @@
 //   순수 함수라 여기서 잠글 수 있고, 그러면 다음엔 셰이더만 보면 된다.
 
 import {
-  ART_ORDER, ATLAS_CAPACITY, BRICK_TEXTURES, GRASS_BAND,
-  artSlot, buildArt, faceSlots, type ArtId,
+  ART_ORDER, ATLAS_CAPACITY, BRICK_TEXTURES, GRASS_BAND, TEX_COLS, TEX_ROWS,
+  artSlot, atlasGridFor, buildArt, faceSlots, type ArtId,
 } from './textures';
 
 let pass = 0;
@@ -63,6 +63,29 @@ for (const art of ART_ORDER) {
   ok(br > bg && br > bb, `★ 벽돌은 빨강이 가장 세다 — rgb(${br.toFixed(0)},${bg.toFixed(0)},${bb.toFixed(0)})`);
   const [sr, sg, sb] = avg('sand');
   ok(sr > sb && sg > sb, `★ 모래는 노랑빛(파랑이 가장 약하다) — rgb(${sr.toFixed(0)},${sg.toFixed(0)},${sb.toFixed(0)})`);
+
+  // ── 티어 1 ───────────────────────────────────────────────────────────
+  const [lr, lg, lb] = avg('leaves');
+  ok(lg > lr && lg > lb, `★ 나뭇잎은 초록 — rgb(${lr.toFixed(0)},${lg.toFixed(0)},${lb.toFixed(0)})`);
+  const [, gg2] = avg('grass');
+  ok(lg < gg2, `★ 나뭇잎이 잔디보다 짙다 — 잎 ${lg.toFixed(0)} < 잔디 ${gg2.toFixed(0)}`);
+
+  const [wr, wg, wb] = avg('water');
+  ok(wb > wg && wg > wr, `★ 물은 파랑이 가장 세다 — rgb(${wr.toFixed(0)},${wg.toFixed(0)},${wb.toFixed(0)})`);
+
+  for (const art of ['log_side', 'log_top'] as const) {
+    const [r2, g2, b2] = avg(art);
+    ok(r2 > g2 && g2 > b2, `★ ${art}는 나무색(갈색) — rgb(${r2.toFixed(0)},${g2.toFixed(0)},${b2.toFixed(0)})`);
+  }
+
+  // 돌벽돌은 무채색이어야 한다 — 채도가 돌면 벽돌(빨강)과 헷갈린다
+  const [br2, bg2, bb2] = avg('stone_brick');
+  ok(Math.max(br2, bg2, bb2) - Math.min(br2, bg2, bb2) < 12,
+    `★ 돌벽돌은 무채색 — rgb(${br2.toFixed(0)},${bg2.toFixed(0)},${bb2.toFixed(0)})`);
+
+  // 유리는 밝아야 색 틴트가 그대로 비친다(어두우면 유리로 안 보인다)
+  const [gr3, gg3, gb3] = avg('glass');
+  ok(Math.min(gr3, gg3, gb3) > 170, `★ 유리는 밝다 — rgb(${gr3.toFixed(0)},${gg3.toFixed(0)},${gb3.toFixed(0)})`);
 }
 
 // ── ★ 아틀라스에 다 들어가는가 ───────────────────────────────────────────
@@ -72,6 +95,42 @@ for (const art of ART_ORDER) {
     `★ 그림 ${ART_ORDER.length}종이 아틀라스 ${ATLAS_CAPACITY}칸에 들어간다`);
   ok(new Set(ART_ORDER).size === ART_ORDER.length, 'ART_ORDER에 중복이 없다 (있으면 한 칸을 두 번 덮어쓴다)');
   ok(ART_ORDER[0] === 'plain', "0번 칸은 민짜여야 한다 — 셰이더가 '0 = 무늬 없음'으로 쓴다");
+
+  // ★★ 그림 순서 고정 — **뒤에만 추가할 것.**
+  //   난수 씨앗이 칸 번호(=배열 위치)에서 나오므로, 중간에 끼우거나 정렬하면
+  //   그 뒤 그림들의 **모양이 전부 달라진다.** 저장은 멀쩡하고 에러도 안 나고 룩만 조용히 변한다.
+  const LOCKED_ART: ArtId[] = [
+    'plain', 'grass', 'dirt', 'stone', 'gravel', 'wood', 'brick', 'sand',
+    'grass_side', 'glass', 'leaves', 'log_side', 'log_top', 'stone_brick', 'water',
+  ];
+  LOCKED_ART.forEach((art, i) => {
+    ok(ART_ORDER[i] === art, `★ 그림 ${i}번은 '${art}' 고정 — 현재 '${ART_ORDER[i]}'`);
+  });
+}
+
+// ── ★ 아틀라스 격자 자동 확장 (결정 기록: `BRICK_SYSTEM.md §8.6`) ─────────
+{
+  // 정사각 + 2의 거듭제곱으로 올림
+  const cases: [number, number][] = [
+    [1, 1], [4, 2], [5, 4], [15, 4], [16, 4], [17, 8], [64, 8], [65, 16], [256, 16], [257, 32],
+  ];
+  for (const [n, grid] of cases) {
+    ok(atlasGridFor(n) === grid, `그림 ${n}장 → 격자 ${grid}×${grid} — 현재 ${atlasGridFor(n)}`);
+  }
+
+  // 어떤 개수에도 반드시 다 들어가야 한다 (넘치면 뒤쪽 그림이 조용히 안 구워진다)
+  let fits = true;
+  for (let n = 1; n <= 300; n++) if (atlasGridFor(n) ** 2 < n) fits = false;
+  ok(fits, '★ 1~300장 어디서도 칸이 모자라지 않는다');
+
+  // 2의 거듭제곱이어야 한다 — 비-2제곱 텍스처를 안 만들려는 것
+  let pow2 = true;
+  for (let n = 1; n <= 300; n++) { const g = atlasGridFor(n); if ((g & (g - 1)) !== 0) pow2 = false; }
+  ok(pow2, '격자 한 변이 항상 2의 거듭제곱이다');
+
+  // 오늘 기준으로는 기존과 같은 4×4여야 한다 — 이번 변경으로 화면이 바뀌면 안 된다
+  ok(TEX_COLS === 4 && TEX_ROWS === 4,
+    `★ 지금 그림 ${ART_ORDER.length}장 → 예전과 같은 4×4 (화면 변화 없음) — 현재 ${TEX_COLS}×${TEX_ROWS}`);
 }
 
 // ── ★ 면별 무늬 매핑 ─────────────────────────────────────────────────────
@@ -94,8 +153,24 @@ for (const art of ART_ORDER) {
   ok(gBottom === artSlot('dirt'), '★ 잔디 밑면 = 흙 그림');
   ok(gTop !== gSide && gSide !== gBottom, '★ 잔디는 세 면이 서로 다르다');
 
+  // ★ 원목도 면이 갈린다 — 마구리(위아래) vs 껍질(옆)
+  const [wTop, wSide, wBottom] = faceSlots(10);
+  ok(wTop === artSlot('log_top'), '★ 원목 윗면 = 마구리(나이테)');
+  ok(wSide === artSlot('log_side'), '★ 원목 옆면 = 껍질');
+  ok(wBottom === artSlot('log_top'), '★ 원목 밑면 = 마구리 — 잘린 통나무는 위아래가 같다');
+
   // 모르는 재료(저장물이 코드보다 앞선 경우)는 민짜로 떨어져야 한다 — 크래시 금지
   ok(faceSlots(999).every((s) => s === 0), '모르는 재료 id는 민짜로 폴백한다');
+
+  // ★ 저장값 보호 — 기존 재료의 id가 밀리면 이미 지어 둔 월드의 무늬가 통째로 뒤바뀐다
+  const LOCKED: [number, string][] = [
+    [0, '민짜'], [1, '잔디'], [2, '흙'], [3, '돌'],
+    [4, '자갈'], [5, '나무'], [6, '벽돌'], [7, '모래'],
+  ];
+  for (const [id, label] of LOCKED) {
+    ok(BRICK_TEXTURES[id]?.id === id && BRICK_TEXTURES[id]?.label === label,
+      `★ 재료 ${id}번은 '${label}' 고정 (append-only) — 현재 '${BRICK_TEXTURES[id]?.label}'`);
+  }
 }
 
 // ── ★ 잔디 옆면 그림의 위아래 ────────────────────────────────────────────

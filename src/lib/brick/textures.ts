@@ -15,9 +15,6 @@
 
 import * as THREE from 'three';
 
-/** 아틀라스 격자 — 4×4 = 16칸 */
-export const TEX_COLS = 4;
-export const TEX_ROWS = 4;
 /** 논리 해상도 — 마인크래프트와 같은 16×16 픽셀 아트 */
 const ART = 16;
 
@@ -46,7 +43,8 @@ const TILE_PX = ART * 4;
 /** 그림 한 장. **아틀라스 칸 번호는 `ART_ORDER`의 위치**로 정해진다 */
 export type ArtId =
   | 'plain' | 'grass' | 'dirt' | 'stone' | 'gravel' | 'wood' | 'brick' | 'sand'
-  | 'grass_side';
+  | 'grass_side'
+  | 'glass' | 'leaves' | 'log_side' | 'log_top' | 'stone_brick' | 'water';
 
 /**
  * 아틀라스에 굽는 순서 = 칸 번호. **저장값이 아니라서 바꿔도 안전**하지만,
@@ -56,12 +54,44 @@ export type ArtId =
 export const ART_ORDER: ArtId[] = [
   'plain', 'grass', 'dirt', 'stone', 'gravel', 'wood', 'brick', 'sand',
   'grass_side',
+  'glass', 'leaves', 'log_side', 'log_top', 'stone_brick', 'water',
 ];
 
 /** 그림 → 아틀라스 칸 번호 */
 export function artSlot(art: ArtId): number {
   return ART_ORDER.indexOf(art);
 }
+
+/**
+ * 그림 수 → 아틀라스 격자 한 변. **정사각 + 2의 거듭제곱으로 올림.**
+ *
+ *   15장 → 4 (=16칸) · 17장 → 8 (=64칸) · 65장 → 16 (=256칸)
+ *
+ * ★ 왜 2의 거듭제곱인가: 5×4 같은 **비-2제곱(NPOT)** 텍스처는 WebGL2에서 동작은 하지만
+ *   필터링·래핑에 잔가시가 있는 영역이다. 얻는 게 메모리 몇백 KB뿐이라 굳이 밟지 않는다.
+ */
+export function atlasGridFor(artCount: number): number {
+  return 1 << Math.ceil(Math.log2(Math.max(1, Math.ceil(Math.sqrt(artCount)))));
+}
+
+/**
+ * 아틀라스 격자 — **숫자를 박지 않고 그림 수에서 자동으로 정한다.**
+ *
+ * ★ **결정 기록과 판단 기준은 `doc/BRICK_SYSTEM.md §8.6`에 있다.**
+ *   이 값을 손으로 고정하고 싶어지면 **거기부터 읽고** 조건이 맞는지 따져 볼 것.
+ *
+ * ★ 자동으로 둔 이유: 칸이 모자라면 그림을 못 늘린다. 늘릴 때마다 상수를 고치는 건
+ *   **터질 걸 알면서 놔두는 것**이라 천장 자체를 없앴다. 지금(15장)은 계산 결과가 4×4라 **기존과 동일**하다.
+ *
+ * ★ 칸이 늘어나는 순간은 **화면에 안 보인다**:
+ *   - 그림 모양 — 난수 씨앗이 **칸 번호**에서 나오고 번호는 안 바뀐다 → 그대로
+ *   - 저장 — 저장값은 **재료 id**라 칸 배치와 무관
+ *   - 셰이더 — 이 상수를 그대로 받아 쓴다(하드코딩 없음)
+ *   - 늘어나는 건 VRAM뿐: 4×4 = 256KB → 8×8 = 1MB
+ */
+const ATLAS_GRID = atlasGridFor(ART_ORDER.length);
+export const TEX_COLS = ATLAS_GRID;
+export const TEX_ROWS = ATLAS_GRID;
 
 export interface BrickTexture {
   /** **저장되는 값.** 순서를 바꾸면 기존 저장물의 무늬가 뒤바뀐다 — 뒤에만 추가할 것 */
@@ -87,6 +117,14 @@ export const BRICK_TEXTURES: BrickTexture[] = [
   { id: 5, label: '나무', top: 'wood' },
   { id: 6, label: '벽돌', top: 'brick' },
   { id: 7, label: '모래', top: 'sand' },
+  // ── 티어 1 (2026-08-02) — `BRICK_PLAN.md` §15 ────────────────────────────
+  { id: 8, label: '유리', top: 'glass' },
+  { id: 9, label: '나뭇잎', top: 'leaves' },
+  // ★ 원목도 면이 갈린다 — **마구리(나이테)는 위아래, 껍질은 옆**. 면별 무늬가 없으면 못 만든다.
+  //   기존 '나무'는 가공한 **널(planks)** 이라 별개다(마인크래프트도 원목과 널이 다른 블록).
+  { id: 10, label: '원목', top: 'log_top', side: 'log_side', bottom: 'log_top' },
+  { id: 11, label: '돌벽돌', top: 'stone_brick' },
+  { id: 12, label: '물', top: 'water' },
 ];
 
 /** 아틀라스가 담을 수 있는 칸 수 — 넘으면 그림이 잘린다(테스트가 지킨다) */
@@ -222,6 +260,71 @@ export function buildArt(art: ArtId): string[] {
       for (let x = 0; x < ART; x++) {
         const h = GRASS_BAND + Math.floor(r() * 3); // 3~5칸
         for (let y = 0; y < h; y++) set(x, y, pick(g));
+      }
+      break;
+    }
+    case 'glass': { // 유리 — 창틀 + 반사光. **반투명 재질과 함께 쓰라고 만든 그림**
+      const pane = '#eaf6fa';
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pane);
+      const frame = '#b3d2dc', inner = '#d2e7ee';
+      for (let i = 0; i < ART; i++) {
+        set(i, 0, frame); set(i, ART - 1, frame); set(0, i, frame); set(ART - 1, i, frame);
+      }
+      for (let i = 1; i < ART - 1; i++) {
+        set(i, 1, inner); set(i, ART - 2, inner); set(1, i, inner); set(ART - 2, i, inner);
+      }
+      for (let k = 0; k < 6; k++) { // 대각선 반사 — 유리로 읽히게 하는 결정적 요소
+        set(3 + k, 11 - k, '#ffffff'); set(4 + k, 11 - k, '#ffffff');
+      }
+      break;
+    }
+    case 'leaves': { // 나뭇잎 — 잔디보다 짙고, 틈이 뚫려 성기다
+      const g = ['#3f6f2b', '#4b8134', '#356024', '#57933b'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(g));
+      for (let i = 0; i < 34; i++) set(Math.floor(r() * ART), Math.floor(r() * ART), '#24401a'); // 잎 사이 틈
+      for (let i = 0; i < 16; i++) set(Math.floor(r() * ART), Math.floor(r() * ART), '#6aa847'); // 밝은 잎끝
+      break;
+    }
+    case 'log_side': { // 원목 껍질 — **세로** 결
+      const b = ['#6b4f2f', '#5c4327', '#775837'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, b[(x >> 1) % b.length]);
+      for (let i = 0; i < 20; i++) { // 갈라진 골
+        const x = Math.floor(r() * ART), y0 = Math.floor(r() * (ART - 4));
+        const len = 3 + Math.floor(r() * 6);
+        for (let y = y0; y < Math.min(ART, y0 + len); y++) set(x, y, '#463320');
+      }
+      for (let i = 0; i < 10; i++) { // 도드라진 결
+        const x = Math.floor(r() * ART), y = Math.floor(r() * ART);
+        set(x, y, '#8a683f');
+      }
+      break;
+    }
+    case 'log_top': { // 원목 마구리 — 나이테 + 바깥 껍질 테
+      const light = '#b58c57', mid = '#a67c48', bark = '#5c4327';
+      const c = (ART - 1) / 2;
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) {
+        const dist = Math.hypot(x - c, y - c);
+        set(x, y, dist > 7.1 ? bark : Math.floor(dist / 1.6) % 2 ? mid : light);
+      }
+      set(Math.round(c), Math.round(c), '#7a5732'); // 심재
+      break;
+    }
+    case 'stone_brick': { // 돌벽돌 — 반듯하게 자른 돌. '돌'(자연석)과 달리 줄눈이 곧다
+      const s = ['#8d8d88', '#82827d', '#979792'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(s));
+      const M = '#5f5f5b';
+      for (let i = 0; i < ART; i++) { set(i, 7, M); set(i, ART - 1, M); set(7, i, M); set(ART - 1, i, M); }
+      break;
+    }
+    case 'water': { // 물 — 잔물결. **반투명 재질과 함께**
+      const w = ['#3f74b0', '#4a82c0', '#35659a'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(w));
+      for (let k = 0; k < 5; k++) { // 가로로 흐르는 물결
+        const y0 = 1 + k * 3;
+        for (let x = 0; x < ART; x++) {
+          const y = y0 + (Math.sin((x + k * 3) * 0.7) > 0.3 ? 1 : 0);
+          if (y < ART) set(x, y, '#78aede');
+        }
       }
       break;
     }
