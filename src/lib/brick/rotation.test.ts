@@ -8,7 +8,7 @@
 
 import { extentOf, pivotOffset, PARTS } from './parts';
 import {
-  ROT_COUNT, axisMap, makeRot, nextSpin, nextTip, rotMatrix,
+  ROT_COUNT, cornerMap, makeRot, nextSpin, nextTip, rotMatrixPlace, rotMatrixVisual,
   rotateExtent, rotatePivot, spinOf, tipOf,
 } from './rotation';
 
@@ -17,11 +17,11 @@ const fails: string[] = [];
 const ok = (cond: boolean, label: string) => { if (cond) pass++; else fails.push(label); };
 
 // ── 24개가 전부 서로 다른 '진짜 회전'인가 ────────────────────────────────
-{
+for (const [name, matrixOf] of [['화면', rotMatrixVisual], ['배치', rotMatrixPlace]] as const) {
   const seen = new Set<string>();
   let proper = 0, permutation = 0;
   for (let rot = 0; rot < ROT_COUNT; rot++) {
-    const m = rotMatrix(rot);
+    const m = matrixOf(rot);
     seen.add(m.join(','));
 
     // 행렬식 +1 = 뒤집힘(거울)이 아닌 진짜 회전. −1이 섞이면 브릭이 좌우 반전된다
@@ -40,9 +40,21 @@ const ok = (cond: boolean, label: string) => { if (cond) pass++; else fails.push
     }
     if (good) permutation++;
   }
-  ok(seen.size === ROT_COUNT, `★ 24방향이 전부 다르다 — ${seen.size}가지`);
-  ok(proper === ROT_COUNT, `★ 전부 행렬식 +1(거울 반전 없음) — ${proper}/24`);
-  ok(permutation === ROT_COUNT, `★ 전부 정수 축 교환(격자가 안 어긋난다) — ${permutation}/24`);
+  ok(seen.size === ROT_COUNT, `★ ${name} 기준 24방향이 전부 다르다 — ${seen.size}가지`);
+  ok(proper === ROT_COUNT, `★ ${name} 기준 전부 행렬식 +1(거울 반전 없음) — ${proper}/24`);
+  ok(permutation === ROT_COUNT, `★ ${name} 기준 전부 정수 축 교환(격자가 안 어긋난다) — ${permutation}/24`);
+}
+
+// ── ★★ 두 기준은 rot 1·3에서 서로 반대다 — 이건 **의도된 것**이다 ─────────
+// 기존 코드가 원래 그랬고(2026-08-02 확인), 한쪽으로 통일하면 지어 둔 경사 지붕 방향이나
+// R 조작감이 뒤집힌다. 누가 "정리"하려고 합치는 걸 막으려고 명시적으로 잠근다.
+{
+  const same = [0, 2], flipped = [1, 3];
+  let ok0 = 0, ok1 = 0;
+  for (const r of same) if (rotMatrixVisual(r).join() === rotMatrixPlace(r).join()) ok0++;
+  for (const r of flipped) if (rotMatrixVisual(r).join() !== rotMatrixPlace(r).join()) ok1++;
+  ok(ok0 === 2, `rot 0·2는 두 기준이 같다 — ${ok0}/2`);
+  ok(ok1 === 2, `★★ rot 1·3은 두 기준이 반대다 (의도된 것 — 합치지 말 것) — ${ok1}/2`);
 }
 
 // ── 번호 ↔ (눕히기, 제자리회전) 왕복 ─────────────────────────────────────
@@ -130,6 +142,30 @@ const ok = (cond: boolean, label: string) => { if (cond) pass++; else fails.push
   }
   ok(extSame === total, `★★ rot 0~3 점유 범위가 기존과 동일 — ${extSame}/${total}`);
   ok(pivSame === total, `★★ rot 0~3 기준 칸이 기존과 동일 — ${pivSame}/${total}${bad.length ? ' · ' + bad.slice(0, 3).join(' / ') : ''}`);
+}
+
+// ── ★★ 밝기표도 기존과 똑같은가 (화면 기준) ──────────────────────────────
+//
+// 틀려도 에러가 안 나고 **명암만 조용히 뒤집힌다**. 눈으로도 잘 안 보인다.
+// 지금 `BrickInstances.tsx`가 쓰는 표를 그대로 옮겨 와 대조한다.
+{
+  const OLD = [0, 1, 2, 3].map((rot) => {
+    const c = [1, 0, -1, 0][rot], s = [0, 1, 0, -1][rot];
+    return Array.from({ length: 8 }, (_, local) => {
+      const sx = local & 1 ? 1 : -1, sy = local & 2 ? 1 : -1, sz = local & 4 ? 1 : -1;
+      const wx = sx * c + sz * s;
+      const wz = -sx * s + sz * c;
+      return (wx > 0 ? 1 : 0) + (sy > 0 ? 2 : 0) + (wz > 0 ? 4 : 0);
+    });
+  });
+  let same = 0;
+  for (let rot = 0; rot < 4; rot++) if (cornerMap(rot).join() === OLD[rot].join()) same++;
+  ok(same === 4, `★★ rot 0~3 밝기표가 기존과 동일 — ${same}/4`);
+
+  // 24방향 전부 꼭짓점 8개를 **겹치지 않게** 짝지어야 한다(하나라도 겹치면 밝기가 뭉갠다)
+  let bijective = 0;
+  for (let rot = 0; rot < ROT_COUNT; rot++) if (new Set(cornerMap(rot)).size === 8) bijective++;
+  ok(bijective === ROT_COUNT, `★ 24방향 모두 꼭짓점이 1:1로 짝지어진다 — ${bijective}/24`);
 }
 
 // ── 세운 상태에서는 기준 칸이 위아래로도 밀린다 ──────────────────────────

@@ -18,14 +18,32 @@ export type RotMatrix = readonly [number, number, number, number, number, number
 export const ROT_COUNT = 24;
 
 /**
- * 제자리 회전(Y축) — **기존 코드와 같은 방향이어야 한다.**
+ * ⚠️⚠️ **이 파일에는 회전 기준이 두 개 있다. 섞으면 안 된다.**
  *
- * ⚠️ 방향(+90°냐 −90°냐)은 **손으로 유도하지 말 것.** `parts.ts`의 기존 `pivotOffset`이
- *   정답이고, `rotation.test.ts`가 rot 0~3에서 그것과 일치하는지 검사한다.
- *   내가 처음 유도했을 땐 부호가 반대로 나왔고, 테스트가 그걸 잡아 여기로 고정했다.
+ * 기존 코드가 **서로 반대 방향**을 쓰고 있었다(2026-08-02, 숫자로 확인):
+ *
+ *   화면(`BrickInstances`의 회전·밝기표) … Y축 **+90°**
+ *   배치(`parts.pivotOffset`의 기준 칸)  … Y축 **−90°**
+ *
+ * rot 1과 3이 서로 뒤바뀌어 있다(rot 0·2는 같다). **둘 다 그대로 둔다** — 이유:
+ *  - 브릭은 상자라 **점유 범위는 어느 쪽이든 같다**(90°든 −90°든 X/Z 크기만 맞바뀜).
+ *  - 화면 기준은 **경사 파츠가 어느 쪽을 보는가**를 정하고, 배치 기준은 **커서 밑에 어느 모서리가 붙어 있는가**를 정한다.
+ *    각자 제 일에는 일관돼 있고, 사용자가 확인까지 마친 동작이다.
+ *  - 한쪽을 "고치면" **이미 지어 둔 경사 지붕의 방향이나 R 조작감이 뒤집힌다.** 얻는 것 없이 회귀만 난다.
+ *
+ * → 24방향으로 늘릴 때도 **각자의 기준에서 각자 늘린다.** 아래 두 함수가 그것이고,
+ *   테스트가 rot 0~3에서 각각 기존과 일치하는지 잠근다.
  */
-function spinY(n: number): RotMatrix {
-  // θ = −n·90° (기존 `pivotOffset` 표에 맞춘 방향)
+
+/** 제자리 회전 — **화면 기준**(Y축 +90°). 메시 회전·밝기표가 쓴다 */
+function spinYVisual(n: number): RotMatrix {
+  const c = [1, 0, -1, 0][n & 3];
+  const s = [0, 1, 0, -1][n & 3];
+  return [c, 0, s, 0, 1, 0, -s, 0, c];
+}
+
+/** 제자리 회전 — **배치 기준**(Y축 −90°). 점유 범위·기준 칸이 쓴다 */
+function spinYPlace(n: number): RotMatrix {
   const c = [1, 0, -1, 0][n & 3];
   const s = [0, -1, 0, 1][n & 3];
   return [c, 0, s, 0, 1, 0, -s, 0, c];
@@ -57,13 +75,38 @@ function mul(a: RotMatrix, b: RotMatrix): RotMatrix {
   return o as unknown as RotMatrix;
 }
 
-/** 24개를 한 번만 만들어 둔다 */
-const MATRICES: readonly RotMatrix[] = Array.from({ length: ROT_COUNT }, (_, rot) =>
-  mul(TIP[Math.floor(rot / 4)], spinY(rot % 4)),
+/** 24개를 한 번만 만들어 둔다 (두 기준 각각) */
+const VISUAL: readonly RotMatrix[] = Array.from({ length: ROT_COUNT }, (_, rot) =>
+  mul(TIP[Math.floor(rot / 4)], spinYVisual(rot % 4)),
+);
+const PLACE: readonly RotMatrix[] = Array.from({ length: ROT_COUNT }, (_, rot) =>
+  mul(TIP[Math.floor(rot / 4)], spinYPlace(rot % 4)),
 );
 
-export function rotMatrix(rot: number): RotMatrix {
-  return MATRICES[((rot % ROT_COUNT) + ROT_COUNT) % ROT_COUNT];
+const wrap = (rot: number): number => ((rot % ROT_COUNT) + ROT_COUNT) % ROT_COUNT;
+
+/** **화면 기준** 회전 — 메시를 돌릴 때·꼭짓점 밝기를 짝지을 때 쓴다 */
+export function rotMatrixVisual(rot: number): RotMatrix {
+  return VISUAL[wrap(rot)];
+}
+
+/** **배치 기준** 회전 — 점유 범위·기준 칸을 구할 때 쓴다 */
+export function rotMatrixPlace(rot: number): RotMatrix {
+  return PLACE[wrap(rot)];
+}
+
+/**
+ * 로컬 꼭짓점 → 월드 꼭짓점 번호 (`i + 2j + 4k`, i=+x·j=+y·k=+z).
+ * **화면 기준**이다 — 밝기표(`CORNER_MAP`)가 이걸로 만들어진다.
+ * 틀리면 에러 없이 **명암만 조용히 뒤집힌다**(D 계열).
+ */
+export function cornerMap(rot: number): number[] {
+  const m = rotMatrixVisual(rot);
+  return Array.from({ length: 8 }, (_, local) => {
+    const l = [local & 1 ? 1 : -1, local & 2 ? 1 : -1, local & 4 ? 1 : -1];
+    const w = [0, 1, 2].map((r) => m[r * 3] * l[0] + m[r * 3 + 1] * l[1] + m[r * 3 + 2] * l[2]);
+    return (w[0] > 0 ? 1 : 0) + (w[1] > 0 ? 2 : 0) + (w[2] > 0 ? 4 : 0);
+  });
 }
 
 export const tipOf = (rot: number): number => Math.floor((((rot % ROT_COUNT) + ROT_COUNT) % ROT_COUNT) / 4);
@@ -82,7 +125,7 @@ export const nextTip = (rot: number): number => makeRot(tipOf(rot) + 1, spinOf(r
  * 반환 `[[로컬축, 부호], …]` — 월드 X·Y·Z 순서.
  */
 export function axisMap(rot: number): [number, number][] {
-  const m = rotMatrix(rot);
+  const m = rotMatrixPlace(rot);
   const out: [number, number][] = [];
   for (let w = 0; w < 3; w++) {
     for (let a = 0; a < 3; a++) {
