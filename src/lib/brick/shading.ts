@@ -68,12 +68,27 @@ export const AO_WALL_RELIEF = 0.30;
  * 평평한 면·볼록 모서리는 그대로 1.0이고 오목한 자리만 어두워진다 → **밝아지는 곳은 없다.**
  */
 export function cornerAO(blocked: number): number {
-  const over = blocked - FLAT_BLOCKED;
+  return aoFromOver(blocked - FLAT_BLOCKED);
+}
+
+/**
+ * 기준(`FLAT`)보다 **몇 칸 더** 막혔는가 → 밝기 배율.
+ *
+ * ★ 왜 `over`를 직접 받는 갈래를 두나: 세는 방식이 두 가지다.
+ *   - **브릭 기준**: 자기 몸을 빼고 바깥 7칸을 센다 → 평평한 면의 기준이 3
+ *   - **세계 좌표 기준**: 주인이 없으니 8칸을 다 센다 → 평평한 면의 기준이 4
+ *   기준만 다르고 **`over`는 똑같이 나온다.** 그래서 `over`로 통일해 두면 두 방식이 같은 값을 낸다
+ *   (칸 단위 조명으로 넘어갈 때 이 동일성이 안전장치가 된다 — 테스트가 잠근다).
+ */
+export function aoFromOver(over: number): number {
   if (over <= 0) return 1;
   const deeper = (over - 1) / (OUTSIDE_BLOCKED - FLAT_BLOCKED - 1); // 0 = 첫 접촉, 1 = 완전히 막힘
   const ao = 1 - (AO_FIRST + AO_EXTRA * deeper);
   return ao < AO_MIN ? AO_MIN : ao;
 }
+
+/** 세계 좌표 기준 꼭짓점 — 여덟 칸을 다 세므로 평평한 면의 기준이 하나 더 크다 */
+export const FLAT_BLOCKED_WORLD = FLAT_BLOCKED + 1;
 
 /**
  * 원값 → **화면에 나오는 밝기**. 셰이더가 프래그먼트마다 하는 계산과 같은 식이다.

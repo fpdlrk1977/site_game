@@ -5,7 +5,7 @@
 
 import { brickGeometry, triCount } from './brickGeometry';
 import { CELL_X, CELL_Y, CELL_Z } from './grid';
-import { PARTS } from './parts';
+import { occludes, PARTS } from './parts';
 
 let pass = 0;
 const fails: string[] = [];
@@ -218,6 +218,95 @@ for (const id of ['s1x2', 's2x2', 'si1x2'] as const) {
     ok(bad === 0, `${part.id}: uv가 0~1 범위 안 — 벗어난 값 ${bad}개`);
     ok(hi - lo > 0.9, `★ ${part.id}: uv가 0~1로 퍼져 있다 (한 점에 뭉치면 면이 통째로 어두워진다) — ${lo}~${hi}`);
   }
+}
+
+// ── ★ 가는 파츠(기둥·봉·패널) — `BRICK_PLAN.md` §19 ──────────────────────
+//
+// 칸은 정수 그대로 차지하고 **그리는 크기만** 얇다. 두 가지가 어긋나기 쉽다:
+//   ① 그리는 크기가 칸을 삐져나오면 이웃 브릭을 파고든다
+//   ② 조명·무늬를 **그리는 크기**로 계산하면 그 파츠만 무늬가 확대되고 밝기가 튄다
+{
+  const THIN = ['c1x1', 'r1x2', 'r1x4', 'w1x1', 'w1x2', 'w1x4'] as const;
+
+  for (const id of THIN) {
+    const part = PARTS[id];
+    const g = brickGeometry(part, false, 'line');
+    const { lo, hi } = bounds(g);
+    const cell = [part.sx * CELL_X, part.h * CELL_Y, part.sz * CELL_Z];
+    const drawn = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+
+    // ① 칸 밖으로 안 나간다
+    let inside = true;
+    for (let k = 0; k < 3; k++) if (drawn[k] > cell[k] + 1e-6) inside = false;
+    ok(inside, `★ ${id}: 그리는 크기가 칸 안에 들어간다 — 그림 ${drawn.map((v) => v.toFixed(2))} ⊂ 칸 ${cell.map((v) => v.toFixed(2))}`);
+
+    // 가운데 정렬 — 한쪽으로 쏠리면 이웃과 안 맞는다
+    for (let k = 0; k < 3; k++) near((lo[k] + hi[k]) / 2, 0, `${id}: 축 ${k}가 가운데 정렬`);
+
+    // 적어도 한 축은 실제로 얇아야 '가는 파츠'다
+    let anyThin = false;
+    for (let k = 0; k < 3; k++) if (drawn[k] < cell[k] - 1e-6) anyThin = true;
+    ok(anyThin, `★ ${id}: 적어도 한 축이 칸보다 얇다(안 그러면 그냥 상자다)`);
+
+    // T-5: uv가 없으면 경계선 셰이더가 **면 전체를 어둡게** 만든다
+    ok(g.getAttribute('uv') !== undefined, `${id}: uv가 있다 (없으면 면이 통째로 어두워진다)`);
+    // T-4: 무늬 전용 UV
+    ok(g.getAttribute('aTexUV') !== undefined, `${id}: aTexUV가 있다 (없으면 무늬가 뭉개진다)`);
+    // 부드러운 조명 재료
+    ok(g.getAttribute('aSelA') !== undefined && g.getAttribute('aSelB') !== undefined,
+      `${id}: 꼭짓점 가중치가 있다`);
+  }
+
+  // ★★ ②의 핵심 — **무늬 밀도(m당 몇 장)가 모든 파츠에서 같은가.**
+  //
+  // ⚠️ 무늬 **범위**를 비교하면 안 된다. 기둥은 0.2m라 범위가 0.4인 게 **정상**이다
+  //    (처음에 범위로 비교했다가 틀린 실패를 봤다). 같아야 하는 건 `범위 ÷ 실제 길이`다.
+  //    이게 어긋나면 그 파츠만 무늬가 확대·축소돼 옆 브릭과 안 맞는다(T-4).
+  const sideDensity = (id: keyof typeof PARTS) => {
+    const g = brickGeometry(PARTS[id], false, 'line');
+    const p = g.getAttribute('position'), n = g.getAttribute('normal'), t = g.getAttribute('aTexUV');
+    let uLo = Infinity, uHi = -Infinity, zLo = Infinity, zHi = -Infinity;
+    for (let i = 0; i < p.count; i++) {
+      if (Math.abs(n.getX(i)) < 0.9) continue; // ±X 면만 — 이 면의 가로(u)는 Z에서 온다
+      const u = t.getX(i), z = p.getZ(i);
+      if (u < uLo) uLo = u; if (u > uHi) uHi = u;
+      if (z < zLo) zLo = z; if (z > zHi) zHi = z;
+    }
+    return (uHi - uLo) / (zHi - zLo); // 무늬 장수 / m
+  };
+  const base = sideDensity('b1x1');
+  near(base, 1 / CELL_X, '기준: 1×1 브릭은 0.5m마다 무늬 한 장');
+  for (const id of ['c1x1', 'r1x2', 'w1x1', 'w1x4'] as const) {
+    near(sideDensity(id), base, `${id}의 무늬 밀도가 브릭과 같다`);
+  }
+
+  // ★★★ **조명 가중치가 칸 기준인가** — 여기가 진짜 함정이다.
+  //
+  // 꼭짓점 가중치는 "이 정점이 칸의 여덟 모서리 중 어디에 있나"다. 얇은 파츠를 **그리는 크기**로
+  // 정규화하면, 0.2m짜리 기둥이 제 혼자 **밝기 범위를 0~1 전부** 쓴다 → 칸 한가운데 서 있는데도
+  // 한쪽 면은 왼쪽 끝 밝기, 반대쪽은 오른쪽 끝 밝기를 받아 **이웃 브릭과 명암이 어긋난다.**
+  // 칸 기준으로 계산하면 가중치가 가운데로 몰려(0.3~0.7) 주변과 자연스럽게 이어진다.
+  //
+  // ⚠️ 무늬 밀도로는 이걸 **못 잡는다**(`addTexUV`의 크기 인자는 배율이 아니라 원점 이동이라서).
+  //    사보타주로 확인했다 — 밀도 검사만 있을 땐 그대로 통과했다.
+  const maxWeight = (id: keyof typeof PARTS) => {
+    const g = brickGeometry(PARTS[id], false, 'line');
+    const a = g.getAttribute('aSelA'), b = g.getAttribute('aSelB');
+    let m = 0;
+    for (let i = 0; i < a.count; i++) {
+      for (let k = 0; k < 4; k++) m = Math.max(m, a.getComponent(i, k), b.getComponent(i, k));
+    }
+    return m;
+  };
+  ok(maxWeight('b1x1') > 0.99,
+    `기준: 꽉 찬 브릭의 정점은 칸 모서리에 딱 붙는다 — ${maxWeight('b1x1').toFixed(3)}`);
+  ok(maxWeight('c1x1') < 0.6,
+    `★★★ 기둥의 조명 가중치가 칸 가운데로 몰린다(칸 기준 계산) — ${maxWeight('c1x1').toFixed(3)}`);
+  ok(maxWeight('w1x2') < 0.9,
+    `★★★ 패널도 마찬가지 — ${maxWeight('w1x2').toFixed(3)}`);
+
+  // 얇은 파츠는 이웃을 감추면 안 된다 — 감추면 그 너머에 구멍이 뚫린다
+  for (const id of THIN) ok(!occludes(id), `${id}: 이웃 면을 감추지 않는다`);
 }
 
 console.log(`\n브릭 지오메트리(경사) 테스트: ${pass}/${pass + fails.length} 통과`);

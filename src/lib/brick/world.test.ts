@@ -7,7 +7,7 @@
 //   **증분으로 갱신한 결과 == 처음부터 전부 계산한 결과**
 
 import { BRICK_CELLS_Y, chunkCoordOf, chunkKey, regionKeyOf, type Rot } from './grid';
-import { PART_LIST, PARTS, PLATE_CELLS_Y, TERRAIN_STEP, type MatClass, type PartId } from './parts';
+import { extentOf, PART_LIST, PARTS, PLATE_CELLS_Y, TERRAIN_STEP, type MatClass, type PartId } from './parts';
 import { ROT_COUNT } from './rotation';
 import { screenShade } from './shading';
 import { deepenAround, SURFACE_Y } from './terrain';
@@ -16,6 +16,19 @@ import { BrickWorld } from './world';
 let pass = 0;
 const fails: string[] = [];
 const ok = (cond: boolean, label: string) => { if (cond) pass++; else fails.push(label); };
+
+/**
+ * 하늘빛 × 그늘을 합친 값 — 예전 `cornerLight`이 한 배열로 내주던 것.
+ *
+ * ★ 지금은 **따로 낸다**(합치면 셰이더 곡선이 하늘빛까지 밝혀 실내 그늘이 사라진다).
+ *   아래 테스트들은 "밝다/어둡다"를 보는 것이라 합친 값으로 보는 게 맞다.
+ *   분리 자체와 곡선 모양은 `shading.test.ts`가 본다.
+ */
+const _sky = new Float32Array(8), _ao = new Float32Array(8);
+function combined(w: BrickWorld, b: Parameters<BrickWorld['cornerLight']>[0], out: Float32Array): void {
+  w.cornerLight(b, _sky, _ao);
+  for (let i = 0; i < 8; i++) out[i] = _sky[i] * _ao[i];
+}
 
 const PART_IDS: PartId[] = PART_LIST.map((p) => p.id);
 /** ★ 24방향 전부 — 세우면 **높이도 바뀌므로**(1×4를 세우면 4칸) 파생 인덱스가 여기서 갈린다 */
@@ -215,7 +228,7 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
   const id = w.place('b2x2', 0, 0, 0, 0, '#fff', 'opaque')!;
   w.recomputeLight();
   const c = new Float32Array(8);
-  w.cornerLight(w.bricks.get(id)!, c);
+  combined(w,w.bricks.get(id)!, c);
   const top = (c[2] + c[3] + c[6] + c[7]) / 4;   // j=1 (위쪽 네 꼭짓점)
   const bot = (c[0] + c[1] + c[4] + c[5]) / 4;   // j=0 (아래쪽 네 꼭짓점)
   ok(top > bot, `위쪽 꼭짓점(${top.toFixed(2)})이 바닥에 닿은 아래쪽(${bot.toFixed(2)})보다 밝다`);
@@ -230,7 +243,7 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
   const id = w.place('b1x1', 0, 300, 0, 0, '#fff', 'opaque')!; // 허공 — 사방이 트임
   w.recomputeLight();
   const c = new Float32Array(8);
-  w.cornerLight(w.bricks.get(id)!, c);
+  combined(w,w.bricks.get(id)!, c);
   for (let i = 0; i < 8; i++) ok(c[i] > 0.9, `허공 브릭의 꼭짓점 ${i}는 배율 없이 밝다 — ${c[i].toFixed(2)}`);
 }
 
@@ -245,13 +258,13 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
   const tileA = w.at(0, -3, 0)!;
   const bare = new Float32Array(8), c2 = new Float32Array(8);
   w.recomputeLight();
-  w.cornerLight(w.bricks.get(tileA)!, bare);
+  combined(w,w.bricks.get(tileA)!, bare);
   ok(bare[2] === 1 && bare[6] === 1, `깔린 지형의 위쪽 꼭짓점은 최대 밝기 — ${bare[2].toFixed(2)}`);
 
   // 타일 경계에 **걸치도록** 놓는다 — 셀 x=1,2 → A타일 절반 + B타일 절반
   w.place('b2x2', 1, 0, 0, 0, '#fff', 'opaque');
   w.recomputeLight();
-  w.cornerLight(w.bricks.get(tileA)!, c2);
+  combined(w,w.bricks.get(tileA)!, c2);
   // 꼭짓점 인덱스 i + 2j + 4k. 덮이지 않은 −x 쪽(i=0) 위쪽 꼭짓점은 그대로여야 한다
   ok(c2[2] === bare[2], `걸친 브릭이 **먼 쪽 꼭짓점**을 어둡게 하지 않는다 — ${bare[2].toFixed(2)} → ${c2[2].toFixed(2)}`);
 }
@@ -590,7 +603,7 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
   w.recomputeLight();
 
   const c = new Float32Array(8);
-  const cornersOf = (x: number, z: number) => { w.cornerLight(w.bricks.get(w.at(x, -3, z)!)!, c); return Array.from(c); };
+  const cornersOf = (x: number, z: number) => { combined(w,w.bricks.get(w.at(x, -3, z)!)!, c); return Array.from(c); };
 
   const flat = cornersOf(6, 6);
   ok(flat[2] === 1 && flat[3] === 1 && flat[6] === 1 && flat[7] === 1,
@@ -608,8 +621,51 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
 
   // 벽 자신의 바깥(볼록) 위쪽 꼭짓점은 안 어두워진다
   const wallTop = new Float32Array(8);
-  w.cornerLight(w.bricks.get(w.at(2, 3, 0)!)!, wallTop);
+  combined(w,w.bricks.get(w.at(2, 3, 0)!)!, wallTop);
   ok(wallTop[3] === 1 || wallTop[7] === 1, `볼록한 벽 꼭대기 바깥 꼭짓점은 1.0 — ${wallTop[3].toFixed(2)}/${wallTop[7].toFixed(2)}`);
+}
+
+// ── ★★★ 세계 좌표 꼭짓점 == 브릭 꼭짓점 (칸 단위 조명의 안전장치) ──────────
+//
+// `cornerValueAt`은 조명 해상도를 **브릭 → 칸**으로 올리기 위한 재료다(§18-2).
+// 갈아타는 순간 **화면이 통째로 바뀌면 안 되므로**, 같은 자리에서 **같은 값**이 나와야 한다.
+//
+// ⚠️ 세는 방식이 다르다: 브릭 쪽은 자기 몸을 빼고 7칸, 세계 쪽은 주인이 없어 8칸.
+//    기준(FLAT)을 하나 올려 맞춰 놨는데, **그게 실제로 맞는지**를 여기서 못 박는다.
+{
+  const w = new BrickWorld();
+  const rand = rng(4242);
+  for (let x = -10; x <= 10; x += 2) for (let z = -10; z <= 10; z += 2)
+    w.placeFast('terrain', x, -3, z, 0, '#fff', 'opaque');
+  // 벽·계단·구석이 섞이도록 무작위로 쌓는다 — 평평한 곳만 보면 차이가 안 드러난다
+  for (let i = 0; i < 120; i++) {
+    const p = PART_IDS[Math.floor(rand() * PART_IDS.length)];
+    const x = Math.floor(rand() * 8) - 4, z = Math.floor(rand() * 8) - 4;
+    w.placeFast(p, x, w.restY(p, x, z, 0), z, 0, '#fff', 'opaque');
+  }
+  w.refreshPending();
+  w.recomputeLight();
+
+  const sky = new Float32Array(8), ao = new Float32Array(8), pair = new Float32Array(2);
+  let same = 0, total = 0;
+  let worstSky = 0, worstAO = 0;
+  for (const b of w.bricks.values()) {
+    if (!w.isVisible(b.id)) continue;
+    w.cornerLight(b, sky, ao);
+    const e = extentOf(PARTS[b.part], b.rot);
+    // 꼭짓점 순서: i + 2j + 4k (i=+x, j=+y, k=+z) — 브릭 AABB의 여덟 모서리
+    for (let k = 0; k < 2; k++) for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+      const idx = i + 2 * j + 4 * k;
+      w.cornerValueAt(b.x + i * e.ex, b.y + j * e.ey, b.z + k * e.ez, pair);
+      total++;
+      const ds = Math.abs(pair[0] - sky[idx]), da = Math.abs(pair[1] - ao[idx]);
+      if (ds < 1e-9 && da < 1e-9) same++;
+      worstSky = Math.max(worstSky, ds); worstAO = Math.max(worstAO, da);
+    }
+  }
+  ok(total > 300, `충분한 표본인가 — ${total}개 꼭짓점`);
+  ok(same === total,
+    `★★★ 세계 좌표 계산이 브릭 계산과 **같은 값**을 낸다 — ${same}/${total} (최대 차이 하늘빛 ${worstSky.toFixed(6)} · 그늘 ${worstAO.toFixed(6)})`);
 }
 
 // ── ★ AO 응답 곡선 — 첫 접촉이 세고 그 뒤는 완만 (마인크래프트 밑동 그늘) ──────
@@ -625,7 +681,7 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
       for (let y = 0; y < 9; y += 3) w.place('b2x2', wx, y, wz, 0, '#fff', 'opaque');
     w.recomputeLight();
     const c = new Float32Array(8);
-    w.cornerLight(w.bricks.get(w.at(0, -3, 0)!)!, c);
+    combined(w,w.bricks.get(w.at(0, -3, 0)!)!, c);
     return c[7]; // +x·+z 쪽 위 꼭짓점 — 벽을 붙이는 방향
   };
 

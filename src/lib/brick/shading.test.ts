@@ -109,6 +109,55 @@ const ok = (cond: boolean, label: string) => { if (cond) pass++; else fails.push
   ok(OUTSIDE_BLOCKED - FLAT_BLOCKED === 4, '깊이 단계가 4단이다');
 }
 
+// ── ★★ 하늘빛·그늘을 한 칸에 눌러 담기 ──────────────────────────────────
+//
+// 정점 속성 칸이 15/16으로 꽉 차서 슬롯을 더 못 쓴다 → `하늘빛*256 + 그늘`로 담아 보낸다.
+// **틀려도 에러가 안 나고 명암만 이상해진다** — 여기서 왕복을 잠근다(B-4와 같은 계열).
+{
+  const pack = (sky: number, ao: number) => Math.round(sky * 255) * 256 + Math.round(ao * 255);
+  const unpackSky = (p: number) => Math.floor(p / 256) / 255;
+  const unpackAO = (p: number) => (p - Math.floor(p / 256) * 256) / 255;
+
+  let worst = 0, maxPacked = 0;
+  for (let s = 0; s <= 20; s++) {
+    for (let a = 0; a <= 20; a++) {
+      const sky = s / 20, ao = a / 20;
+      const p = pack(sky, ao);
+      maxPacked = Math.max(maxPacked, p);
+      worst = Math.max(worst, Math.abs(unpackSky(p) - sky), Math.abs(unpackAO(p) - ao));
+    }
+  }
+  ok(worst < 1 / 255 + 1e-9, `★★ 눌러 담았다 푼 값이 원래와 같다 — 최대 오차 ${worst.toFixed(5)}`);
+  ok(maxPacked <= 65535, `★ 담은 값이 float가 정확히 담는 범위 안이다 — 최대 ${maxPacked}`);
+
+  // ★ 두 값이 **서로 침범하지 않는가** — 그늘이 커도 하늘빛 자릿수를 건드리면 안 된다
+  ok(unpackSky(pack(0.5, 1)) === unpackSky(pack(0.5, 0)),
+    '★★ 그늘이 0이든 1이든 하늘빛은 그대로 나온다(자릿수 침범 없음)');
+  ok(unpackAO(pack(0, 0.5)) === unpackAO(pack(1, 0.5)),
+    '★★ 하늘빛이 0이든 1이든 그늘은 그대로 나온다');
+}
+
+// ── ★★★ 하늘빛에는 곡선을 씌우지 않는다 ─────────────────────────────────
+//
+// 🔴 실측으로 잡은 버그: 나무 밑 하늘빛이 **0.87인데 화면엔 0.99**로 나왔다. 접촉 그늘용 곡선이
+//    하늘빛까지 밝힌 탓이다. 실내·동굴·나무 그늘이 통째로 사라진다.
+{
+  /** 지금 셰이더가 하는 계산 — 하늘빛은 그대로, 그늘에만 곡선 */
+  const shade = (sky: number, ao: number) => sky * screenShade(ao);
+
+  const canopy = 0.87; // 4m 지붕 아래 실측값
+  ok(Math.abs(shade(canopy, 1) - canopy) < 1e-9,
+    `★★★ 그늘이 없는 곳의 하늘빛은 **그대로** 나온다 — ${shade(canopy, 1).toFixed(3)} (곡선을 먹이면 0.99가 된다)`);
+  ok(screenShade(canopy) > 0.98,
+    `참고: 곡선을 먹이면 이렇게 지워진다 — ${screenShade(canopy).toFixed(3)}`);
+
+  // 그늘은 여전히 곡선을 받는다(접촉면 쏠림 유지)
+  ok(shade(1, cornerAO(FLAT_BLOCKED + 1)) < 0.70, '그늘에는 곡선이 그대로 걸린다');
+  // 둘이 겹치면 곱해진다 — 실내 구석이 가장 어둡다
+  ok(shade(canopy, cornerAO(FLAT_BLOCKED + 1)) < shade(1, cornerAO(FLAT_BLOCKED + 1)),
+    '★ 어두운 곳의 구석이 밝은 곳의 구석보다 어둡다');
+}
+
 console.log(`\n브릭 접촉 그늘(모양) 테스트: ${pass}/${pass + fails.length} 통과`);
 if (fails.length) {
   console.log('\n실패:');

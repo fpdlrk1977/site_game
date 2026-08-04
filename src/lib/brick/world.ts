@@ -9,8 +9,8 @@ import {
   cellKey, chunkCoordOf, chunkKey, colKey, colKeyX, colKeyZ,
   COL_STEP_X, COL_STEP_Z, DIRS, regionKeyOf, Y_MAX, Y_MIN, type ChunkCoord, type Rot,
 } from './grid';
-import { extentOf, occludes, PARTS, type MatClass, type PartId } from './parts';
-import { cornerAO } from './shading';
+import { extentOf, occludes, PARTS, type Extent, type MatClass, type PartId } from './parts';
+import { aoFromOver, cornerAO, FLAT_BLOCKED_WORLD } from './shading';
 
 export interface Brick {
   id: number;
@@ -83,6 +83,11 @@ export class BrickWorld {
 
   at(x: number, y: number, z: number): number | undefined {
     return this.occ.get(cellKey(x, y, z));
+  }
+
+  /** 이 브릭이 차지하는 칸 수(회전 반영) — 빛 볼륨이 브릭 범위를 알아야 해서 열어 둔다 */
+  extentOfBrick(b: Brick): Extent {
+    return extentOf(PARTS[b.part], b.rot);
   }
 
   /** 브릭이 차지하는 셀을 순회 */
@@ -652,10 +657,42 @@ export class BrickWorld {
    * ⚠️ **면 배율(FACE_TONE)은 곱하지 않는다.** 한 꼭짓점을 세 면이 공유하는데 면마다 배율이 다르므로,
    *   배율은 셰이더가 **그 면의 월드 법선**을 보고 곱한다.
    *
+   * ⚠️ **하늘빛(`outSky`)과 그늘(`outAO`)을 따로 낸다.** 곱해서 하나로 넘기면 셰이더의 접촉-그늘 곡선이
+   *   하늘빛까지 밝혀 **실내·나무 밑 그늘이 지워진다**(실측 0.87 → 화면 0.99).
+   *
    * 순서: `i + 2j + 4k` (i=+x, j=+y, k=+z 쪽이면 1) — **월드 기준**.
    *   회전한 브릭은 렌더러가 로컬 슬롯으로 옮겨 담는다(`CORNER_MAP`).
    */
-  cornerLight(b: Brick, out: Float32Array): void {
+  /**
+   * **세계 좌표 꼭짓점 하나**의 하늘빛·그늘 — 칸 단위 조명(`BRICK_PLAN.md` §18-2)의 재료.
+   *
+   * ★ `cornerLight`은 **브릭의 여덟 모서리**만 낸다. 그래서 조명 해상도가 브릭 단위가 되고,
+   *   `2×4` 브릭 면은 2m짜리 그라데이션 한 장이 된다(마크는 면이 1m를 안 넘는다 → D-9).
+   *   이 함수는 **칸 모서리 아무 데나** 값을 낼 수 있어서, 볼륨으로 구워 두면 해상도가 칸이 된다.
+   *
+   * ★★ 세는 방식이 `cornerLight`과 다르다 — 여기엔 **"자기 브릭"이라는 게 없어서** 여덟 칸을 다 센다.
+   *   대신 기준을 하나 올려(`FLAT_BLOCKED_WORLD`) **결과가 정확히 같아지게** 맞췄다.
+   *   (테스트가 두 방식의 값이 일치하는지 잠근다 — 나중에 갈아탈 때의 안전장치다)
+   *
+   * 반환: `[하늘빛, 그늘]` 각 0~1
+   */
+  cornerValueAt(cx: number, cy: number, cz: number, out: Float32Array): void {
+    let sum = 0, n = 0, blocked = 0;
+    for (let dz = -1; dz <= 0; dz++) {
+      for (let dy = -1; dy <= 0; dy++) {
+        for (let dx = -1; dx <= 0; dx++) {
+          const x = cx + dx, y = cy + dy, z = cz + dz;
+          const solid = this.occ.has(cellKey(x, y, z)) || this.isUnminedGround(x, y, z);
+          if (solid) { blocked++; continue; } // 막힌 칸은 안 보이므로 밝기 평균에서도 뺀다
+          sum += this.lightAt(x, y, z); n++;
+        }
+      }
+    }
+    out[0] = n === 0 ? BrickWorld.SKY_MIN : sum / n;
+    out[1] = aoFromOver(blocked - FLAT_BLOCKED_WORLD);
+  }
+
+  cornerLight(b: Brick, outSky: Float32Array, outAO: Float32Array): void {
     const e = extentOf(PARTS[b.part], b.rot);
     const x0 = b.x, y0 = b.y, z0 = b.z;
     const x1 = x0 + e.ex - 1, y1 = y0 + e.ey - 1, z1 = z0 + e.ez - 1;
@@ -676,8 +713,13 @@ export class BrickWorld {
             if (this.occ.has(cellKey(cx, cy, cz))) continue; // 가려진 쪽은 안 보인다
             sum += this.lightAt(cx, cy, cz); n++;
           }
-          const sky = n === 0 ? BrickWorld.SKY_MIN : sum / n;
-          out[i + 2 * j + 4 * k] = sky * cornerAO(blocked);
+          // ★★ **하늘빛과 그늘을 따로 낸다 — 합치면 안 된다.**
+          //   합쳐서 넘겼더니 셰이더의 접촉-그늘 곡선이 **하늘빛까지 밝혀서**,
+          //   나무 밑·실내가 계산상 0.87인데 화면엔 0.99로 나왔다(= 그늘이 사라진다).
+          //   둘은 성질이 다르다: 하늘빛은 **그대로 쓰는 밝기**, 그늘은 **접촉면에 몰아붙일 값**이다.
+          const idx = i + 2 * j + 4 * k;
+          outSky[idx] = n === 0 ? BrickWorld.SKY_MIN : sum / n;
+          outAO[idx] = cornerAO(blocked);
         }
       }
     }

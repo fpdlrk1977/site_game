@@ -324,9 +324,13 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   color: BRICK_COLORS[0],
   recentColors: [], // ★ 초기값은 반드시 빈 배열 — 초기화에서 localStorage를 읽으면 SSR과 어긋난다(hydrateRecentColors 참고)
   mat: 'opaque',
-  // 기본값 = 라인. 제품의 얼굴은 기본값이 정한다 — 스크린샷·템플릿·대부분의 사용자 콘텐츠가
-  // 이 모양으로 나온다(BRICK_SYSTEM.md §8.5). 원형 등 나머지는 선택지로 남겨 둔다.
-  studStyle: 'line',
+  // 기본값 = **모따기**(사용자 지정, 2026-08-04). 제품의 얼굴은 기본값이 정한다 —
+  // 스크린샷·템플릿·대부분의 사용자 콘텐츠가 이 모양으로 나온다(BRICK_SYSTEM.md §8.5).
+  //
+  // ⚠️ **삼각형이 브릭당 12 → 108로 9배다.** 모따기는 돌기가 없어서 **가려져도 줄어들 데가 없다**
+  //   (돌기형은 위가 덮이면 12로 떨어진다). 밀집 구조에서 폴리곤이 가장 많이 나오는 선택이다.
+  //   성능이 아니라 **룩** 때문에 고른 것이고, 무거워지면 '라인'으로 되돌리면 된다.
+  studStyle: 'none',
 
   setStudStyle: (s) => {
     set({ studStyle: s });

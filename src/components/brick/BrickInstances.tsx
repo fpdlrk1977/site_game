@@ -24,8 +24,10 @@ import { brickGeometry, triCount, type StudStyle } from '@/lib/brick/brickGeomet
 import { faceSlots, getBrickAtlas, TEX_COLS, TEX_ROWS } from '@/lib/brick/textures';
 import { anchorCenterWorld } from '@/lib/brick/placement';
 import { PARTS, type MatClass, type PartId } from '@/lib/brick/parts';
-import { cornerMap, ROT_COUNT, rotMatrixVisual } from '@/lib/brick/rotation';
+import { ROT_COUNT, rotMatrixVisual } from '@/lib/brick/rotation';
 import { AO_WALL_RELIEF, SHADE_CURVE } from '@/lib/brick/shading';
+import { RegionLightVolume, VOL_X, VOL_Y, VOL_Z } from '@/lib/brick/lightVolume';
+import { CELL_X, CELL_Y, CELL_Z, REGION_X, REGION_Y, REGION_Z, Y_MIN, regionCoordOf } from '@/lib/brick/grid';
 import type { BrickWorld } from '@/lib/brick/world';
 
 export interface BrickHit { brickId: number; point: THREE.Vector3 }
@@ -54,6 +56,65 @@ interface Group {
 // 리전마다 새로 만들지 않고 공유한다(재질은 리전과 무관).
 
 const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+
+// ── 칸 단위 조명 볼륨 (BRICK_PLAN.md §18) ─────────────────────────────────
+//
+// ★★ 밝기를 **칸 모서리마다** 구워 3D 텍스처로 올리고, 프래그먼트가 월드 좌표로 찾아 쓴다.
+//   예전엔 브릭의 꼭짓점 여덟 개를 인스턴스 속성으로 넘겨 정점 사이를 보간했는데,
+//   그러면 조명 해상도가 **브릭 단위**라 `2×4` 브릭 면이 2m짜리 그라데이션이 됐다(D-9).
+//
+// ★ 리전마다 하나씩 둔다 — 이미 "바뀐 리전만 다시 그린다"는 구조가 있어서 그대로 얹힌다.
+
+interface RegionLight {
+  vol: RegionLightVolume;
+  tex: THREE.Data3DTexture;
+  /** 셰이더가 쓰는 볼륨 원점(셀 좌표) */
+  origin: THREE.Vector3;
+  rev: number;
+}
+
+const regionLights = new Map<number, RegionLight>();
+
+/** 이 리전의 빛 볼륨을 최신 상태로 만들어 돌려준다. `rev`가 그대로면 다시 굽지 않는다 */
+function lightFor(world: BrickWorld, regionKey: number, rev: number): RegionLight | null {
+  const ids = world.regionBrickIds(regionKey);
+  if (!ids || ids.size === 0) return null;
+
+  let entry = regionLights.get(regionKey);
+  if (!entry) {
+    // 리전 원점은 그 안의 아무 브릭으로 역산한다(리전 키만으로는 좌표를 못 되돌린다)
+    const first = world.bricks.get(ids.values().next().value as number);
+    if (!first) return null;
+    const rc = regionCoordOf(first.x, first.y, first.z);
+    const ox = rc.rx * REGION_X, oy = rc.ry * REGION_Y + Y_MIN, oz = rc.rz * REGION_Z;
+    const vol = new RegionLightVolume(ox, oy, oz);
+    const tex = new THREE.Data3DTexture(vol.data, VOL_X, VOL_Y, VOL_Z);
+    tex.format = THREE.RGFormat;
+    tex.type = THREE.UnsignedByteType;
+    tex.minFilter = tex.magFilter = THREE.LinearFilter;
+    tex.wrapS = tex.wrapT = tex.wrapR = THREE.ClampToEdgeWrapping;
+    // ⚠️ 폭이 2의 배수가 아니라 기본 정렬(4)로는 **줄이 밀린다.** 반드시 1.
+    tex.unpackAlignment = 1;
+    entry = { vol, tex, origin: new THREE.Vector3(ox, oy, oz), rev: -1 };
+    regionLights.set(regionKey, entry);
+  }
+
+  if (entry.rev !== rev) {
+    entry.vol.bake(world, ids);
+    entry.tex.needsUpdate = true;
+    entry.rev = rev;
+  }
+  return entry;
+}
+
+/** 사라진 리전의 볼륨을 버린다 — 안 버리면 걸어 다닌 만큼 메모리가 는다(B-0b와 같은 계열) */
+function dropUnusedLights(live: Set<number>): void {
+  for (const [key, e] of regionLights) {
+    if (live.has(key)) continue;
+    e.tex.dispose();
+    regionLights.delete(key);
+  }
+}
 
 /**
  * 면 경계선 셰이더 — 돌기를 없앴을 때 브릭이 서로 구분되게 한다.
@@ -232,17 +293,27 @@ function injectBakedLight(shader: {
   vertexShader: string; fragmentShader: string;
 }): void {
   shader.vertexShader = `
-    attribute vec4 aCornerA;  // 인스턴스: 꼭짓점 0~3 밝기 (로컬 슬롯)
-    attribute vec4 aCornerB;  // 인스턴스: 꼭짓점 4~7
-    attribute vec4 aSelA;     // 지오메트리: 이 정점의 꼭짓점 가중치 0~3
-    attribute vec4 aSelB;     // 지오메트리: 4~7
-    varying vec2 vBaked;      // x = 하늘빛×AO(보간됨) · y = 면 배율(면마다 상수)
+    uniform vec3 uVolOrigin;  // 이 리전 볼륨의 원점(셀 좌표)
+    varying vec3 vLightUVW;   // 빛 볼륨 조회 좌표 — 월드 위치의 **선형** 함수라 보간해도 정확하다
+    varying vec2 vFace;       // x = 면 배율 · y = 세로면 정도 (둘 다 면마다 상수)
   ` + shader.vertexShader.replace(
     '#include <begin_vertex>',
     `#include <begin_vertex>
     {
-      // 하늘빛 — 꼭짓점 여덟 값을 정점 위치로 섞는다. 래스터라이저가 면 안을 보간해 부드러워진다.
-      float sky = dot(aCornerA, aSelA) + dot(aCornerB, aSelB);
+      // ★★★ **칸 단위 조명** — 밝기를 브릭 꼭짓점이 아니라 **월드 좌표**로 찾는다.
+      //   예전엔 브릭의 여덟 꼭짓점을 정점 가중치로 섞었는데, 그러면 조명 해상도가 브릭 단위라
+      //   2x4 브릭 면이 2m짜리 그라데이션 한 장이 됐다. 이제 항상 한 칸(0.5m) 안에서 변한다.
+      //   ⚠️ 이 블록은 템플릿 문자열 안이다. 주석에 백틱을 쓰면 문자열이 끊긴다(오늘 두 번 밟았다).
+      #ifdef USE_INSTANCING
+        vec4 wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+      #else
+        vec4 wp = modelMatrix * vec4(transformed, 1.0);
+      #endif
+      // 월드(m) → 셀 → 볼륨 격자 → 텍스처 좌표.
+      // ⚠️ **반 텍셀**을 더해 텍셀 중심을 겨눈다 — 빼먹으면 그늘이 통째로 반 칸 밀린다.
+      //   lightVolume.ts의 volCoord/volUVW와 **같은 식**이어야 한다(테스트가 그쪽을 잠근다).
+      vec3 g = vec3(wp.x / ${CELL_X}, wp.y / ${CELL_Y}, wp.z / ${CELL_Z}) - uVolOrigin;
+      vLightUVW = (g + 0.5) / vec3(${VOL_X}.0, ${VOL_Y}.0, ${VOL_Z}.0);
 
       // 면 방향 배율 — **월드 법선**으로 판정해야 한다.
       //   브릭은 Y축으로 90°씩 도는데 x면(0.6)과 z면(0.8)의 배율이 달라서,
@@ -261,27 +332,35 @@ function injectBakedLight(shader: {
         : abs(wn.x) > abs(wn.z) ? 0.5
         : 0.72;
 
-      // ★ **세로면에서는 그늘을 덜어낸다** — 위 AO_WALL_RELIEF 주석 참고.
-      //   ⚠️ 이 안은 템플릿 문자열이다 — 주석에도 백틱을 쓰면 문자열이 거기서 끊긴다(실제로 그랬다).
-      //   wn.y가 0에 가까울수록(=세운 면) 그늘을 1.0 쪽으로 당긴다. 윗면·밑면은 그대로.
-      float wall = 1.0 - abs(wn.y);
-      sky = mix(sky, 1.0, wall * ${AO_WALL_RELIEF.toFixed(2)});
-
-      // 배율은 **면마다 상수**라 보간하면 안 되고, 하늘빛·AO만 정점 사이에서 섞여야 한다.
-      // → 둘을 따로 넘겨서 프래그먼트가 **하늘빛에만** 곡선을 씌운다(아래 SHADE_CURVE).
-      vBaked = vec2(sky, tone);
+      // 배율·세로면 정도는 **면마다 상수**라 정점에서 구해 넘긴다.
+      // 밝기 자체는 프래그먼트가 볼륨에서 직접 읽는다(그래야 해상도가 칸 단위가 된다).
+      vFace = vec2(tone, 1.0 - abs(wn.y));
     }`,
   );
 
-  shader.fragmentShader = `varying vec2 vBaked;
+  shader.fragmentShader = `
+    uniform highp sampler3D uLightVol;
+    varying vec3 vLightUVW;
+    varying vec2 vFace;
     float bakedLight() {
-      // ★ **접촉부에 바짝 붙은 진한 띠**를 만드는 곳.
-      //   정점 사이는 래스터라이저가 **직선**으로 섞는다 → 그대로 쓰면 어두운 꼭짓점에서 밝은 꼭짓점까지
-      //   면 전체에 걸쳐 완만하게 밝아져서 **"blur를 먹인 것처럼"** 보인다(사용자 피드백, 두 번).
-      //   부족분(1-빛)에 지수를 씌우면 **어두운 자리는 그대로 어둡고 조금만 떨어져도 빠르게 회복**한다.
-      //     예) 접촉 0.40 → 0.56 · 반 칸 밖 0.70 → 0.85 · 한 칸 밖 1.0 → 1.0
-      float sky = clamp(vBaked.x, 0.0, 1.0);
-      return (1.0 - pow(1.0 - sky, ${SHADE_CURVE.toFixed(2)})) * vBaked.y;
+      // ★★ **곡선은 그늘에만 씌운다.**
+      //   정점 사이는 래스터라이저가 **직선**으로 섞으므로, 그대로 두면 접촉 그늘이 면 전체에
+      //   완만히 퍼져 "blur를 먹인 것처럼" 보인다(사용자 피드백). 부족분에 지수를 씌우면
+      //   어두운 자리는 그대로 어둡고 조금만 떨어져도 빠르게 회복한다.
+      //
+      // 🔴 한때 이 곡선을 **하늘빛까지** 먹였다. 그러면 나무 밑·실내가 계산상 0.87인데
+      //    화면엔 0.99로 나와 **그늘이 통째로 사라진다**(실측). 하늘빛은 **그대로 쓰는 밝기**다.
+      // ★★★ 밝기를 **볼륨에서 직접** 읽는다 — R=하늘빛, G=그늘. 조회 한 번에
+      //   하드웨어가 이웃 칸끼리 선형 보간해 주므로 그라데이션이 **항상 한 칸(0.5m)** 안에서 끝난다.
+      vec2 lv = texture(uLightVol, vLightUVW).rg;
+      float sky = clamp(lv.r, 0.0, 1.0);
+      float ao  = clamp(lv.g, 0.0, 1.0);
+
+      // ★ **세로면에서는 그늘을 덜어낸다** — 꼭짓점 계산이 같은 평면의 이웃까지 가림막으로 세어
+      //   평평한 벽 밑동을 한 단계 더 어둡게 만드는 것을 상쇄한다. **하늘빛이 아니라 그늘에만.**
+      ao = mix(ao, 1.0, vFace.y * ${AO_WALL_RELIEF.toFixed(2)});
+
+      return sky * (1.0 - pow(1.0 - ao, ${SHADE_CURVE.toFixed(2)})) * vFace.x;
     }
 ` + shader.fragmentShader.replace(
     '#include <color_fragment>',
@@ -299,8 +378,17 @@ function injectBakedLight(shader: {
  *   "빛이 한쪽만 직사광선처럼 쬔다"는 느낌이 된다(사용자 피드백).
  *   → 브릭은 플라스틱다운 옅은 광택만, **흙·돌은 완전 무광**.
  */
-function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshStandardMaterial {
-  const key = `${mat}|${edges ? 'e' : '-'}|${matte ? 'm' : '-'}`;
+/**
+ * ⚠️ **재질을 리전마다 따로 만든다** — 빛 볼륨이 리전마다 다르기 때문이다.
+ *
+ * 공유 재질 하나에 메시별로 uniform을 갈아 끼우는 방법도 있지만, three는 **재질이 그대로면
+ * uniform 업로드를 건너뛰므로** 앞 리전의 빛이 그대로 남는다(에러 없이 명암만 틀린다).
+ * 복제해도 `onBeforeCompile`이 **같은 함수 참조**라 셰이더 프로그램은 재사용된다 — 컴파일은 한 번뿐.
+ */
+function materialFor(
+  mat: MatClass, edges: boolean, matte: boolean, light: RegionLight | null,
+): THREE.MeshStandardMaterial {
+  const key = `${mat}|${edges ? 'e' : '-'}|${matte ? 'm' : '-'}|${light ? light.origin.toArray().join(',') : 'x'}`;
   const hit = materialCache.get(key);
   if (hit) return hit;
 
@@ -335,6 +423,9 @@ function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshS
   }
   if (mat !== 'emissive') {
     m.onBeforeCompile = (shader) => {
+      // 빛 볼륨 — 이 재질이 맡은 리전의 것. 값 객체를 그대로 물려 두면 나중에 다시 구워도 따라온다
+      shader.uniforms.uLightVol = { value: light ? light.tex : null };
+      shader.uniforms.uVolOrigin = { value: light ? light.origin : new THREE.Vector3() };
       injectTexture(shader);
       injectBakedLight(shader);
       // 이음매 지우기는 **반투명에만** — 불투명에 걸면 유리 뒤가 뚫리고 early-Z도 무뎌진다
@@ -346,15 +437,10 @@ function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshS
   return m;
 }
 
-/**
- * 오브젝트 로컬 꼭짓점 → 월드 꼭짓점 인덱스 (`i + 2j + 4k`, i=+x·j=+y·k=+z).
- *
- * ★ **24방향 전부** — `rotation.ts`의 **화면 기준**(`rotMatrixVisual`)에서 나온다.
- *   ⚠️ **배치 기준(`rotMatrixPlace`)을 물리면 안 된다.** 둘은 rot 1·3에서 서로 반대라
- *   에러 없이 **명암만 조용히 뒤집힌다**(`BRICK_PITFALLS.md` D-6). 손으로 적지도 말 것.
- *   `rotation.test.ts`가 rot 0~3에서 예전 표와 한 글자도 다르지 않은지 대조한다.
- */
-const CORNER_MAP: number[][] = Array.from({ length: ROT_COUNT }, (_, rot) => cornerMap(rot));
+// ★ 예전엔 여기 `CORNER_MAP`(로컬↔월드 꼭짓점 대응표)이 있었다. 브릭 꼭짓점 밝기를
+//   인스턴스로 넘기던 시절, **회전한 브릭의 슬롯을 맞추려고** 필요했던 표다.
+//   이제 셰이더가 **월드 좌표로** 빛 볼륨을 읽으므로 대응시킬 것이 없다 — 표째로 사라졌다.
+//   (표 자체는 `rotation.cornerMap`에 남아 있고 테스트가 계속 지킨다)
 
 /**
  * 회전 24가지를 three 행렬로 미리 만들어 둔다.
@@ -408,8 +494,8 @@ function groupsOf(world: BrickWorld, regionKey: number, studStyle: StudStyle): G
   return [...map.values()].sort((a, b) => Number(a.mat === 'transparent') - Number(b.mat === 'transparent'));
 }
 
-function BrickGroup({ group, world, studStyle, onHover }: {
-  group: Group; world: BrickWorld; studStyle: StudStyle;
+function BrickGroup({ group, world, studStyle, light, onHover }: {
+  group: Group; world: BrickWorld; studStyle: StudStyle; light: RegionLight | null;
   onHover?: Props['onHover'];
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
@@ -427,17 +513,14 @@ function BrickGroup({ group, world, studStyle, onHover }: {
   }, [group.part, group.studs, studStyle]);
 
   // 그룹 키가 이미 part별이라 지형 전용 재질을 써도 드로우콜이 늘지 않는다
-  const material = materialFor(group.mat, studStyle === 'line', group.part === 'terrain');
+  const material = materialFor(group.mat, studStyle === 'line', group.part === 'terrain', light);
 
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
     const n = group.ids.length;
-    const cornerA = new Float32Array(n * 4);
-    const cornerB = new Float32Array(n * 4);
     const tiles = new Float32Array(n * 3); // 무늬 칸 (윗면, 옆면, 밑면) — 0 = 민짜
     const hide = new Float32Array(n);      // 가려진 면 6비트 — 반투명 이음매를 지운다
-    const corner = new Float32Array(8);
 
     group.ids.forEach((brickId, i) => {
       const b = world.bricks.get(brickId);
@@ -451,16 +534,10 @@ function BrickGroup({ group, world, studStyle, onHover }: {
       const [tTop, tSide, tBottom] = faceSlots(b.tex ?? 0);
       tiles[i * 3] = tTop; tiles[i * 3 + 1] = tSide; tiles[i * 3 + 2] = tBottom;
       hide[i] = world.faceHidden.get(brickId) ?? 0;
-
-      // 꼭짓점 밝기 — 월드 기준으로 구한 뒤 회전에 맞춰 로컬 슬롯에 담는다
-      world.cornerLight(b, corner);
-      const map = CORNER_MAP[b.rot];
-      for (let c = 0; c < 4; c++) cornerA[i * 4 + c] = corner[map[c]];
-      for (let c = 0; c < 4; c++) cornerB[i * 4 + c] = corner[map[c + 4]];
+      // ★ 꼭짓점 밝기를 인스턴스로 넘기던 것은 없앴다 — 이제 셰이더가 **빛 볼륨**에서 직접 읽는다.
+      //   그래야 조명 해상도가 브릭이 아니라 **칸**이 된다(BRICK_PLAN.md §18).
     });
 
-    geo.setAttribute('aCornerA', new THREE.InstancedBufferAttribute(cornerA, 4));
-    geo.setAttribute('aCornerB', new THREE.InstancedBufferAttribute(cornerB, 4));
     geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tiles, 3));
     geo.setAttribute('aHide', new THREE.InstancedBufferAttribute(hide, 1));
 
@@ -501,12 +578,14 @@ function Region({ world, regionKey, rev, studStyle, onHover, onGroups }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [world, regionKey, rev, studStyle],
   );
+  // ★ 빛 볼륨도 리전 리비전에 맞춰 다시 굽는다 — 그룹을 다시 만드는 그 시점이다
+  const light = useMemo(() => lightFor(world, regionKey, rev), [world, regionKey, rev]);
   useLayoutEffect(() => { onGroups(regionKey, groups); }, [regionKey, groups, onGroups]);
 
   return (
     <>
       {groups.map((g) => (
-        <BrickGroup key={g.key} group={g} world={world} studStyle={studStyle} onHover={onHover} />
+        <BrickGroup key={g.key} group={g} world={world} studStyle={studStyle} light={light} onHover={onHover} />
       ))}
     </>
   );
@@ -524,6 +603,9 @@ export function BrickInstances({ world, version, onHover, onStats, studStyle = '
   const onGroups = useMemo(() => (key: number, groups: Group[]) => {
     perRegion.current.set(key, groups);
   }, []);
+
+  // 사라진 리전의 빛 볼륨을 버린다 — 안 버리면 걸어 다닌 만큼 메모리가 는다(B-0b)
+  useLayoutEffect(() => { dropUnusedLights(new Set(regions.map((r) => r.key))); }, [regions]);
 
   useLayoutEffect(() => {
     if (!onStats) return;

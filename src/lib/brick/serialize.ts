@@ -44,6 +44,8 @@ const PART_ORDER: PartId[] = [
   'b1x3', 'b1x4', 'b1x6', 'b1x8', 'b2x3', 'b2x6', 'b2x8',
   'p1x1', 'p1x2', 'p2x2', 'p2x4', 'p2x6',
   's1x2', 's2x2', 'si1x2',
+  // 가는 파츠 (2026-08-04) — **뒤에만** 붙인다. 앞에 끼우면 저장된 브릭이 다른 파츠로 읽힌다
+  'c1x1', 'r1x2', 'r1x4', 'w1x1', 'w1x2', 'w1x4',
 ];
 const PART_INDEX = new Map<PartId, number>(PART_ORDER.map((p, i) => [p, i]));
 

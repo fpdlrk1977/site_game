@@ -260,6 +260,22 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
     return g;
   }
 
+  // 가는 파츠(기둥·봉·패널) — **칸은 그대로 차지하고 그리는 크기만 얇다.**
+  //
+  // ★★ 조명·무늬는 **칸 크기(w,h,d)** 로 계산한다 — 그리는 크기로 넣으면 안 된다.
+  //   ① 무늬: `aTexUV`는 "0.5m마다 한 장"이 규약이라, 얇은 크기로 나누면 그 파츠만 무늬가 확대된다
+  //   ② 조명: 꼭짓점 가중치가 **칸의 여덟 모서리** 기준이라야 이웃 브릭과 밝기가 이어진다.
+  //      얇은 크기로 정규화하면 봉 하나가 제 혼자 밝기 범위를 다 쓴다.
+  if (part.shape === 'thin') {
+    const t = part.thin ?? {};
+    const g = new THREE.BoxGeometry(t.x ?? w, t.y ?? h, t.z ?? d);
+    g.computeBoundingSphere();
+    addCornerWeights(g, w, h, d); // ← 칸 크기
+    addTexUV(g, w, h, d);         // ← 칸 크기
+    cache.set(key, g);
+    return g;
+  }
+
   // 지형(바닥) 블록은 돌기가 없다 — 브릭이 아니라 파낼 땅이므로 어떤 스타일이든 민짜 상자.
   if (part.id === 'terrain') {
     const g = new THREE.BoxGeometry(w, h, d);
