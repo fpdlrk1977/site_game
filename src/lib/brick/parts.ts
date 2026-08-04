@@ -4,6 +4,7 @@
 // 카탈로그(돌블록/돌계단/돌반블록…)라 종류가 수백인데, 여기선 N+M 정의로 N×M 조합이 나온다.
 
 import { BRICK_CELLS_Y, type Rot } from './grid';
+import { ROT_COUNT, rotateExtent, rotatePivot } from './rotation';
 
 export type BrickPartId =
   | 'b1x1' | 'b1x2' | 'b1x3' | 'b1x4' | 'b1x6' | 'b1x8'
@@ -106,30 +107,48 @@ export interface Extent { ex: number; ey: number; ez: number }
 
 /**
  * 회전을 반영한 점유 범위(셀 단위).
- * 앵커는 항상 회전 후 AABB의 **최소 모서리**라, 90/270도면 X/Z 범위만 뒤바뀐다.
+ * 앵커는 항상 회전 후 AABB의 **최소 모서리**라, 크기만 축을 바꿔 옮기면 된다.
  * → 점유 검사가 회전과 무관하게 단순해진다.
+ *
+ * ★ **세우면 높이가 바뀐다** — 1×4를 세우면 `ey`가 3이 아니라 4가 된다.
+ *   예전엔 `ey`가 늘 `part.h`였다(Y축 회전뿐이라 세로가 안 변했다).
+ *   높이를 `part.h`로 직접 읽는 코드를 새로 만들지 말 것 — 반드시 여기를 거친다.
+ *
+ * ⚠️ **돌려주는 객체는 캐시된 것이라 공유된다**(호출 지점이 많아 매번 새로 만들면 그게 다 쓰레기가 된다).
+ *   그래서 얼려 두었다 — 값을 고쳐 쓰지 말고 필요하면 복사할 것.
  */
+const EXTENT_CACHE = new Map<BrickPart, Extent[]>();
+
 export function extentOf(part: BrickPart, rot: Rot): Extent {
-  const swap = rot === 1 || rot === 3;
-  return { ex: swap ? part.sz : part.sx, ey: part.h, ez: swap ? part.sx : part.sz };
+  let byRot = EXTENT_CACHE.get(part);
+  if (!byRot) { byRot = new Array<Extent>(ROT_COUNT); EXTENT_CACHE.set(part, byRot); }
+  let e = byRot[rot];
+  if (e === undefined) {
+    const [ex, ey, ez] = rotateExtent([part.sx, part.h, part.sz], rot);
+    e = Object.freeze({ ex, ey, ez });
+    byRot[rot] = e;
+  }
+  return e;
 }
 
 /**
- * **기준 칸(꼭지점)** 이 회전 후 AABB 안 어디에 오는가 — 셀 단위 오프셋 `[dx, dz]`.
+ * **기준 칸(꼭지점)** 이 회전 후 AABB 안 어디에 오는가 — 셀 단위 오프셋 `[dx, dy, dz]`.
  *
  * ★ 이게 없으면 긴 브릭이 **항상 +X/+Z 쪽으로만 자란다.** 앵커가 늘 최소 모서리라서다.
- *   게다가 `extentOf`는 회전 0·2가 같은 값이라, 1×3 브릭은 R을 눌러도 **두 방향밖에 안 나온다.**
- *   기준 칸을 회전과 함께 돌리면 겨눈 칸이 제자리에 붙어 있고 나머지가 **위→오른쪽→아래→왼쪽**으로 돈다.
+ *   기준 칸을 회전과 함께 돌리면 겨눈 칸이 제자리에 붙어 있고 브릭이 그 둘레로 돈다.
  *
- * 로컬 칸 (0,0)이 회전 후 가는 모서리:
- *   rot 0 → 최소(0,0) · rot 1 → (ex−1, 0) · rot 2 → (ex−1, ez−1) · rot 3 → (0, ez−1)
+ * ★ **세로(`dy`)가 생긴 이유**: 눕히면 기준 칸이 위아래로도 밀린다.
+ *   눕히기 0(=rot 0~3)에서는 항상 0이라 **기존 동작은 그대로**다.
  */
-export function pivotOffset(part: BrickPart, rot: Rot): [number, number] {
-  const e = extentOf(part, rot);
-  switch (rot) {
-    case 1: return [e.ex - 1, 0];
-    case 2: return [e.ex - 1, e.ez - 1];
-    case 3: return [0, e.ez - 1];
-    default: return [0, 0];
+const PIVOT_CACHE = new Map<BrickPart, (readonly [number, number, number])[]>();
+
+export function pivotOffset(part: BrickPart, rot: Rot): readonly [number, number, number] {
+  let byRot = PIVOT_CACHE.get(part);
+  if (!byRot) { byRot = new Array<readonly [number, number, number]>(ROT_COUNT); PIVOT_CACHE.set(part, byRot); }
+  let p = byRot[rot];
+  if (p === undefined) {
+    p = Object.freeze(rotatePivot([part.sx, part.h, part.sz], rot)) as readonly [number, number, number];
+    byRot[rot] = p;
   }
+  return p;
 }

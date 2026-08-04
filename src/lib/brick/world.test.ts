@@ -8,6 +8,8 @@
 
 import { BRICK_CELLS_Y, chunkCoordOf, chunkKey, regionKeyOf, type Rot } from './grid';
 import { PART_LIST, PARTS, PLATE_CELLS_Y, TERRAIN_STEP, type MatClass, type PartId } from './parts';
+import { ROT_COUNT } from './rotation';
+import { screenShade } from './shading';
 import { deepenAround, SURFACE_Y } from './terrain';
 import { BrickWorld } from './world';
 
@@ -16,7 +18,8 @@ const fails: string[] = [];
 const ok = (cond: boolean, label: string) => { if (cond) pass++; else fails.push(label); };
 
 const PART_IDS: PartId[] = PART_LIST.map((p) => p.id);
-const ROTS: Rot[] = [0, 1, 2, 3];
+/** ★ 24방향 전부 — 세우면 **높이도 바뀌므로**(1×4를 세우면 4칸) 파생 인덱스가 여기서 갈린다 */
+const ROTS: Rot[] = Array.from({ length: ROT_COUNT }, (_, i) => i as Rot);
 const MATS: MatClass[] = ['opaque', 'transparent', 'emissive'];
 
 function rng(seed: number) {
@@ -327,6 +330,104 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
   ok(regionFingerprint(w) === reg2, '한 개 추가 후 리전 멤버십 일치');
 }
 
+// ── ★ 반투명 이음매 — 가려진 면 마스크 (BRICK_PLAN §17) ──────────────────
+//
+// 유리를 붙여 놓으면 맞닿은 자리에 면이 두 겹 남아 **띠**로 보인다. 그 면을 셰이더가 지우도록
+// 월드가 비트마스크를 넘긴다. **틀려도 에러가 안 나고 화면만 이상해진다** —
+// 너무 많이 지우면 구멍, 덜 지우면 그대로 띠. 그래서 여기서 수치로 못 박는다.
+{
+  const FX = 0, FNX = 1, FY = 2, FZ = 4; // DIRS 순서: +x −x +y −y +z −z
+  const bit = (d: number) => 1 << d;
+
+  // ① 반투명 둘을 X로 붙이면 **맞닿은 두 면이 서로** 가려진다
+  {
+    const w = new BrickWorld();
+    const a = w.place('b2x2', 0, 30, 0, 0, '#fff', 'transparent')!;
+    const b = w.place('b2x2', 2, 30, 0, 0, '#fff', 'transparent')!;
+    const ma = w.faceHidden.get(a) ?? 0, mb = w.faceHidden.get(b) ?? 0;
+    ok((ma & bit(FX)) !== 0, `★ 왼쪽 유리의 +x 면이 가려진다 — 마스크 ${ma}`);
+    ok((mb & bit(FNX)) !== 0, `★ 오른쪽 유리의 −x 면이 가려진다 — 마스크 ${mb}`);
+    // 바깥쪽 면은 살아 있어야 한다(다 지우면 유리가 통째로 사라진다)
+    ok((ma & bit(FNX)) === 0 && (mb & bit(FX)) === 0, '바깥으로 향한 면은 안 지운다');
+    ok((ma & bit(FY)) === 0 && (ma & bit(FZ)) === 0, '트인 옆·윗면은 안 지운다');
+  }
+
+  // ② ★★ 불투명은 **언제나 0** — 이게 무너지면 유리 뒤 브릭에 구멍이 뚫린다
+  {
+    const w = new BrickWorld();
+    const solid = w.place('b2x2', 0, 30, 0, 0, '#fff', 'opaque')!;
+    w.place('b2x2', 2, 30, 0, 0, '#fff', 'transparent');       // 유리를 옆에 붙여도
+    w.place('b2x2', 0, 30 + BRICK_CELLS_Y, 0, 0, '#fff', 'opaque'); // 불투명이 위를 덮어도
+    ok((w.faceHidden.get(solid) ?? 0) === 0,
+      `★★ 불투명 브릭의 마스크는 항상 0 — 지금 ${w.faceHidden.get(solid) ?? 0}`);
+
+    // 반대로 유리 쪽은 불투명 이웃에 가려진 면을 지운다(그 면은 어차피 안 보인다)
+    const glass = w.place('b2x2', -2, 30, 0, 0, '#fff', 'transparent')!;
+    ok(((w.faceHidden.get(glass) ?? 0) & bit(FX)) !== 0, '유리는 불투명 이웃 쪽 면을 지운다');
+  }
+
+  // ③ 혼자 있는 유리는 아무 면도 안 지운다
+  {
+    const w = new BrickWorld();
+    const lone = w.place('b1x1', 0, 30, 0, 0, '#fff', 'transparent')!;
+    ok((w.faceHidden.get(lone) ?? 0) === 0, '이웃 없는 유리는 마스크 0');
+  }
+
+  // ④ **부분만 가려지면 안 지운다** — 한 칸이라도 트이면 그 면은 보인다
+  {
+    const w = new BrickWorld();
+    const wide = w.place('b2x4', 0, 30, 0, 0, '#fff', 'transparent')!; // +z 면이 2칸 폭
+    w.place('b1x1', 0, 30, 4, 0, '#fff', 'transparent');               // 그중 한 칸만 막는다
+    ok(((w.faceHidden.get(wide) ?? 0) & bit(FZ)) === 0,
+      '★ 면이 일부만 가려지면 안 지운다 (부분만 지우면 브릭이 뜯겨 보인다)');
+  }
+
+  // ⑤ ★ 증분 == 전량 (C-2) · 이웃을 지우면 마스크가 되돌아온다
+  {
+    const w = new BrickWorld();
+    const a = w.place('b2x2', 0, 30, 0, 0, '#fff', 'transparent')!;
+    const b = w.place('b2x2', 2, 30, 0, 0, '#fff', 'transparent')!;
+    const fp = (ww: BrickWorld) => [...ww.faceHidden.entries()].sort((p, q) => p[0] - q[0]).join('|');
+    const before = fp(w);
+    w.recomputeAll();
+    ok(fp(w) === before, '★ 마스크: 증분 갱신 == 전량 재계산');
+
+    w.remove(b);
+    ok((w.faceHidden.get(a) ?? 0) === 0, '★ 이웃을 지우면 가렸던 면이 되돌아온다');
+    const after = fp(w);
+    w.recomputeAll();
+    ok(fp(w) === after, '지운 뒤에도 증분 == 전량');
+  }
+
+  // ⑥ ★★ 마스크가 바뀌면 **리전 리비전이 올라야** 한다 (G-6)
+  //    안 올리면 값은 맞는데 화면은 옛 이음매 그대로다 — 데이터가 틀렸다고 착각하기 딱 좋다.
+  //
+  // ⚠️ **같은 리전에 브릭을 하나 더 놓는 방식으로는 못 잡는다** — 새 브릭이 리전에 들어오면서
+  //    어차피 리비전이 오르기 때문이다(처음에 그렇게 썼다가 사보타주를 통과시켰다, F-6).
+  //    → 이웃을 **다른 리전**에 놓아서, 이쪽 리전은 **마스크 변화로만** 오르게 만든다.
+  {
+    const w = new BrickWorld();
+    const RB = 64; // 리전 경계(셀) — REGION_X = CHUNK_X × REGION_CHUNKS
+    const a = w.place('b2x2', RB - 2, 30, 0, 0, '#fff', 'transparent')!;
+    const keyA = regionKeyOf(RB - 2, 30, 0);
+    const revOf = (k: number) => w.regionSnapshot().find((r) => r.key === k)?.rev ?? -1;
+    const before = revOf(keyA);
+
+    w.place('b2x2', RB, 30, 0, 0, '#fff', 'transparent'); // 경계 너머 = 다른 리전
+    ok(regionKeyOf(RB, 30, 0) !== keyA, '전제: 두 브릭이 서로 다른 리전에 있다');
+    ok((w.faceHidden.get(a) ?? 0) !== 0, '전제: 이웃이 생겨 A의 면이 가려졌다');
+    ok(revOf(keyA) > before, `★★ 이음매가 바뀌면 그 리전의 리비전이 오른다 — ${before} → ${revOf(keyA)}`);
+  }
+
+  // ⑦ 경사는 대상이 아니다 — 면이 대각선이라 축에 안 떨어지고, 애초에 이웃을 안 가린다
+  {
+    const w = new BrickWorld();
+    const slope = w.place('s1x2', 0, 30, 0, 0, '#fff', 'transparent')!;
+    w.place('b2x2', 1, 30, 0, 0, '#fff', 'transparent');
+    ok((w.faceHidden.get(slope) ?? 0) === 0, '경사는 마스크를 만들지 않는다');
+  }
+}
+
 // 언로드도 **이웃 브릭**의 가시성을 되살려야 한다 (가리던 게 사라졌으니 다시 드러난다)
 // 스트리밍이 바로 이 경우다 — 옆 청크가 내려가면 경계에 있던 브릭의 면이 열린다.
 {
@@ -534,13 +635,27 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
   const three = floorCorner([[2, 0], [0, 2], [2, 2]]); // 대각까지 막힘
 
   ok(flat === 1, `평면은 1.0 — ${flat.toFixed(2)}`);
-  ok(one < flat && two < one && three <= two,
-    `막힐수록 어두워진다(깊은 쪽은 하한에서 포화) — ${flat.toFixed(2)} → ${one.toFixed(2)} → ${two.toFixed(2)} → ${three.toFixed(2)}`);
-  ok((flat - one) > (one - two) && (one - two) >= (two - three),
-    `★ 첫 접촉이 가장 크게 떨어진다(√ 응답) — 낙차 ${(flat - one).toFixed(2)} > ${(one - two).toFixed(2)} ≥ ${(two - three).toFixed(2)}`);
-  // ⚠️ 이 값들은 **셰이더 곡선(SHADE_CURVE)을 먹기 전의 원값**이다 — 화면은 이보다 밝다(0.40 → 0.56).
-  ok(one <= 0.45, `★ 접촉면이 진하다 — 원값 ${one.toFixed(2)}(화면 약 0.56)`);
-  ok(three >= 0.25, `★ 깊은 구석도 하한 아래로는 안 간다 — ${three.toFixed(2)}(화면 약 0.37)`);
+
+  // ★★★ **단계가 살아 있어야 한다 — 여기가 이번 버그의 핵심이다.**
+  //
+  // 🔴 예전 테스트는 `three <= two`를 허용했다("깊은 쪽은 하한에서 포화"). 그래서
+  //    막힌 칸이 2·3·4개인 자리가 **전부 같은 값**이 되는 걸 통과시켰고,
+  //    화면에서는 오목한 자리가 **단계 없는 납작한 얼룩**으로 보였다
+  //    (사용자 신고: "바닥에 브릭을 놓으면 맞닿은 경계에 그림자가 어색하게 생긴다").
+  //    → 이제 **엄격한 부등호**로 잠근다. 포화하면 여기서 걸린다.
+  ok(one < flat, `막히면 어두워진다 — ${flat.toFixed(2)} → ${one.toFixed(2)}`);
+  ok(two < one, `★ 2칸 막힘이 1칸보다 어둡다 — ${one.toFixed(3)} → ${two.toFixed(3)}`);
+  ok(three < two, `★★★ 3칸 막힘이 2칸보다 **더** 어둡다(포화 금지) — ${two.toFixed(3)} → ${three.toFixed(3)}`);
+
+  ok((flat - one) > (one - two),
+    `★ 첫 접촉이 가장 크게 떨어진다 — 낙차 ${(flat - one).toFixed(2)} > ${(one - two).toFixed(3)}`);
+  // ⚠️ 이 값들은 **곡선을 먹기 전의 원값**이다. 숫자를 여기 박아 두면 곡선을 바꿀 때마다 깨지고,
+  //    그때 "테스트가 틀렸나 코드가 틀렸나"를 매번 다시 따져야 한다.
+  //    → **화면에 나오는 값**으로 본다. 세기·곡선·거리별 모양은 `shading.test.ts`가 전담한다.
+  ok(screenShade(one) > 0.52 && screenShade(one) < 0.72,
+    `★ 접촉면의 화면 밝기가 제 범위 — ${screenShade(one).toFixed(3)}`);
+  ok(screenShade(three) < screenShade(two),
+    `깊은 구석이 화면에서도 더 어둡다 — ${screenShade(two).toFixed(3)} → ${screenShade(three).toFixed(3)}`);
 }
 
 console.log(`\n브릭 월드(파생 인덱스 + 빛 + 스트리밍 + 파기) 테스트: ${pass}/${pass + fails.length} 통과`);

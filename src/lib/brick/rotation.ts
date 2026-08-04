@@ -109,24 +109,65 @@ export function cornerMap(rot: number): number[] {
   });
 }
 
+/**
+ * ★★ **이 방향이 격자에 정확히 앉는가.**
+ *
+ * 칸이 정육면체가 아니다 — 가로세로 `CELL_X = CELL_Z = 0.5m`인데 **높이 `CELL_Y = 0.2m`** (2.5 : 1).
+ * 그래서 브릭을 **옆으로 눕히면** 세로였던 길이가 가로 칸에, 가로였던 길이가 세로 칸에 들어가야 하는데
+ * 어느 쪽도 정수로 안 떨어진다:
+ *
+ *   브릭 높이 0.6m → 가로 칸 0.6 / 0.5 = **1.2칸**
+ *   스터드 폭 0.5m → 세로 칸 0.5 / 0.2 = **2.5칸**
+ *
+ * → **점유 칸과 그려지는 크기가 어긋난다**(실측: 1×4를 눕히면 그린 것 0.60×0.50×2.00 vs 점유 1.50×0.20×2.00).
+ *   화면에서는 브릭이 제 상자를 뚫고 나오고, 옆에 붙여도 틈이 뜬다.
+ *
+ * 세로가 세로로 남는 방향(그대로·뒤집기)만 정확하다. 가로끼리(X↔Z)는 칸 크기가 같아 안전하다.
+ * ⚠️ `CELL_X !== CELL_Z`가 되면 이 판정도 같이 고쳐야 한다.
+ *
+ * (실제 레고도 같은 제약을 갖는다 — 브릭 9.6mm 높이 : 8mm 간격이라 옆으로 돌리면 스터드 격자에 안 맞고,
+ *  그래서 전용 브래킷 부품이 따로 있다.)
+ */
+export function isGridExact(rot: number): boolean {
+  return rotMatrixPlace(rot)[4] !== 0; // 월드 Y가 로컬 Y에서 온다 = 세로가 세로로 남는다
+}
+
+/** 격자에 정확히 앉는 눕히기만 — 지금은 `0`(그대로) · `5`(뒤집기) 둘뿐이다 */
+export const EXACT_TIPS: readonly number[] =
+  [0, 1, 2, 3, 4, 5].filter((tip) => isGridExact(tip * 4));
+
 export const tipOf = (rot: number): number => Math.floor((((rot % ROT_COUNT) + ROT_COUNT) % ROT_COUNT) / 4);
 export const spinOf = (rot: number): number => (((rot % ROT_COUNT) + ROT_COUNT) % ROT_COUNT) % 4;
 export const makeRot = (tip: number, spin: number): number => (tip % 6) * 4 + (spin % 4);
 
 /** 제자리로 한 번 더 돌린다(tip 유지) */
 export const nextSpin = (rot: number): number => makeRot(tipOf(rot), spinOf(rot) + 1);
-/** 눕히는 방향을 한 단계 바꾼다(spin 유지) */
+/** 눕히는 방향을 한 단계 바꾼다(spin 유지). **수학 전체** — 격자에 안 맞는 방향도 포함한다 */
 export const nextTip = (rot: number): number => makeRot(tipOf(rot) + 1, spinOf(rot));
+
+/**
+ * 눕히는 방향을 한 단계 — **격자에 정확히 앉는 것만** 돈다. UI는 반드시 이걸 쓴다.
+ * (`nextTip`은 옆으로 눕힌 방향까지 도는 순수 수학이라 화면에 내보내면 브릭이 상자를 뚫는다)
+ */
+export function nextExactTip(rot: number): number {
+  const cur = EXACT_TIPS.indexOf(tipOf(rot));
+  const next = EXACT_TIPS[(cur + 1) % EXACT_TIPS.length] ?? EXACT_TIPS[0];
+  return makeRot(next, spinOf(rot));
+}
 
 /**
  * 월드 축마다 **어느 로컬 축에서 오고 부호가 뭔지**.
  * 24방향이 전부 부호 있는 축 교환이라 각 행에 0이 아닌 값이 딱 하나다.
  *
  * 반환 `[[로컬축, 부호], …]` — 월드 X·Y·Z 순서.
+ *
+ * ⚠️ **24개를 미리 만들어 두고 그 배열을 그대로 돌려준다** — 고치지 말 것.
+ *   `extentOf`가 점유 검사·가시성·빛 계산에서 브릭당 수십 번 불리는 자리라
+ *   호출마다 배열을 새로 만들면 그게 그대로 쓰레기가 된다.
  */
-export function axisMap(rot: number): [number, number][] {
+function computeAxisMap(rot: number): readonly (readonly [number, number])[] {
   const m = rotMatrixPlace(rot);
-  const out: [number, number][] = [];
+  const out: (readonly [number, number])[] = [];
   for (let w = 0; w < 3; w++) {
     for (let a = 0; a < 3; a++) {
       const v = m[w * 3 + a];
@@ -134,6 +175,13 @@ export function axisMap(rot: number): [number, number][] {
     }
   }
   return out;
+}
+
+const AXIS_MAPS: readonly (readonly (readonly [number, number])[])[] =
+  Array.from({ length: ROT_COUNT }, (_, rot) => computeAxisMap(rot));
+
+export function axisMap(rot: number): readonly (readonly [number, number])[] {
+  return AXIS_MAPS[wrap(rot)];
 }
 
 /**

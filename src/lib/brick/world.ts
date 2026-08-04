@@ -10,6 +10,7 @@ import {
   COL_STEP_X, COL_STEP_Z, DIRS, regionKeyOf, Y_MAX, Y_MIN, type ChunkCoord, type Rot,
 } from './grid';
 import { extentOf, occludes, PARTS, type MatClass, type PartId } from './parts';
+import { cornerAO } from './shading';
 
 export interface Brick {
   id: number;
@@ -61,6 +62,20 @@ export class BrickWorld {
   /** 위가 완전히 덮여 스터드를 그릴 필요가 없는 브릭 */
   readonly studless = new Set<number>();
 
+  /**
+   * brickId → **가려진 면 비트마스크**(`DIRS` 순서: +x −x +y −y +z −z). 없으면 0.
+   *
+   * ★ 왜 필요한가: "안 그리기" 판정이 **브릭 단위**뿐이라, 브릭 두 개를 붙이면
+   *   맞닿은 자리에 면이 **두 겹** 남는다. 불투명은 안쪽이라 안 보이지만
+   *   **반투명은 그 겹이 그대로 더 진해져 띠로 보인다**(유리벽이 격자무늬가 된다).
+   *   → 셰이더가 이 비트를 보고 그 면을 `discard`한다.
+   *
+   * ⚠️ **반투명 브릭만 채운다.** 불투명까지 지우면 **유리 뒤의 브릭에 구멍이 뚫린다** —
+   *   유리는 들여다보이므로 그 너머 면은 반드시 그려져야 한다(마인크래프트도 같은 규칙).
+   *   `hiddenFacesOf`가 그 경계를 지키고 테스트가 "불투명은 항상 0"을 못 박는다.
+   */
+  readonly faceHidden = new Map<number, number>();
+
   get count(): number { return this.bricks.size; }
   get visibleCount(): number { return this.visible.size; }
   /** 이 브릭을 그리는가 — 완전히 파묻히면 false (테스트·디버깅용) */
@@ -110,6 +125,7 @@ export class BrickWorld {
     if (this.visible.has(id)) this.setRegionMember(b, false); // 그리던 것이면 리전에서 빼고 리비전 올림
     this.visible.delete(id);
     this.studless.delete(id);
+    this.faceHidden.delete(id);
     this.unindexChunk(b);
     this.forEachColumn(b, (cx, cz) => this.recomputeColumn(cx, cz));
     this.refreshMany(neighbors);
@@ -125,6 +141,7 @@ export class BrickWorld {
     this.solidBelow.clear();
     this.visible.clear();
     this.studless.clear();
+    this.faceHidden.clear();
     this.byChunk.clear();
     for (const k of this.regionBricks.keys()) this.bumpRegion(k); // 렌더러가 비워진 걸 알도록
     this.regionBricks.clear();
@@ -178,6 +195,7 @@ export class BrickWorld {
       if (this.visible.has(id)) this.setRegionMember(b, false);
       this.visible.delete(id);
       this.studless.delete(id);
+      this.faceHidden.delete(id);
       this.forEachColumn(b, (cx, cz) => this.recomputeColumn(cx, cz));
     }
     for (const id of nbrs) {
@@ -301,16 +319,21 @@ export class BrickWorld {
   private refresh(b: Brick): void {
     const wasVisible = this.visible.has(b.id);
     const wasStudless = this.studless.has(b.id);
+    const wasHidden = this.faceHidden.get(b.id) ?? 0;
     const nowVisible = !this.isBuried(b);
     const nowStudless = this.isTopCovered(b);
+    const nowHidden = this.hiddenFacesOf(b);
 
     if (nowVisible) this.visible.add(b.id); else this.visible.delete(b.id);
     if (nowStudless) this.studless.add(b.id); else this.studless.delete(b.id);
+    if (nowHidden !== 0) this.faceHidden.set(b.id, nowHidden); else this.faceHidden.delete(b.id);
 
     if (nowVisible !== wasVisible) {
       this.setRegionMember(b, nowVisible);
-    } else if (nowVisible && nowStudless !== wasStudless) {
-      this.bumpRegion(regionKeyOf(b.x, b.y, b.z)); // 그리는 메시가 바뀐다(스터드 有↔無)
+    } else if (nowVisible && (nowStudless !== wasStudless || nowHidden !== wasHidden)) {
+      // ★ 값만 고치고 **알리지 않으면** 화면은 옛 값 그대로다(G-6).
+      //   스터드 有↔無는 그리는 메시가, 가려진 면은 인스턴스 속성이 바뀐다.
+      this.bumpRegion(regionKeyOf(b.x, b.y, b.z));
     }
   }
 
@@ -390,6 +413,40 @@ export class BrickWorld {
       }
     });
     return buried;
+  }
+
+  /**
+   * 이 브릭의 **어느 면이 완전히 가려졌는가** — `DIRS` 순서의 6비트.
+   *
+   * ★ 판정은 `isTopCovered`의 6면 일반화다: 그 면에 맞닿은 **바깥 칸이 전부** 막혀야 가려진 것으로 친다.
+   *   한 칸이라도 트여 있으면 그 면은 보인다(부분만 지우면 브릭이 뜯긴 것처럼 보인다).
+   *
+   * ⚠️ **반투명만** 계산한다 — 불투명 면을 지우면 유리 너머로 구멍이 보인다(위 `faceHidden` 주석).
+   *   경사도 제외한다: 면이 대각선이라 축에 딱 떨어지지 않고, 애초에 이웃을 안 가린다.
+   */
+  private hiddenFacesOf(b: Brick): number {
+    if (b.mat !== 'transparent' || !occludes(b.part)) return 0;
+    const e = extentOf(PARTS[b.part], b.rot);
+    const lo = [b.x, b.y, b.z];
+    const hi = [b.x + e.ex - 1, b.y + e.ey - 1, b.z + e.ez - 1];
+    let mask = 0;
+    for (let d = 0; d < DIRS.length; d++) {
+      const axis = d >> 1;
+      const at = (d & 1) === 0 ? hi[axis] + 1 : lo[axis] - 1; // 면 바로 바깥 한 겹
+      const u = (axis + 1) % 3, v = (axis + 2) % 3;
+      const cell = [0, 0, 0];
+      cell[axis] = at;
+      let covered = true;
+      for (let cu = lo[u]; cu <= hi[u] && covered; cu++) {
+        cell[u] = cu;
+        for (let cv = lo[v]; cv <= hi[v]; cv++) {
+          cell[v] = cv;
+          if (!this.blocks(cell[0], cell[1], cell[2])) { covered = false; break; }
+        }
+      }
+      if (covered) mask |= 1 << d;
+    }
+    return mask;
   }
 
   /** 윗면 전체가 다른 브릭에 덮였는가 (스터드 컬링 판정) */
@@ -620,7 +677,7 @@ export class BrickWorld {
             sum += this.lightAt(cx, cy, cz); n++;
           }
           const sky = n === 0 ? BrickWorld.SKY_MIN : sum / n;
-          out[i + 2 * j + 4 * k] = sky * BrickWorld.cornerAO(blocked);
+          out[i + 2 * j + 4 * k] = sky * cornerAO(blocked);
         }
       }
     }
@@ -638,30 +695,14 @@ export class BrickWorld {
    * `blocked`를 세는 데 안 판 땅속도 포함한다 — 실제로 빛을 막으므로 구덩이 벽·바닥에도 그늘이 진다.
    */
   //
-  // ★ **응답은 선형이 아니라 `√`다** — 마인크래프트의 "밑동에 지는 진한 접촉 그늘"이 이 모양이다.
-  //   첫 접촉(막힌 칸 하나)에서 확 떨어지고 그 뒤론 완만하다. 선형으로 깎으면 둘 중 하나가 된다:
-  //   세기를 낮추면 **밑동이 안 보이고**, 올리면 **깊은 구석이 새까매져 얼룩**이 된다(둘 다 실제로 겪었다).
-  //
-  //     막힌 칸  평면 1.00 · 벽 하나 0.70 · ㄱ자 구석 0.58 · 깊은 구석 0.40
-  //
-  // ※ 번지는 폭(= 파츠 한 칸)은 못 줄이지만 **줄일 필요도 없다** — 지형 타일이 1m라
-  //   마인크래프트 블록(1m)과 폭이 같다. 예전에 "넓다"고 본 건 폭이 아니라 세기 문제였다.
-  // ⚠️ **셰이더의 `SHADE_CURVE`와 한 쌍이다.** 여기 값은 **곡선을 먹기 전의 원값**이라
-  //   화면보다 어둡게 잡혀 있다(접촉 0.40 → 화면 0.56). 한쪽만 바꾸면 접촉 그늘이 무너진다.
-  private static readonly AO_STRENGTH = 1.2;
-  private static readonly AO_MIN = 0.25;     // 하한 — 더 깊은 구석은 여기서 포화한다(화면 0.37)
-  private static cornerAO(blocked: number): number {
-    const FLAT = 3, OUTSIDE = 7;
-    const over = blocked - FLAT;
-    if (over <= 0) return 1;
-    const ao = 1 - BrickWorld.AO_STRENGTH * Math.sqrt(over / (OUTSIDE - FLAT));
-    return ao < BrickWorld.AO_MIN ? BrickWorld.AO_MIN : ao;
-  }
+  // ★ 세기·곡선 상수는 **`lib/brick/shading.ts`에 모여 있다.** 여기와 셰이더에 나눠 두었다가
+  //   한쪽만 만지는 사고가 두 번 났다(포화·블러). 그늘 모양을 바꾸려면 그 파일만 고친다.
 
   /** 전량 재계산 — **월드 전체**를 다시 굽는다. 첫 로드·스트레스 테스트에만 쓸 것 */
   recomputeAll(): void {
     this.visible.clear();
     this.studless.clear();
+    this.faceHidden.clear();
     for (const k of this.regionBricks.keys()) this.bumpRegion(k);
     this.regionBricks.clear();
     this.pendingFast.length = 0;

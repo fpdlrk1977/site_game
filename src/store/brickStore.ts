@@ -9,6 +9,7 @@ import {
   type ChunkCoord, type Rot,
 } from '@/lib/brick/grid';
 import type { MatClass, PartId } from '@/lib/brick/parts';
+import { nextExactTip, nextSpin } from '@/lib/brick/rotation';
 import type { StudStyle } from '@/lib/brick/brickGeometry';
 import { decodeChunk, encodeChunk, toBrickData } from '@/lib/brick/serialize';
 import { localBrickStorage, supabaseBrickStorage, type BrickStorage, type ChunkWrite } from '@/lib/brick/storage';
@@ -175,7 +176,18 @@ interface BrickState {
 
   setPart: (p: PartId) => void;
   setRot: (r: Rot) => void;
+  /** 제자리 회전(R) — 눕힌 상태는 그대로 두고 네 방향을 돈다 */
   rotate: () => void;
+  /**
+   * 뒤집기(Shift+R) — 어느 면이 위를 보는지 바꾼다.
+   *
+   * ★ 회전과 **따로 둔 이유**: 한 버튼에 다 넣으면 원하는 방향까지 여러 번 눌러야 한다.
+   *   "어느 면이 위인가"와 "그 상태에서 몇 도"는 사람이 따로 생각하는 축이다.
+   *
+   * ⚠️ **지금은 위아래 뒤집기뿐이다** — 옆으로 눕히기는 격자가 정육면체가 아니라 아직 못 한다
+   *   (`rotation.ts`의 `isGridExact`, `BRICK_PLAN.md` §14). `nextExactTip`이 그 경계를 지킨다.
+   */
+  tipOver: () => void;
   setColor: (c: string) => void;
   /** 고르개에서 **확정한** 임의 색 — 현재 색으로 쓰고 최근 목록에 남긴다(드래그 중엔 setColor만 쓴다) */
   rememberColor: (c: string) => void;
@@ -222,8 +234,14 @@ interface BrickState {
 }
 
 // ── 스트리밍 튜닝 ────────────────────────────────────────────────────────
-/** 로드 반경(청크). 8m/청크 → 6이면 약 48m */
-const LOAD_R = 6;
+/**
+ * 로드 반경(청크). 8m/청크 → 6이면 약 48m.
+ *
+ * ★ 배경의 **먼 땅 고리**가 이 값에 기댄다 — 고리의 구멍이 이 반경보다 작아야
+ *   진짜 지형과 겹쳐서 틈이 안 생긴다(`lib/brick/backdrop.ts`의 `FAR_GROUND_INNER`).
+ *   그래서 내보낸다. 여기를 줄이면 **먼 땅 구멍도 같이 줄여야** 한다(테스트가 잡는다).
+ */
+export const LOAD_R = 6;
 /** 언로드 반경 — 로드보다 넓게 잡아야 경계에서 껌뻑이지 않는다(히스테리시스) */
 const UNLOAD_R = 9;
 /** 한 번에 읽는 청크 수. 사이사이 양보해 화면이 안 멈추게 */
@@ -320,7 +338,8 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
 
   setPart: (p) => set({ part: p }),
   setRot: (r) => set({ rot: r }),
-  rotate: () => set((s) => ({ rot: ((s.rot + 1) % 4) as Rot })),
+  rotate: () => set((s) => ({ rot: nextSpin(s.rot) as Rot })),
+  tipOver: () => set((s) => ({ rot: nextExactTip(s.rot) as Rot })),
   setColor: (c) => set({ color: c }),
   // 고르개로 만든 색만 최근 목록에 남긴다 — 기본 팔레트는 이미 위에 있으므로 중복이다
   rememberColor: (c) => set((s) => ({ color: c, recentColors: pushRecentColor(s.recentColors, c) })),

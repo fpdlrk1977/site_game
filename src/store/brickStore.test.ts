@@ -90,6 +90,31 @@ async function main(): Promise<void> {
     ok(back?.color.toLowerCase() === '#3355ff', `색도 살아 있다 — 지금 ${back?.color}`);
   }
 
+  // ── ★★ 새로고침해도 **세운 방향(24방향)** 이 살아 있어야 한다 ──────────────
+  //
+  // 무늬(위)와 정확히 같은 계열의 함정이다(B-4). 읽는 쪽이 `rot & 3`으로 자르고 있었으므로,
+  // 세우기를 붙이면서 마스크를 안 넓혔다면 **세운 브릭이 새로고침 때 조용히 눕는다.**
+  // 인코딩만 보는 테스트는 이 결함을 영원히 통과시킨다 — 그래서 **왕복**으로 잠근다.
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+
+    store().setPart('b1x4');
+    store().setRot(6); // 눕히기 1(+X가 위) × 제자리 2 — 눕히기 0 밖의 값이라야 마스크를 검사한다
+    const id = store().place(0, 0, 0);
+    ok(id !== null, '세운 브릭이 놓인다');
+    ok(store().world.bricks.get(id!)?.rot === 6, '놓은 직후 방향이 6이다');
+    await store().flush();
+
+    await reload(api);
+    const back = [...store().world.bricks.values()].find((b) => b.part === 'b1x4');
+    ok(back !== undefined, '새로고침해도 세운 브릭이 남는다');
+    ok(back?.rot === 6, `★★ 새로고침해도 세운 방향이 살아 있다 — 지금 ${back?.rot}`);
+
+    store().setPart('b2x4');
+    store().setRot(0);
+  }
+
   // ── 판 구덩이는 새로고침해도 메워지지 않는다 ─────────────────────────────
   {
     const { api } = memoryStorage();

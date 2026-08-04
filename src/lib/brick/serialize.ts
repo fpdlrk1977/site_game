@@ -16,6 +16,7 @@ import {
   type Rot,
 } from './grid';
 import { PARTS, type MatClass, type PartId } from './parts';
+import { ROT_COUNT } from './rotation';
 import type { Brick } from './world';
 
 const MAGIC = 0x42524b; // 'BRK'
@@ -157,9 +158,13 @@ export function decodeChunk(data: Uint8Array, cx: number, cy: number, cz: number
   for (let i = 0; i < brickCount; i++) {
     const o = base + i * REC;
     const mi = data[o + 5] | (data[o + 6] << 8);
+    // 방향은 1바이트를 통째로 쓴다. 예전엔 `& 3`으로 잘라 **Y축 4방향만** 읽었다 —
+    // 세우기(24방향)가 들어오면서 그 마스크가 곧 데이터 손실이 된다.
+    // 범위 밖(손상된 파일)은 0으로 떨어뜨린다 — 모르는 값을 접어 넣으면 엉뚱한 방향이 된다.
+    const rot = data[o + 1];
     out.push({
       part: PART_ORDER[data[o]] ?? PART_ORDER[0],
-      rot: (data[o + 1] & 3) as Rot,
+      rot: (rot < ROT_COUNT ? rot : 0) as Rot,
       x: ox + data[o + 2],
       y: oy + data[o + 3],
       z: oz + data[o + 4],

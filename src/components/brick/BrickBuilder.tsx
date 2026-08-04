@@ -22,7 +22,7 @@ import { brickGeometry, type StudStyle } from '@/lib/brick/brickGeometry';
 import { PARTS } from '@/lib/brick/parts';
 import type { BrickWorld } from '@/lib/brick/world';
 import { useBrickStore, type Tool } from '@/store/brickStore';
-import { BrickInstances, type BrickHit } from './BrickInstances';
+import { BrickInstances, brickQuaternion, type BrickHit } from './BrickInstances';
 import { PlacementMarker } from './PlacementMarker';
 
 interface Props {
@@ -127,8 +127,9 @@ function EraseHighlight({ world, brickId, studStyle }: {
   const geo = useMemo(() => (b ? brickGeometry(PARTS[b.part], true, studStyle) : null), [b, studStyle]);
   if (!b || !geo) return null;
   const [x, y, z] = anchorCenterWorld({ x: b.x, y: b.y, z: b.z }, b.part, b.rot);
+  // ⚠️ 방향은 24가지다 — Y축 각도(`rot * 90°`)로는 세운 브릭을 못 맞춘다(강조가 브릭을 벗어난다)
   return (
-    <mesh geometry={geo} position={[x, y, z]} rotation={[0, (b.rot * Math.PI) / 2, 0]} raycast={() => null}>
+    <mesh geometry={geo} position={[x, y, z]} quaternion={brickQuaternion(b.rot)} raycast={() => null}>
       <meshBasicMaterial color="#f05252" transparent opacity={0.5} depthWrite={false} side={THREE.DoubleSide} />
     </mesh>
   );

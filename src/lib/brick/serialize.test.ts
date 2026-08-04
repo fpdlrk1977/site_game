@@ -6,6 +6,7 @@
 
 import { chunkCoordOf, chunkOriginX, chunkOriginY, chunkOriginZ, CHUNK_X, CHUNK_Y, CHUNK_Z, type Rot } from './grid';
 import { PART_LIST, type MatClass } from './parts';
+import { ROT_COUNT } from './rotation';
 import { base64ToBytes, bytesToBase64, decodeChunk, encodeChunk, toBrickData, type BrickData } from './serialize';
 import { BrickWorld } from './world';
 
@@ -14,7 +15,8 @@ const fails: string[] = [];
 const ok = (cond: boolean, label: string) => { if (cond) pass++; else fails.push(label); };
 
 const MATS: MatClass[] = ['opaque', 'transparent', 'emissive'];
-const ROTS: Rot[] = [0, 1, 2, 3];
+/** ★ 24방향 전부 — 예전엔 0~3뿐이었다. 읽는 쪽이 `& 3`으로 자르면 여기서 걸린다(B-4) */
+const ROTS: Rot[] = Array.from({ length: ROT_COUNT }, (_, i) => i as Rot);
 
 const same = (a: BrickData, b: BrickData) =>
   a.part === b.part && a.x === b.x && a.y === b.y && a.z === b.z &&

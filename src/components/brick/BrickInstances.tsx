@@ -24,6 +24,8 @@ import { brickGeometry, triCount, type StudStyle } from '@/lib/brick/brickGeomet
 import { faceSlots, getBrickAtlas, TEX_COLS, TEX_ROWS } from '@/lib/brick/textures';
 import { anchorCenterWorld } from '@/lib/brick/placement';
 import { PARTS, type MatClass, type PartId } from '@/lib/brick/parts';
+import { cornerMap, ROT_COUNT, rotMatrixVisual } from '@/lib/brick/rotation';
+import { AO_WALL_RELIEF, SHADE_CURVE } from '@/lib/brick/shading';
 import type { BrickWorld } from '@/lib/brick/world';
 
 export interface BrickHit { brickId: number; point: THREE.Vector3 }
@@ -113,7 +115,7 @@ const DEBUG_BAKED_LIGHT = false;
  * ⚠️ **`world.ts`의 `AO_STRENGTH`와 한 쌍이다.** 여기서 곡선이 어두운 값을 조금 들어올리므로
  *   CPU 쪽 AO는 그만큼 세게 잡아 두었다. **하나만 바꾸면 접촉 그늘이 무너진다.**
  */
-const SHADE_CURVE = 1.6;
+// ★ 그늘 상수는 `lib/brick/shading.ts`에 모여 있다 — 세기와 곡선은 **함께** 맞춰야 하기 때문이다.
 
 
 /**
@@ -182,6 +184,50 @@ function injectTexture(shader: {
   );
 }
 
+/**
+ * **가려진 면 지우기** — 반투명 브릭을 붙여도 한 장처럼 보이게 한다.
+ *
+ * ★ 왜 필요한가: 브릭은 상자 6면을 통째로 그리고, "안 그리기" 판정은 **브릭 단위**뿐이다.
+ *   그래서 유리 두 장을 붙이면 맞닿은 자리에 유리가 **한 겹 더** 남아 **띠**가 생기고,
+ *   테두리 선까지 그어져 유리벽이 격자무늬가 된다(사용자 보고).
+ *
+ * ★ 지오메트리를 안 건드리고 **프래그먼트에서 버린다** — draw call·삼각형 수 무변경,
+ *   인스턴스 속성 `float` 하나만 는다. (면 단위로 지오메트리를 다시 짜려면 인스턴싱을 포기해야 한다)
+ *
+ * ⚠️ **반투명 재질에만 건다.** 불투명에 걸면 ①유리 뒤 브릭에 구멍이 뚫리고
+ *   ②`discard`가 early-Z를 무르게 해 브릭 대부분인 불투명 패스가 **오히려 느려진다.**
+ */
+function injectHiddenFaces(shader: { vertexShader: string; fragmentShader: string }): void {
+  shader.vertexShader = `
+    attribute float aHide;  // 인스턴스: 가려진 면 6비트 (+x −x +y −y +z −z)
+    varying float vHide;
+  ` + shader.vertexShader.replace(
+    '#include <begin_vertex>',
+    `#include <begin_vertex>
+    {
+      // 마스크는 **월드 축** 기준이라 법선도 월드로 옮겨야 한다(회전한 브릭에서 어긋나지 않게).
+      #ifdef USE_INSTANCING
+        vec3 hn = normalize(mat3(instanceMatrix) * normal);
+      #else
+        vec3 hn = normal;
+      #endif
+      // 축에 딱 붙은 면만 대상 — 경사의 대각면은 어느 비트에도 걸리지 않는다
+      float face = -1.0;
+      if (hn.x > 0.99) face = 0.0; else if (hn.x < -0.99) face = 1.0;
+      else if (hn.y > 0.99) face = 2.0; else if (hn.y < -0.99) face = 3.0;
+      else if (hn.z > 0.99) face = 4.0; else if (hn.z < -0.99) face = 5.0;
+      vHide = face < 0.0 ? 0.0 : mod(floor(aHide / pow(2.0, face)), 2.0);
+    }`,
+  );
+
+  shader.fragmentShader = `varying float vHide;
+  ` + shader.fragmentShader.replace(
+    '#include <clipping_planes_fragment>',
+    `#include <clipping_planes_fragment>
+    if (vHide > 0.5) discard;`,
+  );
+}
+
 function injectBakedLight(shader: {
   vertexShader: string; fragmentShader: string;
 }): void {
@@ -214,6 +260,12 @@ function injectBakedLight(shader: {
         : wn.y < -0.5 ? 0.35
         : abs(wn.x) > abs(wn.z) ? 0.5
         : 0.72;
+
+      // ★ **세로면에서는 그늘을 덜어낸다** — 위 AO_WALL_RELIEF 주석 참고.
+      //   ⚠️ 이 안은 템플릿 문자열이다 — 주석에도 백틱을 쓰면 문자열이 거기서 끊긴다(실제로 그랬다).
+      //   wn.y가 0에 가까울수록(=세운 면) 그늘을 1.0 쪽으로 당긴다. 윗면·밑면은 그대로.
+      float wall = 1.0 - abs(wn.y);
+      sky = mix(sky, 1.0, wall * ${AO_WALL_RELIEF.toFixed(2)});
 
       // 배율은 **면마다 상수**라 보간하면 안 되고, 하늘빛·AO만 정점 사이에서 섞여야 한다.
       // → 둘을 따로 넘겨서 프래그먼트가 **하늘빛에만** 곡선을 씌운다(아래 SHADE_CURVE).
@@ -285,6 +337,8 @@ function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshS
     m.onBeforeCompile = (shader) => {
       injectTexture(shader);
       injectBakedLight(shader);
+      // 이음매 지우기는 **반투명에만** — 불투명에 걸면 유리 뒤가 뚫리고 early-Z도 무뎌진다
+      if (mat === 'transparent') injectHiddenFaces(shader);
       if (edges) injectEdgeLines(shader);
     };
   }
@@ -295,25 +349,44 @@ function materialFor(mat: MatClass, edges: boolean, matte: boolean): THREE.MeshS
 /**
  * 오브젝트 로컬 꼭짓점 → 월드 꼭짓점 인덱스 (`i + 2j + 4k`, i=+x·j=+y·k=+z).
  *
- * 회전은 Y축 90° 단위뿐이므로 부호만 돌면 된다: `wx = sx·cos + sz·sin`, `wz = −sx·sin + sz·cos`.
- * 손으로 적으면 틀리기 쉬워(FACE_MAP과 어긋나면 **밝기만 조용히 뒤집힌다**) 계산해서 만든다.
+ * ★ **24방향 전부** — `rotation.ts`의 **화면 기준**(`rotMatrixVisual`)에서 나온다.
+ *   ⚠️ **배치 기준(`rotMatrixPlace`)을 물리면 안 된다.** 둘은 rot 1·3에서 서로 반대라
+ *   에러 없이 **명암만 조용히 뒤집힌다**(`BRICK_PITFALLS.md` D-6). 손으로 적지도 말 것.
+ *   `rotation.test.ts`가 rot 0~3에서 예전 표와 한 글자도 다르지 않은지 대조한다.
  */
-const CORNER_MAP: number[][] = [0, 1, 2, 3].map((rot) => {
-  const c = [1, 0, -1, 0][rot], s = [0, 1, 0, -1][rot];
-  return Array.from({ length: 8 }, (_, local) => {
-    const sx = local & 1 ? 1 : -1, sy = local & 2 ? 1 : -1, sz = local & 4 ? 1 : -1;
-    const wx = sx * c + sz * s;
-    const wz = -sx * s + sz * c;
-    return (wx > 0 ? 1 : 0) + (sy > 0 ? 2 : 0) + (wz > 0 ? 4 : 0);
-  });
+const CORNER_MAP: number[][] = Array.from({ length: ROT_COUNT }, (_, rot) => cornerMap(rot));
+
+/**
+ * 회전 24가지를 three 행렬로 미리 만들어 둔다.
+ *
+ * ★ 예전엔 `setFromAxisAngle(Y, rot·90°)` 한 줄이었다 — Y축 회전밖에 없었으니 그걸로 충분했다.
+ *   세우면 축이 섞이므로 **각도로는 표현이 안 된다.** 회전표를 그대로 행렬에 옮긴다
+ *   (정수 ±1만 들어가서 부동소수 오차도 없다 — 각도로 만들면 cos 90°가 6e−17이 된다).
+ */
+const ROT_MATRICES: THREE.Matrix4[] = Array.from({ length: ROT_COUNT }, (_, rot) => {
+  const r = rotMatrixVisual(rot);
+  return new THREE.Matrix4().set(
+    r[0], r[1], r[2], 0,
+    r[3], r[4], r[5], 0,
+    r[6], r[7], r[8], 0,
+    0, 0, 0, 1,
+  );
 });
 
+const ROT_QUATERNIONS: THREE.Quaternion[] =
+  ROT_MATRICES.map((m) => new THREE.Quaternion().setFromRotationMatrix(m));
+
+/**
+ * 메시 **하나**를 그 방향으로 돌릴 때 쓴다(지우기 강조·고스트).
+ * 인스턴스 렌더는 행렬을 직접 쓴다 — 쿼터니언을 거칠 이유가 없다.
+ */
+export function brickQuaternion(rot: number): THREE.Quaternion {
+  return ROT_QUATERNIONS[((rot % ROT_COUNT) + ROT_COUNT) % ROT_COUNT];
+}
+
 const _m = new THREE.Matrix4();
-const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
-const _s = new THREE.Vector3(1, 1, 1);
 const _c = new THREE.Color();
-const _up = new THREE.Vector3(0, 1, 0);
 
 /** 리전 하나의 브릭들을 (파츠 × 스터드 × 재질군)으로 묶는다 */
 function groupsOf(world: BrickWorld, regionKey: number, studStyle: StudStyle): Group[] {
@@ -363,19 +436,21 @@ function BrickGroup({ group, world, studStyle, onHover }: {
     const cornerA = new Float32Array(n * 4);
     const cornerB = new Float32Array(n * 4);
     const tiles = new Float32Array(n * 3); // 무늬 칸 (윗면, 옆면, 밑면) — 0 = 민짜
+    const hide = new Float32Array(n);      // 가려진 면 6비트 — 반투명 이음매를 지운다
     const corner = new Float32Array(8);
 
     group.ids.forEach((brickId, i) => {
       const b = world.bricks.get(brickId);
       if (!b) return;
       const [wx, wy, wz] = anchorCenterWorld(b, b.part, b.rot);
-      _p.set(wx, wy, wz);
-      _q.setFromAxisAngle(_up, (b.rot * Math.PI) / 2);
-      _m.compose(_p, _q, _s);
+      // 회전 행렬에 **중심 좌표만 얹는다** — 크기는 늘 1이라 compose를 거칠 이유가 없다.
+      _m.copy(ROT_MATRICES[b.rot]);
+      _m.setPosition(_p.set(wx, wy, wz));
       mesh.setMatrixAt(i, _m);
       mesh.setColorAt(i, _c.set(b.color));
       const [tTop, tSide, tBottom] = faceSlots(b.tex ?? 0);
       tiles[i * 3] = tTop; tiles[i * 3 + 1] = tSide; tiles[i * 3 + 2] = tBottom;
+      hide[i] = world.faceHidden.get(brickId) ?? 0;
 
       // 꼭짓점 밝기 — 월드 기준으로 구한 뒤 회전에 맞춰 로컬 슬롯에 담는다
       world.cornerLight(b, corner);
@@ -387,6 +462,7 @@ function BrickGroup({ group, world, studStyle, onHover }: {
     geo.setAttribute('aCornerA', new THREE.InstancedBufferAttribute(cornerA, 4));
     geo.setAttribute('aCornerB', new THREE.InstancedBufferAttribute(cornerB, 4));
     geo.setAttribute('aTile', new THREE.InstancedBufferAttribute(tiles, 3));
+    geo.setAttribute('aHide', new THREE.InstancedBufferAttribute(hide, 1));
 
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

@@ -10,12 +10,26 @@
 //
 // ★ 배경·안개 색이 룩을 좌우한다 — 실시간 그림자를 끈 뒤로는 특히.
 //   어두운 배경에 안개를 멀리 두면 먼 지형이 검게 사그라들어 "카메라 주변만 밝은 스포트라이트"처럼
-//   보인다. 낮 하늘 톤 + **지형 반경보다 먼저 잠기는** 안개가 자연스러운 원경을 만든다.
+//   보인다. 낮 하늘 톤 + 지평선과 같은 색의 안개가 자연스러운 원경을 만든다.
 
-/** 하늘·안개 색 — 같은 값이어야 지평선이 하드컷 없이 잠긴다 */
-export const BRICK_SKY = '#a6bccf';
-/** 안개 시작·끝(m). 끝은 **지형 반경(약 48m)보다 앞**이어야 스트리밍 경계가 안 드러난다 */
-export const BRICK_FOG: [number, number] = [18, 46];
+import { useEffect } from 'react';
+import { useThree } from '@react-three/fiber';
+import * as THREE from 'three';
+import { BrickBackdrop } from './BrickBackdrop';
+import { CAMERA_FAR, FOG_FAR, FOG_NEAR, SKY_HORIZON } from '@/lib/brick/backdrop';
+
+/** 안개 색 — **하늘의 지평선 색과 같아야** 먼 것이 하드컷 없이 잠긴다 */
+export const BRICK_SKY = SKY_HORIZON;
+/**
+ * 안개 시작·끝(m).
+ *
+ * ★ 예전엔 `[18, 46]`이었다 — 안개가 장식이 아니라 **가리개**였기 때문이다.
+ *   땅이 카메라 주변 48m만 깔리므로 그 **잘린 가장자리를 안개로 덮고** 있었다.
+ *   이제 배경(`BrickBackdrop`)이 그 너머를 채우므로 안개를 제 역할(원근감)로 돌려놓는다.
+ *
+ * ⚠️ **배경 없이 이 숫자만 늘리면 땅 끝이 그대로 드러난다.** 둘은 한 쌍이다.
+ */
+export const BRICK_FOG: [number, number] = [FOG_NEAR, FOG_FAR];
 /**
  * 환경광 세기 — 유일한 광원. **`π`가 정답이다.**
  *
@@ -33,12 +47,37 @@ export const BRICK_FOG: [number, number] = [18, 46];
  */
 export const BRICK_AMBIENT = Math.PI;
 
+/**
+ * 카메라 far를 **여기서** 늘린다 — 산이 1km 밖에 있어서 기본값(2000)으론 아슬아슬하다.
+ *
+ * ★ 각 `<Canvas camera={{...}}>`에 손으로 적지 않는 이유: 지금 캔버스가 셋(프로토타입·에디터·뷰어)이라
+ *   **반드시 갈라진다.** 실제로 배경·조명이 그렇게 갈라져 있었다(프로토타입만 옛 환경광 1.6).
+ */
+function CameraRange() {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    const prev = camera.far;
+    /* eslint-disable react-hooks/immutability */
+    camera.far = CAMERA_FAR;
+    camera.updateProjectionMatrix();
+    return () => {
+      camera.far = prev;
+      camera.updateProjectionMatrix();
+    };
+    /* eslint-enable react-hooks/immutability */
+  }, [camera]);
+  return null;
+}
+
 export function BrickEnvironment() {
   return (
     <>
-      <color attach="background" args={[BRICK_SKY]} />
+      {/* 배경이 하늘(그라데이션)까지 맡는다 — 단색 `<color attach="background">`를 대신한다 */}
       <fog attach="fog" args={[BRICK_SKY, BRICK_FOG[0], BRICK_FOG[1]]} />
       <ambientLight intensity={BRICK_AMBIENT} />
+      <CameraRange />
+      <BrickBackdrop />
     </>
   );
 }

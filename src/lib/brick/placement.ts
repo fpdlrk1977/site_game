@@ -75,10 +75,12 @@ export interface FacePlacement {
   /** 놓을 브릭의 칸수(회전 반영) */
   ext: [number, number, number];
   /**
-   * 기준 칸(꼭지점)이 AABB 안 어디인지 — `[dx, dz]`. **드래그도 같은 규칙을 써야** 한다.
+   * 기준 칸(꼭지점)이 AABB 안 어디인지 — `[dx, dy, dz]`. **드래그도 같은 규칙을 써야** 한다.
    * (여기 안 담고 `slideAnchor`에서 다시 계산하면 파츠·회전을 또 넘겨야 하고, 그러다 어긋난다)
+   *
+   * ★ 세로(`dy`)는 **세우기(눕히기)에서만** 0이 아니다 — 눕히기 0(rot 0~3)에선 늘 0이라 기존 동작 그대로.
    */
-  pivot: [number, number];
+  pivot: readonly [number, number, number];
 }
 
 /**
@@ -111,8 +113,12 @@ export function anchorFromFace(
   //
   // ★ 나머지 축은 **겨눈 칸이 기준 칸(꼭지점)** 이 되도록 뒤로 민다 — 그래야 R을 눌러도
   //   겨눈 칸이 제자리에 붙어 있고 브릭이 그 둘레로 돈다. 안 밀면 항상 +X/+Z로만 자란다.
-  const [pdx, pdz] = pivotOffset(PARTS[part], rot);
-  const anchor: [number, number, number] = [cell[0] - pdx, cell[1], cell[2] - pdz];
+  //
+  // ★ **세로도 민다**(`pdy`) — 브릭을 세우면 기준 칸이 위아래로도 밀리기 때문이다.
+  //   눕히기 0(rot 0~3)에서는 `pdy`가 늘 0이라 예전 식과 **글자 그대로 같다.**
+  //   윗면·밑면을 겨눈 경우엔 어차피 바로 아래 줄이 y를 덮어쓴다(표면에 얹혀야 하므로).
+  const [pdx, pdy, pdz] = pivotOffset(PARTS[part], rot);
+  const anchor: [number, number, number] = [cell[0] - pdx, cell[1] - pdy, cell[2] - pdz];
   anchor[face.axis] = face.dir > 0 ? cell[face.axis] + 1 : cell[face.axis] - ext[face.axis];
 
   // 수평면(윗면·밑면)이면 XZ 두 방향, 수직면이면 그 벽을 따라 수평 한 방향만
@@ -123,7 +129,7 @@ export function anchorFromFace(
     cell,
     slide,
     ext,
-    pivot: [pdx, pdz],
+    pivot: [pdx, pdy, pdz],
     // 브릭이 **표면에 닿는 면**. 위쪽 면을 겨눴으면 브릭의 아래쪽, 아래쪽 면이면 위쪽이 닿는다
     planeAt: (face.dir > 0 ? anchor[face.axis] : anchor[face.axis] + ext[face.axis]) * CELL[face.axis],
   };
@@ -138,8 +144,7 @@ export function slideAnchor(base: FacePlacement, px: number, py: number, pz: num
   const out = [base.anchor.x, base.anchor.y, base.anchor.z];
   // 커서가 있는 칸이 **기준 칸**이 되도록 민다 — 첫 클릭(anchorFromFace)과 같은 규칙이라야
   // 드래그하는 동안 브릭이 커서 밑에서 튀지 않는다.
-  const pivotOf = [base.pivot[0], 0, base.pivot[1]];
-  for (const a of base.slide) out[a] = toCell[a](p[a]) - pivotOf[a];
+  for (const a of base.slide) out[a] = toCell[a](p[a]) - base.pivot[a];
   return { x: out[0], y: out[1], z: out[2] };
 }
 

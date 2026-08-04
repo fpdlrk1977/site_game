@@ -15,6 +15,7 @@ import { BrickOrbit } from '@/components/brick/BrickOrbit';
 import { BrickMover } from '@/components/brick/BrickMover';
 import { BrickBuilder, brickCursor, useEffectiveTool } from '@/components/brick/BrickBuilder';
 import { BrickToolPanel } from '@/components/brick/BrickToolPanel';
+import { BrickEnvironment } from '@/components/brick/BrickEnvironment';
 import type { FacePlacement } from '@/lib/brick/placement';
 import { attachBrickStorage, useBrickStore } from '@/store/brickStore';
 
@@ -70,20 +71,12 @@ export default function BrickPrototype() {
         style={{ cursor: brickCursor(effTool) }}
         onContextMenu={(e) => e.preventDefault()}
       >
-        {/* ★ 배경·안개 색이 룩을 좌우한다 — 실시간 그림자를 끈 뒤로는 특히.
-            예전엔 거의 검정(#1a1a20)이라 먼 지형이 **검게 사그라들어**, 카메라 주변만 밝은
-            "스포트라이트"처럼 보였다(자연광이 아니라 한 곳에 집중된 느낌).
-            → 낮 하늘 톤으로 바꾸면 멀어질수록 대기에 잠기는 **자연스러운 원경**이 된다. */}
-        <color attach="background" args={['#a6bccf']} />
-        {/* 스트리밍 경계를 가린다 — 지형 반경(약 48m)보다 **먼저** 완전히 잠기도록 far를 맞춘다.
-            far가 지형 끝보다 멀면 땅 가장자리가 그대로 드러난다. */}
-        <fog attach="fog" args={['#a6bccf', 18, 46]} />
-        {/* ★ 조명은 **평평한 환경광 하나뿐**이다 — 마인크래프트와 같은 모델.
-            입체감은 전부 구운 값이 만든다(하늘빛 전파 × 면 방향 고정 배율, `world.FACE_TONE`).
-            방향광을 쓰면 그 위에 **움직이는 음영**이 겹쳐서, 블록을 쌓으면 옆 블록에 그림자가
-            지고 카메라를 돌릴 때마다 어떤 면은 직사광선처럼 번쩍인다. 마크엔 태양 방향이 없다.
-            → 방향광·그림자 맵은 **넣지 않는다.** (비용 실측치는 doc/archive/BRICK_LOG_2026-07.md에 남아 있다) */}
-        <ambientLight intensity={1.6} />
+        {/* ★★ 배경·안개·조명은 **에디터와 같은 컴포넌트**를 쓴다.
+            예전엔 여기에 같은 내용을 손으로 복사해 뒀는데, 그러다 **조용히 갈라졌다** —
+            에디터는 환경광을 `π`로 고쳤는데(알베도 1:1) 여기는 옛 `1.6`으로 남아 있었고,
+            배경(하늘·산·구름)을 붙였을 때 **프로토타입에만 안 나왔다.**
+            브릭 렌더·도구 패널을 공용으로 뽑은 것과 같은 이유다. */}
+        <BrickEnvironment />
 
         {/* 바닥 회색 격자 제거 — 지형 블록 자체가 격자라 중복이고, 블록 위에 겹쳐 지저분했다.
             놓을 자리 안내는 **고스트 아웃라인**이 담당한다 — 격자를 겹치면 선이 두 벌이라 지저분하다. */}

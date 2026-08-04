@@ -44,7 +44,9 @@ const TILE_PX = ART * 4;
 export type ArtId =
   | 'plain' | 'grass' | 'dirt' | 'stone' | 'gravel' | 'wood' | 'brick' | 'sand'
   | 'grass_side'
-  | 'glass' | 'leaves' | 'log_side' | 'log_top' | 'stone_brick' | 'water';
+  | 'glass' | 'leaves' | 'log_side' | 'log_top' | 'stone_brick' | 'water'
+  | 'snow' | 'ice' | 'sandstone_top' | 'sandstone_side' | 'pebbles'
+  | 'clay' | 'terracotta' | 'metal' | 'tile';
 
 /**
  * 아틀라스에 굽는 순서 = 칸 번호. **저장값이 아니라서 바꿔도 안전**하지만,
@@ -55,6 +57,11 @@ export const ART_ORDER: ArtId[] = [
   'plain', 'grass', 'dirt', 'stone', 'gravel', 'wood', 'brick', 'sand',
   'grass_side',
   'glass', 'leaves', 'log_side', 'log_top', 'stone_brick', 'water',
+  // ── 티어 2 (2026-08-04) ──────────────────────────────────────────────────
+  // 여기서 그림이 15장 → 24장이 되어 **아틀라스가 4×4에서 8×8로 자동 확장**된다.
+  // 앞쪽 15장은 칸 번호가 그대로라 **그림 모양도 그대로**다(씨앗이 칸 번호에서 나온다).
+  'snow', 'ice', 'sandstone_top', 'sandstone_side', 'pebbles',
+  'clay', 'terracotta', 'metal', 'tile',
 ];
 
 /** 그림 → 아틀라스 칸 번호 */
@@ -125,6 +132,20 @@ export const BRICK_TEXTURES: BrickTexture[] = [
   { id: 10, label: '원목', top: 'log_top', side: 'log_side', bottom: 'log_top' },
   { id: 11, label: '돌벽돌', top: 'stone_brick' },
   { id: 12, label: '물', top: 'water' },
+  // ── 티어 2 (2026-08-04) — `BRICK_PLAN.md` §15 ────────────────────────────
+  // 테마를 만드는 재료들: 겨울(눈·얼음) · 사막(사암) · 길(자갈흙) · 실내(점토·테라코타·금속판·타일)
+  { id: 13, label: '눈', top: 'snow' },
+  { id: 14, label: '얼음', top: 'ice' },
+  // ★ 사암도 면이 갈린다 — 마인크래프트와 같이 **윗면은 매끈하고 옆면엔 지층 결**이 있다.
+  //   모래로는 벽을 못 쌓으니(무너지는 느낌) 사막 건물의 짝으로 필요하다.
+  { id: 15, label: '사암', top: 'sandstone_top', side: 'sandstone_side', bottom: 'sandstone_top' },
+  // ★ 기존 '자갈'(id 4)은 마크의 **조약돌(cobblestone)** 에 가깝다 — 이건 길·강바닥의 그 자갈흙이다.
+  //   그래서 색을 갈색 쪽으로 빼서 구분되게 했다.
+  { id: 16, label: '자갈흙', top: 'pebbles' },
+  { id: 17, label: '점토', top: 'clay' },
+  { id: 18, label: '테라코타', top: 'terracotta' },
+  { id: 19, label: '금속판', top: 'metal' },
+  { id: 20, label: '타일', top: 'tile' },
 ];
 
 /** 아틀라스가 담을 수 있는 칸 수 — 넘으면 그림이 잘린다(테스트가 지킨다) */
@@ -328,6 +349,100 @@ export function buildArt(art: ArtId): string[] {
       }
       break;
     }
+    // ── 티어 2 ─────────────────────────────────────────────────────────────
+    case 'snow': { // 눈 — 거의 흰색. **틴트가 그대로 비치도록 밝게** 두고 결만 살짝
+      const s = ['#f4f8fb', '#ffffff', '#eaf1f7'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(s));
+      for (let i = 0; i < 12; i++) set(Math.floor(r() * ART), Math.floor(r() * ART), '#dde7f0'); // 얕게 팬 자국
+      break;
+    }
+    case 'ice': { // 얼음 — 옅은 파랑 + 갈라진 금. **반투명 재질과 함께**
+      const b = ['#a9cde9', '#b9daf2', '#98bcdc'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(b));
+      for (let k = 0; k < 4; k++) { // 대각선으로 뻗는 금 — 물(가로 물결)과 확실히 갈린다
+        let x = Math.floor(r() * ART), y = Math.floor(r() * ART);
+        for (let i = 0; i < 9; i++) {
+          set((x + ART) % ART, (y + ART) % ART, '#dcefff');
+          x += 1; y += r() < 0.5 ? 1 : 0;
+        }
+      }
+      break;
+    }
+    case 'sandstone_top': { // 사암 윗면 — 매끈하게 다진 면. '모래'보다 잔알갱이가 적다
+      const s = ['#e6dcb2', '#ded3a5', '#eee5bd'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(s));
+      for (let i = 0; i < 8; i++) set(Math.floor(r() * ART), Math.floor(r() * ART), '#cfc292');
+      break;
+    }
+    case 'sandstone_side': { // 사암 옆면 — **지층 결** + 위쪽에 다져진 밝은 윗단
+      const s = ['#d5c894', '#cfc28d', '#dbcea0'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(s));
+      for (let y = 6; y < ART; y += 4) for (let x = 0; x < ART; x++) { // 지층 경계선
+        if (r() < 0.85) set(x, y, '#c2b47e');
+      }
+      // ★ **y=0이 면의 위쪽**(이 파일 맨 위 규약) — 윗단이 밝아야 지층이 아래로 쌓인 것으로 읽힌다.
+      //   잔디 옆면과 같은 계열이라 뒤집히면 다진 면이 밑에 깔린다(`BRICK_PITFALLS.md` T-2).
+      //   테스트가 잡을 수 있도록 **확실한 밝기 차이**를 준다 — 옅게 두면 사보타주해도 안 걸린다.
+      for (let x = 0; x < ART; x++) {
+        set(x, 0, '#f0e7c4'); set(x, 1, '#f0e7c4');
+        set(x, 2, '#b8a86f'); // 윗단 아래 그늘선
+      }
+      break;
+    }
+    case 'pebbles': { // 자갈흙 — 길·강바닥. 조약돌('자갈')과 달리 **갈색이 돌고 알갱이가 잘다**
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, '#5c564d'); // 사이를 메운 흙
+      // ★ 조약돌('자갈')보다 **한 단계 어둡게** 잡는다 — 나란히 놓았을 때 구별되는 게 이 재료의 존재 이유다
+      const stone = ['#847d74', '#736c64', '#948c80', '#69625a'];
+      for (let i = 0; i < 22; i++) { // 작은 돌 — 2×2 위주라 조약돌보다 잘게 보인다
+        const bx = Math.floor(r() * ART), by = Math.floor(r() * ART);
+        const c = pick(stone);
+        const w = 1 + Math.floor(r() * 2), h = 1 + Math.floor(r() * 2);
+        for (let y = 0; y <= h; y++) for (let x = 0; x <= w; x++) {
+          set((bx + x) % ART, (by + y) % ART, r() < 0.8 ? c : pick(stone));
+        }
+      }
+      break;
+    }
+    case 'clay': { // 점토 — 매끈한 회청색. 색 틴트가 잘 먹으라고 채도를 낮게 둔다
+      const c = ['#a3a8b8', '#9aa0b1', '#adb2c1'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(c));
+      for (let i = 0; i < 10; i++) set(Math.floor(r() * ART), Math.floor(r() * ART), '#8f95a6');
+      break;
+    }
+    case 'terracotta': { // 테라코타 — 구운 흙. 점토와 **같은 매끈함, 다른 색조**(주황빛)
+      const t = ['#985e43', '#a3684b', '#8c553c'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, pick(t));
+      for (let k = 0; k < 5; k++) { // 가마 자국 — 가로로 옅게 번진다
+        const y0 = Math.floor(r() * ART);
+        for (let x = 0; x < ART; x++) if (r() < 0.55) set(x, y0, '#7d4a34');
+      }
+      break;
+    }
+    case 'metal': { // 금속판 — 테두리 + 네 귀퉁이 리벳. 돌벽돌(무채색)과는 **리벳으로** 갈린다
+      const m = ['#9aa0a8', '#8f959d', '#a6acb4'];
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) set(x, y, m[(x >> 2) % m.length]);
+      for (let i = 0; i < ART; i++) { // 판 테두리
+        set(i, 0, '#6f747c'); set(i, ART - 1, '#6f747c');
+        set(0, i, '#6f747c'); set(ART - 1, i, '#6f747c');
+      }
+      for (const [rx, ry] of [[2, 2], [ART - 3, 2], [2, ART - 3], [ART - 3, ART - 3]]) {
+        set(rx, ry, '#d3d8de'); set(rx + 1, ry, '#b9bfc6'); // 리벳(밝은 점 + 그늘)
+        set(rx, ry + 1, '#b9bfc6'); set(rx + 1, ry + 1, '#787e86');
+      }
+      break;
+    }
+    case 'tile': { // 타일 — 실내 바닥용 체크무늬. 격자가 곧아서 멀리서도 인공물로 읽힌다
+      const lightT = '#dfe3e6', darkT = '#9aa3a9', grout = '#7b848a';
+      for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) {
+        const cell = (x >> 2) + (y >> 2);
+        set(x, y, cell % 2 ? darkT : lightT);
+      }
+      for (let i = 0; i < ART; i++) for (let k = 0; k < ART; k += 4) { // 줄눈
+        set(k, i, grout); set(i, k, grout);
+      }
+      break;
+    }
+
     default: // 민짜 — 흰색(= 색 그대로)
       for (let i = 0; i < ART * ART; i++) px[i] = '#ffffff';
   }

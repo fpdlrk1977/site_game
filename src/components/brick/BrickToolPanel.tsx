@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { STUD_STYLES } from '@/lib/brick/brickGeometry';
 import { MAT_CLASSES, PART_KINDS, PARTS, partsOfKind } from '@/lib/brick/parts';
+import { spinOf, tipOf, TIP_LABELS } from '@/lib/brick/rotation';
 import { BRICK_TEXTURES } from '@/lib/brick/textures';
 import { BRICK_COLORS, useBrickStore, type Tool } from '@/store/brickStore';
 import { useEffectiveTool } from './BrickBuilder';
@@ -25,7 +26,7 @@ const label = 'text-[10px] uppercase text-muted mb-1';
 /** 돌기 모양은 룩·IP 검토용이라 프로토타입에서만 노출한다(BRICK_SYSTEM.md §8.5) */
 export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: boolean }) {
   const { part, rot, color, mat, tex, studStyle, recentColors } = useBrickStore();
-  const { setPart, rotate, setColor, setMat, setTex, setTool, setStudStyle, rememberColor } = useBrickStore();
+  const { setPart, rotate, tipOver, setColor, setMat, setTex, setTool, setStudStyle, rememberColor } = useBrickStore();
   const [pickerOpen, setPickerOpen] = useState(false);
   const effTool = useEffectiveTool();
 
@@ -43,20 +44,26 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
   /** 지금 보고 있는 갈래(브릭/플레이트)의 파츠 — 목록과 숫자키가 같은 순서를 쓴다 */
   const kindParts = useMemo(() => partsOfKind(PARTS[part].kind), [part]);
 
-  // 단축키 — 1~9 파츠(**지금 보고 있는 갈래 안에서**) · R 회전
+  // 단축키 — 1~9 파츠(**지금 보고 있는 갈래 안에서**) · R 회전 · Shift+R 눕히기
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // 입력창에서는 가로채지 않는다(이름 편집 등)
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      // ★ Ctrl/Cmd 조합은 건드리지 않는다 — Ctrl+R(새로고침)이 브릭을 돌리고 있었고,
+      //   Ctrl+1~9는 브라우저 탭 전환이다. Ctrl은 도구 일시 반전에도 쓰인다.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key >= '1' && e.key <= '9') {
         const p = kindParts[Number(e.key) - 1];
         if (p) setPart(p.id);
-      } else if (e.key === 'r' || e.key === 'R') rotate();
+      } else if (e.key === 'r' || e.key === 'R') {
+        // Shift+R = 눕히기. 한 글쇠에 두 축을 담되 수식키로 갈라 둔다
+        if (e.shiftKey) tipOver(); else rotate();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [kindParts, setPart, rotate]);
+  }, [kindParts, setPart, rotate, tipOver]);
 
   return (
     <>
@@ -92,8 +99,23 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
       </div>
       <div className="mb-3 text-[10px] text-muted">{PART_KINDS.find((k) => k.id === PARTS[part].kind)?.note}</div>
 
-      <div className={label}>방향 <span className="opacity-60">R</span></div>
-      <button onClick={rotate} className={`${btn} w-full mb-3 ${off}`}>회전 {rot * 90}°</button>
+      {/* 방향은 축이 둘이다 — **어느 면이 위인가**와 그 상태에서의 **제자리 회전**.
+          하나로 합치면 원하는 방향까지 여러 번 눌러야 한다.
+          ⚠️ 옆으로 눕히기는 아직 없다 — 칸이 정육면체가 아니라 격자에 안 맞는다(rotation.ts `isGridExact`). */}
+      <div className={label}>방향 <span className="opacity-60">R 회전 · Shift+R 뒤집기</span></div>
+      <div className="flex gap-1 mb-1">
+        <button onClick={rotate} className={`${btn} flex-1 ${off}`}>회전 {spinOf(rot) * 90}°</button>
+        <button
+          onClick={tipOver}
+          title="위아래를 뒤집는다 — 돌기가 아래를 보게 된다(천장 마감·처마)"
+          className={`${btn} flex-1 ${tipOf(rot) === 0 ? off : on}`}
+        >
+          {tipOf(rot) === 0 ? '뒤집기' : '뒤집힘'}
+        </button>
+      </div>
+      <div className="mb-3 text-[10px] text-muted">
+        {tipOf(rot) === 0 ? '똑바로 놓인 상태' : `${TIP_LABELS[tipOf(rot)]} — 돌기가 아래를 본다`}
+      </div>
 
       <div className={label}>재질</div>
       <div className="flex gap-1 mb-3">

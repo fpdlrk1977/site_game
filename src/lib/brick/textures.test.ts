@@ -86,6 +86,73 @@ for (const art of ART_ORDER) {
   // 유리는 밝아야 색 틴트가 그대로 비친다(어두우면 유리로 안 보인다)
   const [gr3, gg3, gb3] = avg('glass');
   ok(Math.min(gr3, gg3, gb3) > 170, `★ 유리는 밝다 — rgb(${gr3.toFixed(0)},${gg3.toFixed(0)},${gb3.toFixed(0)})`);
+
+  // ── 티어 2 ───────────────────────────────────────────────────────────
+  // 눈은 **가장 밝아야** 한다 — 어두우면 눈으로 안 보이고 틴트도 안 먹는다
+  const [nr, ng, nb] = avg('snow');
+  ok(Math.min(nr, ng, nb) > 225, `★ 눈은 아주 밝다 — rgb(${nr.toFixed(0)},${ng.toFixed(0)},${nb.toFixed(0)})`);
+
+  // 얼음은 파랑이 세되 **물보다 밝아야** 한다(둘 다 파랑이라 이걸로 갈린다)
+  const [ir, ig, ib] = avg('ice');
+  ok(ib > ig && ig > ir, `★ 얼음은 파랑빛 — rgb(${ir.toFixed(0)},${ig.toFixed(0)},${ib.toFixed(0)})`);
+  const [, , wb2] = avg('water');
+  ok(ib > wb2, `★ 얼음이 물보다 밝다 — 얼음 ${ib.toFixed(0)} > 물 ${wb2.toFixed(0)}`);
+
+  // 사암은 모래와 같은 계열(노랑빛)이되 두 면이 서로 달라야 한다
+  for (const art of ['sandstone_top', 'sandstone_side'] as const) {
+    const [r4, g4, b4] = avg(art);
+    ok(r4 > b4 && g4 > b4, `★ ${art}는 노랑빛 — rgb(${r4.toFixed(0)},${g4.toFixed(0)},${b4.toFixed(0)})`);
+  }
+
+  // 자갈흙은 **조약돌('자갈')보다 어둡고 따뜻해야** 한다 — 안 그러면 둘이 구별이 안 된다
+  const [pr, pg, pb] = avg('pebbles');
+  const [cr2, cg2, cb2] = avg('gravel');
+  ok(pr > pb, `★ 자갈흙은 흙기가 돈다(빨강 > 파랑) — rgb(${pr.toFixed(0)},${pg.toFixed(0)},${pb.toFixed(0)})`);
+  ok(cb2 >= cr2, `★ 조약돌은 푸른 회색 — rgb(${cr2.toFixed(0)},${cg2.toFixed(0)},${cb2.toFixed(0)})`);
+  ok(pr + pg + pb < cr2 + cg2 + cb2, '★ 자갈흙이 조약돌보다 어둡다 (나란히 놓아도 구별된다)');
+
+  // 점토 vs 테라코타 — **같은 매끈함, 다른 색조**. 이게 안 갈리면 둘 중 하나가 무의미하다
+  const [yr, yg, yb] = avg('clay');
+  ok(yb > yr, `★ 점토는 회청색(파랑 > 빨강) — rgb(${yr.toFixed(0)},${yg.toFixed(0)},${yb.toFixed(0)})`);
+  const [tr, tg, tb] = avg('terracotta');
+  ok(tr > tg && tg > tb, `★ 테라코타는 주황빛 — rgb(${tr.toFixed(0)},${tg.toFixed(0)},${tb.toFixed(0)})`);
+
+  // 금속판·타일은 무채색이어야 한다(색은 틴트로 입힌다)
+  for (const art of ['metal', 'tile'] as const) {
+    const [r5, g5, b5] = avg(art);
+    ok(Math.max(r5, g5, b5) - Math.min(r5, g5, b5) < 14,
+      `★ ${art}는 무채색 — rgb(${r5.toFixed(0)},${g5.toFixed(0)},${b5.toFixed(0)})`);
+  }
+}
+
+// ── ★ 타일은 실제로 **격자**여야 한다 (잡티가 아니라 인공물로 읽혀야 한다) ──
+{
+  const px = buildArt('tile');
+  // 줄눈이 4칸마다 곧게 그어졌는가 — 한 줄이라도 끊기면 체크무늬로 안 보인다
+  let straight = 0;
+  for (let k = 0; k < ART; k += 4) {
+    let full = true;
+    for (let i = 0; i < ART; i++) if (px[i * ART + k] !== px[k]) full = false;
+    if (full) straight++;
+  }
+  ok(straight === 4, `★ 타일 줄눈이 4칸마다 곧게 이어진다 — ${straight}/4`);
+}
+
+// ── ★ 사암 옆면의 위아래 (그림 y=0 = 면의 위쪽 규약) ─────────────────────
+// 잔디 옆면과 같은 계열의 함정이다(T-2) — 뒤집히면 다진 윗단이 밑에 깔린다.
+{
+  const px = buildArt('sandstone_side');
+  const lum = (c: string) => { const [r, g, b] = rgb(c); return (r + g + b) / 3; };
+  const bandLum = (y0: number, y1: number) => {
+    let s = 0, n = 0;
+    for (let y = y0; y <= y1; y++) for (let x = 0; x < ART; x++) { s += lum(px[y * ART + x]); n++; }
+    return s / n;
+  };
+  // ⚠️ **맨 윗줄 vs 맨 아랫줄로 비교하면 안 된다** — 처음에 그렇게 썼다가 윗단을 통째로
+  //    아래로 옮기는 사보타주를 **통과시켰다**(옮긴 띠의 어두운 경계선이 맨 아랫줄에 걸려서).
+  //    "윗단(0~1줄)이 몸통(4줄 이하)보다 뚜렷하게 밝은가"를 봐야 한다.
+  const cap = bandLum(0, 1), body = bandLum(4, ART - 1);
+  ok(cap - body > 20, `★ 사암 윗단이 몸통보다 뚜렷하게 밝다 — 윗단 ${cap.toFixed(0)} vs 몸통 ${body.toFixed(0)}`);
 }
 
 // ── ★ 아틀라스에 다 들어가는가 ───────────────────────────────────────────
@@ -102,6 +169,8 @@ for (const art of ART_ORDER) {
   const LOCKED_ART: ArtId[] = [
     'plain', 'grass', 'dirt', 'stone', 'gravel', 'wood', 'brick', 'sand',
     'grass_side', 'glass', 'leaves', 'log_side', 'log_top', 'stone_brick', 'water',
+    'snow', 'ice', 'sandstone_top', 'sandstone_side', 'pebbles',
+    'clay', 'terracotta', 'metal', 'tile',
   ];
   LOCKED_ART.forEach((art, i) => {
     ok(ART_ORDER[i] === art, `★ 그림 ${i}번은 '${art}' 고정 — 현재 '${ART_ORDER[i]}'`);
@@ -128,9 +197,16 @@ for (const art of ART_ORDER) {
   for (let n = 1; n <= 300; n++) { const g = atlasGridFor(n); if ((g & (g - 1)) !== 0) pow2 = false; }
   ok(pow2, '격자 한 변이 항상 2의 거듭제곱이다');
 
-  // 오늘 기준으로는 기존과 같은 4×4여야 한다 — 이번 변경으로 화면이 바뀌면 안 된다
-  ok(TEX_COLS === 4 && TEX_ROWS === 4,
-    `★ 지금 그림 ${ART_ORDER.length}장 → 예전과 같은 4×4 (화면 변화 없음) — 현재 ${TEX_COLS}×${TEX_ROWS}`);
+  // 실제로 쓰는 격자가 계산식과 일치하는가 (숫자를 손으로 박으면 여기서 걸린다)
+  const want = atlasGridFor(ART_ORDER.length);
+  ok(TEX_COLS === want && TEX_ROWS === want,
+    `★ 그림 ${ART_ORDER.length}장 → 격자 ${want}×${want} — 현재 ${TEX_COLS}×${TEX_ROWS}`);
+
+  // ★ 티어 2에서 4×4 → 8×8로 넘어갔다. **앞쪽 15장은 칸 번호가 그대로**라 그림 모양이 안 변한다
+  //   (씨앗이 칸 번호에서 나온다). 자동 확장이 룩을 안 건드린다는 것의 실제 확인.
+  ok(TEX_COLS === 8, `★ 티어 2로 아틀라스가 8×8이 됐다 — 현재 ${TEX_COLS}×${TEX_ROWS}`);
+  ok(artSlot('grass') === 1 && artSlot('water') === 14,
+    '★ 칸이 늘어나도 기존 그림의 칸 번호는 그대로 (모양이 안 변한다)');
 }
 
 // ── ★ 면별 무늬 매핑 ─────────────────────────────────────────────────────
@@ -163,9 +239,20 @@ for (const art of ART_ORDER) {
   ok(faceSlots(999).every((s) => s === 0), '모르는 재료 id는 민짜로 폴백한다');
 
   // ★ 저장값 보호 — 기존 재료의 id가 밀리면 이미 지어 둔 월드의 무늬가 통째로 뒤바뀐다
+  // ★ 사암도 면이 갈린다 — 윗면은 매끈, 옆면은 지층 결
+  const [sTop, sSide, sBottom] = faceSlots(15);
+  ok(sTop === artSlot('sandstone_top'), '★ 사암 윗면 = 매끈한 면');
+  ok(sSide === artSlot('sandstone_side'), '★ 사암 옆면 = 지층 결');
+  ok(sBottom === artSlot('sandstone_top'), '★ 사암 밑면 = 윗면과 같다');
+
   const LOCKED: [number, string][] = [
     [0, '민짜'], [1, '잔디'], [2, '흙'], [3, '돌'],
     [4, '자갈'], [5, '나무'], [6, '벽돌'], [7, '모래'],
+    // 티어 1 — 이미 이 id로 저장된 월드가 있다
+    [8, '유리'], [9, '나뭇잎'], [10, '원목'], [11, '돌벽돌'], [12, '물'],
+    // 티어 2
+    [13, '눈'], [14, '얼음'], [15, '사암'], [16, '자갈흙'],
+    [17, '점토'], [18, '테라코타'], [19, '금속판'], [20, '타일'],
   ];
   for (const [id, label] of LOCKED) {
     ok(BRICK_TEXTURES[id]?.id === id && BRICK_TEXTURES[id]?.label === label,
