@@ -75,6 +75,31 @@ interface RegionLight {
 
 const regionLights = new Map<number, RegionLight>();
 
+/**
+ * 구워 둔 빛 볼륨을 **전부 버린다** — 월드가 통째로 바뀔 때(전체 지우기·씬 교체) 부른다.
+ *
+ * 🔴 **왜 필요한가** (2026-08-05 사용자 보고: *"브릭을 놓고 전체 지우기 하면 밑에 그림자가 남아 있다"*)
+ *   이 캐시는 **모듈 전역**이고 리전 키로만 찾는다. 월드를 비워도 여기 담긴 텍스처는 그대로 남고,
+ *   지형이 다시 깔리면 **같은 리전 키가 되살아나** 옛 텍스처를 그대로 물고 간다.
+ *   굽기는 **표면 근처만** 채우므로(비용 때문에) 지워진 브릭이 드리우던 그늘 값이 **안 덮이고 남는다.**
+ *   → 에러도 안 나고 브릭도 없는데 **바닥에 그림자만** 남는다.
+ */
+export function disposeRegionLights(): void {
+  for (const e of regionLights.values()) e.tex.dispose();
+  regionLights.clear();
+
+  // 🔴🔴 **재질도 같이 버려야 한다.** 텍스처만 버리면 그림자가 그대로 남는다(사용자 신고 2회).
+  //   `materialCache`의 키는 **볼륨 원점**이라, 같은 리전이 되살아나면 새 텍스처를 만들어 놓고도
+  //   **옛 텍스처를 uniform에 물고 있는 재질**을 그대로 재사용한다.
+  //   (원점은 리전 좌표에서 나오므로 월드를 비워도 그대로다 — 캐시가 안 갈리는 이유)
+  //   ★ 측정으로 갈랐다: 지우기 뒤 월드 값은 `1.000`(완전히 밝음)인데 화면만 어두웠다 → 범인은 렌더 쪽.
+  for (const [key, m] of materialCache) {
+    if (key.endsWith('|x')) continue; // 빛 볼륨을 안 쓰는 재질은 월드와 무관하다
+    m.dispose();
+    materialCache.delete(key);
+  }
+}
+
 /** 이 리전의 빛 볼륨을 최신 상태로 만들어 돌려준다. `rev`가 그대로면 다시 굽지 않는다 */
 function lightFor(world: BrickWorld, regionKey: number, rev: number): RegionLight | null {
   const ids = world.regionBrickIds(regionKey);

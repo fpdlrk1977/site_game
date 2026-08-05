@@ -10,16 +10,17 @@
 //   그래야 얹는 쪽은 `<BrickBuilder/>` 한 줄이면 되고, 부모의 클릭 처리와 섞이지 않는다.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { anchorCenterWorld, anchorFromFace, faceOf, type FaceAxis, type FacePlacement } from '@/lib/brick/placement';
 import {
-  beginEraseStroke, canEraseInStroke, beginPlaceStroke, canPlaceInStroke, strokeAnchor, dominantAxis, axisSteps,
+  beginEraseStroke, canEraseInStroke, beginPlaceStroke, canPlaceInStroke, strokeRect,
   type EraseLock, type PlaceLock,
 } from '@/lib/brick/strokeLock';
-import { CELL_X, CELL_Y, CELL_Z, worldToCellX, worldToCellY, worldToCellZ } from '@/lib/brick/grid';
+import { CELL_X, CELL_Y, CELL_Z, worldToCellX, worldToCellY, worldToCellZ, type Rot } from '@/lib/brick/grid';
 import { brickGeometry, type StudStyle } from '@/lib/brick/brickGeometry';
-import { extentOf, PARTS } from '@/lib/brick/parts';
+import { extentOf, PARTS, type BrickPart } from '@/lib/brick/parts';
 import { propBox } from '@/lib/brick/props';
 import type { BrickWorld } from '@/lib/brick/world';
 import { useBrickStore, type Tool } from '@/store/brickStore';
@@ -80,45 +81,41 @@ export const brickCursor = (tool: Tool): string => (tool === 'erase' ? ERASE_CUR
  *   `anchorFromFace`가 새 브릭을 **커서 방향이 아니라 내 쪽으로** 붙였고, 그게 이어져 엉뚱한 줄이 생겼다.
  *   평면은 브릭에 가려지지도, 방향이 바뀌지도 않는다 — 커서가 가리키는 **표면 위 그 자리**가 그대로 나온다.
  */
-function StrokePlane({ base, onCell }: { base: FacePlacement; onCell: (c: [number, number, number]) => void }) {
-  const plane = useMemo(() => {
-    const n = new THREE.Vector3(0, 0, 0);
-    n.setComponent(base.face.axis, 1);
-    return new THREE.Plane(n, -base.planeAt);
-  }, [base]);
-  const ray = useMemo(() => new THREE.Raycaster(), []);
-  const hit = useMemo(() => new THREE.Vector3(), []);
-  useFrame(({ camera, pointer }) => {
-    ray.setFromCamera(pointer, camera);
-    // 시선이 평면과 거의 나란하면 교점이 무한대로 달아난다
-    if (Math.abs(ray.ray.direction.getComponent(base.face.axis)) < 0.12) return;
-    if (!ray.ray.intersectPlane(plane, hit)) return;
-    onCell([worldToCellX(hit.x), worldToCellY(hit.y), worldToCellZ(hit.z)]);
-  });
-  return null;
+/**
+ * 커서를 **그 표면의 평면**에 쏴서 칸을 얻는다 — 드래그 사각형의 끝점.
+ *
+ * ★★ **컴포넌트가 아니라 순수 함수다.** 예전엔 `<StrokePlane>`이 `useFrame`으로 매 프레임 쐈는데
+ *   두 가지가 걸렸다:
+ *   ① **프레임에 묶인다** — 프레임이 느리면(탭이 뒤에 있으면 rAF가 초당 1회까지 떨어진다, F-5) 끝점이 안 따라온다.
+ *   ② **마운트를 기다린다** — 누르자마자 빠르게 끌면 컴포넌트가 붙기 전에 드래그가 끝나 **아무 일도 안 일어난다**
+ *      (실제로 자동화에서 그렇게 재현됐다. 사람 손으로는 느려서 안 보였을 뿐, 조건이 갖춰지면 나는 결함이다).
+ *   → 포인터 이벤트에서 **그 자리에서** 계산한다. 커서는 카메라와 달리 **이벤트가 원본**이다.
+ *
+ * ⚠️ 시선이 평면과 거의 나란하면 교점이 무한대로 달아난다 — 그럴 땐 `null`(E-3의 안전장치).
+ */
+function cellOnPlane(
+  el: HTMLElement, camera: THREE.Camera, axis: FaceAxis, planeAt: number,
+  clientX: number, clientY: number,
+): [number, number, number] | null {
+  const r = el.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((clientX - r.left) / r.width) * 2 - 1,
+    -((clientY - r.top) / r.height) * 2 + 1,
+  );
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(ndc, camera);
+  if (Math.abs(ray.ray.direction.getComponent(axis)) < 0.12) return null;
+  const n = new THREE.Vector3(0, 0, 0);
+  n.setComponent(axis, 1);
+  const hit = new THREE.Vector3();
+  if (!ray.ray.intersectPlane(new THREE.Plane(n, -planeAt), hit)) return null;
+  return [worldToCellX(hit.x), worldToCellY(hit.y), worldToCellZ(hit.z)];
 }
 
-/**
- * 줄 긋기용 좌표원 — **카메라를 향한 평면**에 커서를 투영해 월드 지점을 돌려준다.
- *
- * 면의 평면을 쓰면 그 평면 위 두 축밖에 못 잰다. 옆면에서 "끈 방향"을 알려면
- * **면 밖으로 나가는 축(법선)** 까지 재야 하므로, 화면을 마주 보는 평면이 필요하다.
- */
-function CameraPlane({ origin, onPoint }: { origin: [number, number, number]; onPoint: (x: number, y: number, z: number) => void }) {
-  const plane = useMemo(() => new THREE.Plane(), []);
-  const ray = useMemo(() => new THREE.Raycaster(), []);
-  const hit = useMemo(() => new THREE.Vector3(), []);
-  const o = useMemo(() => new THREE.Vector3(...origin), [origin]);
-  const n = useMemo(() => new THREE.Vector3(), []);
-  useFrame(({ camera, pointer }) => {
-    camera.getWorldDirection(n);
-    plane.setFromNormalAndCoplanarPoint(n, o);
-    ray.setFromCamera(pointer, camera);
-    if (!ray.ray.intersectPlane(plane, hit)) return;
-    onPoint(hit.x, hit.y, hit.z);
-  });
-  return null;
-}
+// ★ `CameraPlane`(줄 긋기용 카메라 대면 평면)은 §24에서 **지웠다.**
+//   수직면을 "끄는 방향 한 축"으로 늘리려고 면 밖 축까지 재던 물건인데,
+//   사각형은 **그 면의 평면 위 두 축**만 쓰므로 필요가 없어졌다.
+//   덩달아 `dominantAxis`·`axisSteps`(줄 긋기 전용 계산)도 호출부가 사라졌다.
 
 /** 지우기 도구에서 **어느 브릭이 지워질지** 빨갛게 감싼다 */
 function EraseHighlight({ world, brickId, studStyle }: {
@@ -138,6 +135,7 @@ function EraseHighlight({ world, brickId, studStyle }: {
 
 export function BrickBuilder({ onStats, onSpot }: Props) {
   const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
   const { world, version, part, prop, rot, studStyle, walking } = useBrickStore();
   const { place, removeBrick } = useBrickStore();
   const { beginBatch, endBatch, undo, redo } = useBrickStore();
@@ -181,11 +179,16 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
   const placeStrokeRef = useRef<{
     lock: PlaceLock;
     done: Set<string>;
-    /** 수직면 = 줄 긋기(끄는 방향 한 축) · 수평면 = 면 칠하기 */
-    line: null | { start: [number, number, number] | null; axis: FaceAxis | null };
+    /** 커서를 쏠 평면 — 브릭이 **실제로 닿는 그 표면**(E-2b: 떠 있는 평면은 비스듬히 볼 때 어긋난다) */
+    axis: FaceAxis;
+    planeAt: number;
+    /** 끄는 동안 계산해 둔 사각형 — 손 뗄 때 이걸 놓는다(§24) */
+    rect: [number, number, number][];
   } | null>(null);
   /** 놓기 획이 도는 동안에만 존재하는 좌표원 */
-  const [placeDrag, setPlaceDrag] = useState<{ spot: FacePlacement; line: boolean } | null>(null);
+  const [placeDrag, setPlaceDrag] = useState<{ spot: FacePlacement } | null>(null);
+  /** 끄는 동안 보여줄 사각형 — **놓이기 전에** 무엇이 채워질지 눈으로 확인시킨다 */
+  const [rectPreview, setRectPreview] = useState<[number, number, number][] | null>(null);
   /** 마지막으로 겨눈 지점 — 커서가 안 움직여도(R 등) 자리를 다시 계산하려면 필요하다 */
   const lastHitRef = useRef<{ brickId: number; p: [number, number, number] } | null>(null);
 
@@ -246,39 +249,21 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
     place(a[0], a[1], a[2]);
   }, [place]);
 
-  const onStrokeCell = useCallback((cell: [number, number, number]) => {
+  /**
+   * 끄는 동안 — **놓지 않는다. 사각형만 기억한다**(§24).
+   *
+   * ★ 예전엔 여기서 바로 놓았다(지나간 칸만 채워지고, 빨리 끌면 프레임 사이가 비어 구멍이 났다).
+   *   지금은 **손 뗄 때 한 번에** 놓는다 — 잘못 끌었으면 떼기 전에 되돌릴 수 있고,
+   *   무엇이 놓일지 테두리로 먼저 보인다(E-5: 보여준 값과 놓는 값이 같아야 한다).
+   */
+  const onDragMove = useCallback((e: PointerEvent) => {
     const st = placeStrokeRef.current;
     if (!st) return;
-    // 자유 축은 **첫 브릭에서 이어지는 격자**로 스냅한다(안 하면 벽에서 줄이 어긋난다)
-    tryPlace(strokeAnchor(st.lock, cell));
-  }, [tryPlace]);
-
-  /**
-   * 줄 긋기(수직면) — 끈 방향으로 한 축만 늘린다.
-   *
-   * ★ 축은 **한 번만** 고른다. 매 프레임 다시 고르면 손이 떨릴 때 줄이 방향을 바꿔 어지러워진다.
-   *   중간 칸을 전부 채워 **끊긴 줄이 안 생기게** 한다(빨리 끌어 프레임을 건너뛰어도).
-   */
-  const onLinePoint = useCallback((x: number, y: number, z: number) => {
-    const st = placeStrokeRef.current;
-    if (!st?.line) return;
-    if (!st.line.start) { st.line.start = [x, y, z]; return; }
-    const [sx, sy, sz] = st.line.start;
-    const d: [number, number, number] = [x - sx, y - sy, z - sz];
-    if (st.line.axis === null) {
-      // 한 칸 이상 움직이기 전엔 방향을 못 정한다 — 섣불리 고르면 엉뚱한 축으로 잠긴다
-      if (Math.hypot(d[0], d[1], d[2]) < CELL_X * 0.75) return;
-      st.line.axis = dominantAxis(d[0], d[1], d[2]);
-    }
-    const k = st.line.axis;
-    const n = axisSteps(d[k], st.lock.ext[k], CELL[k]);
-    const s = Math.sign(n);
-    for (let i = 1; i <= Math.abs(n); i++) {
-      const a: [number, number, number] = [...st.lock.originCell];
-      a[k] += s * i * Math.max(1, st.lock.ext[k]);
-      tryPlace(a);
-    }
-  }, [tryPlace]);
+    const cell = cellOnPlane(gl.domElement, camera, st.axis, st.planeAt, e.clientX, e.clientY);
+    if (!cell) return;
+    st.rect = strokeRect(st.lock, cell);
+    setRectPreview(st.rect);
+  }, [gl, camera]);
 
   /**
    * ★ 놓는 자리는 **화면에 보여준 그 값**(`spot`)이다 — 강조된 칸 그대로.
@@ -313,23 +298,29 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
     // ★ **소품은 클릭 한 번에 하나다.** 획을 시작하지 않는다 —
     //   끌면 의자가 줄줄이 깔린다(§22 "안 하는 것").
     if (prop) { endBatch(); return; }
-    // 수평면(윗면·밑면)은 **면을 칠하고**, 수직면은 **끄는 방향으로 한 줄**을 긋는다.
-    //   바닥은 한 획에 넓게 깔려야 하고, 옆면은 "끈 쪽으로 늘어난다"가 기대되는 동작이다.
-    const isLine = spot.face.axis !== 1;
+    // ★ 수평면·수직면이 **같은 규칙**이다(§24) — 둘 다 "누른 칸 ↔ 지금 칸 사각형".
+    //   예전엔 바닥은 붓칠, 벽은 한 줄로 갈라져 있었는데, 사각형이면 축을 고를 일이 없어 규칙이 하나로 준다.
     placeStrokeRef.current = {
       lock: beginPlaceStroke(a, spot.face.axis, spot.ext, spot.slide),
       done: new Set<string>([`${a[0]},${a[1]},${a[2]}`]),
-      line: isLine ? { start: null, axis: null } : null,
+      axis: spot.face.axis,
+      planeAt: spot.planeAt,
+      rect: [a],
     };
-    setPlaceDrag({ spot, line: isLine });
+    setPlaceDrag({ spot });
   }, [effTool, hoverBrick, removeBrick, spot, valid, place, beginBatch, endBatch, world, prop]);
 
   const onUp = useCallback(() => {
+    // ★ **여기서 사각형이 확정된다**(§24). 끄는 동안엔 아무것도 안 놓았다 —
+    //   그래서 잘못 끌었으면 떼기 전에 되돌릴 수 있었다.
+    const st = placeStrokeRef.current;
+    if (st) for (const a of st.rect) tryPlace(a);
     if (placeStrokeRef.current || eraseStrokeRef.current) endBatch();
     placeStrokeRef.current = null;
     eraseStrokeRef.current = null;
+    setRectPreview(null);
     setPlaceDrag(null);
-  }, [endBatch]);
+  }, [endBatch, tryPlace]);
 
   // ★ 포인터는 캔버스 DOM에 직접 붙인다 — 얹는 쪽이 배선할 것이 없다.
   //   `capture` 단계라 에디터의 기존 선택·마퀴보다 먼저 받는다.
@@ -337,14 +328,18 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
     const el = gl.domElement;
     const down = (e: PointerEvent) => { onDown(e); };
     el.addEventListener('pointerdown', down, { capture: true });
+    // ★ 드래그 중 커서 추적도 **여기서** 한다 — 컴포넌트 마운트를 기다리지 않는다.
+    //   누르자마자 빠르게 끌면 마운트 전에 드래그가 끝나 사각형이 안 자란다(자동화에서 재현됨).
+    el.addEventListener('pointermove', onDragMove);
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointerleave', onUp);
     return () => {
       el.removeEventListener('pointerdown', down, { capture: true } as EventListenerOptions);
+      el.removeEventListener('pointermove', onDragMove);
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointerleave', onUp);
     };
-  }, [gl, onDown, onUp]);
+  }, [gl, onDown, onUp, onDragMove]);
 
   // 되돌리기 — **짓는 화면에서만** 걸린다(읽기 전용 뷰어엔 BrickBuilder가 아예 없다).
   //   Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z. 입력창에선 브라우저 기본 동작(텍스트 되돌리기)을 살려 준다.
@@ -374,14 +369,95 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
           걷는 중엔 짓지 않으므로 둘 다 안 그린다 — 발밑에 빨간 사각형이 따라다니면 거슬린다. */}
       {!walking && effTool === 'place' && <PlacementMarker spot={spot} part={box} rot={rot} valid={valid} />}
       {!walking && effTool === 'erase' && <EraseHighlight world={world} brickId={hoverBrick} studStyle={studStyle} />}
-      {/* 놓기 획 중에만 존재하는 좌표원 — 수평면은 그 면의 평면, 수직면은 카메라를 마주 보는 평면 */}
-      {placeDrag && !placeDrag.line && <StrokePlane base={placeDrag.spot} onCell={onStrokeCell} />}
-      {placeDrag && placeDrag.line && (
-        <CameraPlane
-          origin={anchorCenterWorld(placeDrag.spot.anchor, box, rot)}
-          onPoint={onLinePoint}
-        />
+      {/* ★ 채워질 사각형 미리보기 — **놓이기 전에** 보여준다.
+          "비스듬히 보다가 엉뚱한 데 생겼다"는 사고를 막는 가장 실질적인 장치다. */}
+      {placeDrag && rectPreview && (
+        <RectPreview base={placeDrag.spot} anchors={rectPreview} box={box} rot={rot} />
       )}
     </>
+  );
+}
+
+/**
+ * 채워질 사각형을 표면 위에 그린다 — `PlacementMarker`와 **같은 평면**(접촉면)에 눕힌다.
+ *
+ * ★ 떠 있는 상자를 그리면 시차로 어긋나 보인다(D-5). 표면과 같은 평면이면 시차가 원리적으로 0이다.
+ */
+function RectPreview({ base, anchors, box, rot }: {
+  base: FacePlacement; anchors: [number, number, number][]; box: BrickPart; rot: Rot;
+}) {
+  const geo = useMemo(() => {
+    if (anchors.length < 2) return null;
+    const e = extentOf(box, rot);
+    const ext = [e.ex, e.ey, e.ez];
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    for (const a of anchors) {
+      for (let k = 0; k < 3; k++) {
+        if (a[k] < lo[k]) lo[k] = a[k];
+        if (a[k] + ext[k] > hi[k]) hi[k] = a[k] + ext[k];
+      }
+    }
+    const ax = base.face.axis;
+    const surface = base.face.dir > 0 ? lo[ax] : hi[ax];
+    const [u, v] = ax === 0 ? [1, 2] : ax === 1 ? [0, 2] : [0, 1];
+    const at = surface * CELL[ax] + base.face.dir * 0.008;
+    const pts = new Float32Array(12);
+    const quad: [number, number][] = [
+      [lo[u], lo[v]], [hi[u], lo[v]], [hi[u], hi[v]], [lo[u], hi[v]],
+    ];
+    quad.forEach(([uu, vv], i) => {
+      pts[i * 3 + ax] = at;
+      pts[i * 3 + u] = uu * CELL[u];
+      pts[i * 3 + v] = vv * CELL[v];
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+    return g;
+  }, [base, anchors, box, rot]);
+
+  /** 숫자를 띄울 자리 — 사각형 한가운데(표면 위) */
+  const center = useMemo<[number, number, number] | null>(() => {
+    if (!geo) return null;
+    const p = geo.getAttribute('position');
+    const c: [number, number, number] = [0, 0, 0];
+    for (let i = 0; i < p.count; i++) { c[0] += p.getX(i); c[1] += p.getY(i); c[2] += p.getZ(i); }
+    return [c[0] / p.count, c[1] / p.count, c[2] / p.count];
+  }, [geo]);
+
+  /**
+   * 얼마나 깔리는지 — **끄는 동안 숫자로** 보여준다(사용자 요청 2026-08-05).
+   *
+   * ★ 칸이 0.5m라 눈대중이 잘 안 된다. "몇 칸 × 몇 칸"과 **실제 미터**를 같이 낸다 —
+   *   방을 지을 땐 "6m 벽"처럼 미터로 생각하지 칸으로 생각하지 않는다.
+   */
+  const label = useMemo(() => {
+    if (anchors.length === 0) return null;
+    const e = extentOf(box, rot);
+    const ext = [e.ex, e.ey, e.ez];
+    const uniq = [0, 1, 2].map((k) => new Set(anchors.map((a) => a[k])).size);
+    const cells = [0, 1, 2].map((k) => uniq[k] * ext[k]);
+    const [u, v] = base.face.axis === 0 ? [2, 1] : base.face.axis === 1 ? [0, 2] : [0, 1];
+    const m = (k: number) => (cells[k] * CELL[k]).toFixed(1).replace(/\.0$/, '');
+    return `${cells[u]} × ${cells[v]}칸 · ${m(u)} × ${m(v)}m · ${anchors.length}개`;
+  }, [anchors, box, rot, base.face.axis]);
+
+  if (!geo) return null;
+  return (
+    <group raycast={() => null}>
+      <lineLoop geometry={geo}>
+        <lineBasicMaterial color="#000000" transparent opacity={0.9} />
+      </lineLoop>
+      {label && center && (
+        <Html position={center} center style={{ pointerEvents: 'none', userSelect: 'none' }}>
+          <div style={{
+            background: 'rgba(0,0,0,0.72)', color: '#fff', fontSize: 12, lineHeight: 1.2,
+            padding: '4px 8px', borderRadius: 3, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+          }}>
+            {label}
+          </div>
+        </Html>
+      )}
+    </group>
   );
 }

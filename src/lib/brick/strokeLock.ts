@@ -21,6 +21,20 @@ import type { Brick } from './world';
 /** 획 시작점에서 이만큼(m) 넘게 떨어진 것은 안 지운다. 긴 벽/바닥 훑기는 되고 화면 반대편은 안 되는 정도 */
 export const ERASE_REACH_M = 12;
 
+/**
+ * **놓기**의 도달 거리(m) — 지우기(12m)보다 훨씬 넉넉하다.
+ *
+ * 🔴 **왜 갈랐나** (2026-08-05 사용자 보고: *"드래그로 큰 사각형을 만들면 브릭이 그 사각형보다 잘려서 생성된다"*)
+ *   12m를 그대로 쓰니 **사각형이 원형으로 깎였다** — 거리는 유클리드라 모서리가 먼저 잘린다.
+ *   실측: 11×11 사각형 121개 중 **61개만** 놓였다(딱 절반, 사분원 모양).
+ *
+ * ★ 놓기에서 이 그물이 원래 막던 것은 **붓칠 시절의 사고**(커서가 표면을 벗어나 화면 저 끝에 놓이는 것)다.
+ *   지금 놓기는 **잠긴 평면 위 사각형 + 미리보기**라 그 위험이 구조적으로 없다 —
+ *   커서가 어디로 튀든 결과가 **테두리로 먼저 보이고**, 손을 떼야 확정된다.
+ *   그래서 한계는 "사고 방지"가 아니라 **"스트리밍이 올라와 있는 범위"** 로 잡는다(로드 반경 48m 안쪽).
+ */
+export const PLACE_REACH_M = 40;
+
 export interface EraseLock {
   /** 지형에서 시작한 획인가 — 브릭 획은 지형을, 지형 획은 브릭을 건드리지 않는다 */
   terrain: boolean;
@@ -120,10 +134,81 @@ export function strokeAnchor(lock: PlaceLock, cell: [number, number, number]): [
   return a;
 }
 
-/** 이 획에서 여기에 놓아도 되는가 (막힌 자리인지는 월드가 따로 본다) */
+/**
+ * 이 획에서 여기에 놓아도 되는가 (막힌 자리인지는 월드가 따로 본다).
+ *
+ * ★★ 거리를 **축마다 따로** 잰다(상자 판정) — 지우기의 유클리드 판정과 일부러 다르다.
+ *   유클리드로 자르면 **사각형의 모서리가 먼저 잘려 둥글어진다**(실측: 11×11 중 61개만 남았다).
+ *   놓기는 결과가 사각형이어야 하므로 한계도 사각형이어야 한다.
+ */
 export function canPlaceInStroke(lock: PlaceLock, anchor: [number, number, number]): boolean {
   if (anchor[lock.axis] !== lock.layer) return false;
-  return inReach(lock.origin, [anchor[0] * CELL_X, anchor[1] * CELL_Y, anchor[2] * CELL_Z]);
+  const w = [anchor[0] * CELL_X, anchor[1] * CELL_Y, anchor[2] * CELL_Z];
+  for (let k = 0; k < 3; k++) if (Math.abs(w[k] - lock.origin[k]) > PLACE_REACH_M) return false;
+  return true;
+}
+
+// ── 사각형 채우기 (§24) ──────────────────────────────────────────────────
+//
+// ★ 왜 "지나간 칸"이 아니라 사각형인가: 커서가 실제로 훑은 칸만 채우면 **바닥 192칸을 다 훑어야** 하고,
+//   빨리 끌면 프레임 사이가 비어 **구멍**이 생긴다. 두 끝만 정하면 그 사이는 계산으로 채운다.
+//
+// ★ 위험(비스듬한 시점에서 엉뚱한 것이 지워지던 사고)은 **여기서 안 늘어난다** —
+//   양 끝이 이미 같은 평면 위의 칸이고, 층·갈래·도달 거리 잠금은 그대로 통과시킨다.
+
+/**
+ * 한 획으로 채울 수 있는 **앵커 개수 상한**.
+ *
+ * ★ 도달 거리(12m)만으로도 범위는 묶이지만, 1×1 파츠로 넓게 끌면 그 안에서도 수천 개가 나온다.
+ *   손이 미끄러진 한 번이 되돌리기 한 번으로 정리되긴 해도, 그 사이 프레임이 통째로 멈춘다.
+ */
+export const MAX_RECT_ANCHORS = 1024;
+
+/**
+ * 획 시작점 ↔ 지금 겨눈 칸 사이의 **사각형**을 채울 앵커 목록.
+ *
+ * ★ 자유 축(`slide`)만 자란다. 면 축은 `lock.layer`에 고정이라 **다른 층으로 새지 않는다.**
+ * ★ 간격은 `strokeAnchor`와 **같은 규칙**(파츠 크기 단위 스냅) — 안 그러면 클릭과 드래그가 다른 격자에 놓인다.
+ * ★ 두 끝을 **모두 포함**한다. 되돌려 끌어도(음수 방향) 같은 사각형이 나온다.
+ *
+ * ⚠️ 개수 상한에 걸리면 **자르되 버리지 않는다** — 시작점 쪽부터 채운다(사용자가 겨눈 쪽이 살아남는다).
+ */
+export function strokeRect(lock: PlaceLock, cell: [number, number, number]): [number, number, number][] {
+  let out: [number, number, number][] = [[...lock.originCell] as [number, number, number]];
+
+  for (const k of rectAxes(lock.axis)) {
+    const step = Math.max(1, lock.ext[k]);
+    // 끝점도 **같은 격자에 스냅**한다 — 안 그러면 사각형 끝이 클릭 격자와 어긋난다
+    const span = Math.trunc((cell[k] - lock.originCell[k]) / step);
+    const dir = span >= 0 ? 1 : -1;
+    const n = Math.abs(span); // 두 끝 포함 → n+1개
+
+    const next: [number, number, number][] = [];
+    for (const base of out) {
+      for (let i = 0; i <= n && next.length < MAX_RECT_ANCHORS; i++) {
+        const a: [number, number, number] = [...base];
+        a[k] = lock.originCell[k] + dir * i * step;
+        next.push(a);
+      }
+    }
+    out = next;
+  }
+  // ★★ **놓이지 않을 칸은 애초에 안 낸다** — 그래야 미리보기 테두리와 실제 결과가 같다(E-5).
+  //   예전엔 여기서 다 내고 놓을 때 걸렀더니, **테두리보다 작게** 생겨서 잘린 것처럼 보였다(사용자 보고).
+  return out.filter((a) => canPlaceInStroke(lock, a));
+}
+
+/**
+ * 사각형이 자랄 수 있는 두 축 — **면 축을 뺀 나머지 전부**.
+ *
+ * ★ `lock.slide`(줄 긋기용)와 **일부러 다르다.** `slide`는 벽면에서 **가로 한 축**만 열어 둔다 —
+ *   커서가 위아래로 흔들리면 엉뚱한 켜에 놓이던 사고 때문이다(사용자 보고 "Y방향으로 추가된다").
+ *   그런데 **사각형에서는 세로가 곧 높이**라 잠그면 벽을 한 번에 못 세운다.
+ *   대신 위험은 **미리보기가 막는다** — 흔들려서 한 켜가 더 잡히면 손 떼기 전에 눈에 보인다.
+ *   (지금 방식은 *끌면서 즉시 확정*이라 눈에 보일 기회 자체가 없었다)
+ */
+function rectAxes(faceAxis: FaceAxis): FaceAxis[] {
+  return ([0, 1, 2] as FaceAxis[]).filter((a) => a !== faceAxis);
 }
 
 // ── 줄 긋기(수직면) ──────────────────────────────────────────────────────
@@ -152,7 +237,7 @@ export function axisSteps(delta: number, extCells: number, cellSize: number): nu
   return Math.round(delta / step);
 }
 
-function inReach(a: [number, number, number], b: [number, number, number]): boolean {
+function inReach(a: [number, number, number], b: [number, number, number], reach = ERASE_REACH_M): boolean {
   const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
-  return dx * dx + dy * dy + dz * dz <= ERASE_REACH_M * ERASE_REACH_M;
+  return dx * dx + dy * dy + dz * dz <= reach * reach;
 }

@@ -15,6 +15,7 @@ import type { StudStyle } from '@/lib/brick/brickGeometry';
 import { decodeChunk, encodeChunk, toBrickData } from '@/lib/brick/serialize';
 import { localBrickStorage, supabaseBrickStorage, type BrickStorage, type ChunkWrite } from '@/lib/brick/storage';
 import { loadRecentColors, pushRecentColor } from '@/lib/brick/colorPrefs';
+import { disposeRegionLights } from '@/components/brick/BrickInstances';
 import { demoRoom, roomSpawn } from '@/lib/brick/demoRoom';
 import { unitsOf } from '@/lib/brick/units';
 import { BrickWorld } from '@/lib/brick/world';
@@ -509,6 +510,8 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   clear: async () => {
     const { world } = get();
     world.clear();
+    // ★ GPU에 구워 둔 빛 볼륨도 함께 버린다 — 리전 키가 되살아나면 옛 텍스처를 물고 온다
+    disposeRegionLights();
     world.clearDirty(); // 저장소를 통째로 비울 것이라 dirty는 의미가 없다
     chunkIndex.clear();
     terrainDone.clear();
@@ -520,6 +523,11 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     await storage.clear();
     // 바닥을 바로 다시 깔아 준다 — 안 그러면 카메라를 움직일 때까지 빈 화면이다
     await get().streamAround(lastCenter.x, lastCenter.z);
+    // 🔴 **빛을 반드시 다시 굽는다** (사용자 보고: 전체 지우기 뒤 바닥에 그림자가 남는다).
+    //   `streamAround`는 **저장된 청크를 읽었을 때만** 빛을 다시 굽는데, 전체 지우기 직후엔
+    //   저장소가 비어 있어 그 조건이 거짓이다 → 지운 브릭이 드리우던 그늘이 그대로 남았다.
+    get().world.recomputeLight();
+    set((s) => ({ version: s.version + 1 }));
   },
 
   /**
