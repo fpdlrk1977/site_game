@@ -22,6 +22,7 @@ import { forwardRef } from 'react';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { useBrickStore } from '@/store/brickStore';
 
 interface Props {
   /**
@@ -38,11 +39,15 @@ export const BrickOrbit = forwardRef<OrbitControlsImpl, Props>(function BrickOrb
   { mode = 'build', target },
   ref,
 ) {
+  const walking = useBrickStore((s) => s.walking);
   return (
     <OrbitControls
       ref={ref}
       makeDefault
       target={target}
+      // ★ 걷는 중엔 궤도 카메라를 끈다 — 켜 두면 `BrickWalker`가 매 프레임 세운 카메라를
+      //   OrbitControls가 도로 제 궤도로 끌어당겨 **시점이 덜덜 떨린다.**
+      enabled={!walking}
       enableDamping={false}
       /** 지평선 바로 위까지 — 더 내려가면 바닥 아래에서 올려다보게 된다 */
       maxPolarAngle={Math.PI / 2 - 0.02}

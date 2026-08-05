@@ -5,7 +5,10 @@
 // 새로고침을 해봐야 알 수 있다(실제로 그렇게 뒤늦게 발견됐다).
 
 import { SURFACE_Y } from '@/lib/brick/terrain';
-import type { ChunkCoord } from '@/lib/brick/grid';
+import { chunkCoordOf, type ChunkCoord } from '@/lib/brick/grid';
+import { encodeChunk } from '@/lib/brick/serialize';
+import { PARTS, unitOf } from '@/lib/brick/parts';
+import { bricksOfProp } from '@/lib/brick/props';
 import type { BrickSettings, BrickStorage, ChunkBlob, ChunkWrite } from '@/lib/brick/storage';
 import { setBrickStorage, useBrickStore } from './brickStore';
 
@@ -103,11 +106,13 @@ async function main(): Promise<void> {
     store().setRot(6); // 눕히기 1(+X가 위) × 제자리 2 — 눕히기 0 밖의 값이라야 마스크를 검사한다
     const id = store().place(0, 0, 0);
     ok(id !== null, '세운 브릭이 놓인다');
+    // ★ 1×4는 **단위 b1x1 네 개**로 놓인다(§20). 방향은 단위마다 그대로 전달돼야 한다
+    ok(store().world.bricks.get(id!)?.part === 'b1x1', '1×4가 1×1 단위로 놓인다');
     ok(store().world.bricks.get(id!)?.rot === 6, '놓은 직후 방향이 6이다');
     await store().flush();
 
     await reload(api);
-    const back = [...store().world.bricks.values()].find((b) => b.part === 'b1x4');
+    const back = store().world.bricks.get(store().world.at(0, 0, 0)!);
     ok(back !== undefined, '새로고침해도 세운 브릭이 남는다');
     ok(back?.rot === 6, `★★ 새로고침해도 세운 방향이 살아 있다 — 지금 ${back?.rot}`);
 
@@ -222,6 +227,9 @@ async function main(): Promise<void> {
     const s = store;
 
     // ① 놓기 → 되돌리기 → 사라짐 → 다시 실행 → 되살아남
+    //    ★ 여기는 **되돌리기 자체**를 보는 곳이라 파츠를 1×1로 고정한다(개수가 1:1이라 읽기 쉽다).
+    //      큰 파츠가 여러 개로 갈라지는 것은 아래 ⑧에서 따로 잠근다.
+    s().setPart('b1x1');
     const before = s().world.count;
     s().beginBatch();
     const id = s().place(0, SURFACE_Y + 3, 0);
@@ -256,6 +264,7 @@ async function main(): Promise<void> {
     const { api } = memoryStorage();
     await reload(api);
     const s = store;
+    s().setPart('b1x1');
     const Y = SURFACE_Y + 3;
     const before = s().world.count;
     s().beginBatch();
@@ -309,6 +318,7 @@ async function main(): Promise<void> {
     await reload(api);
     const s = store;
     // 브릭 20개를 미리 쌓는다(한 획으로 지울 대상)
+    s().setPart('b1x1'); // 지우기는 **브릭 하나씩**이므로 1:1로 세는 편이 읽기 쉽다
     const ids: number[] = [];
     s().beginBatch();
     for (let i = 0; i < 20; i++) {
@@ -332,6 +342,164 @@ async function main(): Promise<void> {
 
     s().redo();
     ok(s().world.count === before - 20, '★ 다시 실행하면 다시 20개가 지워진다');
+  }
+
+  // ── ⑧ ★★ 큰 파츠는 **1×1 단위 여러 개**로 놓인다 (BRICK_PLAN.md §20) ──────
+  //    사용자 지시: "2×4는 하나의 브릭으로 보이는데 1개씩 따로 떨어진 것으로 보였으면.
+  //    사용자 편의로 1개짜리 브릭이 2×4로 하나처럼 쌓게 하는 거지. 지우는 건 1×1 하나씩."
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+    const Y = SURFACE_Y + 3;
+
+    s().setPart('b2x4');
+    s().setRot(0);
+    s().setTex(0);
+    s().setColor('#22aa44');
+    const before = s().world.count;
+
+    s().beginBatch();
+    const id = s().place(0, Y, 0);
+    s().endBatch();
+    ok(id !== null, '2×4를 놓는다');
+    ok(s().world.count === before + 8, `★★ 2×4 한 번 = 브릭 8개 — 지금 ${s().world.count - before}개`);
+
+    // 레코드는 **단위만** 남는다 — 2×4라는 레코드는 월드에 존재하지 않는다
+    const placed = [...s().world.bricks.values()].filter((b) => b.y === Y);
+    ok(placed.length === 8 && placed.every((b) => b.part === 'b1x1'),
+      `★★ 전부 b1x1 레코드다 — ${[...new Set(placed.map((b) => b.part))].join(',')}`);
+    // 칸을 빈틈없이 채웠는가 (2칸 × 4칸)
+    let filled = 0;
+    for (let x = 0; x < 2; x++) for (let z = 0; z < 4; z++) if (s().world.at(x, Y, z) !== undefined) filled++;
+    ok(filled === 8, `★ 2×4 자리가 빈틈없이 찬다 — ${filled}/8`);
+
+    // ★ 한 번의 클릭은 **되돌리기 한 번**이다 — 여덟 번 눌러야 하면 못 쓴다
+    s().undo();
+    ok(s().world.count === before, `★★ Ctrl+Z 한 번에 여덟 개가 전부 사라진다 — 남은 ${s().world.count - before}개`);
+    s().redo();
+    ok(s().world.count === before + 8, '★ 다시 실행하면 여덟 개가 되살아난다');
+
+    // ★★ 지우기는 **한 칸씩** — 이게 이번 변경의 핵심이다
+    const one = s().world.at(1, Y, 2)!;
+    s().removeBrick(one);
+    ok(s().world.at(1, Y, 2) === undefined, '★★ 겨눈 한 칸만 지워진다');
+    ok(s().world.count === before + 7, `★★ 나머지 일곱 칸은 그대로 남는다 — 지금 ${s().world.count - before}개`);
+    ok(s().world.at(0, Y, 0) !== undefined && s().world.at(1, Y, 3) !== undefined, '★ 이웃 칸이 안 딸려간다');
+
+    // 왕복 — 새로고침해도 단위·색이 그대로여야 한다(B-4)
+    await s().flush();
+    await reload(api);
+    let left = 0;
+    for (let x = 0; x < 2; x++) for (let z = 0; z < 4; z++) if (store().world.at(x, Y, z) !== undefined) left++;
+    ok(left === 7, `★ 새로고침해도 일곱 칸이다(판 자리가 안 메워진다) — ${left}`);
+    const back = store().world.bricks.get(store().world.at(0, Y, 0)!);
+    ok(back?.part === 'b1x1', '새로고침해도 단위 레코드다');
+    ok(back?.color.toLowerCase() === '#22aa44', `색도 그대로 — 지금 ${back?.color}`);
+  }
+
+  // ── ⑨ ★★ **옛 저장물**의 큰 파츠는 불러올 때 단위로 갈라진다 (§20 지연 마이그레이션) ──
+  //    빠뜨리면 옛 월드만 안 쪼개진 채 남는다 — 에러도 안 나고 화면도 그럴듯해서
+  //    **한참 뒤에 "예전에 지은 벽만 한 덩어리로 지워진다"로 발견된다**(B-4와 같은 계열).
+  {
+    const { api, chunks } = memoryStorage();
+    const Y = 0;
+    // 옛 버전이 저장했을 법한 청크를 손으로 만든다 — `b2x4` 레코드 하나
+    const c = chunkCoordOf(0, Y, 0);
+    chunks.set(`${c.cx},${c.cy},${c.cz}`, {
+      coord: c,
+      data: encodeChunk([{ part: 'b2x4', x: 0, y: Y, z: 0, rot: 0, color: '#d01012', mat: 'opaque', tex: 6 }],
+        c.cx, c.cy, c.cz),
+    });
+
+    await reload(api);
+    const cells: number[] = [];
+    for (let x = 0; x < 2; x++) for (let z = 0; z < 4; z++) {
+      const bid = store().world.at(x, Y, z);
+      if (bid !== undefined) cells.push(bid);
+    }
+    ok(cells.length === 8, `옛 2×4가 여덟 칸을 채운다 — ${cells.length}/8`);
+    ok(new Set(cells).size === 8, `★★ 여덟 칸이 **서로 다른 브릭**이다(갈라졌다) — 지금 ${new Set(cells).size}개`);
+    const one = store().world.bricks.get(cells[0]);
+    ok(one?.part === 'b1x1', `★ 단위 레코드로 갈라진다 — 지금 ${one?.part}`);
+    ok(one?.tex === 6 && one?.color.toLowerCase() === '#d01012', '갈라져도 무늬·색이 그대로 따라온다');
+
+    // 한 칸만 지워지는지 — 옛 월드에서도 새 규칙이 먹어야 한다
+    store().removeBrick(cells[0]);
+    let left = 0;
+    for (let x = 0; x < 2; x++) for (let z = 0; z < 4; z++) if (store().world.at(x, Y, z) !== undefined) left++;
+    ok(left === 7, `★★ 옛 월드에서도 한 칸씩 지워진다 — 남은 ${left}/8`);
+  }
+
+  // ── ⑩ ★★ **삭제된 경사** — 지어 둔 지붕이 불러올 때 평범한 블록이 된다 (사용자 지시 2026-08-05) ──
+  //    경사 파츠는 지웠지만 **id는 `PART_ORDER`에 남겨야** 한다(빼면 뒤 파츠가 밀려 저장물이 깨진다 — B-2).
+  //    그래서 "읽히긴 하는데 월드엔 경사가 안 들어간다"를 잠근다.
+  {
+    const { api, chunks } = memoryStorage();
+    const Y = 0;
+    const c = chunkCoordOf(0, Y, 0);
+    chunks.set(`${c.cx},${c.cy},${c.cz}`, {
+      coord: c,
+      data: encodeChunk([{ part: 's1x2', x: 0, y: Y, z: 0, rot: 0, color: '#a0a5a9', mat: 'opaque', tex: 0 }],
+        c.cx, c.cy, c.cz),
+    });
+
+    await reload(api);
+    const a = store().world.bricks.get(store().world.at(0, Y, 0)!);
+    const b = store().world.bricks.get(store().world.at(0, Y, 1)!);
+    ok(a?.part === 'b1x1' && b?.part === 'b1x1', `★★ 옛 지붕이 평범한 블록 둘이 된다 — 지금 ${a?.part}, ${b?.part}`);
+    ok(a?.id !== b?.id, '두 칸은 서로 다른 브릭이다(한 칸씩 지워진다)');
+    ok(a?.color.toLowerCase() === '#a0a5a9', '색이 그대로 따라온다');
+
+    // ★ 경사 레코드가 월드에 **하나도** 안 남는다 — 남으면 그리는 쪽이 조용히 상자로 떨어진다
+    const slopeLeft = [...store().world.bricks.values()].filter((br) => PARTS[br.part].kind === 'slope').length;
+    ok(slopeLeft === 0, `★ 경사 레코드가 안 남는다 — 남은 ${slopeLeft}개`);
+  }
+
+  // ── ⑪ ★★ 소품 — 클릭 한 번에 통째로, 되돌리기 한 번 (BRICK_PLAN.md §22) ──
+  {
+    const { api } = memoryStorage();
+    await reload(api);
+    const s = store;
+    const Y = SURFACE_Y + 3;
+
+    s().setProp('chair');
+    s().setColor('#00ff00'); // ★ 소품은 자기 색을 쓴다 — 이 색이 묻으면 안 된다
+    const before = s().world.count;
+    const want = bricksOfProp('chair', 0, Y, 0, 0).length;
+
+    s().beginBatch();
+    const id = s().place(0, Y, 0);
+    s().endBatch();
+    ok(id !== null, '소품이 놓인다');
+    ok(s().world.count === before + want, `★★ 의자 한 번 = 브릭 ${want}개 — 지금 ${s().world.count - before}개`);
+
+    const placed = [...s().world.bricks.values()].filter((b) => b.y >= Y);
+    ok(placed.every((b) => b.color.toLowerCase() !== '#00ff00'),
+      '★★ 소품은 자기 색을 쓴다(팔레트 색이 안 묻는다)');
+    ok(placed.every((b) => unitOf(b.part) === b.part), '★ 소품도 1×1 단위로만 놓인다');
+
+    // ★ 클릭 한 번 = 되돌리기 한 번
+    s().undo();
+    ok(s().world.count === before, `★★ Ctrl+Z 한 번에 의자가 통째로 사라진다 — 남은 ${s().world.count - before}개`);
+    s().redo();
+    ok(s().world.count === before + want, '★ 다시 실행하면 의자가 돌아온다');
+
+    // 놓고 나면 그냥 브릭이다 — 한 칸만 지워진다
+    const one = placed[0] && s().world.at(placed[0].x, placed[0].y, placed[0].z);
+    if (one !== undefined && one !== null) {
+      s().removeBrick(one);
+      ok(s().world.count === before + want - 1, `★★ 놓은 뒤엔 한 칸씩 지워진다 — 지금 ${s().world.count - before}개`);
+    }
+
+    // 왕복 — 저장하고 새로고침해도 남는다(소품은 저장 포맷을 안 건드린다)
+    await s().flush();
+    await reload(api);
+    const left = [...store().world.bricks.values()].filter((b) => b.y >= Y).length;
+    ok(left === want - 1, `★ 새로고침해도 그대로다 — ${left}/${want - 1}`);
+
+    store().setProp(null);
+    store().setColor('#ffffff');
   }
 }
 

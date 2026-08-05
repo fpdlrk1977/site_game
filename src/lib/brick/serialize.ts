@@ -46,6 +46,9 @@ const PART_ORDER: PartId[] = [
   's1x2', 's2x2', 'si1x2',
   // 가는 파츠 (2026-08-04) — **뒤에만** 붙인다. 앞에 끼우면 저장된 브릭이 다른 파츠로 읽힌다
   'c1x1', 'r1x2', 'r1x4', 'w1x1', 'w1x2', 'w1x4',
+  // 1×1 단위 (2026-08-05, BRICK_PLAN.md §20) — 봉 1칸 · 경사 1칸.
+  //   ★ 앞의 `s1x2`/`s2x2`/`si1x2`는 **지우면 안 된다** — 이미 저장된 지붕이 그 인덱스로 적혀 있다.
+  'r1x1', 's1x1', 'si1x1',
 ];
 const PART_INDEX = new Map<PartId, number>(PART_ORDER.map((p, i) => [p, i]));
 

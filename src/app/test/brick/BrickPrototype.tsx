@@ -13,6 +13,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { BrickOrbit } from '@/components/brick/BrickOrbit';
 import { BrickMover } from '@/components/brick/BrickMover';
+import { BrickWalker } from '@/components/brick/BrickWalker';
 import { BrickBuilder, brickCursor, useEffectiveTool } from '@/components/brick/BrickBuilder';
 import { BrickToolPanel } from '@/components/brick/BrickToolPanel';
 import { BrickEnvironment } from '@/components/brick/BrickEnvironment';
@@ -23,7 +24,13 @@ interface Stats { groups: number; instances: number; tris: number }
 
 export default function BrickPrototype() {
   const { world, version, saveState, loaded, backend } = useBrickStore();
-  const { stressFill, loadWorld, flush, indexedChunks } = useBrickStore();
+  const { stressFill, loadWorld, flush, indexedChunks, buildDemoRoom, setWalking } = useBrickStore();
+
+  /** 방을 만들고 **그 안에서** 걷기를 시작한다 — 한 바퀴를 한 번에 보여준다 */
+  const makeRoom = useCallback(() => {
+    buildDemoRoom();
+    setWalking(true);
+  }, [buildDemoRoom, setWalking]);
 
   const [stats, setStats] = useState<Stats>({ groups: 0, instances: 0, tris: 0 });
   const [perf, setPerf] = useState({ fps: 0, calls: 0, tris: 0 });
@@ -92,6 +99,8 @@ export default function BrickPrototype() {
 
         <PerfMeter onPerf={setPerf} />
         <BrickMover />
+        {/* 걷기 — 지은 공간 **안에** 들어간다. 켜지면 짓기·궤도 카메라가 함께 꺼진다 */}
+        <BrickWalker />
         <Streamer />
 
         {/* 카메라 조작 — 에디터와 **같은 컴포넌트**. 설정을 바꿀 땐 BrickOrbit만 고친다 */}
@@ -104,6 +113,15 @@ export default function BrickPrototype() {
 
         {/* ★ 도구 UI는 **에디터와 같은 컴포넌트**다 — 두 곳에 흩어지면 반드시 갈라진다 */}
         <BrickToolPanel showStudStyle />
+
+        {/* ★ 한 바퀴 완주용 — **방 하나 만들고 그 안에 들어가 본다.**
+            ⚠️ 걷기 버튼은 **도구 패널(공용)** 에 있다. 여기 또 두면 둘로 갈라진다.
+            방 만들기는 데모 생성기라 프로토타입에만 둔다. */}
+        <div className="text-[10px] uppercase text-muted mb-1">한 바퀴 해보기</div>
+        <button onClick={makeRoom} className={`${btn} w-full ${off}`}>방 만들고 들어가기</button>
+        <div className="mb-3 text-[10px] text-muted">
+          방 하나를 짓고 그 안에서 걷기가 시작된다. 마음에 안 들면 Ctrl+Z 한 번
+        </div>
 
         <div className="text-[10px] uppercase text-muted mb-1">폴리곤 예산 측정</div>
         <div className="flex gap-1 mb-1">

@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { STUD_STYLES } from '@/lib/brick/brickGeometry';
 import { MAT_CLASSES, PART_KINDS, PARTS, partsOfKind } from '@/lib/brick/parts';
+import { PROP_LIST } from '@/lib/brick/props';
 import { spinOf, tipOf, TIP_LABELS } from '@/lib/brick/rotation';
 import { BRICK_TEXTURES } from '@/lib/brick/textures';
 import { BRICK_COLORS, useBrickStore, type Tool } from '@/store/brickStore';
@@ -25,8 +26,8 @@ const label = 'text-[10px] uppercase text-muted mb-1';
 
 /** 돌기 모양은 룩·IP 검토용이라 프로토타입에서만 노출한다(BRICK_SYSTEM.md §8.5) */
 export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: boolean }) {
-  const { part, rot, color, mat, tex, studStyle, recentColors } = useBrickStore();
-  const { setPart, rotate, tipOver, setColor, setMat, setTex, setTool, setStudStyle, rememberColor } = useBrickStore();
+  const { part, prop, rot, color, mat, tex, studStyle, recentColors, walking } = useBrickStore();
+  const { setPart, setProp, rotate, tipOver, setColor, setMat, setTex, setTool, setStudStyle, rememberColor, setWalking } = useBrickStore();
   const [pickerOpen, setPickerOpen] = useState(false);
   const effTool = useEffectiveTool();
 
@@ -54,8 +55,10 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
       //   Ctrl+1~9는 브라우저 탭 전환이다. Ctrl은 도구 일시 반전에도 쓰인다.
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key >= '1' && e.key <= '9') {
-        const p = kindParts[Number(e.key) - 1];
-        if (p) setPart(p.id);
+        // 소품 탭에 있으면 숫자키도 **소품 목록**을 고른다 — 보고 있는 목록과 같아야 헷갈리지 않는다
+        const i = Number(e.key) - 1;
+        if (prop) { const p = PROP_LIST[i]; if (p) setProp(p.id); }
+        else { const p = kindParts[i]; if (p) setPart(p.id); }
       } else if (e.key === 'r' || e.key === 'R') {
         // Shift+R = 눕히기. 한 글쇠에 두 축을 담되 수식키로 갈라 둔다
         if (e.shiftKey) tipOver(); else rotate();
@@ -63,7 +66,7 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [kindParts, setPart, rotate, tipOver]);
+  }, [kindParts, prop, setPart, setProp, rotate, tipOver]);
 
   return (
     <>
@@ -78,7 +81,23 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
         ))}
       </div>
 
-      {/* 파츠가 16종이라 가로 나열이 안 맞는다 — 갈래 탭 + 격자 */}
+      {/* ★ 걷기 — **지은 것 안에 들어가 본다.** 짓기와 나란히 두는 이유:
+          "만들다가 바로 걸어본다"가 이 제품의 핵심 동작이라 깊은 메뉴에 숨기면 안 쓰게 된다. */}
+      <button
+        onClick={() => setWalking(!walking)}
+        title="지은 공간 안에 들어가 걸어 다닌다 · WASD 이동 · 드래그로 둘러보기 · Shift 빠르게"
+        className={`${btn} w-full mb-1 ${walking ? on : off}`}
+      >
+        {walking ? '▣ 걷기 끝내기' : '▶ 걸어보기'}
+      </button>
+      {walking && (
+        <div className="mb-2 text-[10px] text-muted">
+          WASD 이동 · 드래그로 둘러보기 · Shift 빠르게 · 턱은 자동으로 오른다
+        </div>
+      )}
+
+      {/* 파츠가 여럿이라 가로 나열이 안 맞는다 — 갈래 탭 + 격자.
+          **소품**은 파츠가 아니라 브릭 묶음이라 마지막 탭으로 따로 둔다(§22). */}
       <div className={label}>파츠 <span className="opacity-60">1~9 = 아래 목록 순서</span></div>
       <div className="flex gap-1 mb-1">
         {PART_KINDS.map((k) => (
@@ -86,18 +105,33 @@ export function BrickToolPanel({ showStudStyle = false }: { showStudStyle?: bool
             key={k.id}
             onClick={() => setPart(partsOfKind(k.id)[0].id)}
             title={k.note}
-            className={`${btn} flex-1 ${PARTS[part].kind === k.id ? on : off}`}
+            className={`${btn} flex-1 ${!prop && PARTS[part].kind === k.id ? on : off}`}
           >
             {k.label}
           </button>
         ))}
+        <button
+          onClick={() => setProp(PROP_LIST[0].id)}
+          title="미리 만들어 둔 브릭 묶음 — 클릭 한 번에 통째로 놓인다"
+          className={`${btn} flex-1 ${prop ? on : off}`}
+        >
+          소품
+        </button>
       </div>
       <div className="grid grid-cols-4 gap-1 mb-1">
-        {kindParts.map((p) => (
-          <button key={p.id} onClick={() => setPart(p.id)} className={`${btn} px-0 ${part === p.id ? on : off}`}>{p.label}</button>
-        ))}
+        {prop
+          ? PROP_LIST.map((p) => (
+            <button key={p.id} onClick={() => setProp(p.id)} className={`${btn} px-0 ${prop === p.id ? on : off}`}>{p.label}</button>
+          ))
+          : kindParts.map((p) => (
+            <button key={p.id} onClick={() => setPart(p.id)} className={`${btn} px-0 ${part === p.id ? on : off}`}>{p.label}</button>
+          ))}
       </div>
-      <div className="mb-3 text-[10px] text-muted">{PART_KINDS.find((k) => k.id === PARTS[part].kind)?.note}</div>
+      <div className="mb-3 text-[10px] text-muted">
+        {prop
+          ? '미리 만든 묶음을 통째로 놓는다 · 자기 색을 갖고 있어 팔레트 색을 안 쓴다 · R로 네 방향'
+          : PART_KINDS.find((k) => k.id === PARTS[part].kind)?.note}
+      </div>
 
       {/* 방향은 축이 둘이다 — **어느 면이 위인가**와 그 상태에서의 **제자리 회전**.
           하나로 합치면 원하는 방향까지 여러 번 눌러야 한다.

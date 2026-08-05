@@ -19,7 +19,8 @@ import {
 } from '@/lib/brick/strokeLock';
 import { CELL_X, CELL_Y, CELL_Z, worldToCellX, worldToCellY, worldToCellZ } from '@/lib/brick/grid';
 import { brickGeometry, type StudStyle } from '@/lib/brick/brickGeometry';
-import { PARTS } from '@/lib/brick/parts';
+import { extentOf, PARTS } from '@/lib/brick/parts';
+import { propBox } from '@/lib/brick/props';
 import type { BrickWorld } from '@/lib/brick/world';
 import { useBrickStore, type Tool } from '@/store/brickStore';
 import { BrickInstances, brickQuaternion, type BrickHit } from './BrickInstances';
@@ -126,7 +127,7 @@ function EraseHighlight({ world, brickId, studStyle }: {
   const b = brickId === null ? undefined : world.bricks.get(brickId);
   const geo = useMemo(() => (b ? brickGeometry(PARTS[b.part], true, studStyle) : null), [b, studStyle]);
   if (!b || !geo) return null;
-  const [x, y, z] = anchorCenterWorld({ x: b.x, y: b.y, z: b.z }, b.part, b.rot);
+  const [x, y, z] = anchorCenterWorld({ x: b.x, y: b.y, z: b.z }, PARTS[b.part], b.rot);
   // ⚠️ 방향은 24가지다 — Y축 각도(`rot * 90°`)로는 세운 브릭을 못 맞춘다(강조가 브릭을 벗어난다)
   return (
     <mesh geometry={geo} position={[x, y, z]} quaternion={brickQuaternion(b.rot)} raycast={() => null}>
@@ -137,9 +138,15 @@ function EraseHighlight({ world, brickId, studStyle }: {
 
 export function BrickBuilder({ onStats, onSpot }: Props) {
   const gl = useThree((s) => s.gl);
-  const { world, version, part, rot, studStyle } = useBrickStore();
+  const { world, version, part, prop, rot, studStyle, walking } = useBrickStore();
   const { place, removeBrick } = useBrickStore();
   const { beginBatch, endBatch, undo, redo } = useBrickStore();
+
+  /**
+   * 지금 놓을 것의 **바깥 상자** — 파츠 하나일 수도, 소품(브릭 묶음)일 수도 있다(§22).
+   * 배치 계산·고스트·막힘 판정이 **전부 이 하나**를 봐야 한다(E-5: 보여준 값과 놓는 값이 같아야 한다).
+   */
+  const box = useMemo(() => (prop ? propBox(prop) : PARTS[part]), [prop, part]);
 
   /** 커서 밑 브릭 — 어느 면에 붙일지, 지우기 도구가 무엇을 지울지 결정한다 */
   const [hoverBrick, setHoverBrick] = useState<number | null>(null);
@@ -148,9 +155,13 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
 
   const anchor = spot?.anchor ?? null;
   const valid = useMemo(
-    () => (anchor ? world.canPlace(part, anchor.x, anchor.y, anchor.z, rot) : false),
+    () => {
+      if (!anchor) return false;
+      const e = extentOf(box, rot);
+      return world.canPlaceBox(anchor.x, anchor.y, anchor.z, e.ex, e.ey, e.ez);
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [anchor, part, rot, world, version],
+    [anchor, box, rot, world, version],
   );
 
   useEffect(() => { onSpot?.(spot, valid); }, [spot, valid, onSpot]);
@@ -200,9 +211,9 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
     setHoverBrick(h ? h.brickId : null);
     lastHitRef.current = h ? { brickId: h.brickId, p: [h.point.x, h.point.y, h.point.z] } : null;
     const f = h ? faceOf(world, h.brickId, h.point.x, h.point.y, h.point.z) : null;
-    setSpot(f && h ? anchorFromFace(world, h.brickId, f, h.point.x, h.point.y, h.point.z, part, rot) : null);
+    setSpot(f && h ? anchorFromFace(world, h.brickId, f, h.point.x, h.point.y, h.point.z, box, rot) : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, version, part, rot, removeBrick]);
+  }, [world, version, box, rot, removeBrick]);
 
   /**
    * ★ **R(회전)·파츠 변경은 포인터 이벤트가 아니다.**
@@ -218,8 +229,8 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
     if (!last) return;
     if (!world.bricks.has(last.brickId)) { setSpot(null); return; }
     const f = faceOf(world, last.brickId, last.p[0], last.p[1], last.p[2]);
-    setSpot(f ? anchorFromFace(world, last.brickId, f, last.p[0], last.p[1], last.p[2], part, rot) : null);
-  }, [part, rot, world]);
+    setSpot(f ? anchorFromFace(world, last.brickId, f, last.p[0], last.p[1], last.p[2], box, rot) : null);
+  }, [box, rot, world]);
 
   /**
    * 놓기 획 진행 — 평면 위 칸을 받아 **잠근 층**에 놓는다.
@@ -279,6 +290,9 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
   //   안 묶으면 드래그로 자리를 고칠 때마다 op가 쌓여, Ctrl+Z를 수십 번 눌러야 브릭 하나가 사라진다.
   const onDown = useCallback((e: PointerEvent) => {
     if (e.button !== 0) return;
+    // ★ 걷기 중엔 짓지 않는다 — 좌드래그가 **둘러보기**로 넘어간다(§6).
+    //   한 버튼에 두 뜻을 주지 않는다는 규칙 그대로다(E-1).
+    if (useBrickStore.getState().walking) return;
     if (effTool === 'erase') {
       // 누르는 순간 획이 시작된다 — 뗄 때까지 지나가는 브릭이 계속 지워지고, **전부 되돌리기 한 번**이다.
       //   ★ 첫 브릭과 짚은 면으로 **획을 잠근다**(같은 갈래·같은 층·도달 거리) — strokeLock.ts 참고.
@@ -296,6 +310,9 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
     const a: [number, number, number] = [spot.anchor.x, spot.anchor.y, spot.anchor.z];
     const id = place(a[0], a[1], a[2]);
     if (id === null) { endBatch(); return; }
+    // ★ **소품은 클릭 한 번에 하나다.** 획을 시작하지 않는다 —
+    //   끌면 의자가 줄줄이 깔린다(§22 "안 하는 것").
+    if (prop) { endBatch(); return; }
     // 수평면(윗면·밑면)은 **면을 칠하고**, 수직면은 **끄는 방향으로 한 줄**을 긋는다.
     //   바닥은 한 획에 넓게 깔려야 하고, 옆면은 "끈 쪽으로 늘어난다"가 기대되는 동작이다.
     const isLine = spot.face.axis !== 1;
@@ -305,7 +322,7 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
       line: isLine ? { start: null, axis: null } : null,
     };
     setPlaceDrag({ spot, line: isLine });
-  }, [effTool, hoverBrick, removeBrick, spot, valid, place, beginBatch, endBatch, world]);
+  }, [effTool, hoverBrick, removeBrick, spot, valid, place, beginBatch, endBatch, world, prop]);
 
   const onUp = useCallback(() => {
     if (placeStrokeRef.current || eraseStrokeRef.current) endBatch();
@@ -353,14 +370,15 @@ export function BrickBuilder({ onStats, onSpot }: Props) {
         onStats={onStats}
         studStyle={studStyle}
       />
-      {/* 놓을 자리 안내는 **놓기 도구일 때만**. 지우기 중엔 놓을 자리가 없다 */}
-      {effTool === 'place' && <PlacementMarker spot={spot} part={part} rot={rot} valid={valid} />}
-      {effTool === 'erase' && <EraseHighlight world={world} brickId={hoverBrick} studStyle={studStyle} />}
+      {/* 놓을 자리 안내는 **놓기 도구일 때만**. 지우기 중엔 놓을 자리가 없다.
+          걷는 중엔 짓지 않으므로 둘 다 안 그린다 — 발밑에 빨간 사각형이 따라다니면 거슬린다. */}
+      {!walking && effTool === 'place' && <PlacementMarker spot={spot} part={box} rot={rot} valid={valid} />}
+      {!walking && effTool === 'erase' && <EraseHighlight world={world} brickId={hoverBrick} studStyle={studStyle} />}
       {/* 놓기 획 중에만 존재하는 좌표원 — 수평면은 그 면의 평면, 수직면은 카메라를 마주 보는 평면 */}
       {placeDrag && !placeDrag.line && <StrokePlane base={placeDrag.spot} onCell={onStrokeCell} />}
       {placeDrag && placeDrag.line && (
         <CameraPlane
-          origin={anchorCenterWorld(placeDrag.spot.anchor, part, rot)}
+          origin={anchorCenterWorld(placeDrag.spot.anchor, box, rot)}
           onPoint={onLinePoint}
         />
       )}

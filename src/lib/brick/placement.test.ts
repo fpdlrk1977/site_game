@@ -56,7 +56,7 @@ const FACES: Face[] = [
               for (const part of PART_IDS) {
                 for (const rot of ROTS) {
                   total++;
-                  const fp = anchorFromFace(w, tid, face, pt[0], pt[1], pt[2], part, rot)!;
+                  const fp = anchorFromFace(w, tid, face, pt[0], pt[1], pt[2], PARTS[part], rot)!;
                   const e = extentOf(PARTS[part], rot);
                   const ext = [e.ex, e.ey, e.ez];
                   const a = [fp.anchor.x, fp.anchor.y, fp.anchor.z];
@@ -110,7 +110,7 @@ const FACES: Face[] = [
 
   /** 그 회전에서 실제로 점유하는 칸들 */
   const cellsOf = (part: PartId, rot: Rot) => {
-    const fp = anchorFromFace(w, tid, top, pt[0], pt[1], pt[2], part, rot)!;
+    const fp = anchorFromFace(w, tid, top, pt[0], pt[1], pt[2], PARTS[part], rot)!;
     const e = extentOf(PARTS[part], rot);
     const out: string[] = [];
     for (let dx = 0; dx < e.ex; dx++) for (let dz = 0; dz < e.ez; dz++)
@@ -139,12 +139,12 @@ const FACES: Face[] = [
   const a = w.place('b1x1', 0, 30, 0, 0, '#fff', 'opaque')!;
   w.place('b1x1', 0, 33, 0, 0, '#fff', 'opaque'); // 위를 막아 둔다
 
-  const fp = anchorFromFace(w, a, { axis: 1, dir: 1 }, 0.25, 30.5 * CELL_Y, 0.25, 'b1x1', 0)!;
+  const fp = anchorFromFace(w, a, { axis: 1, dir: 1 }, 0.25, 30.5 * CELL_Y, 0.25, PARTS['b1x1'], 0)!;
   ok(fp.anchor.y === 33, `막혀 있어도 자리를 옮기지 않는다 — got y=${fp.anchor.y}, want 33`);
   ok(!w.canPlace('b1x1', fp.anchor.x, fp.anchor.y, fp.anchor.z, 0), '막힌 것을 canPlace가 false로 알려준다');
 
   // 옆은 비어 있으니 그쪽은 놓을 수 있다
-  const side = anchorFromFace(w, a, { axis: 0, dir: 1 }, 1 * CELL_X, 30.5 * CELL_Y, 0.25, 'b1x1', 0)!;
+  const side = anchorFromFace(w, a, { axis: 0, dir: 1 }, 1 * CELL_X, 30.5 * CELL_Y, 0.25, PARTS['b1x1'], 0)!;
   ok(w.canPlace('b1x1', side.anchor.x, side.anchor.y, side.anchor.z, 0), '빈 옆면은 놓을 수 있다');
   ok(side.anchor.x === 1 && side.anchor.y === 30, `옆면은 겨눈 칸 옆 같은 높이 — got ${side.anchor.x},${side.anchor.y}`);
 }
@@ -158,7 +158,7 @@ const FACES: Face[] = [
   for (const face of FACES) {
     for (const part of PART_IDS) {
       for (const rot of ROTS) {
-        const fp = anchorFromFace(w, tid, face, 0.5 * CELL_X, 30.5 * CELL_Y, 0.5 * CELL_Z, part, rot)!;
+        const fp = anchorFromFace(w, tid, face, 0.5 * CELL_X, 30.5 * CELL_Y, 0.5 * CELL_Z, PARTS[part], rot)!;
         const fixed = ([0, 1, 2] as FaceAxis[]).filter((x) => !fp.slide.includes(x));
         for (const d of [-40, -7, -1, 0, 1, 7, 40]) {
           const moved = slideAnchor(fp, d * CELL_X, d * CELL_Y, d * CELL_Z);
@@ -174,7 +174,7 @@ const FACES: Face[] = [
 
   let sideBad = 0;
   for (const face of FACES) {
-    const fp = anchorFromFace(w, tid, face, 0.5 * CELL_X, 30.5 * CELL_Y, 0.5 * CELL_Z, 'b1x1', 0)!;
+    const fp = anchorFromFace(w, tid, face, 0.5 * CELL_X, 30.5 * CELL_Y, 0.5 * CELL_Z, PARTS['b1x1'], 0)!;
     if (face.axis === 1) {
       if (fp.slide.length !== 2 || fp.slide.includes(1)) sideBad++;
     } else if (fp.slide.length !== 1 || fp.slide.includes(1)) sideBad++;
@@ -182,7 +182,7 @@ const FACES: Face[] = [
   ok(sideBad === 0, `수평면=2축 · 옆면=수평 1축, 높이는 어느 쪽도 안 미끄러진다 — 위반 ${sideBad}`);
 
   // 자유 축은 커서가 있는 칸을 그대로 따른다(보정 없음)
-  const top = anchorFromFace(w, tid, { axis: 1, dir: 1 }, 0.5 * CELL_X, 30.5 * CELL_Y, 0.5 * CELL_Z, 'b2x4', 0)!;
+  const top = anchorFromFace(w, tid, { axis: 1, dir: 1 }, 0.5 * CELL_X, 30.5 * CELL_Y, 0.5 * CELL_Z, PARTS['b2x4'], 0)!;
   const far = slideAnchor(top, 9.7 * CELL_X, 0, 4.2 * CELL_Z);
   ok(far.x === 9 && far.z === 4, `드래그도 커서가 있는 칸 그대로 — got ${far.x},${far.z}`);
 }
@@ -200,7 +200,7 @@ const FACES: Face[] = [
   for (const face of FACES) {
     for (const part of PART_IDS) {
       for (const rot of ROTS) {
-        const fp = anchorFromFace(w, tid, face, 0.5 * CELL_X, 30.5 * CELL_Y, 0.5 * CELL_Z, part, rot)!;
+        const fp = anchorFromFace(w, tid, face, 0.5 * CELL_X, 30.5 * CELL_Y, 0.5 * CELL_Z, PARTS[part], rot)!;
         const ax = face.axis;
         const a = [fp.anchor.x, fp.anchor.y, fp.anchor.z][ax];
         // 위쪽 면을 겨눴으면 브릭의 아래쪽이, 아래쪽 면이면 위쪽이 표면에 닿는다
@@ -213,7 +213,7 @@ const FACES: Face[] = [
   ok(bad === 0, `★ 미끄러짐 평면 = 브릭이 닿는 표면 — 위반 ${bad}/${n}`);
 
   // 그 평면 위에서 **겨눈 칸을 그대로 짚으면 자리가 안 변해야** 한다(클릭만 해도 옮겨지던 버그)
-  const top = anchorFromFace(w, tid, { axis: 1, dir: 1 }, 0.5 * CELL_X, 30.5 * CELL_Y, 1.5 * CELL_Z, 'b2x4', 0)!;
+  const top = anchorFromFace(w, tid, { axis: 1, dir: 1 }, 0.5 * CELL_X, 30.5 * CELL_Y, 1.5 * CELL_Z, PARTS['b2x4'], 0)!;
   const same = slideAnchor(top, 0.5 * CELL_X, top.planeAt, 1.5 * CELL_Z);
   ok(same.x === top.anchor.x && same.z === top.anchor.z,
     `같은 지점을 짚으면 자리가 안 변한다 — ${top.anchor.x},${top.anchor.z} → ${same.x},${same.z}`);
@@ -248,7 +248,7 @@ const FACES: Face[] = [
   for (const d of [-2, -0.6, -0.1, 0, 3.4, 4.5]) {
     const fp = anchorFromFace(
       w, tid, { axis: 1, dir: 1 },
-      (4 + d) * CELL_X, 3 * CELL_Y, (6 + d) * CELL_Z, 'b1x1', 0,
+      (4 + d) * CELL_X, 3 * CELL_Y, (6 + d) * CELL_Z, PARTS['b1x1'], 0,
     )!;
     if (fp.cell[0] < 4 || fp.cell[0] > 5 || fp.cell[2] < 6 || fp.cell[2] > 9) bad++;
   }

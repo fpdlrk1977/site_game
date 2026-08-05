@@ -17,8 +17,13 @@
 //   큰 브릭은 첫 칸이 겨눈 칸이고 나머지가 한 방향으로 뻗는다. 방향은 **회전(R)** 으로 바꾼다.
 
 import { CELL_X, CELL_Y, CELL_Z, worldToCellX, worldToCellY, worldToCellZ, type Rot } from './grid';
-import { extentOf, PARTS, pivotOffset, type PartId } from './parts';
+import { extentOf, PARTS, pivotOffset, type BrickPart } from './parts';
 import type { BrickWorld } from './world';
+
+// ★ 놓을 것은 **파츠 하나일 수도, 소품(브릭 묶음)일 수도** 있다(§22).
+//   그래서 이 파일은 `PartId`가 아니라 **`BrickPart` 객체**를 받는다 — 소품은 카탈로그에 없으므로
+//   id로는 못 넘긴다(`props.propBox`가 바깥 상자를 그런 객체로 만들어 준다).
+//   여기서 쓰는 건 **크기와 기준 칸뿐**이라 카탈로그에 있든 없든 상관없다.
 
 export interface Anchor { x: number; y: number; z: number }
 
@@ -92,7 +97,7 @@ export interface FacePlacement {
 export function anchorFromFace(
   world: BrickWorld, brickId: number, face: Face,
   px: number, py: number, pz: number,
-  part: PartId, rot: Rot,
+  part: BrickPart, rot: Rot,
 ): FacePlacement | null {
   const b = world.bricks.get(brickId);
   if (!b) return null;
@@ -106,7 +111,7 @@ export function anchorFromFace(
   for (let a = 0; a < 3; a++) cell[a] = Math.min(bHi[a], Math.max(bLo[a], toCell[a](p[a])));
   cell[face.axis] = face.dir > 0 ? bHi[face.axis] : bLo[face.axis]; // 면 쪽 표면 칸
 
-  const e = extentOf(PARTS[part], rot);
+  const e = extentOf(part, rot);
   const ext: [number, number, number] = [e.ex, e.ey, e.ez];
 
   // 새 브릭의 첫 칸. 면 축만 한 칸 비켜 놓는다(아래쪽 면이면 두께만큼).
@@ -117,7 +122,7 @@ export function anchorFromFace(
   // ★ **세로도 민다**(`pdy`) — 브릭을 세우면 기준 칸이 위아래로도 밀리기 때문이다.
   //   눕히기 0(rot 0~3)에서는 `pdy`가 늘 0이라 예전 식과 **글자 그대로 같다.**
   //   윗면·밑면을 겨눈 경우엔 어차피 바로 아래 줄이 y를 덮어쓴다(표면에 얹혀야 하므로).
-  const [pdx, pdy, pdz] = pivotOffset(PARTS[part], rot);
+  const [pdx, pdy, pdz] = pivotOffset(part, rot);
   const anchor: [number, number, number] = [cell[0] - pdx, cell[1] - pdy, cell[2] - pdz];
   anchor[face.axis] = face.dir > 0 ? cell[face.axis] + 1 : cell[face.axis] - ext[face.axis];
 
@@ -149,8 +154,8 @@ export function slideAnchor(base: FacePlacement, px: number, py: number, pz: num
 }
 
 /** 앵커 → 인스턴스 배치용 월드 중심 좌표 */
-export function anchorCenterWorld(a: Anchor, part: PartId, rot: Rot): [number, number, number] {
-  const e = extentOf(PARTS[part], rot);
+export function anchorCenterWorld(a: Anchor, part: BrickPart, rot: Rot): [number, number, number] {
+  const e = extentOf(part, rot);
   return [
     (a.x + e.ex / 2) * CELL_X,
     (a.y + e.ey / 2) * CELL_Y,

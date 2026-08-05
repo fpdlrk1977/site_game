@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useBrickStore } from '@/store/brickStore';
 
 export function BrickMover() {
   const keys = useRef(new Set<string>());
@@ -39,6 +40,8 @@ export function BrickMover() {
   const move = useRef(new THREE.Vector3());
 
   useFrame(({ camera, controls }, dt) => {
+    // 걷는 중엔 `BrickWalker`가 카메라를 몬다 — 둘이 같이 밀면 서로 싸운다
+    if (useBrickStore.getState().walking) return;
     const k = keys.current;
     const ctrl = controls as { target?: THREE.Vector3; update?: () => void } | null;
     if (!ctrl?.target) return;

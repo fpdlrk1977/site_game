@@ -525,7 +525,7 @@ function BrickGroup({ group, world, studStyle, light, onHover }: {
     group.ids.forEach((brickId, i) => {
       const b = world.bricks.get(brickId);
       if (!b) return;
-      const [wx, wy, wz] = anchorCenterWorld(b, b.part, b.rot);
+      const [wx, wy, wz] = anchorCenterWorld(b, PARTS[b.part], b.rot);
       // 회전 행렬에 **중심 좌표만 얹는다** — 크기는 늘 1이라 compose를 거칠 이유가 없다.
       _m.copy(ROT_MATRICES[b.rot]);
       _m.setPosition(_p.set(wx, wy, wz));

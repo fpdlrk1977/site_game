@@ -5,15 +5,18 @@
 
 import { create } from 'zustand';
 import {
-  CELL_X, CELL_Z, CHUNK_X, CHUNK_Z, chunkKey, chunkOfY,
+  CELL_X, CELL_Y, CELL_Z, CHUNK_X, CHUNK_Z, chunkKey, chunkOfY,
   type ChunkCoord, type Rot,
 } from '@/lib/brick/grid';
-import type { MatClass, PartId } from '@/lib/brick/parts';
+import { extentOf, PARTS, type BrickPart, type MatClass, type PartId } from '@/lib/brick/parts';
+import { bricksOfProp, propBox, type PropId } from '@/lib/brick/props';
 import { nextExactTip, nextSpin } from '@/lib/brick/rotation';
 import type { StudStyle } from '@/lib/brick/brickGeometry';
 import { decodeChunk, encodeChunk, toBrickData } from '@/lib/brick/serialize';
 import { localBrickStorage, supabaseBrickStorage, type BrickStorage, type ChunkWrite } from '@/lib/brick/storage';
 import { loadRecentColors, pushRecentColor } from '@/lib/brick/colorPrefs';
+import { demoRoom, roomSpawn } from '@/lib/brick/demoRoom';
+import { unitsOf } from '@/lib/brick/units';
 import { BrickWorld } from '@/lib/brick/world';
 import { deepenAround, forgetTerrainChunk, generateSurface, noteLoadedTerrain, resetTerrainState, SURFACE_Y, terrainKey, type TerrainGenerated } from '@/lib/brick/terrain';
 
@@ -78,17 +81,13 @@ function pushEntry(e: UndoEntry): void {
   redoStack.length = 0; // 새 편집이 생기면 다시 실행할 미래는 사라진다
 }
 
-function record(op: UndoOp): void {
-  if (batch) batch.push(op);
-  else pushEntry([op]);
-}
-
 /**
  * 한 조작이 만든 op 여러 개를 **한 단계로** 기록한다.
  *
- * ★ 이걸 안 쓰고 `record`를 여러 번 부르면 배치 밖에서 **op마다 한 단계**가 되어,
- *   지형을 한 번 팠는데 Ctrl+Z를 수십 번 눌러야 원상복구되고(그 사이 상태는 반쯤 파인 채다)
- *   실제로 그 버그가 났다.
+ * ★ op마다 따로 기록하면 배치 밖에서 **op 하나가 한 단계**가 되어,
+ *   지형을 한 번 팠는데 Ctrl+Z를 수십 번 눌러야 원상복구된다(그 사이 상태는 반쯤 파인 채다).
+ *   실제로 그 버그가 났다. **브릭 하나짜리 조작도 이 함수를 쓴다** —
+ *   `2×4` 한 번이 단위 여덟 개인 지금은 "하나짜리 조작"이라는 게 사실상 없다(§20).
  */
 function recordAll(ops: UndoOp[]): void {
   if (ops.length === 0) return;
@@ -170,9 +169,36 @@ interface BrickState {
   tool: Tool;
   setTool: (t: Tool) => void;
 
+  /**
+   * 걷기 모드 — 지은 공간 **안에 들어가** 걸어 다닌다(`BRICK_PLAN.md` §6).
+   *
+   * ★ 켜지면 짓기·궤도 카메라가 **함께** 꺼진다. 한 화면에서 두 조작 체계가 동시에 살아 있으면
+   *   좌클릭이 무슨 뜻인지 알 수 없다(예전 우클릭 = 회전 + 삭제와 같은 실수).
+   */
+  walking: boolean;
+  setWalking: (w: boolean) => void;
+  /**
+   * 걷기를 시작할 자리(월드 미터). 있으면 카메라 대신 여기서 시작한다.
+   *
+   * ★ 이게 없으면 "방을 만들고 그 안에서 시작하기"를 하려고 **카메라를 먼저 옮긴 뒤** 걷기를 켜야 하는데,
+   *   그러면 두 effect의 실행 순서에 기대게 된다(한쪽이 먼저 돌면 엉뚱한 데서 시작한다).
+   *   값으로 넘기면 순서와 무관해진다.
+   */
+  walkSpawn: [number, number, number] | null;
+
   /** 돌기 모양 — 레고와의 시각적 차별화 검토용(BRICK_SYSTEM.md §8.5). 저장 데이터엔 영향 없음 */
   studStyle: StudStyle;
   setStudStyle: (s: StudStyle) => void;
+
+  /**
+   * 고른 **소품**(`BRICK_PLAN.md` §22). `null`이면 파츠를 놓는다.
+   *
+   * ★ 소품은 **자기 색·재료를 갖는다** — 팔레트에서 고른 색을 안 쓴다. 그래야 "소품"이지 "붓"이 아니다.
+   */
+  prop: PropId | null;
+  setProp: (p: PropId | null) => void;
+  /** 지금 놓을 것의 **바깥 상자** — 배치·고스트·막힘 판정이 전부 이걸 쓴다 */
+  placingBox: () => BrickPart;
 
   setPart: (p: PartId) => void;
   setRot: (r: Rot) => void;
@@ -217,6 +243,12 @@ interface BrickState {
   clear: () => Promise<void>;
   /** 스트레스 테스트 — 꽉 찬 직육면체를 채워 폴리곤 예산을 잰다 */
   stressFill: (studsX: number, studsZ: number, layers: number) => void;
+
+  /**
+   * **데모 방 하나를 통째로 만든다**(`BRICK_PLAN.md` §23) — 되돌리기 한 번으로 사라진다.
+   * 돌아오는 값은 방 안에서 설 자리(월드 미터)라, 호출부가 카메라를 거기로 옮기고 걷기를 켠다.
+   */
+  buildDemoRoom: () => [number, number, number];
 
   // ── 저장 (P1) ──────────────────────────────────────────────────────────
   /** 'idle' 저장할 것 없음 · 'pending' 변경 있음 · 'saving' 쓰는 중 · 'saved' 방금 저장됨 */
@@ -312,7 +344,8 @@ export function setBrickStorage(s: BrickStorage): void {
   chunkIndex.clear();
   terrainDone.clear();
   resetTerrainState();
-  useBrickStore.setState({ world: new BrickWorld(), version: 0, loaded: false, saveState: 'idle' });
+  // ★ 걷기도 끈다 — 월드가 통째로 바뀌는데 서 있던 자리를 들고 있으면 **허공에서 시작**한다
+  useBrickStore.setState({ world: new BrickWorld(), version: 0, loaded: false, saveState: 'idle', walking: false, walkSpawn: null });
 }
 
 export const useBrickStore = create<BrickState>()((set, get) => ({
@@ -324,13 +357,14 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   color: BRICK_COLORS[0],
   recentColors: [], // ★ 초기값은 반드시 빈 배열 — 초기화에서 localStorage를 읽으면 SSR과 어긋난다(hydrateRecentColors 참고)
   mat: 'opaque',
-  // 기본값 = **모따기**(사용자 지정, 2026-08-04). 제품의 얼굴은 기본값이 정한다 —
-  // 스크린샷·템플릿·대부분의 사용자 콘텐츠가 이 모양으로 나온다(BRICK_SYSTEM.md §8.5).
+  // 기본값 = **라인**(사용자 확인 2026-08-05 — *"모따기는 없어도 될 것 같아"*).
+  // 민짜 상자 + 셰이더 외곽선이라 브릭 경계는 그대로 읽히고, **삼각형이 브릭당 108 → 12**다.
   //
-  // ⚠️ **삼각형이 브릭당 12 → 108로 9배다.** 모따기는 돌기가 없어서 **가려져도 줄어들 데가 없다**
-  //   (돌기형은 위가 덮이면 12로 떨어진다). 밀집 구조에서 폴리곤이 가장 많이 나오는 선택이다.
-  //   성능이 아니라 **룩** 때문에 고른 것이고, 무거워지면 '라인'으로 되돌리면 된다.
-  studStyle: 'none',
+  // ★ 제품의 얼굴은 기본값이 정한다 — 스크린샷·템플릿·대부분의 콘텐츠가 이 모양으로 나온다
+  //   (BRICK_SYSTEM.md §8.5). 모따기는 룩 때문에 골랐던 것인데, **실제로 걸어 보고**
+  //   없어도 된다는 판정이 나왔다. 폴리곤이 9배 싸지는 건 덤이다.
+  //   다시 보고 싶으면 도구 패널의 **돌기 모양**에서 한 번만 누르면 된다.
+  studStyle: 'line',
 
   setStudStyle: (s) => {
     set({ studStyle: s });
@@ -340,7 +374,19 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
   tool: 'place',
   setTool: (t) => set({ tool: t }),
 
-  setPart: (p) => set({ part: p }),
+  walking: false,
+  setWalking: (w) => set({ walking: w, ...(w ? {} : { walkSpawn: null }) }),
+  walkSpawn: null,
+
+  prop: null,
+  // 소품과 파츠는 **둘 중 하나만** 골라져 있다 — 한쪽을 고르면 다른 쪽은 풀린다
+  setProp: (p) => set({ prop: p }),
+  placingBox: () => {
+    const s = get();
+    return s.prop ? propBox(s.prop) : PARTS[s.part];
+  },
+
+  setPart: (p) => set({ part: p, prop: null }),
   setRot: (r) => set({ rot: r }),
   rotate: () => set((s) => ({ rot: nextSpin(s.rot) as Rot })),
   tipOver: () => set((s) => ({ rot: nextExactTip(s.rot) as Rot })),
@@ -388,14 +434,43 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     afterHistory(set);
   },
 
+  /**
+   * 놓기 — 고른 파츠를 **1×1 단위 여러 개**로 펼쳐 놓는다(`BRICK_PLAN.md` §20).
+   * 돌아오는 값은 **첫 단위의 id**(호출부는 "놓였나/안 놓였나"만 본다).
+   *
+   * ★ **막힘 판정은 큰 파츠의 AABB로 한 번에** 한다 — 단위들이 그 AABB를 정확히 채우므로 결과가 같고,
+   *   단위마다 따로 검사하면 **부분 배치**가 되어 "겨눈 대로 놓거나 빨강" 규칙이 깨진다(E-00).
+   *
+   * ★ `place` 대신 `placeFast` × N + `refreshPending()` 한 번을 쓴다 —
+   *   `place`는 브릭마다 이웃 가시성을 다시 잡아서, 단위 여덟 개면 그 일을 여덟 번 한다.
+   *   ⚠️ `placeFast`는 가시성을 안 잡으므로 **`refreshPending()`을 빠뜨리면 브릭이 조용히 안 그려진다**(C-1).
+   */
   place: (x, y, z) => {
-    const { world, part, rot, color, mat, tex } = get();
-    const id = world.place(part, x, y, z, rot, color, mat, tex);
-    if (id === null) return null;
-    record({ kind: 'add', id, b: { part, x, y, z, rot, color, mat, tex } });
+    const { world, part, prop, rot, color, mat, tex } = get();
+    // 놓을 것 = 소품이면 그 브릭들, 아니면 고른 파츠를 1×1 단위로 펼친 것.
+    // ★ 소품은 **자기 색·재료**를 들고 오므로 팔레트 값을 안 쓴다(§22).
+    const put = prop
+      ? bricksOfProp(prop, x, y, z, rot)
+      : unitsOf(part, x, y, z, rot).map((u) => ({ ...u, color, mat, tex }));
+
+    const box = extentOf(prop ? propBox(prop) : PARTS[part], rot);
+    if (!world.canPlaceBox(x, y, z, box.ex, box.ey, box.ez)) return null;
+
+    let first: number | null = null;
+    const ops: UndoOp[] = [];
+    for (const u of put) {
+      const id = world.placeFast(u.part, u.x, u.y, u.z, u.rot, u.color, u.mat, u.tex);
+      if (id === null) continue;
+      if (first === null) first = id;
+      ops.push({ kind: 'add', id, b: { part: u.part, x: u.x, y: u.y, z: u.z, rot: u.rot, color: u.color, mat: u.mat, tex: u.tex } });
+    }
+    world.refreshPending();
+    if (first === null) return null;
+    // ★ 단위 여덟 개는 **한 번의 조작**이다 — `record`를 여덟 번 부르면 Ctrl+Z를 여덟 번 눌러야 한다
+    recordAll(ops);
     set((s) => ({ version: s.version + 1, saveState: 'pending', undoDepth: undoStack.length, redoDepth: redoStack.length }));
     scheduleLight(set);
-    return id;
+    return first;
   },
 
 
@@ -447,13 +522,45 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
     await get().streamAround(lastCenter.x, lastCenter.z);
   },
 
+  /**
+   * 데모 방 — **지면 위에** 짓는다. 지형과 겹치지 않도록 y=0(지면)부터 올린다.
+   *
+   * ★ 원점에서 조금 떨어뜨린다 — 이미 지어 둔 것 위에 덮어쓰면 남의 작업이 사라진다.
+   *   막힌 칸은 `placeFast`가 알아서 건너뛰므로 최악이라도 방이 덜 지어질 뿐이다.
+   */
+  buildDemoRoom: () => {
+    const { world } = get();
+    const OX = 24, OY = 0, OZ = 24;
+    const idFrom = world.nextBrickId;
+    for (const b of demoRoom(OX, OY, OZ)) {
+      world.placeFast(b.part, b.x, b.y, b.z, b.rot, b.color, b.mat, b.tex);
+    }
+    world.refreshPending();
+    // ★ 한 번의 조작 = 되돌리기 한 단계. 마음에 안 들면 Ctrl+Z 한 번에 사라져야 한다
+    const ops: UndoOp[] = [];
+    for (let id = idFrom; id < world.nextBrickId; id++) {
+      const nb = world.bricks.get(id);
+      if (nb) ops.push({ kind: 'add', id, b: snapOf(nb) });
+    }
+    recordAll(ops);
+    set((s) => ({ version: s.version + 1, saveState: 'pending', undoDepth: undoStack.length, redoDepth: redoStack.length }));
+    world.recomputeLight(); // 실내는 빛이 확 달라진다 — 디바운스를 기다릴 이유가 없다
+    const [sx, sy, sz] = roomSpawn(OX, OY, OZ);
+    const at: [number, number, number] = [(sx + 0.5) * CELL_X, sy * CELL_Y, (sz + 0.5) * CELL_Z];
+    set({ walkSpawn: at });
+    return at;
+  },
+
   stressFill: (studsX, studsZ, layers) => {
     const { world, color } = get();
     // 2×4 브릭을 격자로 빽빽이. 대량이라 placeFast + 마지막에 한 번 recomputeAll
+    // ★ **실제 배치와 같은 경로로** 단위까지 펼친다 — 안 그러면 스트레스 수치가 진짜보다 8배 작게 나온다.
     for (let ly = 0; ly < layers; ly++) {
       for (let ix = 0; ix < studsX; ix += 2) {
         for (let iz = 0; iz < studsZ; iz += 4) {
-          world.placeFast('b2x4', ix, ly * 3, iz, 0, color, 'opaque');
+          for (const u of unitsOf('b2x4', ix, ly * 3, iz, 0)) {
+            world.placeFast(u.part, u.x, u.y, u.z, u.rot, color, 'opaque');
+          }
         }
       }
     }
@@ -534,10 +641,15 @@ export const useBrickStore = create<BrickState>()((set, get) => ({
           loadedAny = true;
           if (provesTerrainGenerated(c)) markTerrainGenerated(c); // 지면층만 지형을 증명한다
           for (const d of decodeChunk(data, c.cx, c.cy, c.cz)) {
+            // ★ 옛 저장물의 큰 파츠(`b2x4` 등)는 **읽으면서 1×1 단위로 갈라진다**(§20 지연 마이그레이션).
+            //   저장소는 안 건드린다 — 그 청크를 편집하면 그때 단위로 다시 저장된다.
+            //   ⚠️ 여기서 안 펼치면 **옛 월드만 안 쪼개진 채 남는다.** 에러도 안 나고 화면도 그럴듯하다.
             // ⚠️ `tex`(무늬)를 빠뜨리면 **기본값 0(민짜)** 이 들어가 저장해 둔 무늬가 통째로 사라진다.
             //   실제로 그랬다(2026-08-02) — 저장·디코드는 멀쩡한데 여기서만 안 넘겨서,
             //   새로고침하면 모든 브릭이 하얗게 변했다. 에러가 없어서 눈으로만 알 수 있었다.
-            world.placeFast(d.part, d.x, d.y, d.z, d.rot, d.color, d.mat, d.tex);
+            for (const u of unitsOf(d.part, d.x, d.y, d.z, d.rot)) {
+              world.placeFast(u.part, u.x, u.y, u.z, u.rot, d.color, d.mat, d.tex);
+            }
             // 불러온 지형의 최하단을 학습 — 이어서 팔 때 판 자리가 되살아나지 않게
             if (d.part === 'terrain') noteLoadedTerrain(world, d.x, d.y, d.z);
           }

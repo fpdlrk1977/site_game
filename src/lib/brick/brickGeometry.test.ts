@@ -1,6 +1,6 @@
 // 실행: npx tsx src/lib/brick/brickGeometry.test.ts
 //
-// 경사(쐐기) 파츠의 **치수와 방향**을 잠근다.
+// 파츠 메시의 **치수·UV·모따기**를 잠근다.
 // 치수가 틀리면 격자에서 삐져나오거나 틈이 생기는데, 화면에서 미묘해서 늦게 발견된다.
 
 import { brickGeometry, triCount } from './brickGeometry';
@@ -28,79 +28,20 @@ function bounds(g: ReturnType<typeof brickGeometry>) {
   return { lo, hi };
 }
 
-/** 특정 z에서의 최대 높이 — 경사가 어느 쪽으로 내려가는지 본다 */
-function maxYAt(g: ReturnType<typeof brickGeometry>, z: number, eps = 1e-6) {
+/** 모서리(여덟 꼭짓점)에 딱 붙은 정점 수 — 0이면 모따기가 먹었다는 뜻 */
+function sharpCorners(g: ReturnType<typeof brickGeometry>, eps = 1e-6) {
+  const { lo, hi } = bounds(g);
   const p = g.getAttribute('position');
-  let y = -Infinity;
+  let n = 0;
   for (let i = 0; i < p.count; i++) {
-    if (Math.abs(p.getComponent(i, 2) - z) < eps) y = Math.max(y, p.getComponent(i, 1));
+    let all = true;
+    for (let k = 0; k < 3; k++) {
+      const v = p.getComponent(i, k);
+      if (Math.abs(v - lo[k]) > eps && Math.abs(v - hi[k]) > eps) { all = false; break; }
+    }
+    if (all) n++;
   }
-  return y;
-}
-
-// ── 치수 — 점유 칸(AABB)과 정확히 같아야 한다 ─────────────
-for (const id of ['s1x2', 's2x2', 'si1x2'] as const) {
-  const part = PARTS[id];
-  const g = brickGeometry(part, true, 'line');
-  const { lo, hi } = bounds(g);
-  near(hi[0] - lo[0], part.sx * CELL_X, `${id} 폭`);
-  near(hi[1] - lo[1], part.h * CELL_Y, `${id} 높이`);
-  near(hi[2] - lo[2], part.sz * CELL_Z, `${id} 길이`);
-  ok(Math.abs(lo[0] + hi[0]) < 1e-6 && Math.abs(lo[1] + hi[1]) < 1e-6 && Math.abs(lo[2] + hi[2]) < 1e-6,
-    `${id} 원점 중심 — 인스턴스 좌표계와 맞는다`);
-  ok(triCount(g) === 8, `${id} 삼각기둥 = 8삼각형 — ${triCount(g)}`);
-}
-
-// ── ★ 모든 면이 바깥을 향하는가 (감기 방향) ────────────────
-//
-//   볼록한 도형이므로, **도형 안의 한 점**에서 각 면의 무게중심으로 간 방향과 그 면의 법선은 같은 쪽이어야 한다.
-//   이게 뒤집히면 뒷면 컬링에 잘려 **면이 텅 비어 보인다** — 실제로 사각면 세 장이 전부 뒤집혀 있었고,
-//   치수·삼각형 수만 보던 테스트는 그걸 통과시켰다.
-//
-//   ⚠️ 기준점을 **원점**으로 잡으면 안 된다 — 쐐기는 **경사면이 원점을 지나서** 내적이 0이 되고,
-//      멀쩡한 면이 뒤집힌 것으로 잡힌다(처음에 그렇게 짰다가 걸렀다).
-//      모든 꼭짓점의 평균은 볼록 결합이라 **항상 도형 안**에 있다.
-for (const id of ['s1x2', 's2x2', 'si1x2'] as const) {
-  const g = brickGeometry(PARTS[id], true, 'line');
-  const p = g.getAttribute('position');
-  const n = g.getAttribute('normal');
-  let ix = 0, iy = 0, iz = 0;
-  for (let i = 0; i < p.count; i++) { ix += p.getX(i); iy += p.getY(i); iz += p.getZ(i); }
-  ix /= p.count; iy /= p.count; iz /= p.count;
-
-  let bad = 0;
-  for (let t = 0; t < p.count; t += 3) {
-    let cx = 0, cy = 0, cz = 0;
-    for (let k = 0; k < 3; k++) { cx += p.getX(t + k); cy += p.getY(t + k); cz += p.getZ(t + k); }
-    cx /= 3; cy /= 3; cz /= 3;
-    const dot = (cx - ix) * n.getX(t) + (cy - iy) * n.getY(t) + (cz - iz) * n.getZ(t);
-    if (dot <= 1e-9) bad++;
-  }
-  ok(bad === 0, `★ ${id}: 모든 면이 바깥을 향한다 — 뒤집힌 면 ${bad}장`);
-}
-
-// ── 방향 — 경사는 +Z로 내려가고, 역경사는 아래가 깎인다 ─────
-{
-  const part = PARTS.s1x2;
-  const g = brickGeometry(part, true, 'line');
-  const { lo, hi } = bounds(g);
-  near(maxYAt(g, lo[2]), hi[1], '★ 경사: −Z쪽이 가장 높다');
-  near(maxYAt(g, hi[2]), lo[1], '★ 경사: +Z쪽은 바닥까지 내려간다');
-}
-
-{
-  const part = PARTS.si1x2;
-  const g = brickGeometry(part, true, 'line');
-  const { lo, hi } = bounds(g);
-  near(maxYAt(g, lo[2]), hi[1], '역경사: −Z쪽도 천장까지 있다');
-  near(maxYAt(g, hi[2]), hi[1], '★ 역경사: +Z쪽도 천장까지 — 깎이는 건 아랫면이다');
-}
-
-// ── 돌기 스타일과 무관 ────────────────────────────────────
-{
-  const a = triCount(brickGeometry(PARTS.s1x2, true, 'round'));
-  const b = triCount(brickGeometry(PARTS.s1x2, false, 'line'));
-  ok(a === b && a === 8, `★ 경사는 돌기 스타일·유무와 무관하게 같은 메시 — ${a}, ${b}`);
+  return n;
 }
 
 // ── 상자 파츠는 그대로 ────────────────────────────────────
@@ -188,15 +129,6 @@ for (const id of ['s1x2', 's2x2', 'si1x2'] as const) {
     const plateF = faceUV(brickGeometry(PARTS.p1x2, false, 'line'), 2, 1);
     near(plateF.hi[1], 1, '★ 플레이트도 위 끝 = 1 — 잔디 풀 띠가 위에 남는다');
     near(plateF.lo[1], 1 - 1 / 3, '★ 플레이트 옆면은 위쪽 ⅓만 (브릭과 같은 밀도)');
-  }
-
-  // 경사도 무늬를 받는다 — 쐐기엔 원래 uv 자체가 없었다
-  {
-    const g = brickGeometry(PARTS.s1x2, false, 'line');
-    const uv = g.getAttribute('aTexUV');
-    let span = 0;
-    for (let i = 0; i < uv.count; i++) span = Math.max(span, Math.abs(uv.getX(i)));
-    ok(span > 0.5, `★ 경사 파츠도 aTexUV가 퍼져 있다 — 최대 ${span.toFixed(2)}`);
   }
 
   // ★ 모든 파츠에 `uv`(면당 0~1)가 있어야 한다 — 경계선 셰이더가 이걸로 가장자리를 찾는다.
@@ -307,9 +239,49 @@ for (const id of ['s1x2', 's2x2', 'si1x2'] as const) {
 
   // 얇은 파츠는 이웃을 감추면 안 된다 — 감추면 그 너머에 구멍이 뚫린다
   for (const id of THIN) ok(!occludes(id), `${id}: 이웃 면을 감추지 않는다`);
+
+  // ── ★★ 모따기가 가는 파츠에도 걸린다 (2026-08-05 사용자 신고) ────────────
+  //
+  // 기본 돌기 스타일이 **모따기**인데 가는 파츠만 `BoxGeometry`를 쓰고 있어서,
+  // 기둥·봉·패널만 모서리가 **날카로웠다.** 브릭 옆에 세우면 혼자 각져 보인다.
+  //
+  // ★ 판별은 **모서리에 딱 붙은 정점이 있는가**로 한다. 삼각형 수만 보면
+  //   "메시가 바뀌었다"까지만 알고 **실제로 깎였는지는 모른다**.
+  {
+    const boxRef = sharpCorners(brickGeometry(PARTS.b1x1, false, 'none'));
+    ok(boxRef === 0, `기준: 브릭은 모따기에서 모서리가 깎인다 — 남은 꼭짓점 ${boxRef}`);
+
+    for (const id of THIN) {
+      const beveled = brickGeometry(PARTS[id], false, 'none');
+      const sharp = brickGeometry(PARTS[id], false, 'line');
+      ok(sharpCorners(beveled) === 0, `★★ ${id}: 모따기에서 모서리가 깎인다 — 남은 꼭짓점 ${sharpCorners(beveled)}`);
+      ok(sharpCorners(sharp) > 0, `${id}: '라인' 스타일에서는 각진 상자 그대로 — ${sharpCorners(sharp)}`);
+      ok(triCount(beveled) === triCount(brickGeometry(PARTS.b1x1, false, 'none')),
+        `${id}: 브릭과 같은 모따기 메시 — ${triCount(beveled)}`);
+
+      // ⚠️ 깎아도 **칸 밖으로 나가지 않고** 그리는 크기도 안 변한다(깎는 건 안쪽으로만)
+      const b = bounds(beveled), s = bounds(sharp);
+      for (let k = 0; k < 3; k++) {
+        near(b.hi[k] - b.lo[k], s.hi[k] - s.lo[k], `${id}: 모따기해도 축 ${k} 크기가 그대로`);
+      }
+    }
+
+    // ★ 얇은 축이 0.1m(패널)라 **깎는 폭을 안 조이면 메시가 뒤집힌다** — 두께의 절반 미만이어야 한다.
+    //   그 경계를 지키는지는 "폭이 그대로인가"(위)와 "면이 바깥을 향하는가"(아래)로 잠근다.
+    for (const id of THIN) {
+      const g = brickGeometry(PARTS[id], false, 'none');
+      const p = g.getAttribute('position'), n = g.getAttribute('normal');
+      let bad = 0;
+      for (let i = 0; i < p.count; i++) {
+        // 볼록 도형이라 중심(원점)에서 정점으로 간 방향과 법선이 같은 쪽이어야 한다
+        if (p.getX(i) * n.getX(i) + p.getY(i) * n.getY(i) + p.getZ(i) * n.getZ(i) <= 0) bad++;
+      }
+      ok(bad === 0, `★ ${id}: 모따기한 면이 전부 바깥을 향한다(뒤집히지 않았다) — 뒤집힌 정점 ${bad}`);
+    }
+  }
 }
 
-console.log(`\n브릭 지오메트리(경사) 테스트: ${pass}/${pass + fails.length} 통과`);
+console.log(`\n브릭 지오메트리(치수·UV·모따기) 테스트: ${pass}/${pass + fails.length} 통과`);
 if (fails.length) {
   console.log('\n실패:');
   for (const f of fails) console.log('  ✗ ' + f);

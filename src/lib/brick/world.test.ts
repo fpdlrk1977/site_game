@@ -432,12 +432,13 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
     ok(revOf(keyA) > before, `★★ 이음매가 바뀌면 그 리전의 리비전이 오른다 — ${before} → ${revOf(keyA)}`);
   }
 
-  // ⑦ 경사는 대상이 아니다 — 면이 대각선이라 축에 안 떨어지고, 애초에 이웃을 안 가린다
+  // ⑦ 가는 파츠는 대상이 아니다 — 옆이 뚫려 있어 애초에 이웃을 안 가린다
+  //    (경사가 맡던 자리다. 경사는 2026-08-05에 삭제됐고, 남은 non-occluding 모양이 이것뿐이다)
   {
     const w = new BrickWorld();
-    const slope = w.place('s1x2', 0, 30, 0, 0, '#fff', 'transparent')!;
+    const panel = w.place('w1x1', 0, 30, 0, 0, '#fff', 'transparent')!;
     w.place('b2x2', 1, 30, 0, 0, '#fff', 'transparent');
-    ok((w.faceHidden.get(slope) ?? 0) === 0, '경사는 마스크를 만들지 않는다');
+    ok((w.faceHidden.get(panel) ?? 0) === 0, '가는 파츠는 마스크를 만들지 않는다');
   }
 }
 
@@ -552,16 +553,16 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
   }
 }
 
-// ── ★ 경사는 이웃을 감추지 않는다 (non-occluding) ────────────────────────
-//   경사는 칸을 차지하면서도 **대각선이 뚫려 있다.** 감춤으로 치면 그 너머 브릭이 안 그려져
+// ── ★ 가는 파츠는 이웃을 감추지 않는다 (non-occluding) ───────────────────
+//   기둥·봉·패널은 칸을 차지하면서도 **옆이 뚫려 있다.** 감춤으로 치면 그 너머 브릭이 안 그려져
 //   뚫린 쪽으로 **구멍**이 보인다. 화면에서만 드러나는 종류라 여기서 잠근다.
+//   (경사가 맡던 자리다 — 경사는 2026-08-05에 삭제됐다)
 {
   /**
    * 1×1 브릭(칸 (0,0..2,0))을 여섯 방향에서 막고, 가운데가 그려지는지 본다.
-   * `front`만 갈아끼운다 — 경사는 1×2라 여섯 면을 다 경사로 감싸면 **서로 겹쳐 배치가 실패**한다
-   * (처음에 그렇게 짰더니 사보타주를 넣어도 테스트가 통과했다).
+   * `front`만 갈아끼운다 — 한 면만 뚫려도 그려져야 한다는 것이 규칙이므로 그걸 그대로 잰다.
    */
-  const surround = (front: 'b1x1' | 's1x2'): boolean => {
+  const surround = (front: 'b1x1' | 'w1x1'): boolean => {
     const w = new BrickWorld();
     const mid = w.place('b1x1', 0, 0, 0, 0, '#fff', 'opaque')!;
     const box: [number, number, number][] = [[1, 0, 0], [-1, 0, 0], [0, 3, 0], [0, -3, 0], [0, 0, -1]];
@@ -570,7 +571,7 @@ const setFingerprint = (s: Set<number>) => [...s].sort((a, b) => a - b).join(','
     return w.isVisible(mid);
   };
   ok(!surround('b1x1'), '여섯 면이 상자로 막히면 안 그린다(기존 규칙 유지)');
-  ok(surround('s1x2'), '★ 한 면이라도 **경사**면 여전히 그린다 — 경사 틈으로 보이기 때문');
+  ok(surround('w1x1'), '★ 한 면이라도 **가는 파츠**면 여전히 그린다 — 그 틈으로 보이기 때문');
 }
 
 // ── ★ 다시 구운 빛이 **렌더러에 닿는가** ────────────────────────────────

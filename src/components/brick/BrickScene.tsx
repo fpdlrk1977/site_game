@@ -17,6 +17,7 @@ import { attachBrickStorage, useBrickStore } from '@/store/brickStore';
 import { BrickBuilder } from './BrickBuilder';
 import { BrickInstances } from './BrickInstances';
 import { BrickMover } from './BrickMover';
+import { BrickWalker } from './BrickWalker';
 
 interface Props {
   sceneId: string | null;
@@ -38,9 +39,12 @@ const STREAM_STEP = 6;
  */
 function BrickStreamer() {
   const stream = useBrickStore((s) => s.streamAround);
+  const walking = useBrickStore((s) => s.walking);
   const last = useRef({ x: Infinity, z: Infinity });
   useFrame(({ camera, controls }) => {
-    const t = (controls as { target?: THREE.Vector3 } | null)?.target;
+    // ★ 걷는 중엔 **캐릭터(=카메라)** 기준이다. 궤도 컨트롤은 꺼져 있어도 객체는 남아 있고
+    //   `target`이 출발 지점에 **멈춰 있어서**, 그대로 쓰면 걸어 나가는 앞쪽이 안 불러와진다.
+    const t = walking ? null : (controls as { target?: THREE.Vector3 } | null)?.target;
     const x = t ? t.x : camera.position.x;
     const z = t ? t.z : camera.position.z;
     if (Math.abs(x - last.current.x) < STREAM_STEP && Math.abs(z - last.current.z) < STREAM_STEP) return;
@@ -89,6 +93,9 @@ export function BrickScene({ sceneId, readOnly = false, onStats }: Props) {
       <BrickStreamer />
       {/* WASD 이동 — 보기 전용(뷰어)에서도 돌아다닐 수 있어야 한다 */}
       <BrickMover />
+      {/* ★ 걷기 — **에디터·뷰어 둘 다**(결정 ④). 지은 공간을 방문자가 걸어 다니는 게 제품의 원래 그림이다.
+          컴포넌트가 공용이라 여기 한 줄이면 두 화면에 같이 붙는다 — 각자 배선하면 반드시 갈라진다. */}
+      <BrickWalker />
     </>
   );
 }

@@ -10,13 +10,19 @@ export type BrickPartId =
   | 'b1x1' | 'b1x2' | 'b1x3' | 'b1x4' | 'b1x6' | 'b1x8'
   | 'b2x2' | 'b2x3' | 'b2x4' | 'b2x6' | 'b2x8';
 export type PlatePartId = 'p1x1' | 'p1x2' | 'p2x2' | 'p2x4' | 'p2x6';
-/** 경사 — `s`=지붕처럼 내려가는 쐐기, `si`=뒤집힌 쐐기(처마·계단 마감) */
-export type SlopePartId = 's1x2' | 's2x2' | 'si1x2';
+/**
+ * 경사 — **삭제됨(2026-08-05, 사용자 지시).** id만 남는다.
+ *
+ * ★ 지우면 안 되는 이유: `PART_ORDER`는 **저장 인덱스**라, 중간에서 빼면 그 뒤 파츠가 전부 한 칸씩 밀려
+ *   **이미 저장된 월드가 통째로 다른 파츠로 읽힌다**(B-2). 그래서 껍데기만 남긴다 —
+ *   UI엔 안 나오고(`legacy`), 불러오면 `b1x1` 블록으로 바뀐다(`unit`).
+ */
+export type SlopePartId = 's1x1' | 'si1x1' | 's1x2' | 's2x2' | 'si1x2';
 /**
  * 가는 파츠 — 칸은 차지하되 **그리는 모양만 얇다**. 가구·난간·창틀용.
  *   `c`=기둥(세로 봉) · `r`=가로봉 · `w`=패널(얇은 벽)
  */
-export type ThinPartId = 'c1x1' | 'r1x2' | 'r1x4' | 'w1x1' | 'w1x2' | 'w1x4';
+export type ThinPartId = 'c1x1' | 'r1x1' | 'r1x2' | 'r1x4' | 'w1x1' | 'w1x2' | 'w1x4';
 export type PartId = BrickPartId | PlatePartId | SlopePartId | ThinPartId | 'terrain';
 
 /** 재질군 — 셰이더·렌더 패스가 갈리는 단위. 색은 이 안에서 인스턴스마다 자유 */
@@ -28,12 +34,11 @@ export type PartKind = 'brick' | 'plate' | 'slope' | 'thin' | 'terrain';
 /**
  * 브릭의 **생김새**. 점유 칸(AABB)은 그대로고 그리는 모양만 달라진다.
  *
- * ★ `slope`/`slopeInv`는 **이웃 면을 감추지 않는다**(non-occluding).
- *   지금 가시성 규칙은 "표면에 닿은 칸이 전부 차 있으면 안 그린다"인데,
- *   경사는 칸을 차지하면서도 **대각선이 뚫려 있어** 그 너머가 보인다.
- *   감춰 버리면 경사 옆·아래에 **구멍**이 뚫린 것처럼 보인다(마인크래프트가 계단·반블록에 쓰는 규칙과 같다).
+ * ★ `thin`은 **이웃 면을 감추지 않는다**(non-occluding).
+ *   가시성 규칙은 "표면에 닿은 칸이 전부 차 있으면 안 그린다"인데, 얇은 파츠는 칸을 차지하면서도
+ *   **옆이 뚫려 있어** 그 너머가 보인다. 감춰 버리면 그 자리에 **구멍**이 뚫린 것처럼 보인다.
  */
-export type PartShape = 'box' | 'slope' | 'slopeInv' | 'thin';
+export type PartShape = 'box' | 'thin';
 
 /**
  * 가는 파츠가 **실제로 그려지는 크기**(m). 점유 칸은 그대로 두고 메시만 얇게 만든다.
@@ -71,26 +76,46 @@ export interface BrickPart {
   shape?: PartShape;
   /** `shape: 'thin'`일 때 실제로 그리는 크기(m). 점유 칸은 `sx·h·sz` 그대로다 */
   thin?: ThinSize;
+  /**
+   * 이 파츠를 이루는 **1칸 단위**(`BRICK_PLAN.md` §20). 자기 자신이면 더 안 쪼개진다.
+   *
+   * ★ 큰 파츠는 **부품이 아니라 붓 크기(도장)** 다 — `2×4`를 놓으면 `b1x1` 여덟 개가 놓인다.
+   *   그래야 칸마다 테두리가 보이고(마인크래프트처럼), **한 칸씩 지울 수** 있다.
+   *   실제로 월드·저장소에 들어가는 레코드는 **단위뿐**이다(옛 저장물 제외).
+   *
+   * ⚠️ **id 접두어로 유추하지 말 것.** 새 파츠를 넣을 때 조용히 틀린다 — 여기 명시한다.
+   */
+  unit?: PartId;
+  /**
+   * 옛 저장물에만 남아 있는 파츠 — **UI에서 고를 수 없다**(새로 못 놓는다).
+   * 카탈로그에는 남겨 둔다: 지워 버리면 이미 저장된 월드가 안 읽힌다.
+   */
+  legacy?: boolean;
 }
 
-/** 경사면이 내려가는 방향은 **+Z**(회전 0 기준). `R`로 네 방향을 만든다 */
-const slope = (sx: number, sz: number, shape: PartShape): BrickPart => ({
-  id: `${shape === 'slopeInv' ? 'si' : 's'}${sx}x${sz}` as PartId,
-  label: `${shape === 'slopeInv' ? '역' : ''}${sx}×${sz}`,
-  kind: 'slope', sx, sz, h: BRICK_CELLS_Y, shape,
+/**
+ * **삭제된 경사의 껍데기** (2026-08-05, 사용자 지시 *"경사는 삭제하고"*).
+ *
+ * 쐐기 메시·UI·배치 경로는 전부 지웠다. 여기 남는 건 **저장 인덱스를 붙잡아 두기 위한 id뿐**이다
+ * (`SlopePartId` 주석 참고). 지어 둔 지붕은 불러올 때 `b1x1` 블록으로 바뀐다.
+ */
+const goneSlope = (id: SlopePartId, sx: number, sz: number): BrickPart => ({
+  id, label: id, kind: 'slope', sx, sz, h: BRICK_CELLS_Y, unit: 'b1x1', legacy: true,
 });
 
 const brick = (sx: number, sz: number): BrickPart => ({
   id: `b${sx}x${sz}` as PartId, label: `${sx}×${sz}`, kind: 'brick', sx, sz, h: BRICK_CELLS_Y,
+  unit: 'b1x1',
 });
 const plate = (sx: number, sz: number): BrickPart => ({
   id: `p${sx}x${sz}` as PartId, label: `${sx}×${sz}`, kind: 'plate', sx, sz, h: PLATE_CELLS_Y,
+  unit: 'p1x1',
 });
 
 /** 가는 파츠 — 칸은 정수 그대로, 그리는 크기만 `thin`으로 준다 */
 const thin = (
-  id: ThinPartId, label: string, sx: number, h: number, sz: number, size: ThinSize,
-): BrickPart => ({ id, label, kind: 'thin', sx, sz, h, shape: 'thin', thin: size });
+  id: ThinPartId, label: string, sx: number, h: number, sz: number, size: ThinSize, unit: PartId,
+): BrickPart => ({ id, label, kind: 'thin', sx, sz, h, shape: 'thin', thin: size, unit });
 
 /** 기둥·가로봉의 굵기(m) — 레고 봉(3.2mm/8mm ≈ 0.4칸)에 맞춰 0.2m */
 const ROD = 0.2;
@@ -104,41 +129,58 @@ export const PARTS: Record<PartId, BrickPart> = {
 
   p1x1: plate(1, 1), p1x2: plate(1, 2), p2x2: plate(2, 2), p2x4: plate(2, 4), p2x6: plate(2, 6),
 
-  s1x2: slope(1, 2, 'slope'), s2x2: slope(2, 2, 'slope'), si1x2: slope(1, 2, 'slopeInv'),
+  // 경사 — **삭제됨.** id만 남아 옛 저장물을 읽고, 읽는 즉시 `b1x1`로 바뀐다
+  s1x1: goneSlope('s1x1', 1, 1), si1x1: goneSlope('si1x1', 1, 1),
+  s1x2: goneSlope('s1x2', 1, 2), s2x2: goneSlope('s2x2', 2, 2), si1x2: goneSlope('si1x2', 1, 2),
 
   // ── 가는 파츠 (2026-08-04) — 가구·난간·창틀. `BRICK_PLAN.md` §19 ──────────
   // 칸은 정수 그대로라 배치·저장·충돌이 전부 기존 코드로 처리된다. 얇은 건 **그리는 모양뿐**이다.
-  c1x1: thin('c1x1', '기둥', 1, BRICK_CELLS_Y, 1, { x: ROD, z: ROD }),
+  c1x1: thin('c1x1', '기둥', 1, BRICK_CELLS_Y, 1, { x: ROD, z: ROD }, 'c1x1'),
   // 가로봉은 **눕힌 기둥**이다 — 회전으로는 격자에 안 맞아(A-5) 별도 파츠로 만든다(결정 ⑥)
-  r1x2: thin('r1x2', '봉 1×2', 1, PLATE_CELLS_Y, 2, { x: ROD, y: ROD }),
-  r1x4: thin('r1x4', '봉 1×4', 1, PLATE_CELLS_Y, 4, { x: ROD, y: ROD }),
-  w1x1: thin('w1x1', '패널 1×1', 1, BRICK_CELLS_Y, 1, { x: PANEL }),
-  w1x2: thin('w1x2', '패널 1×2', 1, BRICK_CELLS_Y, 2, { x: PANEL }),
-  w1x4: thin('w1x4', '패널 1×4', 1, BRICK_CELLS_Y, 4, { x: PANEL }),
+  r1x1: thin('r1x1', '봉 1×1', 1, PLATE_CELLS_Y, 1, { x: ROD, y: ROD }, 'r1x1'),
+  r1x2: thin('r1x2', '봉 1×2', 1, PLATE_CELLS_Y, 2, { x: ROD, y: ROD }, 'r1x1'),
+  r1x4: thin('r1x4', '봉 1×4', 1, PLATE_CELLS_Y, 4, { x: ROD, y: ROD }, 'r1x1'),
+  w1x1: thin('w1x1', '패널 1×1', 1, BRICK_CELLS_Y, 1, { x: PANEL }, 'w1x1'),
+  w1x2: thin('w1x2', '패널 1×2', 1, BRICK_CELLS_Y, 2, { x: PANEL }, 'w1x1'),
+  w1x4: thin('w1x4', '패널 1×4', 1, BRICK_CELLS_Y, 4, { x: PANEL }, 'w1x1'),
 
   // 지형(바닥) 블록 — 2×2 격자. 돌기가 없고, 파낼 수 있다.
   //   1×1로 깔면 블록 수가 4배라 2×2로 잡았다(1m × 0.6m × 1m).
   terrain: { id: 'terrain', label: '지형', kind: 'terrain', sx: 2, sz: 2, h: BRICK_CELLS_Y },
 };
 
-/** 사용자가 고를 수 있는 파츠 — 지형은 배치 대상이 아니라 제외 */
+/**
+ * 배치 가능한 파츠 전부 — 지형은 배치 대상이 아니라 제외.
+ *
+ * ⚠️ **`legacy`도 들어 있다.** 옛 저장물에 남아 있으므로 저장·조명·가시성 테스트는 이 목록을 전수로 돌아야 한다.
+ *   사용자에게 보여줄 목록은 `partsOfKind`(= `legacy` 제외)를 쓸 것.
+ */
 export const PART_LIST: BrickPart[] = Object.values(PARTS).filter((p) => p.kind !== 'terrain');
+
+/**
+ * 이 파츠를 **균일하게 채우는 1칸 단위**. 자기 자신을 내면 그 방식으로는 안 쪼개진다(1칸 파츠 · 경사 · 지형).
+ *
+ * ⚠️ **"안 쪼개진다"와 뜻이 같지 않다.** 옛 2칸 경사는 균일 단위가 없어서 여기선 자기 자신을 내지만,
+ *   `unitsOf`가 **계단꼴(브릭 + 1칸 경사)로 바꿔** 넣는다. 실제로 월드에 들어가는 레코드는 그쪽이 정답이다.
+ */
+export const unitOf = (part: PartId): PartId => PARTS[part].unit ?? part;
 
 /** UI 분류 — 갈래별 목록 */
 export const PART_KINDS: { id: Exclude<PartKind, 'terrain'>; label: string; note: string }[] = [
-  { id: 'brick', label: '브릭', note: '높이 3칸 (0.6m)' },
+  { id: 'brick', label: '브릭', note: '높이 3칸 (0.6m) — 큰 것은 1×1을 한 번에 여러 개 놓는다' },
   { id: 'plate', label: '플레이트', note: '높이 1칸 (0.2m) — 브릭의 ⅓' },
-  { id: 'slope', label: '경사', note: '지붕·언덕 마감. R로 방향을 돌린다 · 돌기 없음' },
   { id: 'thin', label: '가는것', note: '기둥·봉·패널 — 가구·난간·창틀용. 칸은 그대로 차지한다' },
 ];
 
 /**
  * 이 파츠가 **이웃 면을 감추는가**.
- * 경사는 대각선이, 가는 파츠는 옆이 뚫려 있어 감추면 그 너머에 구멍이 뚫린 것처럼 보인다.
+ * 가는 파츠는 옆이 뚫려 있어 감추면 그 너머에 구멍이 뚫린 것처럼 보인다.
  */
 export const occludes = (part: PartId): boolean => (PARTS[part].shape ?? 'box') === 'box';
 
-export const partsOfKind = (kind: PartKind): BrickPart[] => PART_LIST.filter((p) => p.kind === kind);
+/** UI 목록 — **옛 저장물 전용 파츠는 뺀다**(새로 놓을 수 없다) */
+export const partsOfKind = (kind: PartKind): BrickPart[] =>
+  PART_LIST.filter((p) => p.kind === kind && !p.legacy);
 
 /** 지형 블록의 격자 간격(스터드). 지형은 이 배수 좌표에만 놓인다 */
 export const TERRAIN_STEP = 2;

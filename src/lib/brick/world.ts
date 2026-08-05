@@ -99,14 +99,24 @@ export class BrickWorld {
           fn(b.x + dx, b.y + dy, b.z + dz);
   }
 
-  canPlace(part: PartId, x: number, y: number, z: number, rot: Rot): boolean {
-    const e = extentOf(PARTS[part], rot);
-    if (y < Y_MIN || y + e.ey - 1 > Y_MAX) return false;
-    for (let dx = 0; dx < e.ex; dx++)
-      for (let dy = 0; dy < e.ey; dy++)
-        for (let dz = 0; dz < e.ez; dz++)
+  /**
+   * 이 상자만 한 자리가 비어 있는가.
+   *
+   * ★ 파츠 id가 아니라 **칸 수**로 묻는다 — 소품(`BRICK_PLAN.md` §22)은 카탈로그에 없어서
+   *   id가 없다. 소품은 **바깥 상자 전체**가 비어야 놓인다(부분 배치 안 함, E-00).
+   */
+  canPlaceBox(x: number, y: number, z: number, ex: number, ey: number, ez: number): boolean {
+    if (y < Y_MIN || y + ey - 1 > Y_MAX) return false;
+    for (let dx = 0; dx < ex; dx++)
+      for (let dy = 0; dy < ey; dy++)
+        for (let dz = 0; dz < ez; dz++)
           if (this.occ.has(cellKey(x + dx, y + dy, z + dz))) return false;
     return true;
+  }
+
+  canPlace(part: PartId, x: number, y: number, z: number, rot: Rot): boolean {
+    const e = extentOf(PARTS[part], rot);
+    return this.canPlaceBox(x, y, z, e.ex, e.ey, e.ez);
   }
 
   place(part: PartId, x: number, y: number, z: number, rot: Rot, color: string, mat: MatClass, tex = 0): number | null {

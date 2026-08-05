@@ -84,85 +84,6 @@ const cache = new Map<string, THREE.BufferGeometry>();
  * withStuds=false면 박스만(12삼각형).
  */
 /**
- * 쐐기(경사) — 삼각기둥. 단면은 **Z–Y 평면**의 직각삼각형이고 X로 밀어낸다.
- *
- * `slope`     : 높은 쪽이 **−Z**, +Z로 갈수록 낮아진다(지붕 경사)
- * `slopeInv`  : 그 반대로 **아랫면이 깎인** 모양(처마·계단 밑 마감)
- *
- * ★ 돌기(스터드)는 붙이지 않는다 — 비스듬한 면에 원기둥을 세우면 레고에도 없는 모양이 되고,
- *   폴리곤만 는다. 대신 **6면(삼각기둥) = 8삼각형**으로 아주 가볍다.
- */
-function wedgeGeometry(w: number, h: number, d: number, inverted: boolean): THREE.BufferGeometry {
-  const x0 = -w / 2, x1 = w / 2;
-  const y0 = -h / 2, y1 = h / 2;
-  const z0 = -d / 2, z1 = d / 2;
-
-  // 단면(z,y) 삼각형 — 시계 반대 방향으로 잡아야 앞면이 밖을 본다
-  //   slope    : (z0,y1) 높은 쪽 → (z1,y0) 낮은 쪽 → (z0,y0) 바닥 안쪽
-  //   slopeInv : 위가 꽉 차고 **아래가 깎인다** — (z0,y1) → (z1,y1) → (z1,y0)
-  const tri: [number, number][] = inverted
-    ? [[z0, y1], [z1, y1], [z1, y0]]
-    : [[z0, y1], [z1, y0], [z0, y0]];
-
-  const pos: number[] = [];
-  const nrm: number[] = [];
-  // ★ **면마다 0~1인 `uv`** — 경계선 셰이더(`injectEdgeLines`)가 가장자리를 찾는 데 쓴다.
-  //   이게 없으면 `vUv`가 (0,0)으로 읽혀 **면 전체가 '선 위'로 판정돼 통째로 어두워진다**(경사면이 14% 어두웠다).
-  //   무늬용 좌표는 별개(`aTexUV`) — 그쪽은 칸 수만큼 반복해야 하므로 겸용할 수 없다.
-  const uvs: number[] = [];
-  const push = (
-    ax: number, ay: number, az: number,
-    nx: number, ny: number, nz: number,
-    u: number, v: number,
-  ) => {
-    pos.push(ax, ay, az); nrm.push(nx, ny, nz); uvs.push(u, v);
-  };
-  /** 사각면 하나(반시계). a→b가 가로(u), b→c가 세로(v) */
-  const quad = (
-    a: [number, number, number], b: [number, number, number],
-    c: [number, number, number], dd: [number, number, number],
-  ) => {
-    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-    const len = Math.hypot(nx, ny, nz) || 1;
-    nx /= len; ny /= len; nz /= len;
-    const uv: Record<number, [number, number]> = { 0: [0, 0], 1: [1, 0], 2: [1, 1], 3: [0, 1] };
-    // [a, b, c, a, c, dd] 순서에 맞춘 모서리 번호
-    const order = [0, 1, 2, 0, 2, 3];
-    [a, b, c, a, c, dd].forEach((p, k) => {
-      const [u, v] = uv[order[k]];
-      push(p[0], p[1], p[2], nx, ny, nz, u, v);
-    });
-  };
-
-  // 양 옆(삼각형 두 장) — X 방향 법선. uv는 단면(z,y)을 0~1로 편다
-  //   → 직각을 낀 두 변에는 선이 그어지고 **빗변에는 안 그어진다**(빗변은 uv 안쪽을 지난다).
-  //     경사의 경계를 읽기엔 충분하고, 세 변 모두 그으려면 barycentric이 필요해 과하다.
-  for (const [sx, sign] of [[x0, -1], [x1, 1]] as const) {
-    const t = sign > 0 ? tri : [...tri].reverse();
-    for (const [tz, ty] of t) {
-      push(sx, ty, tz, sign, 0, 0, (tz - z0) / d, (ty - y0) / h);
-    }
-  }
-  // 옆면 세 장 — 삼각형의 각 변을 X로 밀어낸 사각형
-  //   ★ 변을 **b→a 방향**으로 감는다. a→b로 감으면 세 면의 법선이 전부 **안쪽**을 향해
-  //     뒷면 컬링에 잘려 **경사면이 텅 비어 보인다**(실제로 그랬다).
-  for (let i = 0; i < 3; i++) {
-    const [az, ay] = tri[i];
-    const [bz, by] = tri[(i + 1) % 3];
-    quad([x0, by, bz], [x1, by, bz], [x1, ay, az], [x0, ay, az]);
-  }
-
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  g.computeBoundingSphere();
-  return g;
-}
-
-/**
  * 정점마다 **여덟 꼭짓점에 대한 삼선형 가중치**를 붙인다 — 부드러운 조명의 절반.
  *
  * 렌더러는 브릭의 꼭짓점 여덟 개 밝기를 인스턴스 속성으로 넘기고, 셰이더가
@@ -251,15 +172,6 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
   const h = part.h * CELL_Y;
   const d = part.sz * CELL_Z;
 
-  // 경사 — 돌기·모따기 없이 쐐기 하나. 돌기 스타일과 무관하다
-  if (part.shape === 'slope' || part.shape === 'slopeInv') {
-    const g = wedgeGeometry(w, h, d, part.shape === 'slopeInv');
-    addCornerWeights(g, w, h, d); // 부드러운 조명 재료
-    addTexUV(g, w, h, d);         // 무늬 타일링
-    cache.set(key, g);
-    return g;
-  }
-
   // 가는 파츠(기둥·봉·패널) — **칸은 그대로 차지하고 그리는 크기만 얇다.**
   //
   // ★★ 조명·무늬는 **칸 크기(w,h,d)** 로 계산한다 — 그리는 크기로 넣으면 안 된다.
@@ -268,7 +180,13 @@ export function brickGeometry(part: BrickPart, withStuds: boolean, studStyle: St
   //      얇은 크기로 정규화하면 봉 하나가 제 혼자 밝기 범위를 다 쓴다.
   if (part.shape === 'thin') {
     const t = part.thin ?? {};
-    const g = new THREE.BoxGeometry(t.x ?? w, t.y ?? h, t.z ?? d);
+    const tw = t.x ?? w, th = t.y ?? h, td = t.z ?? d;
+    // ★ 모따기는 **다른 파츠와 똑같이** 적용한다(2026-08-05 사용자 신고 — 가는 파츠만 모서리가 날카로웠다).
+    //   ⚠️ 깎는 폭은 **그리는 크기** 기준으로 조인다. `RoundedBoxGeometry`는 반지름이
+    //     가장 얇은 축의 절반을 넘으면 메시가 뒤집히는데, 패널은 0.1m라 브릭 기준 폭(0.03)이 그 절반에 육박한다.
+    const g: THREE.BufferGeometry = studStyle === 'none'
+      ? new RoundedBoxGeometry(tw, th, td, 1, Math.min(BEVEL, Math.min(tw, th, td) * 0.25))
+      : new THREE.BoxGeometry(tw, th, td);
     g.computeBoundingSphere();
     addCornerWeights(g, w, h, d); // ← 칸 크기
     addTexUV(g, w, h, d);         // ← 칸 크기

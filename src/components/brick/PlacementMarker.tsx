@@ -16,13 +16,14 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { CELL_X, CELL_Y, CELL_Z } from '@/lib/brick/grid';
-import { extentOf, PARTS, type PartId } from '@/lib/brick/parts';
+import { extentOf, type BrickPart } from '@/lib/brick/parts';
 import type { FacePlacement } from '@/lib/brick/placement';
 import type { Rot } from '@/lib/brick/grid';
 
 interface Props {
   spot: FacePlacement | null;
-  part: PartId;
+  /** 놓을 것의 **바깥 상자** — 파츠 하나일 수도, 소품(브릭 묶음)일 수도 있다(§22) */
+  part: BrickPart;
   rot: Rot;
   valid: boolean;
 }
@@ -55,8 +56,8 @@ function quadOn(
 }
 
 /** 브릭이 상대 표면에 닿는 면 */
-function contactCorners(spot: FacePlacement, part: PartId, rot: Rot): Float32Array {
-  const e = extentOf(PARTS[part], rot);
+function contactCorners(spot: FacePlacement, part: BrickPart, rot: Rot): Float32Array {
+  const e = extentOf(part, rot);
   const ext: [number, number, number] = [e.ex, e.ey, e.ez];
   const a: [number, number, number] = [spot.anchor.x, spot.anchor.y, spot.anchor.z];
   const ax = spot.face.axis;
